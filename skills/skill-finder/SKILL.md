@@ -19,10 +19,14 @@ Find the skill that fits the user's task, using only what the tools actually ret
 1. **Clarify intent.** Extract 2-6 short keywords from the request (task, file format, domain). Include both English and Korean terms when the user writes in Korean.
 2. **Check enabled skills.** Call `ListSkills` with the keywords (omit keywords if the user asked "what skills do I have").
 3. **Search not-yet-enabled skills.** Call `SearchSkills` with the same keywords.
-4. **Present or suggest.**
+4. **Rank matches.** Keyword search also hits skills that merely mention a term in their description (e.g. a docx skill whose text says "Do NOT use for PDFs"). Split results into:
+   - **Direct match**: the skill's name or its stated purpose is the user's task (e.g. `pdf` for PDF work). Recommend these first.
+   - **Incidental match**: the term appears only in passing, or the description says not to use it for this task. Omit these, or list them under "관련 가능" without recommending. Never present them as recommendations.
+   Judge from the description text actually returned; if unsure, put it under "관련 가능".
+5. **Present or suggest.**
    - If `SuggestSkills` is available and results fit, call it (`trigger: "user_asked"` when the user asked, `"proactive"` otherwise) to render the add card.
    - Otherwise list the matches in text: name, one-line description, enabled or not.
-5. **No match.**
+6. **No match.**
    - User asked: tell them nothing relevant was found, and offer `skill-creator` to build one.
    - Proactive: continue the task without mentioning the search.
 
@@ -31,6 +35,9 @@ Find the skill that fits the user's task, using only what the tools actually ret
 ```
 추천 스킬
 - <name> (활성화됨/미활성) — <description 요약, 원문 기준>
+
+관련 가능 (단어만 일치, 추천 아님)
+- <name> — <왜 직접 해당하지 않는지>
 
 근거: ListSkills / SearchSkills 결과
 ```
