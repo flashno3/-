@@ -38,6 +38,10 @@ for q in P:
         for c in CNT: q[c]//=2
         q['outs']//=2;q['IP']=f"{q['outs']//3}.{q['outs']%3}";q['fixed']='FG 2배 집계 보정(÷2)'
 
+# ---- 시즌 중 팀을 옮긴 선수(FG는 ---로 합산) 팀별 비중: 구장 효과·팀 수비 집계에 사용 (사용자 확인값)
+SPLIT={'Keisho Shirakawa 시라카와':{'Bears':7,'Landers':5}}   # 경기 수 기준 (베어스 7경기, 랜더스 5경기)
+for q in P:
+    if q['name'] in SPLIT: q['split']=SPLIT[q['name']]
 # ---- KBO 기록실(삼성 2024)에만 있는 투수: FanGraphs 목록 누락분 ----
 # 코너(시볼드): KBO 기록실 기본기록만 있음. 없는 항목은 추정/0 처리하고 fixed 에 명시(한재승 선례).
 #  - GS=28 : G=28, SV=HLD=0, 평균 5.7이닝/경기 -> 전 경기 선발. 라이온즈 선발 합이 정확히 144가 되는 값

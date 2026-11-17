@@ -13,16 +13,20 @@ if PARK!='none':
 NEUTRAL={(2024,'Eagles')}   # 2024 한화는 옛 대전구장(파크팩터 없음) -> 구장 효과 제거 없이 사용
 def load(y):
     fac_=lambda t,f:1.0 if (y,t) in NEUTRAL else fac(t,f)
+    def facr(row,f):   # 시즌 중 이적(split)이면 팀별 비중 가중 평균 환경
+        sp=row.get('split')
+        if sp: return sum(v*fac_(t,f) for t,v in sp.items())/sum(sp.values())
+        return fac_(row['team'],f)
     B=json.load(open(f'batting_{y}.json',encoding='utf8'));PT=json.load(open(f'pitching_{y}.json',encoding='utf8'))
     if PARK!='none':
         _B=[]
         for r in B:
-            q=dict(r);t=r['team'];q['H0']=r['H'];q['HR0']=r['HR']
-            q['B1']=r['B1']/fac_(t,'b1');q['B2']=r['B2']/fac_(t,'b2');q['B3']=r['B3']/fac_(t,'b3');q['HR']=r['HR']/fac_(t,'hr')
+            q=dict(r);q['H0']=r['H'];q['HR0']=r['HR']
+            q['B1']=r['B1']/facr(r,'b1');q['B2']=r['B2']/facr(r,'b2');q['B3']=r['B3']/facr(r,'b3');q['HR']=r['HR']/facr(r,'hr')
             q['H']=q['B1']+q['B2']+q['B3']+q['HR'];_B.append(q)
         B=_B;_P=[]
         for r in PT:
-            q=dict(r);t=r['team'];nh=(r['H']-r['HR'])/fac_(t,'nh');q['HR']=r['HR']/fac_(t,'hr');q['H']=nh+q['HR'];_P.append(q)
+            q=dict(r);nh=(r['H']-r['HR'])/facr(r,'nh');q['HR']=r['HR']/facr(r,'hr');q['H']=nh+q['HR'];_P.append(q)
         PT=_P
     return B,PT
 key=lambda r:f"{r['name']}|{r['team']}|{r['age']}"
@@ -44,8 +48,10 @@ def league_pit(PT):
          'babip':(P2['H']-P2['HR'])/(P2['TBF']-P2['SO']-P2['BB']-P2['HBP']-P2['HR'])}
     tb=collections.defaultdict(lambda:[0,0])
     for r in PT:
-        if r['team']=='---': continue
-        tb[r['team']][0]+=r['H']-r['HR']; tb[r['team']][1]+=r['TBF']-r['SO']-r['BB']-r['HBP']-r['HR']
+        sp=r.get('split') or ({r['team']:1} if r['team']!='---' else {})
+        tot=sum(sp.values())
+        for t,v in sp.items():
+            tb[t][0]+=(r['H']-r['HR'])*v/tot; tb[t][1]+=(r['TBF']-r['SO']-r['BB']-r['HBP']-r['HR'])*v/tot
     return lgp,{t:DEFSHARE*(v[0]/v[1]-lgp['babip']) for t,v in tb.items()}
 # stabilization constants (sample size at which observed ≈ 50% signal)
 N={'k':60,'bb':120,'hbp':240,'hr':170,'babip':820,'xbh':400,'tri':300,'sba':150,'sbp':60}
@@ -56,10 +62,14 @@ def bat_counts(r):
     opp=r['B1']+r['BB']+r['HBP']; xb=r['B2']+r['B3']; att=r['SB']+r['CS']
     return {'k':(r['SO'],pa),'bb':(r['BB']-r['IBB'],pa),'hbp':(r['HBP'],pa),'hr':(r['HR'],pa),'babip':(nh,bip),
             'xbh':(xb,nh),'tri':(r['B3'],xb),'sba':(att,opp),'sbp':(r['SB'],att)}
+def dteam_of(r,Dteam):
+    sp=r.get('split')
+    if sp: return sum(v*Dteam.get(t,0) for t,v in sp.items())/sum(sp.values())
+    return Dteam.get(r['team'],0)
 def pit_counts(r,Dteam):
     t=r['TBF']; bip=max(t-r['SO']-r['BB']-r['HBP']-r['HR'],0)
     return {'k':(r['SO'],t),'bb':(r['BB']-r['IBB'],t),'hbp':(r['HBP'],t),'hr':(r['HR'],t),
-            'babip':((r['H']-r['HR'])-(Dteam.get(r['team'],0)*bip if DEFADJ else 0),bip)}
+            'babip':((r['H']-r['HR'])-(dteam_of(r,Dteam)*bip if DEFADJ else 0),bip)}
 # ---------- 시즌 로드·환경 정규화 ----------
 D={};LGB={};LGP={};DT={}
 for y,w in SEASONS:
