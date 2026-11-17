@@ -34,8 +34,15 @@
     let gain = (a > 35 ? -.32 : curve) + gauss(r, 0, 0.12);
     if (a >= 33 && gain < 0) gain *= 1 - 0.4 * clamp((old - 55) / 20, 0, 1);   // 상위권 선수는 에이징 하락이 최대 40% 완만(류현진·양의지·최정 등)
     const pf = play === undefined ? 1 : 0.55 + 0.45 * clamp(play, 0, 1);   // 경기에 못 나온 젊은 선수는 성장이 더딘다(최대 -45%)
-    if (a <= 26 && gain > 0) gain *= pf;
-    if (a <= 26 && p.pot > 0) { const g2 = Math.min(p.pot, 0.4) * (0.6 + 0.8 * r.random()) * pf; gain = Math.max(gain, g2); p.pot = Math.max(0, p.pot - Math.max(0, g2)); }
+    if (a <= 26 && gain > 0 && p.peak === undefined) gain *= pf;
+    if (p.peak !== undefined) {
+      if (a <= 27) {   // 드래프트 신인: 정점을 향해 해마다 격차를 좁힌다(해마다 정점 자체도 흔들림: 대성장·정체 가능)
+        p.peak = clamp(p.peak + gauss(r, 0, 1.8) + (r.random() < 0.05 ? (r.random() < 0.5 ? 5 : -5) : 0), 25, 85);
+        const yrs = Math.max(1, 28 - a), g0 = clamp(((p.peak - old) / yrs) / 14 * (1 + gauss(r, 0, 0.3)) + gauss(r, 0, 0.04), -0.15, 0.7);
+        gain = g0 > 0 ? g0 * pf : g0;
+        p.scout.ceil = clamp(0.6 * p.scout.ceil + 0.4 * (p.peak + gauss(r, 0, 3)), 25, 85);   // 스카우트 평가가 시간이 지나며 정확해진다
+      } else { delete p.peak; delete p.pot; }
+    } else if (a <= 26 && p.pot > 0) { const g2 = Math.min(p.pot, 0.4) * (0.6 + 0.8 * r.random()) * pf; gain = Math.max(gain, g2); p.pot = Math.max(0, p.pot - Math.max(0, g2)); }
     const shift = f => gain * 0.75 + gauss(r, 0, 0.1);
     const set = (f, dir, lo, hi, s) => { p.p[f] = clamp(p.p[f] + dir * s * sc[f][1], lo, hi); };
     if (p.type === 'B') {
@@ -47,6 +54,7 @@
       set('k', 1, 0.08, 0.40, shift()); set('bb', -1, 0.02, 0.18, shift()); set('hr', -1, 0.004, 0.06, shift()); set('babip', -1, 0.25, 0.37, shift());
       p.stamina = clamp(p.stamina + (a <= 25 ? 1.2 : a >= 33 ? -1.5 : 0) + gauss(r, 0, 1.2), 25, 75);
     }
+    if (p.peak !== undefined) p.pot = clamp((p.peak - this.ovr(p)) / 30, 0, 1.4);
     return this.ovr(p) - old;
   };
   /* 은퇴 확률: 나이 + 능력치. 에이징 구간에서도 능력치가 높은 선수는 오래 뛴다(42세 일괄 은퇴 폐지) */
@@ -59,6 +67,24 @@
   };
 
   /* ---------------- 신인 생성 ---------------- */
+  /* ---------------- 신인 잠재력(최종 도달 능력치, 확률 분포) ----------------
+   * 드래프트 순번과 무관하게 선수마다 숨은 '정점 OVR'(peak)을 확률로 뽑는다. 스카우트 평가(scout.ceil)는 정점 + 오차(σ=16)라서
+   * 높은 순번일수록 정점이 높을 가능성은 크지만 확정은 아니다(1라운드 실패·하위 지명 대박 모두 가능). */
+  const TIERS = [   // [이름, 확률, 정점 OVR 범위]
+    ['슈퍼스타', 0.025, 68, 80], ['확실한 주전', 0.12, 57, 67.9], ['준주전', 0.25, 48, 56.9], ['후보', 0.38, 38, 47.9], ['육성', 0.225, 28, 37.9]
+  ];
+  proto.rollPeak = function (r) {
+    let x = r.random(); for (const [name, pr, lo, hi] of TIERS) { if ((x -= pr) < 0) return lo + (hi - lo) * r.random(); }
+    return 36;
+  };
+  proto.tierLabel = function (v) { return v >= 68 ? '슈퍼스타급' : v >= 57 ? '확실한 주전급' : v >= 48 ? '준주전급' : v >= 38 ? '후보급' : '육성급'; };
+  /* 능력치를 gain만큼 이동(1.0 ≈ OVR +14 정도). 잠재력 정렬과 성장에 공통 사용 */
+  proto._gain = function (p, g, r, noise) {
+    const sc = this.S.calib.scale[p.type], n = () => (noise ? gauss(r, 0, noise) : 0), set = (f, dir, lo, hi) => { p.p[f] = clamp(p.p[f] + dir * (g * 0.75 + n()) * sc[f][1], lo, hi); };
+    if (p.type === 'B') { set('k', -1, 0.06, 0.45); set('bb', 1, 0.015, 0.20); set('hr', 1, 0.002, 0.07); set('babip', 1, 0.24, 0.39); set('xbh', 1, 0.10, 0.32); }
+    else { set('k', 1, 0.08, 0.40); set('bb', -1, 0.02, 0.18); set('hr', -1, 0.004, 0.06); set('babip', -1, 0.25, 0.37); }
+  };
+  proto.scoutScore = function (p) { return 0.35 * p.scout.o + 0.65 * p.scout.ceil; };
   proto.makeRookie = function (r, type, forcePos) {
     const S = this.S, sc = S.calib.scale[type], lb = S.calib.lb, id = (type === 'B' ? 'B' : 'P') + (S.nextId++);
     const g = gauss(r, 0, 0.5), z = () => -1.1 + g + gauss(r, 0, 0.6);
@@ -80,7 +106,12 @@
     }
     if (type === 'B') p.bats = r.random() < 0.06 ? 'S' : r.random() < 0.35 ? 'L' : 'R'; else p.throws = r.random() < 0.27 ? 'L' : 'R';   // 가상 신인의 투타
     p.contract = { salary: 0.3, years: 3 };
-    p.scout = { o: this.ovr(p) + Math.round(gauss(r, 0, 3)), pot: clamp(p.pot + gauss(r, 0, 0.25), 0, 2) };
+    S.players[id] = p;
+    p.peak = this.rollPeak(r);   // 숨은 정점 OVR
+    const target = clamp(p.peak - (27 - p.age) * 2.0 - 4 + gauss(r, 0, 7), 20, p.peak);   // 현재 능력치를 정점에 맞춰 정렬(어릴수록 격차 큼)
+    for (let k = 0; k < 5; k++) { const g = (target - this.ovr(p)) / 14; if (Math.abs(g) < 0.08) break; this._gain(p, g, r, 0); }
+    p.pot = clamp((p.peak - this.ovr(p)) / 30, 0, 1.4);
+    p.scout = { o: this.ovr(p) + Math.round(gauss(r, 0, 3)), ceil: clamp(p.peak + gauss(r, 0, 16), 25, 85) };
     S.players[id] = p; return p;
   };
   proto.potGrade = function (v) { return v >= 1.3 ? 'A' : v >= 0.9 ? 'B' : v >= 0.55 ? 'C' : v >= 0.25 ? 'D' : 'E'; };
@@ -161,7 +192,7 @@
     const S = this.S, d = S.off.draft, r = rngFor(S.seed, S.year, 42);
     while (d.pick < d.order.length) {
       const t = d.order[d.pick]; if (t === S.userTeam) return true;
-      const best = d.pool.map(id => { const p = S.players[id]; return { id, s: this.ovr(p) + 14 * p.pot + gauss(r, 0, 3) }; }).sort((a, b) => b.s - a.s)[0];
+      const best = d.pool.map(id => { const p = S.players[id]; return { id, s: this.scoutScore(p) + gauss(r, 0, 2) }; }).sort((a, b) => b.s - a.s)[0];
       this._draftTake(t, best.id);
     }
     return false;
@@ -173,7 +204,7 @@
   };
   proto.draftAutoRest = function () {   // 내 순서도 자동 지명(추천 순)
     const S = this.S, d = S.off.draft;
-    while (d.pick < d.order.length) { if (this.draftOnClock() === S.userTeam) { if (S.teams[S.userTeam].ids.length >= ROSTER_MAX) { d.pick++; continue; } const best = d.pool.map(id => ({ id, s: S.players[id].scout.o + 14 * S.players[id].scout.pot })).sort((a, b) => b.s - a.s)[0]; this._draftTake(S.userTeam, best.id); } else this.draftAiUntilUser(); }
+    while (d.pick < d.order.length) { if (this.draftOnClock() === S.userTeam) { if (S.teams[S.userTeam].ids.length >= ROSTER_MAX) { d.pick++; continue; } const best = d.pool.map(id => ({ id, s: this.scoutScore(S.players[id]) })).sort((a, b) => b.s - a.s)[0]; this._draftTake(S.userTeam, best.id); } else this.draftAiUntilUser(); }
   };
   proto.finishDraft = function () {
     const S = this.S, d = S.off.draft; for (const id of d.pool) { S.players[id].retired = true; S.players[id].team = 'RET'; } d.pool = [];

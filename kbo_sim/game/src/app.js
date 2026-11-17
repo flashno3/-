@@ -141,7 +141,7 @@
     const bars = Object.entries(s).map(([k, v]) => `<span>${k}</span><div class="bar"><i style="width:${(v - 20) / 60 * 100}%"></i></div><b class="num">${v}</b>`).join('');
     const gsl = p.type === 'B' ? Object.entries(p.gs).filter(([k, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${posName[k]} ${v}경기`).join(' · ') : '';
     const fits = p.type === 'B' ? `<div class="small">수비 숙련: ${['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF'].map(ps => { const l = L.fitLevel(p, ps); return `<span class="chip ${l === 2 ? 'ks' : l === 1 ? 'in' : ''}">${posName[ps]}${l === 2 ? ' ●' : l === 1 ? ' ○' : ''}</span>`; }).join(' ')}</div><div class="small muted">● 주포지션 ○ 소화 가능(선발 15경기 이상). 선발로 나서면 경기 수가 쌓여 새 포지션에 적응합니다.${gsl ? ' 선발 기록: ' + gsl : ''}</div>` : '';
-    const pot = p.age <= 25 ? `<span class="chip">잠재력 ${L.potGrade(p.pot || 0)}</span>` : '';
+    const pot = p.peak !== undefined && p.scout ? `<span class="chip" title="스카우트 추정 성장 상한입니다. 실제 정점은 달라질 수 있고, 시즌을 거치며 평가가 정확해집니다.">상한 평가 ${L.tierLabel(p.scout.ceil)}</span>` : (p.age <= 25 ? `<span class="chip">잠재력 ${L.potGrade(p.pot || 0)}</span>` : '');
     const birthChip = p.birth ? `<span class="chip" title="생년월일 ${p.birth}">${p.birth.slice(0, 4)}년생</span>` : '';
     const milChip = p.team === 'MIL' ? `<span class="chip" title="상무 야구단 복무 중이라 전역 전에는 뛸 수 없습니다.">상무 복무 · ${milText(p)} 전역 예정</span>` : '';
     const src = p.src === 'F' ? `<span class="chip" title="2026 퓨처스 기록을 1군 능력치로 환산한 값입니다. 기록이 적을수록 평균에 가깝게 보정됩니다.">퓨처스 환산</span>${p.posEst ? '<span class="chip" title="세부 포지션(1B/2B/3B/SS, LF/CF/RF)과 수비 능력은 데이터가 없어 추정한 값입니다.">포지션 추정</span>' : ''}${p.roleEst ? '<span class="chip" title="선발 기록(GS)이 없어 경기당 이닝으로 선발/구원과 체력을 추정했습니다.">보직 추정</span>' : ''}${p.ageEst ? '<span class="chip" title="명단에 생년월일이 없어 나이를 추정했습니다.">나이 추정</span>' : ''}` : '';
@@ -306,12 +306,12 @@
         <div class="row"><button class="primary big" data-act="toDraft">계약 확정 · 드래프트로</button></div>`;
     }
     if (cur === 'draft') {
-      const d = off.draft, onClock = L.draftOnClock(), mine = onClock === U(), pool = d.pool.map(id => P(id)).sort((a, b) => (b.scout.o + 14 * b.scout.pot) - (a.scout.o + 14 * a.scout.pot));
-      const pr = pool.slice(0, 60).map(p => `<tr><td class="l"><b>${esc(p.ko)}</b></td><td class="l">${p.type === 'B' ? posName[p.pos] : (p.role === 'SP' ? '선발형' : '구원형')}</td><td class="n">${p.age}</td><td>${ovrChip(Math.max(20, Math.min(80, p.scout.o)))}</td><td><span class="chip ${L.potGrade(p.scout.pot) <= 'B' ? 'in' : ''}">${L.potGrade(p.scout.pot)}</span></td><td>${mine ? `<button class="sm primary" data-act="draftPick" data-a="${p.id}">지명</button>` : ''}</td></tr>`).join('');
+      const d = off.draft, onClock = L.draftOnClock(), mine = onClock === U(), pool = d.pool.map(id => P(id)).sort((a, b) => L.scoutScore(b) - L.scoutScore(a));
+      const pr = pool.slice(0, 60).map(p => `<tr><td class="l"><b>${esc(p.ko)}</b></td><td class="l">${p.type === 'B' ? posName[p.pos] : (p.role === 'SP' ? '선발형' : '구원형')}</td><td class="n">${p.age}</td><td>${ovrChip(Math.max(20, Math.min(80, p.scout.o)))}</td><td class="l"><span class="chip ${p.scout.ceil >= 57 ? 'in' : ''}" title="스카우트 추정 — 실제 정점은 ±15 정도 달라질 수 있습니다">${L.tierLabel(p.scout.ceil)}</span></td><td>${mine ? `<button class="sm primary" data-act="draftPick" data-a="${p.id}">지명</button>` : ''}</td></tr>`).join('');
       const picks = d.picks.slice(-14).reverse().map(x => `<tr><td class="l n">${x.pick}</td><td class="l">${teamTag(x.team)}</td><td class="l">${esc(P(x.id).ko)}</td></tr>`).join('');
       const myp = d.picks.filter(x => x.team === U()).map(x => esc(P(x.id).ko)).join(', ');
       return `${bar}<div class="card"><div class="row"><h2>신인 드래프트</h2><span class="muted small">${d.pick}/${d.order.length}번째 지명 · ${onClock ? (mine ? '<b class="pos">내 차례</b>' : KO[onClock] + ' 차례') : '종료'}</span><span class="sp"></span>${onClock && !mine ? '<button data-act="draftSim">내 차례까지 진행</button>' : ''}${onClock ? '<button data-act="draftAuto">나머지 자동 지명</button>' : '<button class="primary" data-act="toFA">FA 시장으로</button>'}</div>
-        <p class="small muted" style="margin:6px 0">스카우트 평가(능력·잠재력 등급)는 오차가 있습니다. 지명 순서는 정규시즌 성적 역순이고 10라운드까지 진행합니다. 신인은 2군으로 들어옵니다. 내 지명: ${myp || '없음'}</p></div>
+        <p class="small muted" style="margin:6px 0">스카우트 평가(능력치·성장 상한 등급)는 오차가 있어 지명 순번이 높아도 크게 못 클 수 있고, 하위 지명에서 대성하기도 합니다. 지명 순서는 정규시즌 성적 역순이고 10라운드까지 진행합니다. 신인은 2군으로 들어옵니다. 내 지명: ${myp || '없음'}</p></div>
         <div class="grid"><div class="card"><h2>지명 가능 선수</h2><div class="tablewrap" style="max-height:520px;overflow-y:auto"><table><thead><tr><th class="l">선수</th><th class="l">유형</th><th>나이</th><th>OVR(추정)</th><th>잠재력</th><th></th></tr></thead><tbody>${pr}</tbody></table></div></div>
         <div class="card"><h2>최근 지명</h2><div class="tablewrap"><table><tbody>${picks || '<tr><td class="muted">아직 없습니다.</td></tr>'}</tbody></table></div></div></div>`;
     }

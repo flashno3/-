@@ -42,6 +42,16 @@ ok(S.nextId>Math.max(...Object.keys(S.players).map(id=>parseInt(id.slice(1)))),'
  const old=Object.values(S.players).find(p=>p.ko==='최형우'&&p.birth);ok(old&&old.age===44,'최형우 44세');
  const q=JSON.parse(JSON.stringify(old));q.age=44;ok(L.retireChance(q)<0.7,'능력치 높은 노장은 일괄 은퇴하지 않음 '+L.retireChance(q).toFixed(2));
  const star=Object.values(S.players).find(p=>p.ko==='양의지'&&p.birth),e=L.retireChance(Object.assign(JSON.parse(JSON.stringify(star)),{age:41}));ok(e<0.45,'양의지 41세 은퇴확률 '+e.toFixed(2));}
+// 2d) 드래프트 후보 잠재력(확률적 정점·스카우트 오차)
+{const {PyRandom}=require('../web/src/engine.js');const rr=new PyRandom(7),rk=[];for(let i=0;i<3000;i++)rk.push(L.makeRookie(rr,i%2?'P':'B'));
+ const fr=f=>rk.filter(f).length/rk.length;
+ ok(fr(p=>p.peak>=68)>0.01&&fr(p=>p.peak>=68)<0.04,'슈퍼스타급 비율 '+fr(p=>p.peak>=68).toFixed(3));ok(fr(p=>p.peak>=57)>0.10&&fr(p=>p.peak>=57)<0.20,'주전급 이상 비율');ok(fr(p=>p.peak<38)>0.15&&fr(p=>p.peak<38)<0.30,'육성급 비율');
+ const m=a=>a.reduce((x,y)=>x+y,0)/a.length,x=rk.map(p=>p.scout.ceil),y=rk.map(p=>p.peak),mx=m(x),my=m(y),c=x.reduce((a,v,i)=>a+(v-mx)*(y[i]-my),0)/Math.sqrt(x.reduce((a,v)=>a+(v-mx)**2,0)*y.reduce((a,v)=>a+(v-my)**2,0));
+ ok(c>0.35&&c<0.75,'스카우트 평가-정점 상관(완전 비례 아님) '+c.toFixed(2));
+ const s=rk.slice().sort((a,b)=>L.scoutScore(b)-L.scoutScore(a));ok(m(s.slice(0,300).map(p=>p.peak))>m(s.slice(-1000).map(p=>p.peak))+15,'상위 지명일수록 정점이 높을 확률');
+ ok(s.slice(300,1800).some(p=>p.peak>=68||rk.indexOf(p)>=0&&p.peak>=57),'중위 지명에서도 주전급 이상이 나옴');
+ const sim=t=>{const a=rk.filter(p=>L.tierLabel(p.peak)===t).slice(0,200).map(p=>{const q=JSON.parse(JSON.stringify(p));let k=0;while(q.age<27&&k++<12)L.progress(q,new PyRandom(500+k+rk.indexOf(p)),1);return L.ovr(q)});return m(a)};
+ const o=['슈퍼스타급','확실한 주전급','준주전급','후보급','육성급'].map(sim);console.log('27세 평균 OVR(슈퍼스타→육성)',o.map(v=>v.toFixed(0)).join(' > '));ok(o.every((v,i)=>i===0||o[i-1]>v+4),'등급별 성장 결과가 구분됨');}
 // 3) 군 복무(상무)
 {const L2=League.create(base,'Lions',4),S2=L2.S;const mil=S2.mil.map(id=>S2.players[id]);
  ok(L2.farmTeams().includes('Whales')&&mil.length===26&&mil.every(p=>p.team==='MIL'&&p.milTeam in S2.teams&&!S2.teams[p.milTeam].ids.includes(p.id)),'상무 26명이 팀 명단 밖');
