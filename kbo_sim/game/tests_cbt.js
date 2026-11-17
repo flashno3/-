@@ -5,7 +5,7 @@ let fail=0;const ok=(c,m)=>{if(!c){fail++;console.log('FAIL',m)}};
 const L=League.create(base,'Lions',5),S=L.S,T=Object.keys(S.teams),U='Lions';
 const pays=T.map(t=>L.cbtPay(t));const avg=pays.reduce((a,b)=>a+b,0)/10;
 console.log('초기 상위40 합계',T.map((t,i)=>t+' '+pays[i]).join(' '),'| 평균',avg.toFixed(1),'| 상한',L.cbtCap(),'하한',L.cbtFloor());
-ok(Math.abs(avg-111.05)<0.8,'평균 111.05 근처 '+avg);ok(pays.every(p=>p<L.cbtCap()),'초기 상한 이내');console.log('하한 미달 구단',T.filter((t,i)=>pays[i]<L.cbtFloor()).join(',')||'없음');
+ok(avg>98&&avg<112,'평균(FA 시장 선수 제외 상태) '+avg.toFixed(1));ok(pays.every(p=>p<L.cbtCap()),'초기 상한 이내');console.log('하한 미달 구단',T.filter((t,i)=>pays[i]<L.cbtFloor()).join(',')||'없음');
 ok(L.cbtCap(2027)===151.1709&&L.cbtCap(2028)===158.7294&&L.cbtFloor(2026)===null&&L.cbtFloor(2027)===60.6538,'상한·하한 수치');
 ok(L.cbtRate(1)===.3&&L.cbtRate(2)===.5&&L.cbtRate(3)===1&&L.cbtRate(5)===1,'세율');
 // 신인·외국인 제외, 41번째 이후 제외

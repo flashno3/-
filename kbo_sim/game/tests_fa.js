@@ -40,6 +40,18 @@ const young=dh.filter(p=>p.peak!==undefined&&p.age<=24);ok(young.length>20&&youn
  const conf=Object.values(SF.players).filter(p=>p.foreign&&p.f27);ok(conf.length===7,'확정 계약 7건 '+conf.length);
  ok(Object.values(SF.players).filter(p=>p.foreign&&p.team in SF.teams&&!p.f27).every(p=>p.assumed),'나머지는 가정 표시');
  const vf=Object.values(SF.players).filter(p=>p.foreign&&p.virtual);console.log('가상 외국인',vf.length);}
+// 1e) 2027 FA 시장(승인 22명): 미계약 20명은 시장에서 시작, 등급 6/10/6, AI가 시즌 초에 영입
+{const LM=League.create(base,'Lions',11),SM=LM.S;
+ ok(SM.faClass2027.length===22,'FA 승인 22명');const gc={A:0,B:0,C:0};SM.faClass2027.forEach(x=>gc[x.grade]++);ok(gc.A===6&&gc.B===10&&gc.C===6,'등급 인원 KBO 공시와 일치 '+JSON.stringify(gc));
+ const mk=LM.faList().filter(p=>!p.foreign&&p.faInfo&&p.faInfo.grade);ok(mk.length===20,'미계약 FA 20명 '+mk.length);
+ ok(['원태인','구자욱','홍창기','박동원','최지훈'].every(n=>mk.some(p=>p.ko===n)),'주요 FA 시장 진입');
+ ok(['양의지','오태곤'].every(n=>Object.values(SM.players).some(p=>p.ko===n&&p.team in SM.teams&&p.contract.total||p.ko===n&&p.team in SM.teams)),'계약 확정 2명은 소속 유지');
+ ok(mk.every(p=>LM.faEligible(p)&&!SM.teams[p.faInfo.from].ids.includes(p.id)),'자격 보유·원소속 명단에서 제외');
+ // 사용자(삼성)도 협상 가능: 원태인(원소속) 재영입은 보상 없음, 외부 FA는 3명 한도
+ const wt=mk.find(p=>p.ko==='원태인');ok(LM.signFA(wt.id,3)===null&&wt.team==='Lions'&&!(SM.compLog||[]).some(c=>c.id===wt.id),'원소속 재계약은 보상 없음');
+ LM.advance(40,false);const left=LM.faList().filter(p=>!p.foreign&&p.faInfo&&p.faInfo.grade).length;ok(left<20&&left>=3,'40경기일 후 AI가 일부 영입 '+left);
+ ok((SM.faLog||[]).length>0&&(SM.compLog||[]).length>0,'계약·보상 기록');
+ for(const tm of Object.keys(SM.teams)){ok(LM._faCount(tm)<=3,tm+' 외부 FA 3명 한도')}}
 // 2) 시즌 진행 → 1군 등록일수 누적
 L.advance(300,false);const reg=Object.values(S.players).filter(p=>p.active&&p.team in S.teams);const rd=reg.map(p=>p.fa.regDays).sort((a,b)=>a-b);ok(reg.length>250&&rd[rd.length>>1]>160&&rd.filter(x=>x>150).length/rd.length>0.6,'1군 풀타임 등록일수 누적(약 168일) 중앙값 '+Math.round(rd[rd.length>>1]));
 const before=reg.slice(0,40).map(p=>[p,p.fa.svc]);

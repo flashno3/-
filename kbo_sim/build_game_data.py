@@ -375,6 +375,15 @@ def load_foreign27():
                         bonus=int(r['계약금_달러']) if r['계약금_달러'] else None,opt=int(r['옵션_달러']) if r['옵션_달러'] else None,term=r['기간'],date=r['확정일']))
     return out
 FOREIGN27=load_foreign27()
+
+# 2027 FA 승인 선수 22명(KBO 2026-11-16 공시). 상태 '계약'(양의지·오태곤)은 FA 계약 CSV로 이미 반영, '미계약'은 시장에서 시작
+def load_faclass():
+    import csv
+    f=D+'game/data/fa_class_2027.csv'
+    if not os.path.exists(f): return []
+    TMC={'한화':'Eagles','LG':'Twins','SSG':'Landers','두산':'Bears','키움':'Heroes','KT':'Wiz','NC':'Dinos','롯데':'Giants','삼성':'Lions','KIA':'Tigers'}
+    return [dict(team=TMC[r['팀']],name=r['선수명'],type='P' if r['포지션']=='투수' else 'B',pos=r['포지션'],signed=r['상태']=='계약',note=r['계약']) for r in csv.DictReader(open(f,encoding='utf-8-sig'))]
+FACLASS=load_faclass()
 # 능력치 척도(20-80): ratings.py 와 같은 방식(규정 타자 PA≥300 / 규정 투수 TBF≥200 가중 평균·표준편차)
 def scale(rows,fields,w):
     out={}
@@ -382,7 +391,7 @@ def scale(rows,fields,w):
         v=[r['p'][f] for r in rows];t=[w(r) for r in rows];mu=sum(a*b for a,b in zip(v,t))/sum(t);sd=math.sqrt(sum(b*(a-mu)**2 for a,b in zip(v,t))/sum(t));out[f]=[mu,sd]
     return out
 regB=[b for b in R['batters'] if b['PA']>=300];regP=[p for p in R['pitchers'] if p['TBF']>=200]
-out={'foreign2027':FOREIGN27,'draft2027':DRAFT,'teams':TEAMS,'players':players,'league_bat':R['league_bat'],'team_def':R['team_def'],'pf':PK['pf_by_team'],
+out={'faclass2027':FACLASS,'foreign2027':FOREIGN27,'draft2027':DRAFT,'teams':TEAMS,'players':players,'league_bat':R['league_bat'],'team_def':R['team_def'],'pf':PK['pf_by_team'],
  'fielding':{'lg':F['lg'],'team_avg_range':F['team_avg_range']},
  'scale':{'B':scale(regB,['k','bb','hr','babip','xbh','sba'],lambda r:r['PA']),'P':scale(regP,['k','bb','hr','babip'],lambda r:r['TBF'])}}
 os.makedirs(D+'game/src',exist_ok=True)
@@ -417,3 +426,5 @@ print('드래프트 이력 매칭',DHS['ok'],'| 모호',DHS['amb'],'| 미매칭'
 print('FA 이력 반영',FAH['ok'],'행 | 미매칭(은퇴·자료 없음)',FAH['miss'])
 
 print('2027 외국인 확정 계약',len(FOREIGN27),'건')
+
+print('2027 FA 승인 선수',len(FACLASS),'명 (계약 확정 %d)'%sum(1 for x in FACLASS if x['signed']))

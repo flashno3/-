@@ -12,6 +12,7 @@
   const GIV = ['민준', '서준', '도윤', '예준', '시우', '하준', '주원', '지호', '지후', '준우', '현우', '도현', '건우', '우진', '승현', '민재', '재원', '태양', '성민', '동현', '진우', '유찬', '지훈', '수호', '현준', '재윤', '정우', '시윤', '은우', '준혁', '태윤', '민성', '승우', '하린', '찬영', '다온', '규민', '원준', '세훈', '상원'];
   const POSW = [['C', 10], ['1B', 8], ['2B', 11], ['3B', 11], ['SS', 12], ['LF', 14], ['CF', 12], ['RF', 14], ['DH', 8]];
   const gauss = (r, m, s) => r.gauss(m, s);
+  const KO0 = { Bears: '두산', Twins: 'LG', Heroes: '키움', Landers: 'SSG', Wiz: 'KT', Eagles: '한화', Tigers: 'KIA', Giants: '롯데', Dinos: 'NC', Lions: '삼성' };
   const LIM_DEADLINE = 110;   // 트레이드 마감(일차)
 
   const proto = League.prototype;
@@ -389,6 +390,43 @@
       if (p.fa.regDays >= FA_REG_DAYS) p.fa.svc += 1; else { p.fa.rem += p.fa.regDays; while (p.fa.rem >= FA_REG_DAYS) { p.fa.svc += 1; p.fa.rem -= FA_REG_DAYS; } }
       p.fa.regDays = 0; p.fa.est = false;
       if (p.team in this.S.teams || p.team === 'MIL') p.salHist = (p.salHist || []).slice(-2).concat([p.contract.salary]);
+    }
+  };
+  /* ---------------- 2027 FA 시장(2026-11-16 KBO 공시 FA 승인 22명) ----------------
+   * 계약이 확정된 선수(양의지·오태곤)는 이미 반영됨. 미계약 20명은 시장에서 시작하며 사용자·AI 모두 영입 가능.
+   * 등급 인원은 KBO 공시(A 6·B 10·C 6)에 맞춘다: 나이(게임 38 이상)는 C, 나머지는 최근 3년 평균 연봉의 리그 순위로 A 6명·B 10명 순 배정. */
+  proto._applyFAClass = function (list) {
+    if (!list || !list.length) return;
+    const S = this.S, ps = [];
+    for (const c of list) {
+      const m = Object.values(S.players).filter(p => !p.foreign && p.ko === c.name && p.team === c.team && p.type === c.type).sort((a, b) => (b.reg1 ? 1 : 0) - (a.reg1 ? 1 : 0) || b.age - a.age)[0];
+      if (m) ps.push({ c, p: m });
+    }
+    const old = ps.filter(x => x.p.age >= 38), rest = ps.filter(x => x.p.age < 38).sort((a, b) => this._salAvg(b.p) - this._salAvg(a.p));
+    const gr = new Map(); old.forEach(x => gr.set(x.p.id, 'C')); rest.forEach((x, i) => gr.set(x.p.id, i < 6 ? 'A' : i < 16 ? 'B' : 'C'));
+    this.S.faClass2027 = ps.map(x => ({ id: x.p.id, grade: gr.get(x.p.id), signed: x.c.signed }));
+    for (const { c, p } of ps) {
+      if (c.signed) continue;   // 이미 재계약(FA 계약 CSV 반영)
+      p.fa.svc = Math.max(p.fa.svc, this.faReq(p)); p.fa.est = false;
+      S.teams[p.team].ids = S.teams[p.team].ids.filter(x => x !== p.id);
+      p.faInfo = { from: p.team, grade: gr.get(p.id), prev: p.contract.salary, year: 2027 }; p.team = 'FA'; p.active = false; p.reg1 = false; (S.fa = S.fa || []).push(p.id);
+    }
+    this.invalidate();
+  };
+  /* FA 시장 진행: 개막 후 매일 AI 구단이 확률적으로 FA를 영입(초반에 많고 점차 줄어듦). 사용자는 언제든 직접 협상 가능 */
+  proto._faMarketDay = function (d) {
+    const S = this.S, pool = this.faList().filter(p => !p.foreign); if (!pool.length || d > 90) return;
+    const pr = 0.01 + 0.2 * Math.exp(-d / 14), r = rngFor(S.seed, S.year, d, 5000), teams = TEAMS.filter(t => t !== S.userTeam).sort(() => r.random() - 0.5);
+    for (const t of teams) {
+      if (r.random() > pr) continue;
+      if (this._faCount(t) >= EXT_LIMIT || S.teams[t].ids.length >= ROSTER_MAX - 4) continue;
+      const cand = this.faList().filter(p => !p.foreign && !(p.faInfo && p.faInfo.from === t && false)).sort((a, b) => this.war(b) - this.war(a)).find(p => {
+        const ask = this.askSalary(p); return this.war(p) >= 1.0 && this.cbtPay(t) + this._cbtAdd(p, ask, 2) <= this.cbtCap() * 0.97 && (!(p.faInfo && p.faInfo.grade) || p.faInfo.from === t || this._faCount(t) < EXT_LIMIT) && r.random() < (this.war(p) >= 2 ? 0.7 : 0.45);
+      });
+      if (!cand) continue;
+      const ask = this.askSalary(cand), yrs = 1 + Math.floor(r.random() * 3), g = cand.faInfo && cand.faInfo.grade, from = cand.faInfo && cand.faInfo.from;
+      this._doSign(t, cand, yrs, ask); this.refreshTeam(t);
+      if (g || this.war(cand) >= 2) { const text = `FA ${cand.ko}(${from ? KO0[from] + ' ' : ''}${g ? g + '등급' : ''}) → ${KO0[t]} (${ask}억, ${yrs}년)`; (S.faLog = S.faLog || []).unshift({ year: S.year, day: d, text }); if (S.faLog.length > 40) S.faLog.pop(); news(this, text); }
     }
   };
   proto.faList = function () { const S = this.S; return (S.fa || []).map(id => S.players[id]).filter(p => p && p.team === 'FA'); };

@@ -49,10 +49,12 @@
       L._calibrateSalaries();   // 2026 연봉 데이터가 있으면 실제 연봉 사용, 없으면 모델 연봉을 실제 규모로 환산
       S.cbt = { over: {}, under: {}, drop: {}, fees: {}, log: [] };
       L._f27 = base.foreign2027 || [];
+      L._faclass = base.faclass2027 || [];
       if (L._initFARules) L._initFARules();   // FA 자격 연수·등급 기준 연봉·외국인 슬롯 초기화
+      if (L._applyFAClass) L._applyFAClass(L._faclass);   // 2027 FA 승인 선수: 미계약 20명은 시장에서 시작
       if (L._addDraftClass) L._addDraftClass(base.draft2027);   // 2027 신인 드래프트 지명 결과(실제 지명·가상 능력치)
       for (const t of TEAMS) L.initTeam(t);
-      S.calib.base = L.talentLevel();
+      S.calib.base = L.talentLevel(undefined, true);
       L.newSeasonSetup(true);
       return L;
     }
@@ -99,12 +101,12 @@
     static load(str) { return League.fromJSON(JSON.parse(str)); }
 
     /* ------------------------------------------------------------ 리그 평균 실력 수준(기준선 보정용) */
-    talentLevel(shift) {
+    talentLevel(shift, withFA) {   /* withFA: 시장에 나간 FA 승인 선수를 원소속 팀에 포함(시작 시점 기준선용) */
       const sh = shift || { B: 0, P: 0 }, out = { B: [], SP: [], RP: [] };
       for (const t of TEAMS) {
-        const H = this.hitters(t), lu = this.bestLineup(H);
+        const ex = withFA && this.faList ? this.faList().filter(p => !p.foreign && p.faInfo && p.faInfo.from === t) : [], H = this.hitters(t).concat(ex.filter(p => p.type === 'B')), lu = this.bestLineup(H);
         for (const x of lu) out.B.push(this._runsBS(this.S.players[x.id], sh.B));
-        const P = this.pitchers(t).slice().sort((a, b) => this._runsPS(b, sh.P) - this._runsPS(a, sh.P)), sp = P.filter(p => p.role === 'SP' || p.stamina >= 52).slice(0, 5), spi = new Set(sp.map(p => p.id));
+        const P = this.pitchers(t).concat(ex.filter(p => p.type === 'P')).sort((a, b) => this._runsPS(b, sh.P) - this._runsPS(a, sh.P)), sp = P.filter(p => p.role === 'SP' || p.stamina >= 52).slice(0, 5), spi = new Set(sp.map(p => p.id));
         sp.forEach(p => out.SP.push(this._runsPS(p, sh.P))); P.filter(p => !spi.has(p.id)).slice(0, 8).forEach(p => out.RP.push(this._runsPS(p, sh.P)));
       }
       const m = a => a.reduce((x, y) => x + y, 0) / a.length;
@@ -582,7 +584,7 @@
       });
       this.mergeTracking();
       for (const o of others) this.commit(o.home, o.away, o.rh, o.ra, { spH: o.spH, spA: o.spA });
-      this._decayFatigue(); this._tickService(); this.playFutures(d); this.returnMilitary(this.milYM(d));
+      this._decayFatigue(); this._tickService(); if (this._faMarketDay) this._faMarketDay(d); this.playFutures(d); this.returnMilitary(this.milYM(d));
       if (!ug) { S.day++; return { status: 'ok', day: d }; }
       if (live) { S.pendingDay = d; return { status: 'userGame', day: d, game: ug.g, idx: ug.i }; }
       const L = this.startUserGame(ug.g, ug.i); L.live.playToEnd(); const res = this.finishUserGame(L);
