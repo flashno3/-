@@ -37,5 +37,5 @@ const rid=Object.keys(S.recent)[0];ok(S.recent[rid].length<=10,'recent 10개 이
 // 4) 저장/불러오기
 const L2=League.load(L.save());ok(L2.standings2()[0].team===st2[0].team,'저장 후 2군 순위 보존');
 // 구버전 저장(2군 필드 없음)
-const old=JSON.parse(L.save());delete old.stats2;delete old.rec2;delete old.recent;const L3=League.load(JSON.stringify(old));L3.S.day=0;L3.S.phase='regular';L3.S.day=10;L3.playFutures(10);ok(L3.standings2().reduce((a,x)=>a+x.w+x.l,0)>=8,'구버전 저장 호환');
+const old=JSON.parse(L.save());delete old.stats2;delete old.rec2;delete old.recent;const L3=League.load(JSON.stringify(old));L3.S.day=0;L3.S.phase='regular';L3.S.day=10;L3.playFutures(10);ok(L3.standings2().reduce((a,x)=>a+x.w+x.l+x.d,0)===10,'구버전 저장 호환');
 console.log(fail?'실패 '+fail:'모두 통과');process.exit(fail?1:0);

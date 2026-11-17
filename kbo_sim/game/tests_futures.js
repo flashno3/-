@@ -17,12 +17,12 @@ ok(pbad===0,'투수 원본 기록 불일치 '+pbad);console.log('투수 기록',
 const base=JSON.parse(fs.readFileSync(path.join(__dirname,'src/gamedata.json'),'utf8'));
 const L=League.create(base,'Lions',9),S=L.S;const FA=Object.values(S.players).filter(p=>p.src==='F'),F=FA.filter(p=>p.type==='B'),FP=FA.filter(p=>p.type==='P');
 ok(FP.length>=180,'신규 2군 투수 수 '+FP.length);
-const PR={k:[.08,.4],bb:[.02,.18],hr:[.004,.06],babip:[.25,.37]};for(const p of FP){for(const k in PR)if(!(p.p[k]>=PR[k][0]&&p.p[k]<=PR[k][1])){ok(false,p.ko+' '+k+' '+p.p[k]);break}ok((p.team in S.teams||p.team==='MIL'||p.team==='Whales')&&(p.role==='SP'||p.role==='RP')&&p.stamina>=20&&p.stamina<=80,p.ko+' 투수 필드')}
+const PR={k:[.08,.4],bb:[.02,.18],hr:[.004,.06],babip:[.25,.37]};for(const p of FP){for(const k in PR)if(!(p.p[k]>=PR[k][0]&&p.p[k]<=PR[k][1])){ok(false,p.ko+' '+k+' '+p.p[k]);break}ok((p.team in S.teams||p.team==='MIL'||p.team==='Whales'||p.team==='FA')&&(p.role==='SP'||p.role==='RP')&&p.stamina>=20&&p.stamina<=80,p.ko+' 투수 필드')}
 ok(Object.keys(S.teams).every(t=>L.pitchers(t).filter(p=>!p.active).length>=8&&L.hitters(t).filter(p=>!p.active).length>=9),'팀별 2군 풀');
 ok(F.length>=170,'신규 2군 타자 수 '+F.length);
 const R={k:[.06,.45],bb:[.015,.2],hr:[.002,.07],babip:[.24,.39],xbh:[.1,.32],sba:[.005,.25]};
 for(const p of F){for(const k in R)if(!(p.p[k]>=R[k][0]&&p.p[k]<=R[k][1])){ok(false,p.ko+' '+k+' 범위 '+p.p[k]);break}
- ok((p.team in S.teams||p.team==='MIL'||p.team==='Whales')&&p.gs[p.pos]>0&&p.fr[p.pos],p.ko+' 필드');}
+ ok((p.team in S.teams||p.team==='MIL'||p.team==='Whales'||p.team==='FA')&&p.gs[p.pos]>0&&p.fr[p.pos],p.ko+' 필드');}
 ok(new Set(F.map(p=>p.fpid)).size===F.length,'fpid 중복');
 // 겹치는 선수 중복 생성 없음: 같은 팀 같은 이름 타자는 1명(동명이인 제외 목록)
 const dup={};for(const p of Object.values(S.players))if(p.type==='B'){const k=p.team+p.ko;dup[k]=(dup[k]||0)+1}

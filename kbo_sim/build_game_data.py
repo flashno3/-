@@ -337,6 +337,44 @@ def load_drafthist(players):
         st['ok']+=1
     return st
 DHS=load_drafthist(players)
+
+# FA 이력(사용자 제공 CSV): FA 행사 여부·등급·행사 횟수 → p['fah'](목록). 후보는 나이 27세 이상(FA 자격 연수 때문에), 동명이인은 FA 계약 CSV 매칭(p['ct'])·출전량으로 선택.
+def load_fahist(players):
+    import csv,re
+    f=D+'game/data/fa_history.csv'
+    if not os.path.exists(f): return {'ok':0,'miss':[]}
+    by={}
+    for p in players:
+        if not p.get('foreign') and p.get('team')!='RET': by.setdefault(p['ko'],[]).append(p)
+    st={'ok':0,'miss':[]}
+    for r in csv.DictReader(open(f,encoding='utf-8-sig')):
+        name=re.sub(r'\s*\(.*\)','',r['선수명']);hint=(re.findall(r'\((.*)\)',r['선수명']) or [''])[0]
+        c=[p for p in by.get(name,[]) if p['age']>=27]
+        if hint=='투수': c=[p for p in c if p['type']=='P']
+        elif hint=='외야수': c=[p for p in c if p['type']=='B']
+        c.sort(key=lambda p:(-(1 if p.get('ct') else 0),-((p.get('PA') or 0)+1.5*(p.get('IP') or 0))))
+        if not c: st['miss'].append((r['선수명'],r['자격시즌']));continue
+        p=c[0]
+        g=r['등급'].split()[0] if r['등급'] and r['등급'].split()[0] in ('A','B','C') else None
+        cnt=re.match(r'(\d+)',r['FA행사횟수_확인분'] or '');used=int(cnt.group(1)) if cnt else (1 if '두 번째 FA 자격' in (r['FA행사횟수_확인분'] or '') else None)
+        pg=re.search(r'(\d{4}) ([ABC])',r['직전FA등급'] or '')
+        p.setdefault('fah',[]).append({'y':int(r['자격시즌']),'g':g,'st':r['자격상태'].split()[0],'used':used,'prev':pg.group(2) if pg else None})
+        st['ok']+=1
+    return st
+FAH=load_fahist(players)
+
+# 2027 시즌 외국인 선수 계약(뉴스 검색으로 확정이 확인된 것만, game/data/foreign_2027.csv)
+def load_foreign27():
+    import csv
+    f=D+'game/data/foreign_2027.csv'
+    if not os.path.exists(f): return []
+    TMF={'한화':'Eagles','LG':'Twins','SSG':'Landers','두산':'Bears','키움':'Heroes','KT':'Wiz','NC':'Dinos','롯데':'Giants','삼성':'Lions','KIA':'Tigers'}
+    out=[]
+    for r in csv.DictReader(open(f,encoding='utf-8-sig')):
+        out.append(dict(team=TMF[r['팀']],name=r['선수명'],aq=r['구분']=='AQ',type='P' if r['포지션']=='투수' else 'B',status=r['상태'],total=int(r['총액_달러']) if r['총액_달러'] else None,
+                        bonus=int(r['계약금_달러']) if r['계약금_달러'] else None,opt=int(r['옵션_달러']) if r['옵션_달러'] else None,term=r['기간'],date=r['확정일']))
+    return out
+FOREIGN27=load_foreign27()
 # 능력치 척도(20-80): ratings.py 와 같은 방식(규정 타자 PA≥300 / 규정 투수 TBF≥200 가중 평균·표준편차)
 def scale(rows,fields,w):
     out={}
@@ -344,7 +382,7 @@ def scale(rows,fields,w):
         v=[r['p'][f] for r in rows];t=[w(r) for r in rows];mu=sum(a*b for a,b in zip(v,t))/sum(t);sd=math.sqrt(sum(b*(a-mu)**2 for a,b in zip(v,t))/sum(t));out[f]=[mu,sd]
     return out
 regB=[b for b in R['batters'] if b['PA']>=300];regP=[p for p in R['pitchers'] if p['TBF']>=200]
-out={'draft2027':DRAFT,'teams':TEAMS,'players':players,'league_bat':R['league_bat'],'team_def':R['team_def'],'pf':PK['pf_by_team'],
+out={'foreign2027':FOREIGN27,'draft2027':DRAFT,'teams':TEAMS,'players':players,'league_bat':R['league_bat'],'team_def':R['team_def'],'pf':PK['pf_by_team'],
  'fielding':{'lg':F['lg'],'team_avg_range':F['team_avg_range']},
  'scale':{'B':scale(regB,['k','bb','hr','babip','xbh','sba'],lambda r:r['PA']),'P':scale(regP,['k','bb','hr','babip'],lambda r:r['TBF'])}}
 os.makedirs(D+'game/src',exist_ok=True)
@@ -375,3 +413,7 @@ print('2027 드래프트 지명',len(DRAFT),'명')
 print('FA 계약 반영',FAC['ok'],'| 시장 진출',FAC['fa'],'| 매칭 실패',FAC['skip'])
 
 print('드래프트 이력 매칭',DHS['ok'],'| 모호',DHS['amb'],'| 미매칭',DHS['miss'],'| 나이 재추정',sum(1 for p in players if p.get('ageEstDraft')))
+
+print('FA 이력 반영',FAH['ok'],'행 | 미매칭(은퇴·자료 없음)',FAH['miss'])
+
+print('2027 외국인 확정 계약',len(FOREIGN27),'건')

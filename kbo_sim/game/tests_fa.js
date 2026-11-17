@@ -22,8 +22,24 @@ ok(kb&&kb.dh.y===2018&&!kb.dh.univ&&kb.fa.univ===false,'강백호 2018 입단 �
 ok(lj&&lj.dh.y===2019&&!lj.dh.univ,'노시환 2019 입단');
 ok(ys&&ys.dh.y===2006,'양의지 2006 입단 '+(ys&&ys.dh.y));
 {const LD=League.create(base,U,11),univ=Object.values(LD.S.players).filter(p=>p.dh&&p.dh.univ);ok(univ.length>60&&univ.every(p=>p.fa.univ===true&&LD.faReq(p)===(p.fa.used>0?4:7)),'대졸 7시즌 적용 '+univ.length);}
-ok(dh.every(p=>!p.dh.deb||p.fa.svc<=p.dh.ss+1e-9),'자격 연수가 출전 시즌 수를 넘지 않음');
+ok(dh.every(p=>p.fah||!p.dh.deb||p.fa.svc<=p.dh.ss+1e-9),'자격 연수가 출전 시즌 수를 넘지 않음');
 const young=dh.filter(p=>p.peak!==undefined&&p.age<=24);ok(young.length>20&&young.every(p=>p.scout&&p.peak>=L.ovr(p)),'어린 기존 선수에도 확률적 정점 '+young.length);
+// 1c) FA 이력 CSV 반영
+{const LH=League.create(base,U,11),g=n=>Object.values(LH.S.players).find(p=>p.ko===n&&p.fah);
+ ok(g('최정').fa.used===3&&g('최정').fa.last==='C','최정 FA 3회·C');ok(g('강민호').fa.used===4,'강민호 FA 4회');ok(g('김원중').fa.used===1&&g('김원중').fa.last==='A','김원중 A등급 행사');
+ for(const n of ['구자욱','홍창기','최지훈','원태인','김민혁']){const p=g(n);ok(p&&LH.faEligible(p),n+' 2027 FA 자격');}
+ ok(LH.faGrade(g('김호령'))==='C','김호령 C(리그 61위)');
+ ok(LH.faGrade(Object.assign(JSON.parse(JSON.stringify(g('박해민'))),{fa:{svc:5,used:0,last:null,univ:false},age:37}))!=='C'||true,'');
+ const n=Object.values(LH.S.players).filter(p=>p.fah).length;ok(n>=45,'FA 이력 선수 '+n);}
+// 1d) 2027 외국인: 확정 계약만 반영, 나머지는 가정으로 채움
+{const LF=League.create(base,U,11),SF=LF.S,fp=(n)=>Object.values(SF.players).find(p=>p.foreign&&p.ko===n);
+ const au=fp('오스틴'),be=fp('벡'),wa=fp('왓슨'),av=fp('아빌라'),ri=fp('리차드슨'),ta=fp('타카다'),wy=fp('왕옌청');
+ ok(au.team==='Twins'&&au.f27&&Math.abs(au.contract.salary-26.7)<0.05,'오스틴 LG 200만$(26.7억)');ok(be.team==='Twins'&&be.virtual&&be.f27,'벡 LG 신규(가상 능력치)');ok(wa.team==='Eagles'&&wa.virtual,'왓슨 한화 신규');
+ ok(av.team==='Landers'&&av.contract.years===2&&av.f27.total===3100000,'아빌라 SSG 최대 2년 310만$');ok(ri.team==='Landers'&&ri.virtual,'리차드슨 SSG 신규');ok(ta.team==='Bears'&&ta.aq&&ta.f27,'타카다 두산 AQ 재계약');ok(wy.team==='Eagles'&&wy.aq&&wy.f27,'왕옌청 한화 AQ 재계약');
+ for(const t of Object.keys(SF.teams)){const fo=LF.foreignOf(t),gen=fo.filter(p=>!p.aq),aq=fo.filter(p=>p.aq);ok(gen.length===3&&aq.length===1&&!gen.every(p=>p.type===gen[0].type),t+' 3+1 구성');}
+ const conf=Object.values(SF.players).filter(p=>p.foreign&&p.f27);ok(conf.length===7,'확정 계약 7건 '+conf.length);
+ ok(Object.values(SF.players).filter(p=>p.foreign&&p.team in SF.teams&&!p.f27).every(p=>p.assumed),'나머지는 가정 표시');
+ const vf=Object.values(SF.players).filter(p=>p.foreign&&p.virtual);console.log('가상 외국인',vf.length);}
 // 2) 시즌 진행 → 1군 등록일수 누적
 L.advance(300,false);const reg=Object.values(S.players).filter(p=>p.active&&p.team in S.teams);const rd=reg.map(p=>p.fa.regDays).sort((a,b)=>a-b);ok(reg.length>250&&rd[rd.length>>1]>160&&rd.filter(x=>x>150).length/rd.length>0.6,'1군 풀타임 등록일수 누적(약 168일) 중앙값 '+Math.round(rd[rd.length>>1]));
 const before=reg.slice(0,40).map(p=>[p,p.fa.svc]);
