@@ -545,49 +545,67 @@
     this.refreshTeam(aiTeam); this.repairSettings(me); this.invalidate(); return ev;
   };
 
-  /* ---------------- 재정(손익) 모델 ----------------
-   * 입력: finance_2025.csv(감사보고서·언론 종합 매출·영업비용·영업이익) + 2026 평균 관중 + 구장 수용인원.
-   * 입장 수입 = 홈 경기 관중 × 객단가(롯데는 공시 입장수입 232억에서 역산, 나머지는 리그 평균 추정 15,600원 — 가정).
-   * 그 외 매출(중계·광고·MD·기타) = 2025 매출 − 입장 추정치, 시즌마다 동일(가정).
-   * 선수단 외 운영비 = 2025 영업비용 − 현재 선수단 보수 합계(2026 연봉을 2025 보수의 대용으로 사용 — 가정).
-   * 영업이익 = 입장 + 그 외 매출 − 선수단 보수 − 운영비 − 야구발전기금(CBT). FA 여유자금 = 예산 − 선수단 보수,
-   * 예산 = 직전 시즌 매출 − 운영비 + 허용 적자(매출의 3%, 모기업 보전 가정). */
-  const FIN_PRICE = 15600 / 1e8, FIN_GAMES = 72, FIN_LOSS = 0.03;
+  /* ---------------- 재정(손익) 모델 v2 ----------------
+   * [데이터] finance_2025.csv: 2025 매출·영업비용·영업이익, 2026 평균 관중, 구장 좌석(검색에서 가장 많이 언급된 값), 모기업(계열사) 의존도(삼성·SSG·롯데만 보도).
+   * [수입] 입장(홈 관중 × 객단가 × 티켓 가격 정책) + 모기업·계열사 광고·후원(매출 × 의존도, 미확인 구단은 35% 가정)
+   *        + 중계·KBO 분배·MD·기타(2025 매출에서 역산해 고정) + 포스트시즌 배당금 + 우승 시 모기업 보너스.
+   * [포스트시즌 배당] 입장수입(경기당 좌석 × 4.5만 원, 전 경기 매진 가정) − 운영비 44% = 배당 재원. 정규시즌 1위 20%, 나머지 80%를
+   *        한국시리즈 우승 50 / 준우승 24 / 플레이오프 패 14 / 준PO 패 9 / 와일드카드 패 3 으로 분배(2025 LG 52.8억=17.6+35.2, 한화 16.9억으로 검증).
+   *        우승 팀은 배당금의 50%를 모기업 보너스로 추가(LG 79.2억), 그중 선수단 포상금으로 30% 지출(가정).
+   * [비용] 선수단 보수 + 운영비(2025 영업비용 − 초기 보수) + 야구발전기금(CBT) + 우승 포상금.
+   * [예산] FA 여유자금 = 직전 시즌 매출 − 운영비 + 허용 적자(매출의 3% × (0.5 + 이사회 신뢰도/100)) − 선수단 보수.
+   * [이사회 신뢰도] 0~100(시작 60): 성적·포스트시즌·우승, 영업 손익이 허용 적자 안인지에 따라 변동. 낮으면 허용 적자(예산)가 줄어든다. */
+  const FIN_PRICE = 15600 / 1e8, FIN_GAMES = 72, PS_PRICE = 45000 / 1e8, PS_COST = 0.44, PARENT_BONUS = 0.5, PLAYER_BONUS = 0.3, PAR_DEFAULT = 0.35, ELAST = 0.6, LOSS = 0.03;
+  const PS_SHARE = { reg: 0.2, ks: 0.4, ksL: 0.192, poL: 0.112, jpoL: 0.072, wcL: 0.024 };
+  const PRICE_PM = [0.9, 1, 1.1, 1.2];
   proto._initFinance = function (data) {
-    const S = this.S; S.fin = { teams: {}, hist: [] }; if (!data) return;
+    const S = this.S; S.fin = { v: 2, teams: {}, hist: [] }; if (!data) return;
     for (const t of TEAMS) {
       const d = data[t]; if (!d) continue;
-      const price = d.gate ? d.gate / (d.att * FIN_GAMES) : FIN_PRICE, estGate = d.gate || d.att * FIN_GAMES * price, pay0 = this.payroll(t);
-      S.fin.teams[t] = { att0: d.att, cap: d.cap, price, other: Math.round((d.rev - estGate) * 10) / 10, opex: Math.round((d.cost - pay0) * 10) / 10, rev0: d.rev, op0: d.op, park: d.park, note: d.note, gateKnown: !!d.gate, gate: 0, games: 0, lastRev: d.rev };
+      const price = d.gate ? d.gate / (d.att * FIN_GAMES) : FIN_PRICE, estGate = d.gate || d.att * FIN_GAMES * price, pay0 = this.payroll(t), par = d.par !== null && d.par !== undefined ? d.par / 100 : PAR_DEFAULT;
+      S.fin.teams[t] = { att0: d.att, cap: d.cap, capchg: d.capchg || [], capsrc: d.capsrc, chgsrc: d.chgsrc, price, pm: 1, par, parKnown: d.par !== null && d.par !== undefined, parAds: Math.round(d.rev * par * 10) / 10, other: Math.round((d.rev - estGate - d.rev * par) * 10) / 10, opex: Math.round((d.cost - pay0) * 10) / 10, rev0: d.rev, op0: d.op, park: d.park, note: d.note, gateKnown: !!d.gate, gate: 0, games: 0, lastRev: d.rev, trust: 60 };
     }
   };
-  proto.finReady = function () { return !!(this.S.fin && this.S.fin.teams && this.S.fin.teams.Lions); };
-  proto.finAtt = function (t) {   // 이번 시즌 홈 관중 예상: 기준 관중 × 성적 보정(승률 ±), 수용인원 이내
-    const S = this.S, f = S.fin.teams[t], r = S.rec[t], g = r[0] + r[1] + r[2];
-    const wp = g >= 10 ? r[0] / Math.max(1, r[0] + r[1]) : 0.5;
-    return Math.min(f.cap, Math.round(f.att0 * clamp(1 + 0.8 * (wp - 0.5), 0.8, 1.25)));
+  proto.finReady = function () { const F = this.S.fin; return !!(F && F.v === 2 && F.teams && F.teams.Lions); };
+  proto.finCap = function (t, year) { const f = this.S.fin.teams[t]; let c = f.cap; for (const [y, v] of f.capchg) if ((year || this.S.year) >= y) c = v; return c; };
+  proto.finAtt = function (t) {   // 홈 관중: 기준 관중 × 성적 보정 × 티켓 가격 탄력성, 좌석 수 이내
+    const S = this.S, f = S.fin.teams[t], r = S.rec[t], wp = (r[0] + r[1] + r[2]) >= 10 ? r[0] / Math.max(1, r[0] + r[1]) : 0.5;
+    return Math.min(this.finCap(t), Math.round(f.att0 * clamp(1 + 0.8 * (wp - 0.5), 0.8, 1.25) * clamp(1 - ELAST * (f.pm - 1), 0.6, 1.2)));
   };
-  proto._finGame = function (home) {   // 홈 경기 1경기 입장 수입 적립
-    if (!this.finReady()) return; const f = this.S.fin.teams[home]; if (!f) return;
-    f.gate += this.finAtt(home) * f.price; f.games++;
-  };
-  proto.finBudget = function (t) { const f = this.S.fin.teams[t]; return Math.round((f.lastRev - f.opex + f.lastRev * FIN_LOSS) * 10) / 10; };
+  proto._finGame = function (home) { if (!this.finReady()) return; const f = this.S.fin.teams[home]; if (!f) return; f.gate += this.finAtt(home) * f.price * f.pm; f.games++; };
+  proto.setTicketPolicy = function (t, pm) { if (!this.finReady() || !PRICE_PM.includes(pm)) return false; this.S.fin.teams[t].pm = pm; return true; };
+  proto.finAllowed = function (t) { const f = this.S.fin.teams[t]; return f.lastRev * LOSS * (0.5 + f.trust / 100); };
+  proto.finBudget = function (t) { const f = this.S.fin.teams[t]; return Math.round((f.lastRev - f.opex + this.finAllowed(t)) * 10) / 10; };
   proto.faRoom = function (t) { return this.finReady() ? Math.round((this.finBudget(t) - this.payroll(t)) * 10) / 10 : 1e9; };
-  proto.finPreview = function (t) {   // 시즌 예상 손익(진행분 + 남은 홈 경기를 현재 관중으로 환산)
-    const S = this.S, f = S.fin.teams[t], rem = Math.max(0, FIN_GAMES - f.games), gate = f.gate + rem * this.finAtt(t) * f.price;
-    const pay = this.payroll(t), fee = (S.cbt && S.cbt.log.length) ? 0 : 0, v = this.cbtPreview(t), cbt = v.fee || 0, rev = gate + f.other;
-    return { gate, other: f.other, rev, pay, opex: f.opex, cbt, op: rev - pay - f.opex - cbt, att: this.finAtt(t), room: this.faRoom(t), budget: this.finBudget(t) };
+  proto.finPreview = function (t) {   // 시즌 예상 손익(진행분 + 남은 홈 경기를 현재 관중으로 환산), 포스트시즌 수입 제외
+    const S = this.S, f = S.fin.teams[t], rem = Math.max(0, FIN_GAMES - f.games), gate = f.gate + rem * this.finAtt(t) * f.price * f.pm;
+    const pay = this.payroll(t), v = this.cbtPreview(t), cbt = v.fee || 0, rev = gate + f.parAds + f.other;
+    return { gate, par: f.parAds, other: f.other, rev, pay, opex: f.opex, cbt, op: rev - pay - f.opex - cbt, att: this.finAtt(t), cap: this.finCap(t), room: this.faRoom(t), budget: this.finBudget(t), trust: f.trust, allowed: this.finAllowed(t) };
+  };
+  proto._psSettle = function () {   // 포스트시즌 입장수입 → 배당 재원 → 팀별 배당
+    const P = this.S.post; if (!P || !P.rounds || !P.rounds.length) return null;
+    let gate = 0, games = 0; const alloc = {}, add = (t, x) => { if (t) alloc[t] = (alloc[t] || 0) + x; };
+    P.rounds.forEach(r => { if (r) for (const g of r.games) { gate += this.finCap(g.home) * PS_PRICE; games++; } });
+    const pool = gate * (1 - PS_COST), lose = r => r.winner === r.hi ? r.lo : r.hi;
+    add(P.seeds[0], pool * PS_SHARE.reg);
+    const keys = ['wcL', 'jpoL', 'poL']; P.rounds.forEach((r, i) => { if (r && r.winner) { if (i < 3) add(lose(r), pool * PS_SHARE[keys[i]]); else { add(r.winner, pool * PS_SHARE.ks); add(lose(r), pool * PS_SHARE.ksL); } } });
+    return { gate, games, pool, alloc, champion: P.done ? P.champion : null, runnerUp: P.done ? P.runnerUp : null };
   };
   proto.settleFinance = function () {
-    const S = this.S; if (!this.finReady()) return; const row = { year: S.year, teams: {} };
+    const S = this.S; if (!this.finReady()) return; const row = { year: S.year, teams: {} }, ps = this._psSettle(), st = this.standings();
+    row.ps = ps ? { gate: Math.round(ps.gate * 10) / 10, games: ps.games, pool: Math.round(ps.pool * 10) / 10 } : null;
     for (const t of TEAMS) {
       const f = S.fin.teams[t], v = this.finPreview(t), lg = (S.cbt.log || []).filter(x => x.team === t && x.year === S.year).pop(); if (lg) { v.op += v.cbt - lg.fee; v.cbt = lg.fee; }   // 야구발전기금은 방금 정산한 실제 금액
-      const rr = S.rec[t], g = Math.max(1, rr[0] + rr[1] + rr[2]), wp = rr[0] / Math.max(1, rr[0] + rr[1]);
-      row.teams[t] = { gate: Math.round(v.gate * 10) / 10, rev: Math.round(v.rev * 10) / 10, pay: Math.round(v.pay * 10) / 10, opex: f.opex, cbt: Math.round(v.cbt * 100) / 100, op: Math.round(v.op * 10) / 10, att: v.att };
-      f.lastRev = v.rev; f.att0 = Math.min(f.cap, Math.round(f.att0 * clamp(1 + 0.35 * (wp - 0.5), 0.92, 1.1)));   // 성적이 좋으면 다음 해 기준 관중 상승
+      const rr = S.rec[t], wp = rr[0] / Math.max(1, rr[0] + rr[1]), div = ps ? (ps.alloc[t] || 0) : 0, champ = ps && ps.champion === t, bonus = champ ? div * PARENT_BONUS : 0, prize = champ ? (div + bonus) * PLAYER_BONUS : 0;
+      const op = v.op + div + bonus - prize, rank = st.find(x => x.team === t).rank, inPS = S.post && S.post.seeds.includes(t);
+      let d = champ ? 12 : (ps && ps.runnerUp === t) ? 6 : inPS ? 3 : rank > 7 ? -6 : -3;
+      d += op >= 0 ? 2 : (-op > f.lastRev * LOSS * (0.5 + f.trust / 100) ? -6 : -1);
+      const trust = clamp(Math.round(f.trust + d), 0, 100);
+      row.teams[t] = { gate: Math.round(v.gate * 10) / 10, par: f.parAds, other: f.other, rev: Math.round((v.rev + div + bonus) * 10) / 10, ps: Math.round(div * 10) / 10, bonus: Math.round(bonus * 10) / 10, prize: Math.round(prize * 10) / 10, pay: Math.round(v.pay * 10) / 10, opex: f.opex, cbt: Math.round(v.cbt * 100) / 100, op: Math.round(op * 10) / 10, att: v.att, trust, dTrust: trust - f.trust, rank };
+      f.lastRev = v.rev; f.trust = trust; f.att0 = Math.min(this.finCap(t, S.year + 1), Math.round(f.att0 * clamp(1 + 0.35 * (wp - 0.5) + (champ ? 0.03 : 0), 0.92, 1.1)));   // 성적이 좋으면 다음 해 기준 관중 상승
       f.gate = 0; f.games = 0;
     }
     S.fin.hist.push(row); if (S.fin.hist.length > 20) S.fin.hist.shift();
-    const my = row.teams[S.userTeam]; news(this, `재정 결산 ${S.year}: 매출 ${my.rev}억 · 선수단 ${my.pay}억 · 영업이익 ${my.op >= 0 ? '+' : ''}${my.op}억 (평균 관중 ${my.att.toLocaleString()}명)`);
+    const my = row.teams[S.userTeam]; news(this, `재정 결산 ${S.year}: 매출 ${my.rev}억 · 선수단 ${my.pay}억 · 영업이익 ${my.op >= 0 ? '+' : ''}${my.op}억${my.ps ? ` (포스트시즌 배당 ${my.ps}억${my.bonus ? ` + 모기업 보너스 ${my.bonus}억, 선수단 포상 ${my.prize}억` : ''})` : ''} · 이사회 신뢰도 ${my.trust}(${my.dTrust >= 0 ? '+' : ''}${my.dTrust})`);
   };
 });

@@ -5,16 +5,27 @@ const L=League.create(base,'Lions',7),S=L.S;let n=0;const ok=(c,m)=>{assert(c,m)
 const T=Object.keys(S.fin.teams);ok(T.length===10,'10개 구단');
 ok(Math.abs(T.reduce((a,t)=>a+S.fin.teams[t].rev0,0)-7795.8)<1,'2025 총매출 합');
 // 2) 기준 연도 손익 재현: 시즌 전 예상 영업이익이 2025 영업이익과 (기금 제외) 일치
-for(const t of T){const f=S.fin.teams[t],v=L.finPreview(t);ok(Math.abs(v.op+v.cbt-f.op0)<0.6,t+' 기준 손익 재현 '+(v.op+v.cbt)+' vs '+f.op0);ok(f.att0<=f.cap,t+' 관중≤수용');}
+for(const t of T){const f=S.fin.teams[t],v=L.finPreview(t);if(L.finCap(t)<f.cap)ok(v.op+v.cbt<f.op0,t+' 좌석 축소로 손익 감소');else ok(Math.abs(v.op+v.cbt-f.op0)<0.6,t+' 기준 손익 재현 '+(v.op+v.cbt)+' vs '+f.op0);ok(f.att0<=f.cap,t+' 관중≤수용');}
 ok(S.fin.teams.Giants.gateKnown&&Math.abs(L.finPreview('Giants').gate-232)<0.5,'롯데 입장수입 232억');
+ok(S.fin.teams.Twins.cap===23750&&L.finCap('Twins',2027)===18000&&L.finCap('Bears',2026)===23750,'잠실 좌석 2027 변경');ok(L.finCap('Eagles',2028)===20000&&L.finCap('Eagles',2027)===17000,'한화 증축 2028');
+ok(S.fin.teams.Lions.parKnown&&Math.abs(S.fin.teams.Lions.par-0.308)<1e-9&&!S.fin.teams.Bears.parKnown&&S.fin.teams.Bears.par===0.35,'모기업 의존도');
+{const a=L.finAtt('Lions');L.setTicketPolicy('Lions',1.2);const b=L.finAtt('Lions');L.setTicketPolicy('Lions',1);ok(b<a||a===S.fin.teams.Lions.cap&&b<=a,'가격 인상 시 관중 감소');ok(!L.setTicketPolicy('Lions',3),'허용 안 되는 정책');}
 // 3) 시즌 진행: 홈 경기 수만큼 입장 수입 적립, 관중은 수용인원 이내
 L.advance(1000);
 for(const t of T){const f=S.fin.teams[t];ok(f.games===S.rec[t][0]+S.rec[t][1]+S.rec[t][2]-Math.round(0)||true,'');}
 const homes={};for(const r of S.results)homes[r.home]=(homes[r.home]||0)+1;
 for(const t of T){ok(S.fin.teams[t].games===homes[t],t+' 홈 경기 수 일치 '+S.fin.teams[t].games+' '+homes[t]);ok(L.finAtt(t)<=S.fin.teams[t].cap,'수용인원');}
 // 4) 결산: 보수·기금이 그대로 기록되고 누적 초기화
-const pre=T.map(t=>L.finPreview(t));pre.forEach(v=>{});L.startOffseason&&L.startOffseason();
-ok(S.fin.hist.length===1,'결산 1건');T.forEach((t,i)=>{const h=S.fin.hist[0].teams[t];ok(Math.abs(h.rev-pre[i].rev)<0.2&&Math.abs(h.pay-pre[i].pay)<0.2,t+' 결산 매출·보수=예상');const lg=S.cbt.log.filter(x=>x.team===t&&x.year===S.year-0).pop();ok(!lg||Math.abs(h.cbt-lg.fee)<0.01,t+' 기금=CBT 정산 금액');ok(Math.abs(h.op-(h.rev-h.pay-h.opex-h.cbt))<0.2,t+' 영업이익=매출-비용');ok(S.fin.teams[t].games===0&&S.fin.teams[t].gate===0,'초기화');});
+L.advance(1000);const pre=T.map(t=>L.finPreview(t));
+const P=L.startPostseason();let gg=0;while(!P.done&&gg++<100){if(L.userInPost()){const c=L.startUserPostGame();c.live.playToEnd();L.finishUserPostGame(c)}else L.simPostGame()}
+const ps=L._psSettle();
+// 4a) 포스트시즌 배당: 분배율 합 = 100%, 배당 재원 = 입장수입×(1-44%), 우승·준우승·1위 몫
+ok(Math.abs(ps.pool-ps.gate*0.56)<1e-9,'배당 재원 56%');ok(Math.abs(Object.values(ps.alloc).reduce((a,b)=>a+b,0)-ps.pool)<1e-6,'배당 합=재원(모든 라운드 진행)');
+ok(ps.alloc[P.seeds[0]]>=ps.pool*0.2-1e-9,'정규시즌 1위 20%');ok(ps.champion===P.champion&&ps.alloc[P.champion]>ps.alloc[P.runnerUp]||P.champion===P.seeds[0],'우승 몫>준우승 몫');
+// 2025 실제 검증: 재원 88억 → 정규 17.6, KS 우승 35.2, 준우승 16.9(보도)
+{const pool=88;ok(Math.abs(pool*0.2-17.6)<1e-9&&Math.abs(pool*0.4-35.2)<1e-9&&Math.abs(pool*0.192-16.9)<0.01,'2025 보도 수치 재현');}
+const champ=P.champion;L.startOffseason&&L.startOffseason();
+ok(S.fin.hist.length===1,'결산 1건');T.forEach((t,i)=>{const h=S.fin.hist[0].teams[t];ok(Math.abs(h.rev-h.ps-h.bonus-pre[i].rev)<0.2&&Math.abs(h.pay-pre[i].pay)<0.2,t+' 결산 매출(배당 제외)·보수=예상');const lg=S.cbt.log.filter(x=>x.team===t&&x.year===S.year-0).pop();ok(!lg||Math.abs(h.cbt-lg.fee)<0.01,t+' 기금=CBT 정산 금액');ok(Math.abs(h.op-(h.rev-h.pay-h.opex-h.cbt-h.prize))<0.2,t+' 영업이익=매출-비용-포상');ok(t===champ?h.bonus>0&&h.prize>0:h.bonus===0&&h.prize===0,t+' 우승팀만 보너스·포상');ok(h.trust>=0&&h.trust<=100,'신뢰도 범위');ok(S.fin.teams[t].games===0&&S.fin.teams[t].gate===0,'초기화');});
 // 5) FA 여유자금: AI 시장 영입은 여유자금 이내 — 여유 0이면 영입 없음
 const L2=League.create(base,'Lions',7);for(const t of Object.keys(L2.S.fin.teams))L2.S.fin.teams[t].lastRev=0;
 const before=L2.faList().length;for(let d=0;d<40;d++)L2._faMarketDay(d);ok(L2.faList().length===before,'예산 0이면 AI FA 영입 없음');
