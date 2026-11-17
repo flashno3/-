@@ -8,6 +8,7 @@ node web/tests/live_parity.js
 node game/tests_live.js
 node game/tests_farm.js | tail -2
 node game/tests_cbt.js | tail -3
+node game/tests_futures.js | tail -3
 node game/tests_offseason.js | tail -3
 node game/tests_longrun.js 10 11 | tail -2
 python3 build_game.py

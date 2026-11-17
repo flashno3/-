@@ -15,7 +15,7 @@
   const PEN_R = { SS: 22, '2B': 26, '3B': 28, CF: 24, LF: 36, RF: 36, '1B': 44, C: 40 }, PEN_E = { SS: 2.2, '2B': 2.2, '3B': 2.2, CF: 1.8, LF: 1.5, RF: 1.5, '1B': 1.2, C: 1.6 };   // 엔진의 낯선 포지션 페널티와 같은 값
   const FAM = 15;   // 소화 가능 기준(해당 포지션 선발 경기 수)
   const POSPEN = { C: 70, SS: 55, CF: 40, '2B': 38, '3B': 32, RF: 20, LF: 16, '1B': 10, DH: 0 };
-  const ACTIVE_MAX = 28, ROSTER_MAX = 70, ROSTER_MIN = 44;
+  const ACTIVE_MAX = 28, ROSTER_MAX = 120, ROSTER_MIN = 44;
   const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
   const rngFor = (...ns) => { let h = 2166136261; for (const n of ns) { h = Math.imul(h ^ (n | 0), 16777619) >>> 0; h = (h ^ (h >>> 13)) >>> 0; } return new PyRandom(h); };
   const gauss = (r, m, s) => r.gauss(m, s);

@@ -51,6 +51,78 @@ def load_hands():
         p=c[0];p['throws']={'우':'R','좌':'L'}[h[0]];p['bats']={'우':'R','좌':'L','양':'S'}[h[2]];hit+=1
     return hit,skip,miss
 HITS,SKIP,MISS=load_hands()
+
+# ---------------------------------------------------------------------------
+# 퓨처스 타자: 2026 퓨처스 기록(사용자 제공)을 1군 능력치 척도로 환산해 2군 선수로 추가.
+# 환산: 1군 레이팅이 있는 겹치는 선수(PA>=40)로 'rating ~ 퓨처스 수축 비율' 회귀(PA 가중)를 구해 적용한다.
+#  - 퓨처스 비율은 1군과 같은 사전 표본(ratings.py의 N)으로 퓨처스 리그 평균 쪽으로 수축
+#  - 상무·울산 소속 선수는 원소속 구단을 몰라 게임에 넣지 않고 별도 파일에 보관
+#  - 포지션 세부(1B/2B/3B/SS, LF/CF/RF)·수비 능력·나이(명단에 없는 경우)는 데이터가 없어 추정값(posEst/ageEst)
+FUT_TM={'한화':'Eagles','LG':'Twins','SSG':'Landers','두산':'Bears','고양':'Heroes','KT':'Wiz','NC':'Dinos','롯데':'Giants','삼성':'Lions','KIA':'Tigers'}
+FNs={'k':60,'bb':120,'hbp':240,'hr':170,'babip':820,'xbh':400,'sba':150}
+def futures_hitters(players):
+    f=D+'game/data/futures_bat_2026.txt'
+    if not os.path.exists(f): return None
+    rows=[]
+    for l in open(f,encoding='utf8'):
+        if l.startswith('#') or not l.strip(): continue
+        t=l.split();team,g,pid,name=t[:4];v=[float(x) if '.' in x else int(x) for x in t[4:]]
+        _,G,PA,AB,_r,H,B2,B3,HR,RBI,SB,BB,HBP,SO,_,_=v
+        rows.append(dict(team=team,g=g,pid=pid,name=name,G=G,PA=PA,AB=AB,H=H,B2=B2,B3=B3,HR=HR,SB=SB,BB=BB,HBP=HBP,SO=SO))
+    # 명단(생년·투타)
+    ros={}
+    rf=D+'game/data/futures_roster_2026.txt'
+    for l in open(rf,encoding='utf8'):
+        if not l.strip() or l.startswith('#'): continue
+        t,g,n,h,b,_,_=l.strip().split('|');ros[(('고양' if t=='히어로즈' else t),n,'P' if g=='P' else g)]=(b,h)
+    def obs(r):
+        bip=r['AB']-r['SO']-r['HR'];hnh=r['H']-r['HR'];b1=r['H']-r['B2']-r['B3']-r['HR']
+        return {'k':(r['SO'],r['PA']),'bb':(r['BB'],r['PA']),'hbp':(r['HBP'],r['PA']),'hr':(r['HR'],r['PA']),'babip':(hnh,bip),'xbh':(r['B2']+r['B3'],hnh),'sba':(r['SB']/0.745,b1+r['BB']+r['HBP'])}
+    lg={s:sum(obs(r)[s][0] for r in rows)/sum(obs(r)[s][1] for r in rows) for s in FNs}
+    shr=lambda r,s:(obs(r)[s][0]+lg[s]*FNs[s])/(obs(r)[s][1]+FNs[s])
+    # 1군 선수와 매칭(이름+같은 소속팀). 겹치는 선수는 1군 레이팅을 그대로 쓴다.
+    byname={}
+    for p in players:
+        if p['type']=='B': byname.setdefault(p['ko'],[]).append(p)
+    used=set();ov=[];new=[];unassigned=[]
+    for r in rows:
+        c=[p for p in byname.get(r['name'],[]) if p['team']==FUT_TM.get(r['team']) and p['id'] not in used]
+        if c: used.add(c[0]['id']);r['m']=c[0];ov.append(r)
+        elif r['team'] in FUT_TM: new.append(r)
+        else: unassigned.append(r)
+    fit={}
+    for s in ['k','bb','hr','babip','xbh','sba']:
+        pts=[(shr(r,s),r['m']['p'][s],r['PA']) for r in ov if r['PA']>=40]
+        W=sum(w for _,_,w in pts);mx=sum(w*x for x,_,w in pts)/W;my=sum(w*y for _,y,w in pts)/W
+        sxx=sum(w*(x-mx)**2 for x,_,w in pts);sxy=sum(w*(x-mx)*(y-my) for x,y,w in pts)
+        fit[s]=dict(mx=mx,my=my,b=sxy/sxx,n=len(pts))
+    lgB=R['league_bat']
+    out=[]
+    import hashlib
+    def h01(key):
+        return int(hashlib.md5(key.encode()).hexdigest()[:8],16)/0xffffffff
+    for r in new:
+        p={s:fit[s]['my']+fit[s]['b']*(shr(r,s)-fit[s]['mx']) for s in fit}
+        p['hbp']=shr(r,'hbp')*lgB['hbp']/lg['hbp'];p['tri']=lgB['tri'];p['sbp']=lgB['sbp']
+        p['k']=min(max(p['k'],0.06),0.45);p['bb']=min(max(p['bb'],0.015),0.20);p['hr']=min(max(p['hr'],0.002),0.07);p['babip']=min(max(p['babip'],0.24),0.39);p['xbh']=min(max(p['xbh'],0.10),0.32);p['sba']=min(max(p['sba'],0.005),0.25)
+        info=ros.get((r['team'],r['name'],r['g']))
+        age=2026-int(info[0][:4])+1 if info else None   # 2027 시즌 기준(기존 데이터와 같은 기준)
+        u=h01(r['pid'])
+        if r['g']=='C': pos='C'
+        elif r['g']=='IF': pos='1B' if u<0.15 else '2B' if u<0.40 else '3B' if u<0.65 else 'SS'
+        else: pos='LF' if u<0.33 else 'CF' if u<0.67 else 'RF'
+        grp={'C':['C'],'IF':['1B','2B','3B','SS'],'OF':['LF','CF','RF']}[r['g']]
+        gs={pos:50};[gs.__setitem__(q,8) for q in grp if q!=pos]
+        fr={pos:{'range':50,'err_reg':F['lg']['err'][pos]}}
+        q=dict(id='B%d'%(len(players)+len(out)+1),type='B',name=r['name'],ko=r['name'],team=FUT_TM[r['team']],age=age or 24,p=p,pos=pos,gs=gs,fr=fr,cs=None,PA=0,G=0,src='F',fpid=r['pid'],posEst=True)
+        if not age: q['ageEst']=True
+        if info:
+            h=info[1];q['throws']={'우':'R','좌':'L'}[h[0]];q['bats']={'우':'R','좌':'L','양':'S'}[h[2]]
+        out.append(q)
+    return out,fit,[(r['team'],r['name'],r['pid']) for r in unassigned],len(ov)
+FUT=futures_hitters(players)
+if FUT:
+    players.extend(FUT[0])
 # 능력치 척도(20-80): ratings.py 와 같은 방식(규정 타자 PA≥300 / 규정 투수 TBF≥200 가중 평균·표준편차)
 def scale(rows,fields,w):
     out={}
@@ -69,3 +141,7 @@ print('나이 공란(28세 가정):',NOAGE)
 print('주 포지션 분포',Counter(p['pos'] for p in players if p['type']=='B'))
 
 print('투타 매칭',HITS,'| 건너뜀(소속 불일치/모호)',SKIP,'| 1군 데이터에 없는 2군 선수',len(MISS))
+
+if FUT:
+    print('퓨처스 타자: 1군 선수와 매칭',FUT[3],'| 신규 2군 타자',len(FUT[0]),'| 소속 미정(상무·울산)',len(FUT[2]))
+    print('환산식',{k:{a:round(b,4) for a,b in v.items()} for k,v in FUT[1].items()})
