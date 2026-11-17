@@ -1,0 +1,245 @@
+
+Player & Blog Search
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+KBO Leaderboards
+Batting
+Pitching
+Position:
+All
+Min PA/IP:
+0
+Single Season:
+2025
+Multiple Seasons:
+2025
+to
+2025
+Split Seasons
+League:
+KBO
+Team:
+All Teams
+
+Standard
+Advanced
+?
+Beta
+Find player on this board
+
+Data Export [Members Only]
+#	Name	Team	Age	G	AB	PA	H	1B	2B	3B	HR	R	RBI	BB	IBB	SO	HBP	SF	SH	GDP	SB	CS	AVG
+251	Sang Hyuk Lee 이상혁	Eagles (KBO)	23	39	10	12	2	1	1	0	0	14	2	0	0	3	1	0	1	0	3	4	.200
+252	Da Min Jeon 전다민	Bears (KBO)	23	22	12	12	1	1	0	0	0	5	0	0	0	0	0	0	0	1	3	0	.083
+253	Jeong Ho Kim 김정호	Dinos (KBO)	26	8	9	11	4	4	0	0	0	3	0	0	0	4	1	0	1	0	0	0	.444
+254	Seon Woo Lee 이선우	Bears (KBO)	19	10	11	11	2	1	1	0	0	0	0	0	0	2	0	0	0	0	0	0	.182
+255	Seung Wan Ko 고승완	Dinos (KBO)	24	17	10	11	2	2	0	0	0	5	0	1	0	5	0	0	0	0	2	1	.200
+256	Se Jin Cho 조세진	Giants (KBO)	21	12	7	9	1	1	0	0	0	1	0	2	0	4	0	0	0	0	0	0	.143
+257	Sang-min Choi 최상민	Landers (KBO)	25	23	7	9	1	1	0	0	0	5	1	1	0	5	1	0	0	0	1	1	.143
+258	Won-seok Lee 이원석	Heroes (KBO)	38	5	7	8	1	1	0	0	0	1	0	1	0	2	0	0	0	1	0	0	.143
+259	Yoo Sin Seo 서유신	Heroes (KBO)	24	6	7	8	0	0	0	0	0	0	0	1	0	4	0	0	0	0	0	0	.000
+260	Hang Choi 최항	Giants (KBO)	31	8	6	7	1	1	0	0	0	1	1	1	0	4	0	0	0	0	0	0	.167
+261	In San An 안인산	Dinos (KBO)	24	4	6	7	0	0	0	0	0	0	1	0	0	3	0	1	0	0	0	0	.000
+262	Seoung Jae Park 박성재	Bears (KBO)	22	6	7	7	0	0	0	0	0	0	0	0	0	5	0	0	0	0	0	0	.000
+263	Jeong-yong Choi 최정용	Tigers (KBO)	28	4	6	6	1	1	0	0	0	0	0	0	0	2	0	0	0	1	0	0	.167
+264	Seung-min Choi 최승민	Twins (KBO)	28	19	5	6	0	0	0	0	0	6	0	1	0	2	0	0	0	0	1	2	.000
+265	Byeong Hwi Kim 김병휘	Heroes (KBO)	24	7	4	6	1	1	0	0	0	2	0	2	0	1	0	0	0	0	0	0	.250
+266	Hyun Jong Kim 김현종	Twins (KBO)	20	10	5	6	2	1	1	0	0	3	0	1	0	1	0	0	0	1	0	0	.400
+267	Hae-seung Lee 이해승	Lions (KBO)	24	8	5	5	1	1	0	0	0	2	1	0	0	2	0	0	0	0	0	0	.200
+268	Young Bin Park 박영빈	Dinos (KBO)	27	16	4	5	1	1	0	0	0	8	1	1	0	2	0	0	0	0	4	2	.250
+269	Byeong Jun Kim 김병준	Wiz (KBO)	21	9	5	5	1	1	0	0	0	2	0	0	0	2	0	0	0	0	0	0	.200
+270	Sung Woo Kim 김성우	Twins (KBO)	21	7	5	5	1	1	0	0	0	0	1	0	0	1	0	0	0	0	0	0	.200
+271	Dae In Hong 홍대인	Landers (KBO)	23	14	5	5	1	1	0	0	0	3	0	0	0	2	0	0	0	0	1	1	.200
+272	Geun Woo Lim 임근우	Landers (KBO)	25	3	5	5	0	0	0	0	0	0	0	0	0	1	0	0	0	0	0	0	.000
+273	Seung Min Lee 이승민	Landers (KBO)	20	2	5	5	1	1	0	0	0	0	0	0	0	2	0	0	0	0	0	0	.200
+274	Jae Hyuk Kim 김재혁	Lions (KBO)	25	8	3	4	0	0	0	0	0	2	0	1	0	2	0	0	0	0	0	0	.000
+275	Min Jae Lee 이민재	Eagles (KBO)	21	3	4	4	0	0	0	0	0	0	0	0	0	1	0	0	0	1	0	0	.000
+276	Tae Yun Kim 김태윤	Landers (KBO)	22	8	2	4	1	1	0	0	0	0	0	2	0	0	0	0	0	0	1	1	.500
+277	Jeong-bum Lee 이정범	Landers (KBO)	27	3	3	3	0	0	0	0	0	0	0	0	0	2	0	0	0	0	0	0	.000
+278	Kun Woo Park 박건우	Giants (KBO)	22	6	3	3	2	2	0	0	0	1	1	0	0	1	0	0	0	0	0	0	.667
+279	Hyun Jae Chun 천현재	Bears (KBO)	25	3	3	3	0	0	0	0	0	0	0	0	0	0	0	0	0	1	0	0	.000
+280	Jun-tae Kim 김준태	Twins (KBO)	30	2	1	2	1	1	0	0	0	1	0	1	0	0	0	0	0	0	0	0	1.000
+281	Seung-hyun Jang 장승현	Bears (KBO)	31	4	2	2	0	0	0	0	0	0	0	0	0	0	0	0	0	1	0	0	.000
+282	Jung Hyun Park 박정현	Eagles (KBO)	23	2	2	2	0	0	0	0	0	0	0	0	0	1	0	0	0	0	0	0	.000
+283	Kyu Hyun Chang 장규현	Eagles (KBO)	23	2	1	2	1	1	0	0	0	1	0	1	0	0	0	0	0	0	0	0	1.000
+284	Hyun Gu Kang 강현구	Bears (KBO)	23	1	2	2	0	0	0	0	0	0	0	0	0	1	0	0	0	0	0	0	.000
+285	Young Chan You 유영찬	Twins (KBO)	28	39	1	2	0	0	0	0	0	0	0	1	0	0	0	0	0	0	0	0	.000
+286	Seung Won Lee 이승원	Heroes (KBO)	20	1	2	2	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	.000
+287	Jae Sang Lee 이재상	Heroes (KBO)	20	2	2	2	1	1	0	0	0	0	0	0	0	1	0	0	0	0	0	0	.500
+288	Hyeon Seung Jung 정현승	Landers (KBO)	23	3	2	2	1	0	1	0	0	0	0	0	0	0	0	0	0	0	0	0	.500
+289	Min Jun Park 박민준	Bears (KBO)	22	7	2	2	0	0	0	0	0	0	0	0	0	1	0	0	0	0	0	0	.000
+290	Ki-hoon Kim 김기훈	Tigers (KBO)	25	25	1	1	0	0	0	0	0	0	0	0	0	1	0	0	0	0	0	0	.000
+291	Geon Hyoung Kim 김건형	Wiz (KBO)	28	2	1	1	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	.000
+292	Bum-joon Kim 김범준	Dinos (KBO)	25	1	1	1	0	0	0	0	0	0	0	0	0	1	0	0	0	0	0	0	.000
+293	Seung Gu Kang 강승구	Giants (KBO)	21	1	1	1	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	.000
+294	Seung Hyeon Lee 이승현	Eagles (KBO)	22	4	1	1	1	0	0	1	0	1	1	0	0	0	0	0	0	0	0	0	1.000
+295	Tae Kyeong Lee 이태경	Giants (KBO)	22	2	1	1	0	0	0	0	0	0	0	0	0	1	0	0	0	0	0	0	.000
+296	Seung Jun Cha 차승준	Lions (KBO)	18	1	1	1	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	.000
+297	Sung Jae Kim 김성재	Bears (KBO)	19	1	1	1	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	.000
+298	Jin Woo Park 박진우	Lions (KBO)	21	1	1	1	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	.000
+299	Vince Velasquez 벨라스케즈	Giants (KBO)	33	11	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	.000
+300	Raúl Alcántara 알칸타라	Heroes (KBO)	32	19	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	.000
+#	Name	Team																					
+251	Sang Hyuk Lee 이상혁	Eagles (KBO)																					
+252	Da Min Jeon 전다민	Bears (KBO)																					
+253	Jeong Ho Kim 김정호	Dinos (KBO)																					
+254	Seon Woo Lee 이선우	Bears (KBO)																					
+255	Seung Wan Ko 고승완	Dinos (KBO)																					
+256	Se Jin Cho 조세진	Giants (KBO)																					
+257	Sang-min Choi 최상민	Landers (KBO)																					
+258	Won-seok Lee 이원석	Heroes (KBO)																					
+259	Yoo Sin Seo 서유신	Heroes (KBO)																					
+260	Hang Choi 최항	Giants (KBO)																					
+261	In San An 안인산	Dinos (KBO)																					
+262	Seoung Jae Park 박성재	Bears (KBO)																					
+263	Jeong-yong Choi 최정용	Tigers (KBO)																					
+264	Seung-min Choi 최승민	Twins (KBO)																					
+265	Byeong Hwi Kim 김병휘	Heroes (KBO)																					
+266	Hyun Jong Kim 김현종	Twins (KBO)																					
+267	Hae-seung Lee 이해승	Lions (KBO)																					
+268	Young Bin Park 박영빈	Dinos (KBO)																					
+269	Byeong Jun Kim 김병준	Wiz (KBO)																					
+270	Sung Woo Kim 김성우	Twins (KBO)																					
+271	Dae In Hong 홍대인	Landers (KBO)																					
+272	Geun Woo Lim 임근우	Landers (KBO)																					
+273	Seung Min Lee 이승민	Landers (KBO)																					
+274	Jae Hyuk Kim 김재혁	Lions (KBO)																					
+275	Min Jae Lee 이민재	Eagles (KBO)																					
+276	Tae Yun Kim 김태윤	Landers (KBO)																					
+277	Jeong-bum Lee 이정범	Landers (KBO)																					
+278	Kun Woo Park 박건우	Giants (KBO)																					
+279	Hyun Jae Chun 천현재	Bears (KBO)																					
+280	Jun-tae Kim 김준태	Twins (KBO)																					
+281	Seung-hyun Jang 장승현	Bears (KBO)																					
+282	Jung Hyun Park 박정현	Eagles (KBO)																					
+283	Kyu Hyun Chang 장규현	Eagles (KBO)																					
+284	Hyun Gu Kang 강현구	Bears (KBO)																					
+285	Young Chan You 유영찬	Twins (KBO)																					
+286	Seung Won Lee 이승원	Heroes (KBO)																					
+287	Jae Sang Lee 이재상	Heroes (KBO)																					
+288	Hyeon Seung Jung 정현승	Landers (KBO)																					
+289	Min Jun Park 박민준	Bears (KBO)																					
+290	Ki-hoon Kim 김기훈	Tigers (KBO)																					
+291	Geon Hyoung Kim 김건형	Wiz (KBO)																					
+292	Bum-joon Kim 김범준	Dinos (KBO)																					
+293	Seung Gu Kang 강승구	Giants (KBO)																					
+294	Seung Hyeon Lee 이승현	Eagles (KBO)																					
+295	Tae Kyeong Lee 이태경	Giants (KBO)																					
+296	Seung Jun Cha 차승준	Lions (KBO)																					
+297	Sung Jae Kim 김성재	Bears (KBO)																					
+298	Jin Woo Park 박진우	Lions (KBO)																					
+299	Vince Velasquez 벨라스케즈	Giants (KBO)																					
+300	Raúl Alcántara 알칸타라	Heroes (KBO)																					
+6
+of 
+12
+Page Size:
+50
+251 - 300 of 584 results
+6
+of 
+12
+Page Size:
+50
+251 - 300 of 584 results
+KBO stat lines do not separate stints with different teams before 2019; the team reported is the last team the player played for that season.
+Updated: 11/16/2026 5:33 AM ET
+@fangraphs.com - Contact Us - Advertise- Terms of Service - Privacy Policy
+
+All major league baseball data including pitch type, velocity, batted ball location, and play-by-play data provided by Sports Info Solutions.
+
+Major League and Minor League Baseball data provided by Major League Baseball.
+Mitchel Lichtman
+All UZR (ultimate zone rating) calculations are provided courtesy of Mitchel Lichtman.
+TangoTiger.com
+All Win Expectancy, Leverage Index, Run Expectancy, and Fans Scouting Report data licenced from TangoTiger.com
+Retrosheet.org
+Play-by-play data prior to 2002 was obtained free of charge from and is copyrighted by Retrosheet.
+KBO Leaders | FanGraphs Baseball

@@ -1,0 +1,209 @@
+
+Player & Blog Search
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+KBO Leaderboards
+Batting
+Pitching
+Position:
+Select
+Min PA/IP:
+0
+Single Season:
+2025
+Multiple Seasons:
+2025
+to
+2025
+Split Seasons
+League:
+KBO
+Team:
+All Teams
+
+Standard
+Advanced
+?
+Beta
+Find player on this board
+
+Data Export [Members Only]
+#	Name	Team	Age	W	L	ERA	G	GS	CG	ShO	SV	BS	HLD	IP	TBF	H	R	ER	HR	BB	IBB	HBP	WP	BK	SO
+251	Sung-jong Chung 정성종	Giants (KBO)	29	0	0	3.86	2	0	0	0	0	0	0	2.1	10	3	1	1	1	0	0	0	0	0	0
+252	Seung-cheol Yoo 유승철	Tigers (KBO)	27	0	0	4.50	1	0	0	0	0	0	0	2.0	11	3	1	1	0	2	0	0	1	0	3
+253	Won Pyo Hong 홍원표	Lions (KBO)	24	0	1	4.50	2	0	0	0	0	0	0	2.0	12	3	1	1	0	2	1	1	0	0	1
+254	Min Jae Kim 김민재	Tigers (KBO)	21	0	0	0.00	1	0	0	0	0	0	0	2.0	8	2	0	0	0	0	0	0	0	0	1
+255	Han Jung Kim 김한중	Bears (KBO)	20	0	0	0.00	2	0	0	0	0	0	0	2.0	8	1	1	0	0	0	0	0	0	0	0
+256	Young Jae Lee 이영재	Giants (KBO)	18	0	0	9.00	3	0	0	0	0	0	0	2.0	11	5	2	2	1	0	0	1	0	0	2
+257	Tae Hyun Kim 김태현	Giants (KBO)	19	0	0	4.50	1	0	0	0	0	0	0	2.0	12	1	2	1	0	4	0	0	0	0	2
+258	Chung-yeon Choi 최충연	Lions (KBO)	28	0	0	37.80	4	0	0	0	0	0	0	1.2	15	7	8	7	1	2	0	1	0	0	1
+259	Woo-young Jung 정우영	Twins (KBO)	25	0	0	32.40	3	0	0	0	0	0	0	1.2	11	1	6	6	1	4	0	1	0	0	3
+260	Cha Hyeon Han 한차현	Wiz (KBO)	26	0	0	16.20	2	0	0	0	0	0	0	1.2	11	4	3	3	0	2	0	0	1	0	1
+261	Jong In Choi 최종인	Bears (KBO)	24	0	0	5.40	3	0	0	0	0	0	0	1.2	9	1	1	1	0	3	0	0	2	0	5
+262	Jong Jun Lee 이종준	Twins (KBO)	24	0	0	0.00	2	0	0	0	0	0	0	1.2	6	0	0	0	0	1	0	0	0	0	2
+263	Jong Wun Kim 김종운	Twins (KBO)	18	0	0	5.40	2	0	0	0	0	0	0	1.2	7	2	3	1	2	0	0	0	0	0	2
+264	Jong Hyeok Won 원종혁	Eagles (KBO)	19	0	0	16.20	2	0	0	0	0	0	0	1.2	10	3	3	3	1	2	0	0	0	0	1
+265	Won-bin Hong 홍원빈	Tigers (KBO)	24	0	0	27.00	2	0	0	0	0	0	0	1.2	11	2	5	5	0	4	0	0	2	0	1
+266	Jin-yong Seo 서진용	Landers (KBO)	32	0	0	6.75	2	0	0	0	0	0	0	1.1	7	1	1	1	0	3	0	0	0	0	0
+267	Si Won Park 박시원	Twins (KBO)	19	0	0	13.50	2	0	0	0	0	0	0	1.1	9	0	2	2	0	5	0	0	0	0	0
+268	Woo Young Jin 진우영	Twins (KBO)	24	0	0	0.00	1	0	0	0	0	0	0	1.0	2	0	0	0	0	0	0	0	0	0	0
+269	Sung-hoon Choi 최성훈	Lions (KBO)	35	0	0	9.00	2	0	0	0	0	0	0	1.0	5	1	1	1	0	1	0	0	0	0	1
+270	Sang-min Lee 이상민	Lions (KBO)	34	0	0	0.00	1	0	0	0	0	0	0	1.0	5	2	0	0	0	0	0	0	0	0	1
+271	Tae-hun Do 도태훈	Dinos (KBO)	32	0	0	9.00	1	0	0	0	0	0	0	1.0	6	3	1	1	1	0	0	0	0	0	1
+272	Baek-ho Kang 강백호	Wiz (KBO)	25	0	0	18.00	1	0	0	0	0	0	0	1.0	7	3	2	2	1	1	0	0	0	0	1
+273	Sang Hyeon Lim 임상현	Dinos (KBO)	19	0	0	18.00	1	0	0	0	0	0	0	1.0	8	2	2	2	0	3	0	0	0	0	0
+274	Ji Sung You 유지성	Tigers (KBO)	24	0	0	0.00	1	0	0	0	0	0	0	1.0	3	0	0	0	0	0	0	0	0	0	0
+275	Min Seong Jeong 정민성	Lions (KBO)	20	0	1	36.00	1	1	0	0	0	0	0	1.0	7	3	4	4	0	0	0	2	1	0	0
+276	Jeong Yeop Kim 김정엽	Tigers (KBO)	19	0	0	18.00	2	0	0	0	0	0	0	1.0	5	0	2	2	0	1	0	1	0	0	0
+277	Ji Hwan Shin 신지환	Landers (KBO)	19	0	0	0.00	1	0	0	0	0	0	0	1.0	4	0	0	0	0	0	0	1	0	0	1
+278	Dae-woo Kim 김대우	Lions (KBO)	36	0	0	0.00	2	0	0	0	0	0	1	0.2	3	1	0	0	0	0	0	0	0	0	0
+279	Seong Min Kim 김성민	Landers (KBO)	24	1	0	0.00	2	0	0	0	0	0	0	0.2	4	0	0	0	0	2	0	0	1	0	0
+280	Matt Davidson 데이비슨	Dinos (KBO)	34	0	0	0.00	1	0	0	0	0	0	0	0.1	1	0	0	0	0	0	0	0	0	0	0
+281	Joo-on Kim 김주온	Twins (KBO)	28	0	1	27.00	1	1	0	0	0	0	0	0.1	5	0	1	1	0	2	0	2	0	0	1
+#	Name	Team																							
+251	Sung-jong Chung 정성종
+Sung-jong Chung 정성종
+Giants (KBO)																							
+252	Seung-cheol Yoo 유승철	Tigers (KBO)																							
+253	Won Pyo Hong 홍원표	Lions (KBO)																							
+254	Min Jae Kim 김민재	Tigers (KBO)																							
+255	Han Jung Kim 김한중	Bears (KBO)																							
+256	Young Jae Lee 이영재	Giants (KBO)																							
+257	Tae Hyun Kim 김태현	Giants (KBO)																							
+258	Chung-yeon Choi 최충연	Lions (KBO)																							
+259	Woo-young Jung 정우영	Twins (KBO)																							
+260	Cha Hyeon Han 한차현	Wiz (KBO)																							
+261	Jong In Choi 최종인	Bears (KBO)																							
+262	Jong Jun Lee 이종준	Twins (KBO)																							
+263	Jong Wun Kim 김종운	Twins (KBO)																							
+264	Jong Hyeok Won 원종혁	Eagles (KBO)																							
+265	Won-bin Hong 홍원빈	Tigers (KBO)																							
+266	Jin-yong Seo 서진용	Landers (KBO)																							
+267	Si Won Park 박시원	Twins (KBO)																							
+268	Woo Young Jin 진우영	Twins (KBO)																							
+269	Sung-hoon Choi 최성훈	Lions (KBO)																							
+270	Sang-min Lee 이상민	Lions (KBO)																							
+271	Tae-hun Do 도태훈	Dinos (KBO)																							
+272	Baek-ho Kang 강백호	Wiz (KBO)																							
+273	Sang Hyeon Lim 임상현	Dinos (KBO)																							
+274	Ji Sung You 유지성	Tigers (KBO)																							
+275	Min Seong Jeong 정민성	Lions (KBO)																							
+276	Jeong Yeop Kim 김정엽	Tigers (KBO)																							
+277	Ji Hwan Shin 신지환	Landers (KBO)																							
+278	Dae-woo Kim 김대우	Lions (KBO)																							
+279	Seong Min Kim 김성민	Landers (KBO)																							
+280	Matt Davidson 데이비슨	Dinos (KBO)																							
+281	Joo-on Kim 김주온	Twins (KBO)																							
+6
+of 
+6
+Page Size:
+50
+251 - 281 of 281 results
+6
+of 
+6
+Page Size:
+50
+251 - 281 of 281 results
+KBO stat lines do not separate stints with different teams before 2019; the team reported is the last team the player played for that season.
+Updated: 11/16/2026 5:33 AM ET
+@fangraphs.com - Contact Us - Advertise- Terms of Service - Privacy Policy
+
+All major league baseball data including pitch type, velocity, batted ball location, and play-by-play data provided by Sports Info Solutions.
+
+Major League and Minor League Baseball data provided by Major League Baseball.
+Mitchel Lichtman
+All UZR (ultimate zone rating) calculations are provided courtesy of Mitchel Lichtman.
+TangoTiger.com
+All Win Expectancy, Leverage Index, Run Expectancy, and Fans Scouting Report data licenced from TangoTiger.com
+Retrosheet.org
+Play-by-play data prior to 2002 was obtained free of charge from and is copyrighted by Retrosheet.
+KBO Leaders | FanGraphs Baseball

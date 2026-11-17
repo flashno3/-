@@ -1,0 +1,247 @@
+
+Player & Blog Search
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+KBO Leaderboards
+Batting
+Pitching
+Position:
+Select
+Min PA/IP:
+0
+Single Season:
+2025
+Multiple Seasons:
+2025
+to
+2025
+Split Seasons
+League:
+KBO
+Team:
+All Teams
+
+Standard
+Advanced
+?
+Beta
+Find player on this board
+
+Data Export [Members Only]
+#	Name	Team	Age	W	L	ERA	G	GS	CG	ShO	SV	BS	HLD	IP	TBF	H	R	ER	HR	BB	IBB	HBP	WP	BK	SO
+201	Joong-hyeon Yoon 윤중현	Tigers (KBO)	30	1	0	4.35	13	0	0	0	0	0	0	10.1	48	10	5	5	2	7	2	0	1	0	7
+202	Hyeong-beom Lee 이형범	Tigers (KBO)	31	0	0	11.70	12	0	0	0	0	0	0	10.0	56	21	16	13	0	5	1	0	0	0	6
+203	Min-gyu Kim 김민규	Bears (KBO)	26	1	1	4.66	7	1	0	0	0	0	0	9.2	47	9	5	5	1	6	0	4	0	0	6
+204	Kang Hoon Woo 우강훈	Twins (KBO)	22	0	0	4.66	11	0	0	0	0	0	0	9.2	46	12	5	5	0	6	0	2	0	0	5
+205	Seunghwan Oh 오승환	Lions (KBO)	42	0	0	8.00	12	0	0	0	0	0	1	9.0	45	15	8	8	1	3	0	0	1	0	7
+206	Gi-yeong Im 임기영	Tigers (KBO)	32	1	1	13.00	10	0	0	0	0	0	0	9.0	52	23	13	13	2	4	0	0	0	0	5
+207	Seung-min Koo 구승민	Giants (KBO)	35	0	1	7.00	11	0	0	0	0	0	2	9.0	45	9	10	7	1	7	0	1	0	0	10
+208	Sang-kyu Lee 이상규	Eagles (KBO)	28	0	1	8.00	5	0	0	0	0	0	0	9.0	47	16	9	8	0	4	0	0	0	0	5
+209	Dong-hyun Sung 성동현	Twins (KBO)	26	0	0	9.00	12	0	0	0	0	0	0	9.0	45	10	9	9	2	9	0	0	1	0	6
+210	Yong Jun Choi 최용준	Wiz (KBO)	23	1	0	2.00	7	0	0	0	0	0	0	9.0	39	13	2	2	0	2	1	0	0	0	5
+211	Jae Hee Lee 이재희	Lions (KBO)	23	0	2	3.00	11	0	0	0	0	0	3	9.0	39	7	3	3	0	5	0	0	0	0	9
+212	Hyun-hee Han 한현희	Giants (KBO)	32	0	0	6.23	3	2	0	0	0	0	1	8.2	41	13	6	6	2	2	0	1	1	0	8
+213	Joon-hyeong Lim 임준형	- - -	24	0	0	5.19	10	0	0	0	0	0	0	8.2	42	11	7	5	0	7	0	1	1	0	6
+214	Dae-yu Kim 김대유	Tigers (KBO)	34	0	1	9.72	15	0	0	0	0	0	0	8.1	42	12	9	9	1	4	0	0	0	0	3
+215	Myeong-sin Kim 김명신	Bears (KBO)	31	0	0	5.40	8	0	0	0	0	0	0	8.1	43	13	8	5	0	3	0	1	1	0	6
+216	Rhee-hyun So 소이현	Dinos (KBO)	26	0	0	5.63	7	0	0	0	0	0	0	8.0	36	5	5	5	0	7	0	1	2	0	3
+217	Dong Kyu Kim 김동규	Heroes (KBO)	20	0	0	6.75	9	0	0	0	0	0	1	8.0	49	13	11	6	2	11	0	0	4	0	10
+218	Kyo-hoon Lee 이교훈	Bears (KBO)	25	1	0	1.17	10	0	0	0	0	0	0	7.2	29	4	2	1	0	4	0	1	2	0	7
+219	Si-young Park 박시영	Giants (KBO)	36	1	0	11.05	11	0	0	0	0	1	0	7.1	42	9	9	9	0	9	0	2	0	0	10
+220	Jae-ik Lee 이재익	Lions (KBO)	31	1	0	1.23	7	0	0	0	0	0	0	7.1	31	8	1	1	0	2	0	0	1	0	6
+221	Geon Woo Park 박건우	Wiz (KBO)	18	0	0	2.70	6	0	0	0	0	0	0	6.2	28	4	2	2	1	4	0	0	0	0	9
+222	Eun-beom Song 송은범	Lions (KBO)	41	0	0	4.50	5	0	0	0	0	0	0	6.0	28	9	3	3	0	3	0	0	3	0	2
+223	Jin-hyung Park 박진형	Giants (KBO)	31	0	0	8.44	7	0	0	0	0	0	0	5.1	29	9	7	5	1	3	0	0	0	0	5
+224	Jun-young Ha 하준영	Dinos (KBO)	25	1	1	6.75	10	0	0	0	0	0	1	5.1	33	10	4	4	0	7	1	0	0	0	5
+225	Min Gyu Gwon 권민규	Eagles (KBO)	19	0	0	8.44	5	0	0	0	0	0	0	5.1	28	5	5	5	1	7	0	0	0	0	4
+226	Seo Jun Kim 김서준	Heroes (KBO)	18	0	0	20.25	4	0	0	0	0	0	0	5.1	34	14	12	12	2	5	0	0	1	0	4
+227	Jin Su Kim 김진수	Twins (KBO)	26	0	0	9.00	4	0	0	0	0	0	0	5.0	27	11	5	5	2	1	0	0	0	0	6
+228	Jun Yeong Park 박준영	Eagles (KBO)	22	0	0	3.60	1	1	0	0	0	0	0	5.0	24	3	2	2	0	6	0	0	0	0	3
+229	Ji Min Lim 임지민	Dinos (KBO)	21	0	1	3.86	7	0	0	0	0	1	1	4.2	20	1	2	2	0	5	0	0	0	0	7
+230	Min Gyu Kim 김민규	Dinos (KBO)	23	0	0	7.71	7	0	0	0	0	0	1	4.2	23	5	4	4	0	4	1	0	0	0	2
+231	Yu-yeong Kim 김유영	Twins (KBO)	31	0	0	12.46	6	0	0	0	0	0	0	4.1	26	8	6	6	0	4	0	1	0	0	5
+232	Jung-hyun Lee 이정현	Wiz (KBO)	27	0	0	16.62	6	0	0	0	0	0	0	4.1	27	9	8	8	0	4	0	1	0	0	3
+233	Jae Won Kim 김재원	Wiz (KBO)	18	0	0	10.38	4	0	0	0	0	0	0	4.1	24	3	5	5	0	8	0	1	3	0	4
+234	Jae Min Kang 강재민	Eagles (KBO)	28	0	0	9.00	4	0	0	0	0	0	0	4.0	20	6	4	4	1	2	0	1	0	0	5
+235	Do Gyu Kwak 곽도규	Tigers (KBO)	21	0	0	13.50	9	0	0	0	0	1	4	4.0	22	3	6	6	0	6	0	2	1	0	5
+236	Him Chan Son 손힘찬	Heroes (KBO)	22	0	0	11.25	4	0	0	0	0	0	0	4.0	22	5	5	5	0	4	0	1	1	0	4
+237	Geon Kang 강건	Wiz (KBO)	20	0	1	24.55	2	1	0	0	0	0	0	3.2	26	7	10	10	1	7	0	1	0	0	1
+238	Se Hyun Park 박세현	Giants (KBO)	19	0	0	14.73	3	0	0	0	0	0	0	3.2	21	8	6	6	1	1	0	1	0	0	4
+239	Jin Muk Lim 임진묵	Heroes (KBO)	19	0	0	24.55	4	0	0	0	0	0	0	3.2	28	10	11	10	0	5	0	1	1	0	3
+240	Hyun Yang 양현	Lions (KBO)	32	0	0	0.00	4	0	0	0	0	1	0	3.1	15	2	0	0	0	3	0	0	0	0	1
+241	Woo Jun Jeong 정우준	Giants (KBO)	25	0	0	5.40	3	0	0	0	0	0	0	3.1	16	6	2	2	0	0	0	1	0	0	3
+242	Dong Hyun Kim 김동현	Wiz (KBO)	19	0	0	13.50	3	0	0	0	0	0	0	3.1	19	7	5	5	2	3	0	0	3	0	4
+243	Jae-min Shim 심재민	Giants (KBO)	31	1	0	3.00	4	0	0	0	0	0	0	3.0	15	5	2	1	0	1	0	0	1	0	2
+244	Tae-hyun Kim 김태현	Dinos (KBO)	27	0	0	12.00	5	0	0	0	0	0	1	3.0	17	5	4	4	2	3	0	2	1	0	2
+245	Jae Hyouk Jang 장재혁	Tigers (KBO)	23	0	0	6.00	3	0	0	0	0	0	0	3.0	13	3	2	2	1	3	0	0	0	0	2
+246	Hyeon Gi Son 손현기	Heroes (KBO)	19	0	0	15.00	2	0	0	0	0	0	0	3.0	18	4	5	5	1	6	0	1	1	0	1
+247	Min Ju Kim 김민주	Tigers (KBO)	22	0	0	12.00	3	0	0	0	0	0	0	3.0	17	4	4	4	0	2	0	2	0	0	2
+248	Seung Il Kim 김승일	Eagles (KBO)	23	0	0	23.63	5	0	0	0	0	0	0	2.2	17	3	7	7	1	3	0	3	1	0	3
+249	Se Young Chung 정세영	Heroes (KBO)	18	0	1	16.88	4	1	0	0	0	0	0	2.2	22	9	6	5	0	4	0	0	1	0	2
+250	Sung Won Lee 이성원	Tigers (KBO)	19	0	0	16.88	4	0	0	0	0	0	0	2.2	19	3	7	5	0	4	0	3	0	0	3
+#	Name	Team																							
+201	Joong-hyeon Yoon 윤중현	Tigers (KBO)																							
+202	Hyeong-beom Lee 이형범
+Hyeong-beom Lee 이형범
+Tigers (KBO)																							
+203	Min-gyu Kim 김민규	Bears (KBO)																							
+204	Kang Hoon Woo 우강훈	Twins (KBO)																							
+205	Seunghwan Oh 오승환	Lions (KBO)																							
+206	Gi-yeong Im 임기영	Tigers (KBO)																							
+207	Seung-min Koo 구승민	Giants (KBO)																							
+208	Sang-kyu Lee 이상규	Eagles (KBO)																							
+209	Dong-hyun Sung 성동현	Twins (KBO)																							
+210	Yong Jun Choi 최용준	Wiz (KBO)																							
+211	Jae Hee Lee 이재희	Lions (KBO)																							
+212	Hyun-hee Han 한현희	Giants (KBO)																							
+213	Joon-hyeong Lim 임준형	- - -																							
+214	Dae-yu Kim 김대유	Tigers (KBO)																							
+215	Myeong-sin Kim 김명신	Bears (KBO)																							
+216	Rhee-hyun So 소이현	Dinos (KBO)																							
+217	Dong Kyu Kim 김동규	Heroes (KBO)																							
+218	Kyo-hoon Lee 이교훈	Bears (KBO)																							
+219	Si-young Park 박시영	Giants (KBO)																							
+220	Jae-ik Lee 이재익	Lions (KBO)																							
+221	Geon Woo Park 박건우	Wiz (KBO)																							
+222	Eun-beom Song 송은범	Lions (KBO)																							
+223	Jin-hyung Park 박진형	Giants (KBO)																							
+224	Jun-young Ha 하준영	Dinos (KBO)																							
+225	Min Gyu Gwon 권민규	Eagles (KBO)																							
+226	Seo Jun Kim 김서준	Heroes (KBO)																							
+227	Jin Su Kim 김진수	Twins (KBO)																							
+228	Jun Yeong Park 박준영	Eagles (KBO)																							
+229	Ji Min Lim 임지민	Dinos (KBO)																							
+230	Min Gyu Kim 김민규	Dinos (KBO)																							
+231	Yu-yeong Kim 김유영	Twins (KBO)																							
+232	Jung-hyun Lee 이정현	Wiz (KBO)																							
+233	Jae Won Kim 김재원	Wiz (KBO)																							
+234	Jae Min Kang 강재민	Eagles (KBO)																							
+235	Do Gyu Kwak 곽도규	Tigers (KBO)																							
+236	Him Chan Son 손힘찬	Heroes (KBO)																							
+237	Geon Kang 강건	Wiz (KBO)																							
+238	Se Hyun Park 박세현	Giants (KBO)																							
+239	Jin Muk Lim 임진묵	Heroes (KBO)																							
+240	Hyun Yang 양현	Lions (KBO)																							
+241	Woo Jun Jeong 정우준	Giants (KBO)																							
+242	Dong Hyun Kim 김동현	Wiz (KBO)																							
+243	Jae-min Shim 심재민	Giants (KBO)																							
+244	Tae-hyun Kim 김태현	Dinos (KBO)																							
+245	Jae Hyouk Jang 장재혁	Tigers (KBO)																							
+246	Hyeon Gi Son 손현기	Heroes (KBO)																							
+247	Min Ju Kim 김민주	Tigers (KBO)																							
+248	Seung Il Kim 김승일	Eagles (KBO)																							
+249	Se Young Chung 정세영	Heroes (KBO)																							
+250	Sung Won Lee 이성원	Tigers (KBO)																							
+5
+of 
+6
+Page Size:
+50
+201 - 250 of 281 results
+5
+of 
+6
+Page Size:
+50
+201 - 250 of 281 results
+KBO stat lines do not separate stints with different teams before 2019; the team reported is the last team the player played for that season.
+Updated: 11/16/2026 5:33 AM ET
+@fangraphs.com - Contact Us - Advertise- Terms of Service - Privacy Policy
+
+All major league baseball data including pitch type, velocity, batted ball location, and play-by-play data provided by Sports Info Solutions.
+
+Major League and Minor League Baseball data provided by Major League Baseball.
+Mitchel Lichtman
+All UZR (ultimate zone rating) calculations are provided courtesy of Mitchel Lichtman.
+TangoTiger.com
+All Win Expectancy, Leverage Index, Run Expectancy, and Fans Scouting Report data licenced from TangoTiger.com
+Retrosheet.org
+Play-by-play data prior to 2002 was obtained free of charge from and is copyrighted by Retrosheet.
+KBO Leaders | FanGraphs Baseball
