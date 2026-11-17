@@ -101,7 +101,7 @@
 
     class Bat {
       constructor(x) {
-        this.name = x.name; this.key = x.key; this.p = x.p; this.PA = x.PA; this.G = x.G;
+        this.name = x.name; this.key = x.key; this.id = x.id !== undefined ? x.id : x.key; this.p = x.p; this.PA = x.PA; this.G = x.G; this.team = x.team;
         const p = this.p;
         this.obp = p.bb + p.hbp + p.hr + (1 - p.k - p.bb - p.hbp - p.hr) * p.babip * 0.97;
         this.slg = this.obp + 2 * p.hr + p.babip * p.xbh * 0.5;
@@ -112,24 +112,25 @@
         this.dh = Math.max(0.0, starts - gsum);
         this.fr = F.players[this.key] || {};
         const c = F.catchers[this.key]; this.cs = c ? c.cs_reg : CSLG;
-        const st = STINT[this.name];
+        const st = M.noStint ? null : STINT[this.name];
         this.stints = st ? st : [[x.team, 1, 144, Math.min(1.0, Math.min(x.G, x.PA / 4.15) / 144)]];
       }
     }
     class Pit {
       constructor(x) {
-        this.name = x.name; this.p = x.p; this.GS = x.GS; this.G = x.G; this.IP = x.IP; this.team = x.team;
+        this.name = x.name; this.id = x.id !== undefined ? x.id : x.name; this.p = x.p; this.GS = x.GS; this.G = x.G; this.IP = x.IP; this.team = x.team; this.stamina = x.stamina;
         this.ipgs = x.ip_per_start || 5.0; this.relief_ip = Math.max(x.IP - this.ipgs * x.GS, 0.0);
       }
     }
     const bats = M.batters.map(x => new Bat(x));
     const pits = M.pitchers.map(x => new Pit(x));
+    const batById = {}, pitById = {}; for (const b of bats) batById[b.id] = b; for (const p of pits) pitById[p.id] = p;
     const BYT = {}; for (const t of TEAMS) BYT[t] = [];
     for (const b of bats) for (const [t, a, z, pr] of b.stints) { (BYT[t] = BYT[t] || []).push([b, a, z, pr]); }
 
     function staff(team, g) {
       const S = pits.filter(p => p.team === team);
-      for (const p of pits) for (const [t, a, z] of (PMOVE[p.name] || [])) if (t === team && a <= g && g <= z) S.push(p);
+      for (const p of pits) if (!M.noStint) for (const [t, a, z] of (PMOVE[p.name] || [])) if (t === team && a <= g && g <= z) S.push(p);
       return S;
     }
 
@@ -164,11 +165,12 @@
       return [[L[3], L[1], L[0], L[2], L[4], L[5], L[6], L[7], L[8]], assign];
     }
 
-    function defMods(team, assign) {
+    function defMods(team, assign, penal) {
       let s = 0.0, e = 0.0, wsum = 0.0, cs = CSLG;
       for (const [b, pos] of assign) {
-        const fr = b.fr[pos];
-        if (pos === 'C') cs = b.cs;
+        let fr = b.fr[pos];
+        if (penal && !fr && !((b.gs[pos] || 0) > 0)) { const PR = { SS: 22, '2B': 26, '3B': 28, CF: 24, LF: 36, RF: 36, '1B': 44, C: 40 }, PE = { SS: 2.2, '2B': 2.2, '3B': 2.2, CF: 1.8, LF: 1.5, RF: 1.5, '1B': 1.2, C: 1.6 }; fr = { range: PR[pos] || 40, err_reg: ERRLG[pos] * (PE[pos] || 1.6), pen: true }; }
+        if (pos === 'C') cs = (penal && fr && fr.pen) ? CSLG * 0.55 : b.cs;
         if (pos in WD) {
           const rr = fr ? fr.range : 50, avg = (F.team_avg_range[team][pos] !== undefined ? F.team_avg_range[team][pos] : 50);
           s += WD[pos] * (rr - avg) / 10;
@@ -214,63 +216,86 @@
     }
 
     const newStats = () => ({ K: 0, BB: 0, HBP: 0, HR: 0, '1B': 0, '2B': 0, '3B': 0, ROE: 0, OUT: 0, PA: 0, SB: 0, CS: 0, WP: 0, GDP: 0, SF: 0 });
-    let PLAYER = {};   // 선수별 누적 (웹 추가: 난수 무관)
-    const track = (b, e) => { const c = PLAYER[b.key] || (PLAYER[b.key] = { PA: 0, K: 0, BB: 0, HBP: 0, HR: 0, '1B': 0, '2B': 0, '3B': 0, ROE: 0, OUT: 0, SF: 0 }); c.PA++; c[e]++; return c; };
+    let PLAYER = {}, PITCH = {};   // 선수별 누적 (난수와 무관)
+    const track = (b, e) => { const c = PLAYER[b.id] || (PLAYER[b.id] = { PA: 0, K: 0, BB: 0, HBP: 0, HR: 0, '1B': 0, '2B': 0, '3B': 0, ROE: 0, OUT: 0, SF: 0, RBI: 0, SB: 0, CS: 0 }); c.PA++; c[e]++; return c; };
+    const trackRun = (b, k) => { const c = PLAYER[b.id] || (PLAYER[b.id] = { PA: 0, K: 0, BB: 0, HBP: 0, HR: 0, '1B': 0, '2B': 0, '3B': 0, ROE: 0, OUT: 0, SF: 0, RBI: 0, SB: 0, CS: 0 }); c[k]++; };
+    const trackP = (p, e, outs, runs) => {
+      const c = PITCH[p.id] || (PITCH[p.id] = { BF: 0, K: 0, BB: 0, HBP: 0, H: 0, HR: 0, outs: 0, R: 0 });
+      if (e) { c.BF++; if (e === 'K') c.K++; else if (e === 'BB') c.BB++; else if (e === 'HBP') c.HBP++; else if (e === 'HR') { c.H++; c.HR++; } else if (e === '1B' || e === '2B' || e === '3B') c.H++; }
+      c.outs += outs; c.R += runs;
+    };
 
-    function half(L, idx, ss, rng, stats, dm, limit, lineLog) {
-      let outs = 0; const bases = [null, null, null]; let runs = 0;
-      while (outs < 3) {
-        const p = ss.cur, b = L[idx % 9]; idx++;
-        if (bases[0] && !bases[1] && outs < 2 && rng.random() < bases[0].p.sba * ENV.sb_mult) {
-          if (rng.random() < comb(bases[0].p.sbp, 1 - dm[2], 1 - CSLG)) { bases[1] = bases[0]; bases[0] = null; stats.SB++; }
-          else { bases[0] = null; outs++; stats.CS++; }
-          if (outs >= 3) { idx--; break; }
+    /* 한 타석의 결과를 주자·아웃·득점에 반영. 반환: 'END'(이닝 종료) | 'CONT'(병살: 득점 한도 검사 생략) | null */
+    function applyEvent(h, e, b, rng, stats, tc) {
+      const bases = h.bases;
+      if (e === 'K') h.outs++;
+      else if (e === 'OUT') {
+        if (bases[0] && h.outs < 2 && rng.random() < ENV.gdp) {
+          bases[0] = null; h.outs += 2; stats.GDP++;
+          if (h.outs >= 3) return 'END';
+          if (bases[2]) { h.runs++; bases[2] = null; }
+          if (bases[1]) { bases[2] = bases[1]; bases[1] = null; }
+          return 'CONT';
         }
-        if ((bases[0] || bases[1] || bases[2]) && rng.random() < ENV.wp) {
-          stats.WP++;
-          if (bases[2]) runs++;
-          bases[2] = bases[1]; bases[1] = bases[0]; bases[0] = null;
+        h.outs++;
+        if (h.outs < 3 && bases[2] && rng.random() < ENV.sf) { h.runs++; bases[2] = null; stats.SF++; tc.SF++; }
+        else {
+          if (h.outs < 3 && bases[1] && !bases[2] && rng.random() < ENV.prod) { bases[2] = bases[1]; bases[1] = null; }
+          if (h.outs < 3 && bases[0] && !bases[1] && rng.random() < ENV.prod * 0.7) { bases[1] = bases[0]; bases[0] = null; }
         }
-        const e = pa(b, p, rng, dm); stats.PA++; stats[e]++;
-        const tc = track(b, e);
-        if (e === 'K') outs++;
-        else if (e === 'OUT') {
-          if (bases[0] && outs < 2 && rng.random() < ENV.gdp) {
-            bases[0] = null; outs += 2; stats.GDP++;
-            if (outs >= 3) break;
-            if (bases[2]) { runs++; bases[2] = null; }
-            if (bases[1]) { bases[2] = bases[1]; bases[1] = null; }
-            continue;
-          }
-          outs++;
-          if (outs < 3 && bases[2] && rng.random() < ENV.sf) { runs++; bases[2] = null; stats.SF++; tc.SF++; }
-          else {
-            if (outs < 3 && bases[1] && !bases[2] && rng.random() < ENV.prod) { bases[2] = bases[1]; bases[1] = null; }
-            if (outs < 3 && bases[0] && !bases[1] && rng.random() < ENV.prod * 0.7) { bases[1] = bases[0]; bases[0] = null; }
-          }
-        } else if (e === 'BB' || e === 'HBP') {
-          if (bases[0]) { if (bases[1]) { if (bases[2]) runs++; bases[2] = bases[1]; } bases[1] = bases[0]; }
-          bases[0] = b;
-        } else if (e === 'HR') { runs += 1 + (bases[0] ? 1 : 0) + (bases[1] ? 1 : 0) + (bases[2] ? 1 : 0); bases[0] = bases[1] = bases[2] = null; }
-        else if (e === '3B') { runs += (bases[0] ? 1 : 0) + (bases[1] ? 1 : 0) + (bases[2] ? 1 : 0); bases[0] = null; bases[1] = null; bases[2] = b; }
-        else if (e === '2B') {
-          runs += (bases[2] ? 1 : 0) + (bases[1] ? 1 : 0); let n3 = null;
-          if (bases[0]) { if (rng.random() < ENV.sc1on2) runs++; else n3 = bases[0]; }
-          bases[0] = null; bases[1] = b; bases[2] = n3;
-        } else {
-          if (bases[2]) runs++;
-          let n3 = null, n2 = null;
-          if (bases[1]) { if (rng.random() < ENV.sc2on1) runs++; else n3 = bases[1]; }
-          if (bases[0]) { if (n3 === null && rng.random() < ENV.adv13) n3 = bases[0]; else n2 = bases[0]; }
-          bases[0] = b; bases[1] = n2; bases[2] = n3;
-        }
-        if (limit !== null && runs > limit) break;
+      } else if (e === 'BB' || e === 'HBP') {
+        if (bases[0]) { if (bases[1]) { if (bases[2]) h.runs++; bases[2] = bases[1]; } bases[1] = bases[0]; }
+        bases[0] = b;
+      } else if (e === 'HR') { h.runs += 1 + (bases[0] ? 1 : 0) + (bases[1] ? 1 : 0) + (bases[2] ? 1 : 0); bases[0] = bases[1] = bases[2] = null; }
+      else if (e === '3B') { h.runs += (bases[0] ? 1 : 0) + (bases[1] ? 1 : 0) + (bases[2] ? 1 : 0); bases[0] = null; bases[1] = null; bases[2] = b; }
+      else if (e === '2B') {
+        h.runs += (bases[2] ? 1 : 0) + (bases[1] ? 1 : 0); let n3 = null;
+        if (bases[0]) { if (rng.random() < ENV.sc1on2) h.runs++; else n3 = bases[0]; }
+        bases[0] = null; bases[1] = b; bases[2] = n3;
+      } else {
+        if (bases[2]) h.runs++;
+        let n3 = null, n2 = null;
+        if (bases[1]) { if (rng.random() < ENV.sc2on1) h.runs++; else n3 = bases[1]; }
+        if (bases[0]) { if (n3 === null && rng.random() < ENV.adv13) n3 = bases[0]; else n2 = bases[0]; }
+        bases[0] = b; bases[1] = n2; bases[2] = n3;
       }
-      ss.runs += runs;
-      return [runs, idx];
+      return null;
     }
 
-    /* 한 경기. o: {maxInn, post, spH, spA}. 반환 [홈득점, 원정득점, {inn, lines}] */
+    /* 반 이닝의 한 반복(도루/폭투 + 타석 1회). 반환 true 면 반 이닝 종료. h: {L, idx, outs, bases, runs, limit, log} */
+    function advance(h, ss, rng, stats, dm) {
+      const p = ss.cur, b = h.L[h.idx % 9], bases = h.bases, r0 = h.runs, o0 = h.outs; h.idx++;
+      if (bases[0] && !bases[1] && h.outs < 2 && rng.random() < bases[0].p.sba * ENV.sb_mult) {
+        const runner = bases[0];
+        if (rng.random() < comb(runner.p.sbp, 1 - dm[2], 1 - CSLG)) { bases[1] = runner; bases[0] = null; stats.SB++; trackRun(runner, 'SB'); if (h.log) h.log.push({ k: 'SB', b: runner }); }
+        else { bases[0] = null; h.outs++; stats.CS++; trackRun(runner, 'CS'); if (h.log) h.log.push({ k: 'CS', b: runner }); }
+        if (h.outs >= 3) { h.idx--; trackP(p, null, h.outs - o0, h.runs - r0); return true; }
+      }
+      if ((bases[0] || bases[1] || bases[2]) && rng.random() < ENV.wp) {
+        stats.WP++;
+        if (bases[2]) h.runs++;
+        bases[2] = bases[1]; bases[1] = bases[0]; bases[0] = null;
+        if (h.log) h.log.push({ k: 'WP' });
+      }
+      const e = pa(b, p, rng, dm); stats.PA++; stats[e]++;
+      const tc = track(b, e), rb = h.runs, oa = h.outs;
+      const sig = applyEvent(h, e, b, rng, stats, tc);
+      if (e !== 'ROE' && sig !== 'CONT') tc.RBI += h.runs - rb;
+      trackP(p, e, h.outs - o0, h.runs - r0);
+      if (h.log) h.log.push({ k: 'PA', b, p, e, runs: h.runs - rb, outs: h.outs, dout: h.outs - oa });
+      if (sig === 'END') return true;
+      if (sig === 'CONT') return false;
+      return h.limit !== null && h.runs > h.limit;
+    }
+
+    function half(L, idx, ss, rng, stats, dm, limit) {
+      const h = { L, idx, outs: 0, bases: [null, null, null], runs: 0, limit, log: null };
+      while (h.outs < 3) { if (advance(h, ss, rng, stats, dm)) break; }
+      ss.runs += h.runs;
+      return [h.runs, h.idx];
+    }
+
+    /* 한 경기. o: {maxInn, post, spH, spA}. 반환 [홈득점, 원정득점, {inns, spH, spA}] */
     function game(home, away, gh, ga, rng, stats, o) {
       o = o || {}; const maxInn = o.maxInn || 11, post = !!o.post;
       CURPF = PFS[home];
@@ -280,7 +305,6 @@
       let rh = 0, ra = 0, ih = 0, ia = 0; const inns = [];
       for (let inn = 1; inn <= maxInn; inn++) {
         let r; [r, ia] = half(LA, ia, SHh, rng, stats, dmH, null); ra += r; SHh.endInning();
-        let h = null;
         if (inn >= 9 && rh > ra) { inns.push([r, null]); break; }
         const lim = inn >= 9 ? (ra - rh) : null;
         const away_r = r;
@@ -290,6 +314,116 @@
       }
       const pk = PARKNAME[home]; (PARKR[pk] = PARKR[pk] || [0, 0]); PARKR[pk][0] += rh + ra; PARKR[pk][1] += 1;
       return [rh, ra, { inns, spH: SHh.sp.name, spA: SAa.sp.name }];
+    }
+
+    /* ---------------- 타석 단위 경기 (감독 모드) ----------------
+     * o: {home, away, lineups:{home:{L,assign}, away:{...}}, staff:{home,away}(StaffState), rng, maxInn, post,
+     *     hook:{home,away}(이닝 종료 시 투수 교체 결정 함수, 없으면 StaffState.endInning), penal:{home,away}(낯선 포지션 페널티) }
+     * 난수 호출 순서는 game() 과 같아서, 같은 입력이면 같은 결과가 나온다(테스트로 확인). */
+    class LiveGame {
+      constructor(o) {
+        this.home = o.home; this.away = o.away; this.rng = o.rng; this.maxInn = o.maxInn || 11; this.hook = o.hook || {}; this.penal = o.penal || {};
+        this.L = { home: o.lineups.home.L.slice(), away: o.lineups.away.L.slice() };
+        this.assign = { home: o.lineups.home.assign.map(x => x.slice()), away: o.lineups.away.assign.map(x => x.slice()) };
+        this.staff = { home: o.staff.home, away: o.staff.away };
+        this.idx = { home: 0, away: 0 }; this.score = { home: 0, away: 0 }; this.inns = []; this.inning = 1; this.top = true;
+        this.finished = false; this.stats = newStats(); this.log = []; this.curInn = null; this.subs = { home: [], away: [] };
+        this._dm();
+        this._startHalf();
+      }
+      _dm() { this.dm = { home: defMods(this.home, this.assign.home, this.penal.home), away: defMods(this.away, this.assign.away, this.penal.away) }; }
+      get batSide() { return this.top ? 'away' : 'home'; }
+      get fldSide() { return this.top ? 'home' : 'away'; }
+      get batter() { return this.L[this.batSide][this.idx[this.batSide] % 9]; }
+      get pitcher() { return this.staff[this.fldSide].cur; }
+      get outs() { return this.h.outs; }
+      get bases() { return this.h.bases; }
+      _startHalf() {
+        const bat = this.batSide;
+        this.h = { L: this.L[bat], idx: this.idx[bat], outs: 0, bases: [null, null, null], runs: 0, limit: (!this.top && this.inning >= 9) ? this.score.away - this.score.home : null, log: [] };
+      }
+      _flush() { const l = this.h.log; this.h.log = []; this.log.push(...l); return l; }
+      _endHalf() {
+        const bat = this.batSide, fld = this.fldSide, ss = this.staff[fld], r = this.h.runs;
+        ss.runs += r; this.score[bat] += r; this.idx[bat] = this.h.idx;
+        if (this.top) this.curInn = [r, null]; else { this.curInn[1] = r; this.inns.push(this.curInn); }
+        if (this.hook[fld]) this.hook[fld](this, ss); else ss.endInning();
+        if (this.top) {
+          if (this.inning >= 9 && this.score.home > this.score.away) { this.inns.push(this.curInn); this.finished = true; return; }
+          this.top = false;
+        } else {
+          if (this.inning >= 9 && this.score.home !== this.score.away) { this.finished = true; return; }
+          if (this.inning >= this.maxInn) { this.finished = true; return; }
+          this.inning++; this.top = true;
+        }
+        this._startHalf();
+      }
+      _after(ended) { this.idx[this.batSide] = this.h.idx; if (ended || this.h.outs >= 3) this._endHalf(); return this._flush(); }
+      /* 한 타석 진행 */
+      _pre() { const fld = this.fldSide; if (!this.h.preDone) { this.h.preDone = true; if (this.pre && this.pre[fld]) this.pre[fld](this, this.staff[fld]); } }
+      step() {
+        if (this.finished) return [];
+        this._pre(); CURPF = PFS[this.home];
+        const ended = advance(this.h, this.staff[this.fldSide], this.rng, this.stats, this.dm[this.fldSide]);
+        return this._after(ended);
+      }
+      playInning() { const s = this.inning, t = this.top, out = []; while (!this.finished && this.inning === s && this.top === t) out.push(...this.step()); return out; }
+      playToEnd() { const out = []; while (!this.finished) out.push(...this.step()); return out; }
+      /* ---- 감독 개입 ---- */
+      changePitcher(side, pit) { if (side === this.fldSide) this.h.preDone = true; const ss = this.staff[side]; ss.cur = pit; ss.used.add(pit.name); ss.o = 0; this.log.push({ k: 'PC', side, p: pit }); return [{ k: 'PC', side, p: pit }]; }
+      pinchHit(side, slot, nb) {   // 타순 slot(0~8) 선수를 nb 로 교체. 수비 위치도 nb 가 이어받는다.
+        const old = this.L[side][slot]; this.L[side][slot] = nb;
+        const as = this.assign[side].find(x => x[0] === old); if (as) as[0] = nb;
+        if (side === this.batSide) this.h.L = this.L[side];
+        this.subs[side].push({ out: old, in: nb, slot }); this._dm(); const e = { k: 'PH', side, out: old, in: nb }; this.log.push(e); return [e];
+      }
+      swapField(side, slot, nb, pos) {   // 수비 교체(타순 slot 선수를 nb 가 pos 에서 대신)
+        return this.pinchHit(side, slot, nb);
+      }
+      _finishTactic() { return this._after(false); }
+      ibb() {
+        this._pre(); CURPF = PFS[this.home]; const h = this.h, b = this.batter, ss = this.staff[this.fldSide], r0 = h.runs; h.idx++;
+        this.stats.PA++; this.stats.BB++; const tc = track(b, 'BB'); applyEvent(h, 'BB', b, this.rng, this.stats, tc); tc.RBI += h.runs - r0;
+        trackP(ss.cur, 'BB', 0, h.runs - r0); h.log.push({ k: 'PA', b, p: ss.cur, e: 'IBB', runs: h.runs - r0, outs: h.outs });
+        return this._after(h.limit !== null && h.runs > h.limit);
+      }
+      steal() {   // 선두 주자 도루 시도
+        this._pre();
+        const h = this.h, bs = h.bases, ss = this.staff[this.fldSide], dm = this.dm[this.fldSide], o0 = h.outs;
+        let from = -1; if (bs[1] && !bs[2]) from = 1; else if (bs[0] && !bs[1]) from = 0; if (from < 0 || h.outs >= 2) return [];
+        const runner = bs[from], pen = from === 1 ? 0.12 : 0;
+        const ok = this.rng.random() < Math.max(0.05, comb(runner.p.sbp, 1 - dm[2], 1 - CSLG) - pen);
+        if (ok) { bs[from + 1] = runner; bs[from] = null; this.stats.SB++; trackRun(runner, 'SB'); h.log.push({ k: 'SB', b: runner }); }
+        else { bs[from] = null; h.outs++; this.stats.CS++; trackRun(runner, 'CS'); trackP(ss.cur, null, 1, 0); h.log.push({ k: 'CS', b: runner }); }
+        return this._after(false);
+      }
+      bunt() {    // 희생번트(주자 있고 2사 미만)
+        this._pre(); CURPF = PFS[this.home]; const h = this.h, bs = h.bases, b = this.batter, ss = this.staff[this.fldSide], r0 = h.runs, o0 = h.outs;
+        if (!(bs[0] || bs[1] || bs[2]) || h.outs >= 2) return [];
+        const x = this.rng.random(); h.idx++; this.stats.PA++;
+        let res;
+        if (x < 0.66) {   // 성공: 타자 아웃, 주자 한 베이스씩
+          res = 'SH'; h.outs++; if (bs[2]) { h.runs++; bs[2] = null; } if (bs[1]) { bs[2] = bs[1]; bs[1] = null; } if (bs[0]) { bs[1] = bs[0]; bs[0] = null; }
+        } else if (x < 0.82) { res = 'OUT'; h.outs++; }                                   // 실패: 타자만 아웃
+        else if (x < 0.92) { res = 'FC'; const lead = bs[2] ? 2 : (bs[1] ? 1 : 0); bs[lead] = null; h.outs++; bs[0] = b; } // 야수선택: 선두 주자 아웃
+        else { res = '1B'; const e = '1B'; this.stats['1B']++; const tc = track(b, e); applyEvent(h, e, b, this.rng, this.stats, tc); tc.RBI += h.runs - r0; }
+        if (res !== '1B') { const c = PLAYER[b.id] || (PLAYER[b.id] = { PA: 0, K: 0, BB: 0, HBP: 0, HR: 0, '1B': 0, '2B': 0, '3B': 0, ROE: 0, OUT: 0, SF: 0, RBI: 0, SB: 0, CS: 0 }); c.PA++; if (res === 'SH') c.SF++; else c.OUT++; }
+        trackP(ss.cur, res === '1B' ? '1B' : null, h.outs - o0, h.runs - r0);
+        h.log.push({ k: 'PA', b, p: ss.cur, e: res === 'SH' ? '번트' : (res === '1B' ? '번트안타' : (res === 'FC' ? '번트(선택)' : '번트실패')), runs: h.runs - r0, outs: h.outs });
+        return this._after(h.limit !== null && h.runs > h.limit);
+      }
+    }
+    // 감독 모드의 AI 경기: game() 과 같은 순서로 라인업·투수를 만든 LiveGame
+    function liveAI(home, away, gh, ga, rng, o) {
+      o = o || {}; const post = !!o.post;
+      const lh = lineup(home, gh, rng, post), la = lineup(away, ga, rng, post);
+      const sh = new StaffState(staff(home, gh), rng, o.spH), sa = new StaffState(staff(away, ga), rng, o.spA);
+      return new LiveGame({ home, away, lineups: { home: { L: lh[0], assign: lh[1] }, away: { L: la[0], assign: la[1] } }, staff: { home: sh, away: sa }, rng, maxInn: o.maxInn || 11 });
+    }
+    function makeLineup(spec) {   // spec: [{id,pos}]*9 (타순 순서, pos: 'C','1B',…,'DH')
+      const L = [], assign = [];
+      for (const s of spec) { const b = batById[s.id]; if (!b) throw new Error('선수 없음 ' + s.id); L.push(b); if (s.pos !== 'DH') assign.push([b, s.pos]); }
+      return { L, assign };
     }
     let PARKR = {};
 
@@ -303,7 +437,7 @@
         this.gn = {}; this.rec = {}; this.h2h = {};
         for (const t of TEAMS) { this.gn[t] = 0; this.rec[t] = [0, 0, 0, 0, 0]; this.h2h[t] = {}; for (const u of TEAMS) this.h2h[t][u] = [0, 0, 0]; }
         this.stats = newStats(); this.results = [];
-        PLAYER = {}; PARKR = {};
+        PLAYER = {}; PITCH = {}; PARKR = {};
       }
       get done() { return this.pos >= this.sched.length; }
       play(n) {
@@ -383,7 +517,7 @@
     function leaders(season, minPAperG) {
       const g = 144, minPA = Math.round(3.1 * g * (minPAperG === undefined ? 1 : minPAperG)), out = [];
       for (const b of bats) {
-        const c = PLAYER[b.key]; if (!c || !c.PA) continue;
+        const c = PLAYER[b.id]; if (!c || !c.PA) continue;
         const ab = c.PA - c.BB - c.HBP - c.SF, h = c['1B'] + c['2B'] + c['3B'] + c.HR;
         const tb = c['1B'] + 2 * c['2B'] + 3 * c['3B'] + 4 * c.HR;
         const obp = (h + c.BB + c.HBP) / c.PA, slg = ab ? tb / ab : 0;
@@ -395,7 +529,9 @@
     return {
       TEAMS, PARKNAME, PyRandom, Season, playPostseason, leaders, game, newStats,
       parkRuns: () => PARKR, teamOf: t => t,
-      bats: () => bats, pits: () => pits
+      bats: () => bats, pits: () => pits,
+      LiveGame, StaffState, liveAI, makeLineup, defMods, staff, lineup, batById, pitById, pfs: PFS,
+      tracking: () => ({ bat: PLAYER, pit: PITCH }), resetTracking: () => { PLAYER = {}; PITCH = {}; }
     };
   }
 

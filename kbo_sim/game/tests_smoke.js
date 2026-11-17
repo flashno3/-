@@ -1,0 +1,14 @@
+const fs=require('fs'),path=require('path');
+const {League}=require('./src/league.js');
+const base=JSON.parse(fs.readFileSync(path.join(__dirname,'src/gamedata.json'),'utf8'));
+const t0=Date.now();const L=League.create(base,'Lions',2027);
+console.log('생성',Date.now()-t0,'ms | 연봉총액상한',L.S.calib.cap,'억 | 팀 연봉:',Object.fromEntries(Object.keys(L.S.teams).map(t=>[t,L.payroll(t)])));
+const T='Lions';const me=L.hitters(T,true);console.log('내 팀 1군 타자',me.length,'투수',L.pitchers(T,true).length);
+console.log('라인업',L.S.teams[T].set.lineup.map(x=>L.S.players[x.id].ko+'/'+x.pos).join(' '));
+console.log('로테이션',L.S.teams[T].set.rotation.map(id=>L.S.players[id].ko).join(' '),'| 마무리',L.S.players[L.S.teams[T].set.bullpen.closer].ko);
+const t1=Date.now();const r=L.advance(300,false);console.log('시즌 진행',Date.now()-t1,'ms',r.status,'day',L.S.day);
+const st=L.standings();console.log(st.map(x=>`${x.rank} ${x.team} ${x.w}-${x.l}-${x.d} ${x.rs}/${x.ra}`).join('\n'));
+let tr=0,tg=0;for(const x of st){tr+=x.rs;tg+=x.w+x.l+x.d}console.log('팀당 경기당 득점',(tr/tg).toFixed(2));
+const sal=Object.values(L.S.players).map(p=>({n:p.ko,t:p.type,s:p.contract.salary,o:L.ovr(p)})).sort((a,b)=>b.s-a.s);
+console.log('연봉 상위',sal.slice(0,6).map(x=>`${x.n}${x.s}억(OVR${x.o})`).join(' '),'| 평균',(sal.reduce((a,b)=>a+b.s,0)/sal.length).toFixed(2));
+console.log('OVR 분포 타자',[20,40,50,60,70].map(k=>Object.values(L.S.players).filter(p=>p.type==='B'&&L.ovr(p)>=k).length).join('/'),'(>=20/40/50/60/70)');
