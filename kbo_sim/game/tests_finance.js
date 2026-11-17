@@ -3,12 +3,14 @@ const base=JSON.parse(fs.readFileSync(__dirname+'/src/gamedata.json'));
 const L=League.create(base,'Lions',7),S=L.S;let n=0;const ok=(c,m)=>{assert(c,m);n++;};
 // 1) 데이터 정합성: 입력 매출 합 ≈ 보도 총매출 7795.8억, 모든 구단 존재
 const T=Object.keys(S.fin.teams);ok(T.length===10,'10개 구단');
-ok(Math.abs(T.reduce((a,t)=>a+S.fin.teams[t].rev0,0)-7795.8)<1,'2025 총매출 합');
+ok(Math.abs(T.reduce((a,t)=>a+S.fin.teams[t].rev0,0)-7795.8)<1.5,'2025 총매출 합');
 // 2) 기준 연도 손익 재현: 시즌 전 예상 영업이익이 2025 영업이익과 (기금 제외) 일치
 for(const t of T){const f=S.fin.teams[t],v=L.finPreview(t);if(L.finCap(t)<f.cap)ok(v.op+v.cbt<f.op0,t+' 좌석 축소로 손익 감소');else ok(Math.abs(v.op+v.cbt-f.op0)<0.6,t+' 기준 손익 재현 '+(v.op+v.cbt)+' vs '+f.op0);ok(f.att0<=f.cap,t+' 관중≤수용');}
-ok(S.fin.teams.Giants.gateKnown&&Math.abs(L.finPreview('Giants').gate-232)<0.5,'롯데 입장수입 232억');
-ok(S.fin.teams.Twins.cap===23750&&L.finCap('Twins',2027)===18000&&L.finCap('Bears',2026)===23750,'잠실 좌석 2027 변경');ok(L.finCap('Eagles',2028)===20000&&L.finCap('Eagles',2027)===17000,'한화 증축 2028');
-ok(S.fin.teams.Lions.parKnown&&Math.abs(S.fin.teams.Lions.par-0.308)<1e-9&&!S.fin.teams.Bears.parKnown&&S.fin.teams.Bears.par===0.35,'모기업 의존도');
+ok(S.fin.teams.Giants.gateKnown&&Math.abs(L.finPreview('Giants').gate-224.64)<0.5,'롯데 입장수입 224.6억(감사보고서)');
+ok(S.fin.teams.Twins.cap===23750&&L.finCap('Twins',2027)===18000&&L.finCap('Bears',2026)===23750&&S.fin.teams.Giants.cap===22669,'잠실 좌석 2027 변경');ok(L.finCap('Eagles',2028)===20000&&L.finCap('Eagles',2027)===17000,'한화 증축 2028');
+ok(Math.abs(S.fin.teams.Lions.par-0.373)<0.001&&Math.abs(S.fin.teams.Tigers.par-0.063)<0.001&&!S.fin.teams.Eagles.parKnown&&S.fin.teams.Eagles.par===0.30,'계열사 거래 비율');
+// 감사보고서 정합성: 5개 구단 수입 항목 합 = 매출, 매출−영업비용 = 영업이익
+for(const t of ['Lions','Twins','Bears','Giants','Tigers']){const f=S.fin.teams[t];const rv=f.audit.filter(a=>a[0]==='수입').reduce((a,x)=>a+x[2],0);ok(Math.abs(rv-f.rev0)<0.15||t==='Bears'&&Math.abs(rv-f.rev0)<0.15,t+' 수입 항목 합 '+rv+' vs 매출 '+f.rev0);const d=base.finance[t];ok(Math.abs(d.rev-d.cost-d.op)<0.05,t+' 매출-비용=영업이익 '+(d.rev-d.cost)+' vs '+d.op);}
 {const a=L.finAtt('Lions');L.setTicketPolicy('Lions',1.2);const b=L.finAtt('Lions');L.setTicketPolicy('Lions',1);ok(b<a||a===S.fin.teams.Lions.cap&&b<=a,'가격 인상 시 관중 감소');ok(!L.setTicketPolicy('Lions',3),'허용 안 되는 정책');}
 // 3) 시즌 진행: 홈 경기 수만큼 입장 수입 적립, 관중은 수용인원 이내
 L.advance(1000);

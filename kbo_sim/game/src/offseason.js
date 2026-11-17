@@ -547,7 +547,7 @@
 
   /* ---------------- 재정(손익) 모델 v2 ----------------
    * [데이터] finance_2025.csv: 2025 매출·영업비용·영업이익, 2026 평균 관중, 구장 좌석(검색에서 가장 많이 언급된 값), 모기업(계열사) 의존도(삼성·SSG·롯데만 보도).
-   * [수입] 입장(홈 관중 × 객단가 × 티켓 가격 정책) + 모기업·계열사 광고·후원(매출 × 의존도, 미확인 구단은 35% 가정)
+   * [수입] 입장(홈 관중 × 객단가 × 티켓 가격 정책) + 모기업·계열사 거래 매출(매출 × 비율: 삼성 37.3·LG 31.7·두산 24.1·롯데 33.7·KIA 6.3 = 감사보고서, SSG 29.9 = 보도, 나머지 30% 가정)
    *        + 중계·KBO 분배·MD·기타(2025 매출에서 역산해 고정) + 포스트시즌 배당금 + 우승 시 모기업 보너스.
    * [포스트시즌 배당] 입장수입(경기당 좌석 × 4.5만 원, 전 경기 매진 가정) − 운영비 44% = 배당 재원. 정규시즌 1위 20%, 나머지 80%를
    *        한국시리즈 우승 50 / 준우승 24 / 플레이오프 패 14 / 준PO 패 9 / 와일드카드 패 3 으로 분배(2025 LG 52.8억=17.6+35.2, 한화 16.9억으로 검증).
@@ -555,15 +555,16 @@
    * [비용] 선수단 보수 + 운영비(2025 영업비용 − 초기 보수) + 야구발전기금(CBT) + 우승 포상금.
    * [예산] FA 여유자금 = 직전 시즌 매출 − 운영비 + 허용 적자(매출의 3% × (0.5 + 이사회 신뢰도/100)) − 선수단 보수.
    * [이사회 신뢰도] 0~100(시작 60): 성적·포스트시즌·우승, 영업 손익이 허용 적자 안인지에 따라 변동. 낮으면 허용 적자(예산)가 줄어든다. */
-  const FIN_PRICE = 15600 / 1e8, FIN_GAMES = 72, PS_PRICE = 45000 / 1e8, PS_COST = 0.44, PARENT_BONUS = 0.5, PLAYER_BONUS = 0.3, PAR_DEFAULT = 0.35, ELAST = 0.6, LOSS = 0.03;
+  const FIN_PRICE = 15600 / 1e8, FIN_GAMES = 72, PS_PRICE = 45000 / 1e8, PS_COST = 0.44, PARENT_BONUS = 0.5, PLAYER_BONUS = 0.3, PAR_DEFAULT = 0.30, ELAST = 0.6, LOSS = 0.03;
   const PS_SHARE = { reg: 0.2, ks: 0.4, ksL: 0.192, poL: 0.112, jpoL: 0.072, wcL: 0.024 };
   const PRICE_PM = [0.9, 1, 1.1, 1.2];
   proto._initFinance = function (data) {
     const S = this.S; S.fin = { v: 2, teams: {}, hist: [] }; if (!data) return;
+    const kn = TEAMS.filter(t => data[t] && data[t].gate), avgPrice = kn.length ? kn.reduce((a, t) => a + data[t].gate / (data[t].att * FIN_GAMES), 0) / kn.length : FIN_PRICE;   // 감사보고서 입장수입이 있는 구단의 평균 유효 객단가를 미공개 구단에 적용
     for (const t of TEAMS) {
       const d = data[t]; if (!d) continue;
-      const price = d.gate ? d.gate / (d.att * FIN_GAMES) : FIN_PRICE, estGate = d.gate || d.att * FIN_GAMES * price, pay0 = this.payroll(t), par = d.par !== null && d.par !== undefined ? d.par / 100 : PAR_DEFAULT;
-      S.fin.teams[t] = { att0: d.att, cap: d.cap, capchg: d.capchg || [], capsrc: d.capsrc, chgsrc: d.chgsrc, price, pm: 1, par, parKnown: d.par !== null && d.par !== undefined, parAds: Math.round(d.rev * par * 10) / 10, other: Math.round((d.rev - estGate - d.rev * par) * 10) / 10, opex: Math.round((d.cost - pay0) * 10) / 10, rev0: d.rev, op0: d.op, park: d.park, note: d.note, gateKnown: !!d.gate, gate: 0, games: 0, lastRev: d.rev, trust: 60 };
+      const price = d.gate ? d.gate / (d.att * FIN_GAMES) : avgPrice, estGate = d.gate || d.att * FIN_GAMES * price, pay0 = this.payroll(t), par = d.par !== null && d.par !== undefined ? d.par / 100 : PAR_DEFAULT;
+      S.fin.teams[t] = { att0: d.att, cap: d.cap, capchg: d.capchg || [], capsrc: d.capsrc, chgsrc: d.chgsrc, price, pm: 1, par, parKnown: d.par !== null && d.par !== undefined, parAds: Math.round(d.rev * par * 10) / 10, other: Math.round((d.rev - estGate - d.rev * par) * 10) / 10, opex: Math.round((d.cost - pay0) * 10) / 10, rev0: d.rev, op0: d.op, audit: d.audit || [], parsrc: d.parsrc, park: d.park, note: d.note, gateKnown: !!d.gate, gate: 0, games: 0, lastRev: d.rev, trust: 60 };
     }
   };
   proto.finReady = function () { const F = this.S.fin; return !!(F && F.v === 2 && F.teams && F.teams.Lions); };
