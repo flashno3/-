@@ -264,6 +264,8 @@
     _obpSlg(p) { const q = p.p, obp = q.bb + q.hbp + q.hr + (1 - q.k - q.bb - q.hbp - q.hr) * q.babip * 0.97, slg = obp + 2 * q.hr + q.babip * q.xbh * 0.5; return obp * 2 + slg; }
     /* 팀 초기 설정: 1군 28명, 라인업/로테이션/불펜 자동 */
     initTeam(t) {
+      const pool = this.reg1Pool(t);
+      if (pool.length >= ACTIVE_MAX) { this.autoActive(t, pool); this.autoSettings(t); return; }   // 실제 2026.10 1군 등록 명단이 있으면 그 안에서 28명 선발
       const T = this.S.teams[t], H = this.hitters(t).sort((a, b) => b.PA - a.PA), P = this.pitchers(t);
       const act = new Set();
       let hs = H.slice(0, 14); if (hs.filter(p => p.pos === 'C').length < 2) { const c = H.find(p => p.pos === 'C' && !hs.includes(p)); if (c) hs[hs.length - 1] = c; }
@@ -273,6 +275,8 @@
       for (const p of this.players(t)) p.active = act.has(p.id);
       this.autoSettings(t);
     }
+    /* 실제 1군 등록 명단(2026.10, 확대 엔트리 33명) 선수 */
+    reg1Pool(t) { return this.players(t).filter(p => p.reg1); }
     autoSettings(t, only) {
       const T = this.S.teams[t], set = T.set, H = this.hitters(t, true), P = this.pitchers(t, true);
       if (!only || only === 'lineup') set.lineup = this.bestLineup(H);
@@ -334,8 +338,8 @@
       rps.forEach((p, i) => { const u = U(p); if (!farm) p.role = 'RP'; u.GS = 0; u.G = Math.round((IPs[i] || 8) * 1.05); u.IP = IPs[i] || 8; u.ipgs = null; });
     }
     /* AI 팀의 1군 28명 자동 편성: 주전 9 + 백업 5(포수 2명 이상) + 선발 5 + 불펜 9 */
-    autoActive(t) {
-      const S = this.S, H = this.hitters(t), P = this.pitchers(t), act = new Set();
+    autoActive(t, pool) {
+      const S = this.S, inPool = p => !pool || pool.includes(p), H = this.hitters(t).filter(inPool), P = this.pitchers(t).filter(inPool), act = new Set();
       const lineup = this.bestLineup(H); lineup.forEach(x => act.add(x.id));
       const bench = H.filter(p => !act.has(p.id)).sort((a, b) => this._runsB(b, true) - this._runsB(a, true)); let nb = 0;
       const needC = 2 - H.filter(p => act.has(p.id) && p.pos === 'C').length;
@@ -345,6 +349,10 @@
       if (spc.length < 5) { const have = new Set(spc.map(p => p.id)); spc.push(...P.filter(p => !have.has(p.id)).sort((a, b) => b.stamina - a.stamina).slice(0, 5 - spc.length)); }
       spc.forEach(p => act.add(p.id));
       const rps = P.filter(p => !act.has(p.id)).sort((a, b) => this._runsP(b) - this._runsP(a)).slice(0, Math.max(0, ACTIVE_MAX - act.size)); rps.forEach(p => act.add(p.id));
+      if (act.size < ACTIVE_MAX) {   // 명단 풀이 모자라면 팀의 나머지 선수 중 가치가 높은 순으로 28명까지 채운다(투수 최소 13명)
+        const rest = this.players(t).filter(p => !act.has(p.id)).sort((a, b) => this.marketValue(b) - this.marketValue(a));
+        while (act.size < ACTIVE_MAX && rest.length) { const needP = [...act].filter(id => S.players[id].type === 'P').length < 13; const i = rest.findIndex(p => needP ? p.type === 'P' : true); const p = rest.splice(i < 0 ? 0 : i, 1)[0]; act.add(p.id); }
+      }
       for (const p of this.players(t)) p.active = act.has(p.id);
       this._engDirty = true; this._f2dirty = true;
     }
@@ -432,7 +440,7 @@
     newSeasonSetup(first) {
       const S = this.S;
       for (const p of Object.values(S.players)) p.lockUntil = 0;
-      for (const t of TEAMS) { if (t !== S.userTeam) { this.autoActive(t); this.assignUsage(t); } }
+      for (const t of TEAMS) { if (t !== S.userTeam) { const rp = first ? this.reg1Pool(t) : []; this.autoActive(t, rp.length >= ACTIVE_MAX ? rp : null); this.assignUsage(t); } }
       this.repairSettings(S.userTeam);
       S.day = 0; S.results = []; S.stats = { bat: {}, pit: {} }; S.stats2 = { bat: {}, pit: {} }; S.recent = {}; S.rec2 = {}; for (const t of this.farmTeams()) S.rec2[t] = [0, 0, 0, 0, 0]; S.post = null; S.phase = 'preseason';
       S.rec = {}; S.h2h = {}; for (const t of TEAMS) { S.rec[t] = [0, 0, 0, 0, 0]; S.h2h[t] = {}; for (const u of TEAMS) S.h2h[t][u] = [0, 0, 0]; }

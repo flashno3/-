@@ -34,6 +34,14 @@ L.advance(300,false);ok(L.standings2().length===11&&L.standings2().every(x=>x.w+
 ok(S.fteams.Whales.ids.length===50&&S.fteams.Whales.ids.every(id=>S.players[id].team==='Whales'),'울산 50명');
 // 2b) ID 충돌 방지: 새 신인 ID는 기존 선수 ID와 겹치지 않는다
 ok(S.nextId>Math.max(...Object.keys(S.players).map(id=>parseInt(id.slice(1)))),'nextId 충돌');
+// 2c) 1군 등록 명단(생년월일·투타) 반영과 에이징
+{const csv=fs.readFileSync(path.join(__dirname,'data/roster_1군_2026.csv'),'utf8').split('\n').slice(1).filter(Boolean);
+ const R=Object.values(S.players).filter(p=>p.birth);ok(R.length>=330,'생년월일 반영 '+R.length);
+ ok(R.every(p=>p.age===2027-parseInt(p.birth.slice(0,4))&&p.throws&&p.bats),'나이=2027-출생연도, 투타 입력');
+ const Lk=League.create(base,'Eagles',3);let bad=0;for(const t of Object.keys(Lk.S.teams)){const a=Lk.players(t).filter(p=>p.active);if(a.length!==28)bad++;if(a.filter(p=>!p.reg1).length>2)bad++}ok(bad===0,'초기 1군 28명, 대부분 실제 등록 명단');
+ const old=Object.values(S.players).find(p=>p.ko==='최형우'&&p.birth);ok(old&&old.age===44,'최형우 44세');
+ const q=JSON.parse(JSON.stringify(old));q.age=44;ok(L.retireChance(q)<0.7,'능력치 높은 노장은 일괄 은퇴하지 않음 '+L.retireChance(q).toFixed(2));
+ const star=Object.values(S.players).find(p=>p.ko==='양의지'&&p.birth),e=L.retireChance(Object.assign(JSON.parse(JSON.stringify(star)),{age:41}));ok(e<0.45,'양의지 41세 은퇴확률 '+e.toFixed(2));}
 // 3) 군 복무(상무)
 {const L2=League.create(base,'Lions',4),S2=L2.S;const mil=S2.mil.map(id=>S2.players[id]);
  ok(L2.farmTeams().includes('Whales')&&mil.length===26&&mil.every(p=>p.team==='MIL'&&p.milTeam in S2.teams&&!S2.teams[p.milTeam].ids.includes(p.id)),'상무 26명이 팀 명단 밖');

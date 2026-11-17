@@ -32,6 +32,7 @@
     p.age = a;
     const curve = (p.type === 'B' ? BCURVE : PCURVE)[clamp(a, 18, 35)] !== undefined ? (p.type === 'B' ? BCURVE : PCURVE)[clamp(a, 18, 35)] : -.3;
     let gain = (a > 35 ? -.32 : curve) + gauss(r, 0, 0.12);
+    if (a >= 33 && gain < 0) gain *= 1 - 0.4 * clamp((old - 55) / 20, 0, 1);   // 상위권 선수는 에이징 하락이 최대 40% 완만(류현진·양의지·최정 등)
     const pf = play === undefined ? 1 : 0.55 + 0.45 * clamp(play, 0, 1);   // 경기에 못 나온 젊은 선수는 성장이 더딘다(최대 -45%)
     if (a <= 26 && gain > 0) gain *= pf;
     if (a <= 26 && p.pot > 0) { const g2 = Math.min(p.pot, 0.4) * (0.6 + 0.8 * r.random()) * pf; gain = Math.max(gain, g2); p.pot = Math.max(0, p.pot - Math.max(0, g2)); }
@@ -48,7 +49,14 @@
     }
     return this.ovr(p) - old;
   };
-  proto.retireChance = function (p) { const o = this.ovr(p), a = p.age; if (a >= 42) return 1; if (a < 35) return 0; return clamp(0.10 * (a - 34) + (o < 45 ? 0.25 : o < 50 ? 0.1 : 0) - (o >= 60 ? 0.15 : 0), 0, 0.95); };
+  /* 은퇴 확률: 나이 + 능력치. 에이징 구간에서도 능력치가 높은 선수는 오래 뛴다(42세 일괄 은퇴 폐지) */
+  proto.retireChance = function (p) {
+    const o = this.ovr(p), a = p.age; if (a >= 48) return 1; if (a < 35) return 0;
+    let c = a >= 42 ? 0.35 + 0.1 * (a - 42) : 0.07 * (a - 34);
+    c += o < 45 ? 0.25 : o < 50 ? 0.1 : 0;
+    c -= o >= 70 ? 0.4 : o >= 65 ? 0.3 : o >= 60 ? 0.2 : o >= 55 ? 0.1 : 0;
+    return clamp(c, 0.02, 0.97);
+  };
 
   /* ---------------- 신인 생성 ---------------- */
   proto.makeRookie = function (r, type, forcePos) {

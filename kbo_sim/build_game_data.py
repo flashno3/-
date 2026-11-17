@@ -226,6 +226,29 @@ def load_salary(players):
         c[0]['sal']=int(r['연봉_만원'])/10000;c[0]['foreign']=bool(r['외국인구분']);ok+=1
     return ok,skip,miss
 SALOK,SALSKIP,SALMISS=load_salary(players)
+
+# 2026.10 1군 등록 명단(사용자 제공 CSV): 생년월일·투타·언더핸드 → 나이(2027 시즌 기준 = 2027-출생연도), 투타, 1군 등록 여부(reg1)
+def load_roster1(players):
+    import csv
+    f=D+'game/data/roster_1군_2026.csv'
+    if not os.path.exists(f): return {}
+    TM3={'한화':'Eagles','LG':'Twins','SSG':'Landers','두산':'Bears','키움':'Heroes','KT':'Wiz','NC':'Dinos','롯데':'Giants','삼성':'Lions','KIA':'Tigers'}
+    by={}
+    for p in players: by.setdefault((p['ko'],p['team'],p['type']),[]).append(p)
+    st={'ok':0,'amb':[],'miss':[],'agefix':0,'reg1':0}
+    for r in csv.DictReader(open(f,encoding='utf-8-sig')):
+        ty='P' if r['포지션']=='투수' else 'B';y=int(r['생년월일'][:4])
+        c=by.get((r['선수명'],TM3[r['구단']],ty),[])
+        if len(c)>1: c=[p for p in c if abs(p['age']-(2027-y))<=1]
+        if len(c)!=1: (st['amb'] if len(c)>1 else st['miss']).append((r['구단'],r['선수명']));continue
+        p=c[0];st['ok']+=1
+        if p['age']!=2027-y: st['agefix']+=1
+        p['age']=2027-y;p['birth']=r['생년월일'];p.pop('ageEst',None)
+        p['throws']={'우':'R','좌':'L'}[r['투구손']];p['bats']={'우':'R','좌':'L','양':'S'}[r['타석']]
+        if r['언더핸드']=='Y': p['under']=True
+        if '등록명단 외' not in r['비고']: p['reg1']=True;st['reg1']+=1
+    return st
+R1=load_roster1(players)
 # 능력치 척도(20-80): ratings.py 와 같은 방식(규정 타자 PA≥300 / 규정 투수 TBF≥200 가중 평균·표준편차)
 def scale(rows,fields,w):
     out={}
@@ -256,3 +279,5 @@ if FUTP:
 print('군 복무(상무) 반영:',sum(1 for p in players if p.get('team')=='MIL'),'명 (기존 1군 데이터 %d, 신규 %d)'%(sum(1 for p in players if p.get('team')=='MIL' and p.get('src')!='F'),sum(1 for p in players if p.get('team')=='MIL' and p.get('src')=='F')))
 
 print('연봉 반영',SALOK,'명 | 동명이인 등으로 건너뜀',len(SALSKIP),'| 선수 데이터에 없음',len(SALMISS),'| 외국인',sum(1 for p in players if p.get('foreign')))
+
+print('1군 명단(생년월일·투타): 매칭',R1['ok'],'| 나이 정정',R1['agefix'],'| 1군 등록',R1['reg1'],'| 모호',R1['amb'],'| 미매칭',R1['miss'])
