@@ -354,7 +354,7 @@
       const oppStaff = new E.StaffState(E.staff(opp, 1 + d), r, null);
       const lineups = {}, staff = {}, penal = {}; lineups[userSide] = ul; lineups[oppSide] = { L: ol[0], assign: ol[1] }; staff[userSide] = userStaff; staff[oppSide] = oppStaff; penal[userSide] = true;
       const ctx = { auto: true, userSide, league: this, prep, g, idx };
-      const live = new E.LiveGame({ home, away, lineups, staff, rng: r, maxInn: 11, penal, hook: { [userSide]: (game, ss) => { ss.o += 3; } } });
+      const live = new E.LiveGame({ home, away, lineups, staff, rng: r, maxInn: 11, penal, fatigue: true, hook: { [userSide]: (game, ss) => { ss.o += 3; } } });
       live.pre = { [userSide]: (game, ss) => this._autoBullpen(game, ss, userSide, ctx) };
       ctx.live = live; ctx.E = E; return ctx;
     }
@@ -363,7 +363,7 @@
       if (!ctx.auto) return;
       const S = this.S, E = ctx.E, set = S.teams[S.userTeam].set, bp = set.bullpen, opp = side === 'home' ? 'away' : 'home';
       const cur = ss.cur, sp = ss.sp; let change = false;
-      if (cur === sp) { if (ss.o >= ss.sp_outs || ss.runs >= 6) change = true; } else change = true;
+      const fat = game.pitchFatigue(side); if (cur === sp) { if (ss.o >= ss.sp_outs || ss.runs >= 6 || fat.over >= 3) change = true; } else change = true;
       if (!change) return;
       const inn = game.inning, lead = game.score[side] - game.score[opp], used = ss.used;
       const roster = id => { const p = S.players[id]; return p && p.active ? E.pitById[id] : null; };
@@ -442,7 +442,7 @@
       const spH = E.pitById[this._postStarter(g.home, s).id], spA = E.pitById[this._postStarter(g.away, s).id];
       const r = rngFor(S.seed, S.year, 500 + S.post.stage, s.games.length + 1);
       const [rh, ra, info] = E.game(g.home, g.away, 144, 144, r, E.newStats(), { maxInn: 15, post: true, spH, spA });
-      this.mergeTracking(); const ended = this.postRecord(g.home, g.away, rh, ra, info); return { home: g.home, away: g.away, rh, ra, ended };
+      this.mergeTracking(); const ended = this.postRecord(g.home, g.away, rh, ra, info); return { home: g.home, away: g.away, rh, ra, ended, round: s.name, winner: s.winner, w: Object.assign({}, s.w) };
     }
     /* 포스트시즌에서 내 경기를 직접 지휘할 때 */
     startUserPostGame() {
@@ -457,14 +457,14 @@
       const oppStaff = new E.StaffState(E.staff(opp, 144), r, oppSp);
       const lineups = {}, staff = {}, penal = {}; lineups[userSide] = ul; lineups[oppSide] = { L: ol[0], assign: ol[1] }; staff[userSide] = userStaff; staff[oppSide] = oppStaff; penal[userSide] = true;
       const ctx = { auto: true, userSide, league: this, prep: { spec, absent: [], sp, rotIdx: 0 }, post: true, E };
-      const live = new E.LiveGame({ home: g.home, away: g.away, lineups, staff, rng: r, maxInn: 15, penal, hook: { [userSide]: (game, ss) => { ss.o += 3; } } });
+      const live = new E.LiveGame({ home: g.home, away: g.away, lineups, staff, rng: r, maxInn: 15, penal, fatigue: true, hook: { [userSide]: (game, ss) => { ss.o += 3; } } });
       live.pre = { [userSide]: (game, ss) => this._autoBullpen(game, ss, userSide, ctx) };
       ctx.live = live; return ctx;
     }
     finishUserPostGame(ctx) {
-      const live = ctx.live; this.mergeTracking();
+      const live = ctx.live, s = this.S.post.cur; this.mergeTracking();
       const ended = this.postRecord(live.home, live.away, live.score.home, live.score.away, { inns: live.inns, spH: live.staff.home.sp.name, spA: live.staff.away.sp.name });
-      return { home: live.home, away: live.away, rh: live.score.home, ra: live.score.away, ended };
+      return { home: live.home, away: live.away, rh: live.score.home, ra: live.score.away, ended, round: s.name, winner: s.winner, w: Object.assign({}, s.w), inns: live.inns };
     }
     userInPost() { const P = this.S.post; if (!P || P.done) return false; const g = this.postNextGame(); return !!g && (g.home === this.S.userTeam || g.away === this.S.userTeam); }
   }

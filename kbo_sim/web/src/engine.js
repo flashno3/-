@@ -82,6 +82,9 @@
   const WD = { '2B': .18, 'SS': .22, '3B': .16, '1B': .07, 'LF': .10, 'CF': .17, 'RF': .10 };
   const ENV = { gdp: 0.185, sf: 0.40, adv13: 0.33, sc2on1: 0.65, sc1on2: 0.48, roe: 0.032, wp: 0.0215, sb_mult: 1.6, prod: 0.30 };
   const K2 = 0.004, BOFF = -0.001;
+  // 감독 작전: 타석 확률 배수(트레이드오프가 있다)
+  const BAT_APP = { normal: null, contact: { k: 0.86, hr: 0.82, babip: 1.012, bb: 0.97 }, power: { k: 1.10, hr: 1.15, babip: 0.985, bb: 0.98 }, patient: { bb: 1.18, k: 0.97, hr: 0.90, babip: 0.99 } };
+  const PIT_APP = { normal: null, attack: { bb: 0.82, k: 1.03, hr: 1.08, babip: 1.015 }, careful: { bb: 1.15, hr: 0.90, k: 0.99, babip: 0.995 }, strikeout: { k: 1.08, bb: 1.08, hr: 1.03 } };
   const STINT = {
     'Matt Davidson 데이비슨': [['Dinos', 1, 60, 0.93], ['Heroes', 61, 144, 0.81]],
     'Ju-suk Ha 하주석': [['Eagles', 1, 95, 0.25], ['Tigers', 96, 144, 0.96]],
@@ -181,15 +184,17 @@
       return [(TEAMDEF[team] !== undefined ? TEAMDEF[team] : 0.0) - K2 * s, e / wsum, cs];
     }
 
-    function pa(b, p, rng, dm) {
+    function pa(b, p, rng, dm, mod) {
       const bp = b.p, pp = p.p;
-      const k = comb(bp.k, pp.k, LB.k), bb = comb(bp.bb, pp.bb, LB.bb), hbp = comb(bp.hbp, pp.hbp, LB.hbp), hr = comb(bp.hr, pp.hr, LB.hr) * CURPF.hr;
+      let k = comb(bp.k, pp.k, LB.k), bb = comb(bp.bb, pp.bb, LB.bb); const hbp = comb(bp.hbp, pp.hbp, LB.hbp); let hr = comb(bp.hr, pp.hr, LB.hr) * CURPF.hr;
+      if (mod) { if (mod.k) k *= mod.k; if (mod.bb) bb *= mod.bb; if (mod.hr) hr *= mod.hr; }
       let r = rng.random();
       if (r < k) return 'K'; r -= k;
       if (r < bb) return 'BB'; r -= bb;
       if (r < hbp) return 'HBP'; r -= hbp;
       if (r < hr) return 'HR';
       let babip = comb(bp.babip, pp.babip, LB.babip); babip = comb(babip, LB.babip + dm[0] + BOFF, LB.babip);
+      if (mod && mod.babip) babip *= mod.babip;
       const xb = bp.xbh, tr = bp.tri;
       const p1 = babip * (1 - xb) * CURPF.b1, p2 = babip * xb * (1 - tr) * CURPF.b2, p3 = babip * xb * tr * CURPF.b3, x = rng.random();
       if (x < p1) return '1B'; if (x < p1 + p2) return '2B'; if (x < p1 + p2 + p3) return '3B';
@@ -238,7 +243,7 @@
           return 'CONT';
         }
         h.outs++;
-        if (h.outs < 3 && bases[2] && rng.random() < ENV.sf) { h.runs++; bases[2] = null; stats.SF++; tc.SF++; }
+        if (h.outs < 3 && bases[2] && rng.random() < ENV.sf * (h.sfMult || 1)) { h.runs++; bases[2] = null; stats.SF++; tc.SF++; }
         else {
           if (h.outs < 3 && bases[1] && !bases[2] && rng.random() < ENV.prod) { bases[2] = bases[1]; bases[1] = null; }
           if (h.outs < 3 && bases[0] && !bases[1] && rng.random() < ENV.prod * 0.7) { bases[1] = bases[0]; bases[0] = null; }
@@ -277,7 +282,7 @@
         bases[2] = bases[1]; bases[1] = bases[0]; bases[0] = null;
         if (h.log) h.log.push({ k: 'WP' });
       }
-      const e = pa(b, p, rng, dm); stats.PA++; stats[e]++;
+      const e = pa(b, p, rng, dm, h.mod); stats.PA++; stats[e]++;
       const tc = track(b, e), rb = h.runs, oa = h.outs;
       const sig = applyEvent(h, e, b, rng, stats, tc);
       if (e !== 'ROE' && sig !== 'CONT') tc.RBI += h.runs - rb;
@@ -328,6 +333,8 @@
         this.staff = { home: o.staff.home, away: o.staff.away };
         this.idx = { home: 0, away: 0 }; this.score = { home: 0, away: 0 }; this.inns = []; this.inning = 1; this.top = true;
         this.finished = false; this.stats = newStats(); this.log = []; this.curInn = null; this.subs = { home: [], away: [] };
+        this.fatigue = !!o.fatigue; this.bf = {};
+        this.tact = { home: { bat: 'normal', pit: 'normal', inf: false }, away: { bat: 'normal', pit: 'normal', inf: false } };
         this._dm();
         this._startHalf();
       }
@@ -342,7 +349,21 @@
         const bat = this.batSide;
         this.h = { L: this.L[bat], idx: this.idx[bat], outs: 0, bases: [null, null, null], runs: 0, limit: (!this.top && this.inning >= 9) ? this.score.away - this.score.home : null, log: [] };
       }
-      _flush() { const l = this.h.log; this.h.log = []; this.log.push(...l); return l; }
+      _flush() { const l = this.h.log; this.h.log = []; for (const e of l) if (e.k === 'PA' && e.p) this.bf[e.p.id] = (this.bf[e.p.id] || 0) + 1; this.log.push(...l); return l; }
+      /* 투수 체력: 선발은 평균 이닝 기준, 구원은 약 1이닝. 한계를 넘기면 볼넷·피홈런·피안타가 늘고 삼진이 줄어든다 */
+      pitchLimit(side) { const ss = this.staff[side], p = ss.cur; return ss.sp === p ? Math.round((p.ipgs || 5) * 4.15 + 3) : 9; }
+      pitchFatigue(side) { const ss = this.staff[side], bf = this.bf[ss.cur.id] || 0, lim = this.pitchLimit(side); return { bf, lim, pct: bf / lim, over: Math.max(0, bf - lim) }; }
+      setTactic(side, key, val) { this.tact[side][key] = val; }
+      _mods() {
+        const bat = this.batSide, fld = this.fldSide, B = BAT_APP[this.tact[bat].bat], Pm = PIT_APP[this.tact[fld].pit], h = this.h;
+        let mod = null; const mul = (k, v) => { if (!v) return; if (!mod) mod = {}; mod[k] = (mod[k] || 1) * v; };
+        if (B) for (const k in B) mul(k, B[k]); if (Pm) for (const k in Pm) mul(k, Pm[k]);
+        if (this.fatigue) { const f = this.pitchFatigue(fld); if (f.over > 0) { mul('bb', 1 + 0.03 * f.over); mul('hr', 1 + 0.04 * f.over); mul('babip', 1 + 0.008 * f.over); mul('k', Math.max(0.6, 1 - 0.015 * f.over)); } }
+        h.sfMult = 1;
+        if (this.tact[bat].bat === 'contact' && h.bases[2] && h.outs < 2) h.sfMult = 1.35;   // 3루 주자: 컨택 접근은 땅볼·플라이로도 불러들인다
+        if (this.tact[fld].inf && h.bases[2] && h.outs < 2) { mul('babip', 1.07); h.sfMult *= 0.55; }
+        h.mod = mod || undefined;
+      }
       _endHalf() {
         const bat = this.batSide, fld = this.fldSide, ss = this.staff[fld], r = this.h.runs;
         ss.runs += r; this.score[bat] += r; this.idx[bat] = this.h.idx;
@@ -363,7 +384,7 @@
       _pre() { const fld = this.fldSide; if (!this.h.preDone) { this.h.preDone = true; if (this.pre && this.pre[fld]) this.pre[fld](this, this.staff[fld]); } }
       step() {
         if (this.finished) return [];
-        this._pre(); CURPF = PFS[this.home];
+        this._pre(); CURPF = PFS[this.home]; this._mods();
         const ended = advance(this.h, this.staff[this.fldSide], this.rng, this.stats, this.dm[this.fldSide]);
         return this._after(ended);
       }
@@ -371,16 +392,28 @@
       playToEnd() { const out = []; while (!this.finished) out.push(...this.step()); return out; }
       /* ---- 감독 개입 ---- */
       changePitcher(side, pit) { if (side === this.fldSide) this.h.preDone = true; const ss = this.staff[side]; ss.cur = pit; ss.used.add(pit.name); ss.o = 0; this.log.push({ k: 'PC', side, p: pit }); return [{ k: 'PC', side, p: pit }]; }
-      pinchHit(side, slot, nb) {   // 타순 slot(0~8) 선수를 nb 로 교체. 수비 위치도 nb 가 이어받는다.
+      pinchHit(side, slot, nb, kind) {   // 타순 slot(0~8) 선수를 nb 로 교체. 수비 위치도 nb 가 이어받는다.
         const old = this.L[side][slot]; this.L[side][slot] = nb;
         const as = this.assign[side].find(x => x[0] === old); if (as) as[0] = nb;
         if (side === this.batSide) this.h.L = this.L[side];
-        this.subs[side].push({ out: old, in: nb, slot }); this._dm(); const e = { k: 'PH', side, out: old, in: nb }; this.log.push(e); return [e];
+        this.subs[side].push({ out: old, in: nb, slot }); this._dm(); const e = { k: kind || 'PH', side, out: old, in: nb, pos: as ? as[1] : 'DH' }; this.log.push(e); return [e];
       }
-      swapField(side, slot, nb, pos) {   // 수비 교체(타순 slot 선수를 nb 가 pos 에서 대신)
-        return this.pinchHit(side, slot, nb);
+      swapField(side, slot, nb) {   // 수비 교체(타순 slot 선수를 nb 가 같은 수비 위치에서 대신)
+        return this.pinchHit(side, slot, nb, 'DS');
       }
       _finishTactic() { return this._after(false); }
+      pinchRun(side, base, nb) {   // 주자 교체(대주자): 타순과 수비 위치를 이어받는다
+        const old = this.h.bases[base]; if (side !== this.batSide || !old) return [];
+        const slot = this.L[side].indexOf(old); this.L[side][slot] = nb; this.h.bases[base] = nb; const as = this.assign[side].find(x => x[0] === old); if (as) as[0] = nb;
+        this.subs[side].push({ out: old, in: nb, slot }); this._dm(); const e = { k: 'PR', side, out: old, in: nb }; this.log.push(e); return [e];
+      }
+      swapPos(side, a, b) {   // 두 선수의 수비 위치 맞교환(지명타자 포함)
+        const A = this.L[side][a], B = this.L[side][b], pos = x => { const f = this.assign[side].find(y => y[0] === x); return f ? f[1] : 'DH'; };
+        const pa_ = pos(A), pb_ = pos(B); if (pa_ === pb_) return [];
+        this.assign[side] = this.assign[side].filter(y => y[0] !== A && y[0] !== B);
+        if (pb_ !== 'DH') this.assign[side].push([A, pb_]); if (pa_ !== 'DH') this.assign[side].push([B, pa_]);
+        this._dm(); const e = { k: 'SW', side, a: A, b: B, pa: pb_, pb: pa_ }; this.log.push(e); return [e];
+      }
       ibb() {
         this._pre(); CURPF = PFS[this.home]; const h = this.h, b = this.batter, ss = this.staff[this.fldSide], r0 = h.runs; h.idx++;
         this.stats.PA++; this.stats.BB++; const tc = track(b, 'BB'); applyEvent(h, 'BB', b, this.rng, this.stats, tc); tc.RBI += h.runs - r0;
@@ -535,5 +568,5 @@
     };
   }
 
-  return { createEngine, PyRandom, TEAMS, PARKNAME };
+  return { createEngine, PyRandom, TEAMS, PARKNAME, BAT_APP, PIT_APP };
 });
