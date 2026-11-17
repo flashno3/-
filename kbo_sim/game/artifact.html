@@ -123,7 +123,7 @@ textarea { width: 100%; min-height: 90px; background: var(--bg); border: 1px sol
 
 /* 팀 엠블럼·테마 */
 :root { --tp: #1D7A4E; }
-.logo { display: inline-block; vertical-align: middle; flex: none; width: auto; border-radius: 6px; background: #1E1F23; }
+.logo { display: inline-block; vertical-align: middle; flex: none; object-fit: contain; padding: 2px; box-sizing: border-box; border-radius: 6px; background: #1E1F23; }
 .top { border-bottom: 3px solid var(--tp); }
 .side { background: color-mix(in srgb, var(--tp) 52%, #000); }
 .side button[aria-current=true] { background: rgba(255,255,255,.2); }
@@ -169,7 +169,7 @@ details.card > summary { cursor: pointer; font-family: var(--font-display); font
 .lvstick .card { padding: 6px 10px; }
 .lvstick .diamond { width: 54px; height: 44px; }
 .lvstick .outs i { width: 11px; height: 11px; margin-right: 4px; }
-.lvstick .logo { height: 22px !important; width: auto; }
+.lvstick .logo { height: 22px !important; width: 32px !important; }
 .lastplay { padding: 6px 12px; min-height: 42px; align-items: center; } .lastplay .t { font-size: 16px; }
 @media (min-width: 861px) { .lvstick .score td, .lvstick .score th { padding: 6px 8px; font-size: 14px; } .lvstick .diamond { width: 70px; height: 58px; } .lastplay .t { font-size: 18px; } .lvstick .logo { height: 26px !important; } }
 
@@ -1265,7 +1265,7 @@ details.card > summary { cursor: pointer; font-family: var(--font-display); font
       S.schedule = this.makeSchedule(); S.pendingDay = null; S.userGameDone = {};
       this.invalidate();
     }
-    makeSchedule(salt, teams) {
+    makeScheduleRR(salt, teams) {
       const T = (teams || TEAMS).slice(); if (T.length % 2) T.push(null);   // 홀수 팀이면 경기 없는 날(부전) 슬롯 추가
       const r = rngFor(this.S.seed, this.S.year, salt || 777), n = T.length, rounds = [], cycles = Math.ceil(144 / (n - 1));
       for (let c = 0; c < cycles; c++) {
@@ -1284,7 +1284,41 @@ details.card > summary { cursor: pointer; font-family: var(--font-display); font
       for (const rd of rounds) for (const g of rd) { const key = [g[0], g[1]].sort().join('|'); seen[key] = (seen[key] || 0) + 1; if (seen[key] % 2 === 0) { const t = g[0]; g[0] = g[1]; g[1] = t; } }
       return rounds;
     }
-    dateOf(day) { const d = new Date(Date.UTC(this.S.year, 2, 28)); let k = 0; while (k < day) { d.setUTCDate(d.getUTCDate() + 1); if (d.getUTCDay() !== 1) k++; } return d; }
+    /* 1군 일정(KBO 방식): 개막 2연전 → 3연전 29회(전반기, 89경기일) → 올스타 휴식기 → 후반기 개막 4연전(개막 2연전 상대와 다시) → 3연전 14회 → 마지막 9경기일은 상대팀당 1경기(우천 순연용 미편성분).
+     * 팀당 144경기 = 2 + 4 + 3×43 + 9. 같은 상대와 3연전은 같은 구장에서 치른다. 잠실(두산·LG)은 같은 날 동시에 홈이 되지 않는다. */
+    makeSchedule() {
+      const S = this.S, r = rngFor(S.seed, S.year, 777), T = TEAMS.slice(), n = T.length, F = [], arr = T.slice();
+      for (let k = 0; k < n - 1; k++) { const m = []; for (let i = 0; i < n / 2; i++) m.push([arr[i], arr[n - 1 - i]]); F.push(m); arr.splice(1, 0, arr.pop()); }   // 서클 방식 1-팩터화: 9개 매치업 세트
+      for (let i = F.length - 1; i > 0; i--) { const j = r.randbelow(i + 1); [F[i], F[j]] = [F[j], F[i]]; }   // F[0] = 개막 2연전·후반기 4연전 상대 세트
+      // 3연전 슬롯 43개: F[0]은 3번, 나머지 8세트는 5번씩. 같은 세트가 연달아 나오지 않게(개막·후반기 개막 앞뒤 포함) 섞는다
+      let seq = null;
+      for (let tr = 0; tr < 2000 && !seq; tr++) {
+        const s = []; for (let k = 0; k < F.length; k++) for (let c = 0; c < (k === 0 ? 3 : 5); c++) s.push(k);
+        for (let i = s.length - 1; i > 0; i--) { const j = r.randbelow(i + 1); [s[i], s[j]] = [s[j], s[i]]; }
+        let ok = s[0] !== 0 && s[28] !== 0 && s[29] !== 0; for (let i = 1; i < s.length && ok; i++) if (s[i] === s[i - 1]) ok = false;
+        if (ok) seq = s;
+      }
+      if (!seq) { seq = []; for (let c = 0; c < 5; c++) for (let k = 1; k < F.length; k++) seq.push(k); for (let c = 0; c < 3; c++) seq.splice(1 + c * 14, 0, 0); }
+      const singles = F.map((_, k) => k).sort(() => r.random() - 0.5); if (singles[0] === seq[seq.length - 1]) singles.push(singles.shift());
+      const home = {}, gp = {}, ph = {}; for (const t of T) { home[t] = 0; gp[t] = 0; }
+      const key = (a, b) => a < b ? a + '|' + b : b + '|' + a, rounds = [];
+      const series = (m, len) => {
+        // 홈 결정: 홈 경기 수가 모자란 팀(+상대와의 홈 경기 수가 모자란 팀)을 홈으로
+        const o = m.map(([a, b]) => { const pk = key(a, b), pa = (ph[pk + '>' + a] || 0), pb = (ph[pk + '>' + b] || 0), da = (home[a] - gp[a] / 2) + 2 * (pa - pb) / 2, db = (home[b] - gp[b] / 2) + 2 * (pb - pa) / 2; return (da < db || (da === db && r.random() < 0.5)) ? [a, b, da, db] : [b, a, db, da]; });
+        const ja = o.find(x => x[0] === 'Bears' || x[0] === 'Twins'), jb = o.find(x => x !== ja && (x[0] === 'Bears' || x[0] === 'Twins'));
+        if (ja && jb && ja[0] !== jb[0]) { const f = ja[2] > jb[2] ? ja : jb; const t = f[0]; f[0] = f[1]; f[1] = t; }   // 잠실 동시 홈 금지
+        for (const [h, a] of o) { home[h] += len; gp[h] += len; gp[a] += len; ph[key(h, a) + '>' + h] = (ph[key(h, a) + '>' + h] || 0) + len; }
+        for (let d = 0; d < len; d++) rounds.push(o.map(([h, a]) => [h, a]));
+      };
+      series(F[0], 2);
+      for (let i = 0; i < 29; i++) series(F[seq[i]], 3);
+      series(F[0], 4);   // 올스타 휴식기 직후
+      for (let i = 29; i < 43; i++) series(F[seq[i]], 3);
+      for (const k of singles) series(F[k], 1);
+      return rounds;
+    }
+    FIRST_HALF_DAYS() { return 89; }
+    dateOf(day) { const d = new Date(Date.UTC(this.S.year, 2, 28)), off = (6 - d.getUTCDay() + 7) % 7; d.setUTCDate(d.getUTCDate() + (off > 3 ? off - 7 : off)); /* 개막: 3월 28일에 가장 가까운 토요일 */ let k = 0, br = false; while (k < day) { if (k === 88 && !br) { br = true; d.setUTCDate(d.getUTCDate() + 6); } d.setUTCDate(d.getUTCDate() + 1); if (d.getUTCDay() !== 1) k++; } return d; }   // 월요일 휴식, 89경기일 뒤 올스타 휴식기(6일)
     dateStr(day) { const d = this.dateOf(day); return `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`; }
 
     /* ------------------------------------------------------------ 순위 */
@@ -1297,7 +1331,7 @@ details.card > summary { cursor: pointer; font-family: var(--font-display); font
       });
       return order.map((t, i) => ({ rank: i + 1, team: t, w: R[t][0], l: R[t][1], d: R[t][2], pct: pct(t), rs: R[t][3], ra: R[t][4] }));
     }
-    farmSchedule() { const S = this.S; if (!this._sch2 || this._sch2.y !== S.year || this._sch2.s !== S.seed || this._sch2.n !== this.farmTeams().length) this._sch2 = { y: S.year, s: S.seed, n: this.farmTeams().length, v: this.makeSchedule(888, this.farmTeams()) }; return this._sch2.v; }
+    farmSchedule() { const S = this.S; if (!this._sch2 || this._sch2.y !== S.year || this._sch2.s !== S.seed || this._sch2.n !== this.farmTeams().length) this._sch2 = { y: S.year, s: S.seed, n: this.farmTeams().length, v: this.makeScheduleRR(888, this.farmTeams()) }; return this._sch2.v; }
     standings2() {
       const R = this.S.rec2, pct = t => (R[t][0] + R[t][1]) ? R[t][0] / (R[t][0] + R[t][1]) : 0;
       return this.farmTeams().sort((x, y) => pct(y) - pct(x) || (R[y][3] - R[y][4]) - (R[x][3] - R[x][4]) || (x < y ? -1 : 1)).map((t, i) => ({ rank: i + 1, team: t, w: R[t][0], l: R[t][1], d: R[t][2], pct: pct(t), rs: R[t][3], ra: R[t][4] }));
@@ -2027,7 +2061,7 @@ details.card > summary { cursor: pointer; font-family: var(--font-display); font
   const COL = { Bears: '#1A1748', Twins: '#C30452', Heroes: '#820024', Landers: '#CE0E2D', Wiz: '#6B6B6B', Eagles: '#FF6600', Tigers: '#EA0029', Giants: '#0B2A56', Dinos: '#315288', Lions: '#0A5BC4' };
   // 팀 색(테마용). 로고는 사용자가 제공한 이미지(KBO_LOGOS)를 사용한다.
   const BADGE = { Bears: { p: '#131230' }, Twins: { p: '#C30452' }, Heroes: { p: '#820024' }, Landers: { p: '#CE0E2D' }, Wiz: { p: '#1C1C1C' }, Eagles: { p: '#F26A1B' }, Tigers: { p: '#E4002B' }, Giants: { p: '#0A2547' }, Dinos: { p: '#1E3F78' }, Lions: { p: '#0A5BC4' } };
-  const logo = (t, size) => (KBO_LOGOS[t] ? `<img class="logo" src="${KBO_LOGOS[t]}" alt="${KO[t]}" style="height:${size || 22}px">` : '');
+  const logo = (t, size) => (KBO_LOGOS[t] ? `<img class="logo" src="${KBO_LOGOS[t]}" alt="${KO[t]}" style="height:${size || 22}px;width:${Math.round((size || 22) * 1.45)}px">` : '');   // 로고 원본 비율이 제각각이라 같은 크기의 상자 안에 맞춰 넣는다
   const applyTheme = () => { const r = document.documentElement.style; if (L) { r.setProperty('--tp', BADGE[L.S.userTeam].p); } else r.setProperty('--tp', '#1D7A4E'); };
   const SAVE_KEY = 'kbo.mgr.save.v1';
   const $ = (s, r) => (r || document).querySelector(s);

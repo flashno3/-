@@ -120,7 +120,7 @@ textarea { width: 100%; min-height: 90px; background: var(--bg); border: 1px sol
 
 /* 팀 엠블럼·테마 */
 :root { --tp: #1D7A4E; }
-.logo { display: inline-block; vertical-align: middle; flex: none; width: auto; border-radius: 6px; background: #1E1F23; }
+.logo { display: inline-block; vertical-align: middle; flex: none; object-fit: contain; padding: 2px; box-sizing: border-box; border-radius: 6px; background: #1E1F23; }
 .top { border-bottom: 3px solid var(--tp); }
 .side { background: color-mix(in srgb, var(--tp) 52%, #000); }
 .side button[aria-current=true] { background: rgba(255,255,255,.2); }
@@ -166,7 +166,7 @@ details.card > summary { cursor: pointer; font-family: var(--font-display); font
 .lvstick .card { padding: 6px 10px; }
 .lvstick .diamond { width: 54px; height: 44px; }
 .lvstick .outs i { width: 11px; height: 11px; margin-right: 4px; }
-.lvstick .logo { height: 22px !important; width: auto; }
+.lvstick .logo { height: 22px !important; width: 32px !important; }
 .lastplay { padding: 6px 12px; min-height: 42px; align-items: center; } .lastplay .t { font-size: 16px; }
 @media (min-width: 861px) { .lvstick .score td, .lvstick .score th { padding: 6px 8px; font-size: 14px; } .lvstick .diamond { width: 70px; height: 58px; } .lastplay .t { font-size: 18px; } .lvstick .logo { height: 26px !important; } }
 
