@@ -11,7 +11,7 @@ for(const t of Object.keys(L.S.teams)){const lu=L.bestLineup(L.hitters(t,t===L.S
 for(let y=0;y<3;y++){L.advance(300,false);L.startOffseason();L.finishContracts();L.buildDraft();L.draftAutoRest();L.finishDraft();L.finishFA();L.startNewSeason();}
 bad=0;tot=0;worst=0;report(false);console.log('3시즌 후 부적합',bad,'/',tot,'| 한 팀 최대',worst);
 // 엔진에 전달되는 수비 기록이 숙련 포지션만인지
-const E=L.engine();let leak=0;for(const b of E.bats()){for(const pos in b.fr){const p=L.S.players[b.id];if(!((p.gs[pos]||0)>=15||p.pos===pos))leak++}}console.log('엔진 수비 기록 중 미숙련 포지션',leak);
+const E=L.engine();let leak=0;for(const b of E.bats()){for(const pos in b.fr){const p=L.S.players[b.id];if(!((p.gs[pos]||0)>0||p.pos===pos))leak++}}console.log('엔진 수비 기록 중 미숙련 포지션',leak);
 // 낯선 포지션 페널티가 실제 경기에 영향을 주는지: 같은 라인업에서 수비 위치만 일부러 어긋나게 배치해 득실 비교
 const me='Lions',spec=L.bestLineup(L.hitters(me,true));const goodDM=E.defMods(me,E.makeLineup(spec).assign,true);
 const rot=spec.map(x=>({id:x.id,pos:x.pos}));const ps=rot.filter(x=>x.pos!=='DH');const bad2=rot.map(x=>x);for(let i=0;i<ps.length;i++){const a=bad2.findIndex(y=>y.id===ps[i].id);const nxt=ps[(i+1)%ps.length];bad2[a]={id:ps[i].id,pos:nxt.pos}}

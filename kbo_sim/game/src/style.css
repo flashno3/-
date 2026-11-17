@@ -172,3 +172,4 @@ details.card > summary { cursor: pointer; font-family: var(--font-display); font
 
 .teamcard .logo { border-radius: 8px; }
 .side .club .logo { border-radius: 8px; background: #1E1F23; }
+@media (max-width: 560px) { td select { max-width: 112px; font-size: 13px; padding: 4px 4px; } th, td { padding: 6px 5px; } .chip { font-size: 11px; padding: 1px 6px; } }

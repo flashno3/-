@@ -12,6 +12,7 @@
   const POSS = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'];
   const WD = { '2B': .18, 'SS': .22, '3B': .16, '1B': .07, 'LF': .10, 'CF': .17, 'RF': .10, C: 0.12 };
   const KO = { Bears: '두산', Twins: 'LG', Heroes: '키움', Landers: 'SSG', Wiz: 'KT', Eagles: '한화', Tigers: 'KIA', Giants: '롯데', Dinos: 'NC', Lions: '삼성' };
+  const PEN_R = { SS: 22, '2B': 26, '3B': 28, CF: 24, LF: 36, RF: 36, '1B': 44, C: 40 }, PEN_E = { SS: 2.2, '2B': 2.2, '3B': 2.2, CF: 1.8, LF: 1.5, RF: 1.5, '1B': 1.2, C: 1.6 };   // 엔진의 낯선 포지션 페널티와 같은 값
   const FAM = 15;   // 소화 가능 기준(해당 포지션 선발 경기 수)
   const POSPEN = { C: 70, SS: 55, CF: 40, '2B': 38, '3B': 32, RF: 20, LF: 16, '1B': 10, DH: 0 };
   const ACTIVE_MAX = 28, ROSTER_MAX = 70, ROSTER_MIN = 44;
@@ -126,13 +127,50 @@
       return 0;
     }
     fit(p, pos) { return this.fitLevel(p, pos) >= 1 ? 'ok' : 'bad'; }
-    fitPenalty(p, pos) { const l = this.fitLevel(p, pos); return l === 2 ? 0 : l === 1 ? 3 : POSPEN[pos]; }
+    /* 경험이 적은 포지션(선발 1~14경기)은 경험 비례로 페널티가 줄어든다. 전혀 없으면 최대 */
+    fitPenalty(p, pos) {
+      const l = this.fitLevel(p, pos); if (l === 2) return 0; if (l === 1) return 3;
+      const g = (p.gs && p.gs[pos]) || 0; return g > 0 ? Math.round(POSPEN[pos] * (1 - (0.3 + 0.5 * g / FAM)) * 10) / 10 : POSPEN[pos];
+    }
+    posScore(p, pos) { return pos === 'DH' ? this._runsB(p, true) : this._runsB(p, true) + this.defRuns(p, pos) - this.fitPenalty(p, pos) + (p.pos === pos ? 1.5 : 0) + (pos === 'C' && p.cs ? 40 * (p.cs - this.S.calib.fielding.lg.cs) : 0); }   // 포수는 어깨(도루저지)도 반영
+    /* 주어진 9명에게 수비 위치를 최적 배정(타순은 그대로). 반환 {선수id: 포지션} */
+    resolvePositions(ids) {
+      const slots = ORDER.concat(['DH']), P = ids.map(id => this.S.players[id]), n = P.length, M = 1 << slots.length, NEG = -1e9;
+      const val = P.map(p => slots.map(q => this.posScore(p, q)));
+      const dp = [new Float64Array(M).fill(NEG)]; dp[0][0] = 0; const ch = [];
+      for (let i = 0; i < n; i++) {
+        const nx = new Float64Array(M).fill(NEG), pr = new Int8Array(M).fill(-1), cur = dp[i];
+        for (let m = 0; m < M; m++) { const b = cur[m]; if (b === NEG) continue; for (let j = 0; j < slots.length; j++) { if (m & (1 << j)) continue; const nm = m | (1 << j), v = b + val[i][j]; if (v > nx[nm]) { nx[nm] = v; pr[nm] = j; } } }
+        dp.push(nx); ch.push(pr);
+      }
+      let bm = 0, bv = NEG; for (let m = 0; m < M; m++) if (dp[n][m] > bv) { bv = dp[n][m]; bm = m; }
+      const out = {}; let m = bm; for (let i = n - 1; i >= 0; i--) { const j = ch[i][m]; out[ids[i]] = slots[j]; m &= ~(1 << j); } return out;
+    }
     /* 선발로 나선 경기를 쌓으면 그 포지션에 익숙해진다(15경기 → 가능) */
     learnPosition(p, pos) {
       if (pos === 'DH' || p.type !== 'B') return; p.gs[pos] = (p.gs[pos] || 0) + 1;
       if (p.gs[pos] >= FAM && !p.fr[pos]) { p.fr[pos] = { range: 44, err_reg: this.S.calib.fielding.lg.err[pos] * 1.25 }; this.invalidate(); }
     }
 
+    /* ------------------------------------------------------------ 투타 정보 */
+    handLabel(p) { if (p.type === 'B') return p.bats === 'L' ? '좌타' : p.bats === 'S' ? '양타' : p.bats === 'R' ? '우타' : ''; return p.throws === 'L' ? '좌투' : p.throws === 'R' ? '우투' : ''; }
+    handsKnown() { const P = Object.values(this.S.players).filter(p => p.team in this.S.teams); return { b: P.filter(p => p.type === 'B' && p.bats).length, bt: P.filter(p => p.type === 'B').length, p: P.filter(p => p.type === 'P' && p.throws).length, pt: P.filter(p => p.type === 'P').length }; }
+    /* KBO 선수 등록 현황 표나 '이름,우투좌타' 줄을 붙여넣으면 투타를 적용한다. 같은 이름이 여러 명이면 팀 이름이 같은 줄에 있어야 한다 */
+    importHands(text) {
+      const S = this.S, hre = /(우|좌)(?:투|언|사)(우|좌|양)타/, teams = Object.values(KO), by = {}, rep = { applied: 0, ambiguous: [], missing: [] };
+      for (const p of Object.values(S.players)) if (p.team in S.teams || p.team === 'FA') (by[p.ko] = by[p.ko] || []).push(p);
+      for (const line of String(text).split(/\r?\n/)) {
+        const m = line.match(hre); if (!m) continue; const throws = m[1] === '좌' ? 'L' : 'R', bats = m[2] === '좌' ? 'L' : m[2] === '양' ? 'S' : 'R';
+        const toks = line.split(/[\s,;|]+/).filter(Boolean), name = toks.find(t => by[t]); if (!name) { rep.missing.push(toks.slice(0, 3).join(' ')); continue; }
+        let list = by[name]; const tw = toks.find(t => teams.includes(t)); if (tw) { const f = list.filter(p => KO[p.team] === tw); if (f.length) list = f; }
+        const bt = list.filter(p => p.type === 'B'), pt = list.filter(p => p.type === 'P');
+        if (bt.length > 1 || pt.length > 1) { rep.ambiguous.push(name); continue; }
+        for (const p of list) { p.bats = bats; p.throws = throws; } rep.applied++;
+      }
+      this.invalidate(); return rep;
+    }
+    /* 입력 안 된 선수 목록(붙여넣기용 양식) */
+    handTemplate() { return Object.values(this.S.players).filter(p => (p.team in this.S.teams) && !(p.type === 'B' ? p.bats : p.throws)).map(p => `${p.ko},${KO[p.team]},${p.type === 'B' ? '타자' : '투수'},`).join('\n'); }
     /* ------------------------------------------------------------ 로스터/설정 */
     team(t) { return this.S.teams[t]; }
     players(t) { return this.S.teams[t].ids.map(id => this.S.players[id]); }
@@ -140,9 +178,13 @@
     pitchers(t, activeOnly) { return this.players(t).filter(p => p.type === 'P' && (!activeOnly || p.active)); }
     /* 주어진 타자 풀에서 최적 라인업(포지션 배정+타순). 9자리를 한 번에 최적화(동적계획법) */
     bestLineup(pool) {
-      const slots = ORDER.concat(['DH']), score = (p, pos) => (pos === 'DH' ? this._runsB(p, true) : this._runsB(p, true) + this.defRuns(p, pos) - this.fitPenalty(p, pos) + (p.pos === pos ? 1.5 : 0));
+      const slots = ORDER.concat(['DH']), score = (p, pos) => this.posScore(p, pos);
       let cand = pool.slice();
-      if (cand.length > 15) cand = cand.map(p => ({ p, v: Math.max(...slots.map(q => score(p, q))) })).sort((a, b) => b.v - a.v).slice(0, 15).map(x => x.p);
+      if (cand.length > 15) {   // 후보가 많으면 각 포지션 최적 선수는 반드시 포함하고 나머지는 종합 점수순
+        const must = new Set(); for (const q of slots) must.add(cand.slice().sort((a, b) => score(b, q) - score(a, q))[0]);
+        const rest = cand.filter(p => !must.has(p)).map(p => ({ p, v: Math.max(...slots.map(q => score(p, q))) })).sort((a, b) => b.v - a.v).map(x => x.p);
+        cand = [...must, ...rest].slice(0, 15);
+      }
       const n = cand.length, K = slots.length; if (n < K) return cand.map((p, i) => ({ id: p.id, pos: slots[i] }));
       const M = 1 << n, NEG = -1e9, val = cand.map(p => slots.map(q => score(p, q)));
       const dp = [new Float64Array(M).fill(NEG)]; dp[0][0] = 0; const ch = [];
@@ -232,12 +274,15 @@
       for (const t of TEAMS) for (const id of S.teams[t].ids) {
         const p = S.players[id];
         if (p.type === 'B') {
-          batters.push({ id, key: id, name: p.name, team: t, age: p.age, PA: p.PA, G: p.G, p: p.p });
-          const gsE = (t !== S.userTeam && p.aiGs) || p.gs, d = {}; for (const k in gsE) d[k] = [0, gsE[k]]; defense[id] = d; const fr = {}; for (const k in (p.fr || {})) if ((p.gs[k] || 0) >= FAM || k === p.pos) fr[k] = p.fr[k]; fplayers[id] = fr;
+          batters.push({ id, key: id, name: p.name, team: t, age: p.age, PA: p.PA, G: p.G, p: p.p, hand: p.bats || null });
+          const gsE = (t !== S.userTeam && p.aiGs) || p.gs, d = {}; for (const k in gsE) d[k] = [0, gsE[k]]; defense[id] = d; const fr = {};
+          for (const k in (p.fr || {})) if ((p.gs[k] || 0) >= FAM || k === p.pos) fr[k] = p.fr[k];
+          for (const k in p.gs) { const g = p.gs[k]; if (g > 0 && g < FAM && k !== p.pos && PEN_R[k]) { const tt = 0.8 * g / FAM; fr[k] = { range: PEN_R[k] + (50 - PEN_R[k]) * tt, err_reg: C.fielding.lg.err[k] * (PEN_E[k] - (PEN_E[k] - 1) * tt) }; } }   // 경험이 조금 있는 포지션은 페널티를 경험만큼 줄인다
+          fplayers[id] = fr;
           if (p.cs !== undefined && p.cs !== null) catchers[id] = { cs_reg: p.cs };
-        } else pitchers.push({ id, name: p.name, team: t, age: p.age, GS: p.GS, G: p.G, IP: p.IP, ip_per_start: p.ipgs, p: p.p, stamina: p.stamina });
+        } else pitchers.push({ id, name: p.name, team: t, age: p.age, GS: p.GS, G: p.G, IP: p.IP, ip_per_start: p.ipgs, p: p.p, stamina: p.stamina, hand: p.throws || null });
       }
-      return { modes: { g: { label: 'game', noStint: true, league_bat: C.lb, team_def: C.team_def, pf: C.pf, batters, pitchers } }, shared: { positions: {}, defense, fielding: { players: fplayers, catchers, team_avg_range: C.fielding.team_avg_range, lg: C.fielding.lg } } };
+      return { modes: { g: { label: 'game', noStint: true, platoon: true, league_bat: C.lb, team_def: C.team_def, pf: C.pf, batters, pitchers } }, shared: { positions: {}, defense, fielding: { players: fplayers, catchers, team_avg_range: C.fielding.team_avg_range, lg: C.fielding.lg } } };
     }
     invalidate() { this._engDirty = true; }
     mergeTracking() {

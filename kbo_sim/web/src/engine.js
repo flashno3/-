@@ -82,6 +82,10 @@
   const WD = { '2B': .18, 'SS': .22, '3B': .16, '1B': .07, 'LF': .10, 'CF': .17, 'RF': .10 };
   const ENV = { gdp: 0.185, sf: 0.40, adv13: 0.33, sc2on1: 0.65, sc1on2: 0.48, roe: 0.032, wp: 0.0215, sb_mult: 1.6, prod: 0.30 };
   const K2 = 0.004, BOFF = -0.001;
+  // 좌우 매치업(플래툰). 단위 u: 타자 입장에서 유리할수록 +. 타자 유형별 평균 노출(투수 우투 약 72%)을 빼서 리그 평균은 변하지 않게 맞춘다.
+  const PL = { dk: -0.07, dbb: 0.035, dhr: 0.16, dbabip: 0.02 };
+  const platoonUnit = (bh, ph) => { if (!bh || !ph) return null; if (bh === 'S') return 0.03; if (bh === 'L') return ph === 'R' ? 0.28 : -0.72; return ph === 'L' ? 0.36 : -0.14; };
+  const platoonMod = (b, p) => { const u = platoonUnit(b.hand, p.hand); return u === null ? null : { u, k: 1 + PL.dk * u, bb: 1 + PL.dbb * u, hr: 1 + PL.dhr * u, babip: 1 + PL.dbabip * u }; };
   // 감독 작전: 타석 확률 배수(트레이드오프가 있다)
   const BAT_APP = { normal: null, contact: { k: 0.86, hr: 0.82, babip: 1.012, bb: 0.97 }, power: { k: 1.10, hr: 1.15, babip: 0.985, bb: 0.98 }, patient: { bb: 1.18, k: 0.97, hr: 0.90, babip: 0.99 } };
   const PIT_APP = { normal: null, attack: { bb: 0.82, k: 1.03, hr: 1.08, babip: 1.015 }, careful: { bb: 1.15, hr: 0.90, k: 0.99, babip: 0.995 }, strikeout: { k: 1.08, bb: 1.08, hr: 1.03 } };
@@ -104,7 +108,7 @@
 
     class Bat {
       constructor(x) {
-        this.name = x.name; this.key = x.key; this.id = x.id !== undefined ? x.id : x.key; this.p = x.p; this.PA = x.PA; this.G = x.G; this.team = x.team;
+        this.name = x.name; this.key = x.key; this.id = x.id !== undefined ? x.id : x.key; this.p = x.p; this.PA = x.PA; this.G = x.G; this.team = x.team; this.hand = x.hand || null;
         const p = this.p;
         this.obp = p.bb + p.hbp + p.hr + (1 - p.k - p.bb - p.hbp - p.hr) * p.babip * 0.97;
         this.slg = this.obp + 2 * p.hr + p.babip * p.xbh * 0.5;
@@ -121,7 +125,7 @@
     }
     class Pit {
       constructor(x) {
-        this.name = x.name; this.id = x.id !== undefined ? x.id : x.name; this.p = x.p; this.GS = x.GS; this.G = x.G; this.IP = x.IP; this.team = x.team; this.stamina = x.stamina;
+        this.name = x.name; this.id = x.id !== undefined ? x.id : x.name; this.p = x.p; this.GS = x.GS; this.G = x.G; this.IP = x.IP; this.team = x.team; this.stamina = x.stamina; this.hand = x.hand || null;
         this.ipgs = x.ip_per_start || 5.0; this.relief_ip = Math.max(x.IP - this.ipgs * x.GS, 0.0);
       }
     }
@@ -187,6 +191,8 @@
     function pa(b, p, rng, dm, mod) {
       const bp = b.p, pp = p.p;
       let k = comb(bp.k, pp.k, LB.k), bb = comb(bp.bb, pp.bb, LB.bb); const hbp = comb(bp.hbp, pp.hbp, LB.hbp); let hr = comb(bp.hr, pp.hr, LB.hr) * CURPF.hr;
+      const pm = M.platoon ? platoonMod(b, p) : null;
+      if (pm) { k *= pm.k; bb *= pm.bb; hr *= pm.hr; }
       if (mod) { if (mod.k) k *= mod.k; if (mod.bb) bb *= mod.bb; if (mod.hr) hr *= mod.hr; }
       let r = rng.random();
       if (r < k) return 'K'; r -= k;
@@ -194,6 +200,7 @@
       if (r < hbp) return 'HBP'; r -= hbp;
       if (r < hr) return 'HR';
       let babip = comb(bp.babip, pp.babip, LB.babip); babip = comb(babip, LB.babip + dm[0] + BOFF, LB.babip);
+      if (pm) babip *= pm.babip;
       if (mod && mod.babip) babip *= mod.babip;
       const xb = bp.xbh, tr = bp.tri;
       const p1 = babip * (1 - xb) * CURPF.b1, p2 = babip * xb * (1 - tr) * CURPF.b2, p3 = babip * xb * tr * CURPF.b3, x = rng.random();
@@ -340,7 +347,7 @@
         this.staff = { home: o.staff.home, away: o.staff.away };
         this.idx = { home: 0, away: 0 }; this.score = { home: 0, away: 0 }; this.inns = []; this.inning = 1; this.top = true;
         this.finished = false; this.stats = newStats(); this.log = []; this.curInn = null; this.subs = { home: [], away: [] };
-        this.fatigue = !!o.fatigue; this.bf = {};
+        this.fatigue = !!o.fatigue; this.bf = {}; this.visits = { home: 0, away: 0 }; this.calm = { home: 0, away: 0 };
         this.tact = { home: { bat: 'normal', pit: 'normal', inf: false, hold: false }, away: { bat: 'normal', pit: 'normal', inf: false, hold: false } };
         this._dm();
         this._startHalf();
@@ -356,7 +363,14 @@
         const bat = this.batSide;
         this.h = { L: this.L[bat], idx: this.idx[bat], outs: 0, bases: [null, null, null], runs: 0, limit: (!this.top && this.inning >= 9) ? this.score.away - this.score.home : null, log: [] };
       }
-      _flush() { const l = this.h.log; this.h.log = []; for (const e of l) if (e.k === 'PA' && e.p) this.bf[e.p.id] = (this.bf[e.p.id] || 0) + 1; this.log.push(...l); return l; }
+      _flush(fld0) { const l = this.h.log; this.h.log = []; const fld = fld0 || this.fldSide; for (const e of l) if (e.k === 'PA' && e.p) { this.bf[e.p.id] = (this.bf[e.p.id] || 0) + 1; if (this.calm[fld] > 0) this.calm[fld]--; } this.log.push(...l); return l; }
+      /* 마운드 방문: 경기당 3번까지, 한 이닝에 두 번은 불가(두 번째는 투수를 바꿔야 한다). 체력을 조금 회복하고 다음 3타자 동안 안정감을 준다 */
+      canVisit(side) { return side === this.fldSide && this.visits[side] < 3 && this.h.visitHalf !== this.inning * 2 + (this.top ? 0 : 1); }
+      moundVisit(side) {
+        if (!this.canVisit(side)) return [];
+        const ss = this.staff[side], p = ss.cur; this.visits[side]++; this.h.visitHalf = this.inning * 2 + (this.top ? 0 : 1); this.calm[side] = 3;
+        this.bf[p.id] = Math.max(0, (this.bf[p.id] || 0) - 2); const e = { k: 'MV', side, p, n: this.visits[side] }; this.log.push(e); return [e];
+      }
       /* 투수 체력: 선발은 평균 이닝 기준, 구원은 약 1이닝. 한계를 넘기면 볼넷·피홈런·피안타가 늘고 삼진이 줄어든다 */
       pitchLimit(side) { const ss = this.staff[side], p = ss.cur; return ss.sp === p ? Math.round((p.ipgs || 5) * 4.15 + 3) : 9; }
       pitchFatigue(side) { const ss = this.staff[side], bf = this.bf[ss.cur.id] || 0, lim = this.pitchLimit(side); return { bf, lim, pct: bf / lim, over: Math.max(0, bf - lim) }; }
@@ -365,6 +379,7 @@
         const bat = this.batSide, fld = this.fldSide, B = BAT_APP[this.tact[bat].bat], Pm = PIT_APP[this.tact[fld].pit], h = this.h;
         let mod = null; const mul = (k, v) => { if (!v) return; if (!mod) mod = {}; mod[k] = (mod[k] || 1) * v; };
         if (B) for (const k in B) mul(k, B[k]); if (Pm) for (const k in Pm) mul(k, Pm[k]);
+        if (this.calm[fld] > 0) { mul('bb', 0.85); mul('hr', 0.92); mul('k', 1.04); mul('babip', 0.99); }   // 마운드 방문 직후 3타자: 투수가 안정을 찾는다
         if (this.fatigue) { const f = this.pitchFatigue(fld); if (f.over > 0) { mul('bb', 1 + 0.03 * f.over); mul('hr', 1 + 0.04 * f.over); mul('babip', 1 + 0.008 * f.over); mul('k', Math.max(0.6, 1 - 0.015 * f.over)); } }
         h.holdMult = undefined; h.holdPen = undefined;
         if (this.tact[fld].hold && h.bases[0]) { h.holdMult = 0.4; h.holdPen = 0.10; mul('bb', 1.04); }   // 주자 견제 지시: 도루 시도·성공 억제, 투구엔 약간 부담
@@ -388,7 +403,7 @@
         }
         this._startHalf();
       }
-      _after(ended) { this.idx[this.batSide] = this.h.idx; if (ended || this.h.outs >= 3) this._endHalf(); return this._flush(); }
+      _after(ended) { const fld0 = this.fldSide; this.idx[this.batSide] = this.h.idx; if (ended || this.h.outs >= 3) this._endHalf(); return this._flush(fld0); }
       /* 한 타석 진행 */
       _pre() { const fld = this.fldSide; if (!this.h.preDone) { this.h.preDone = true; if (this.pre && this.pre[fld]) this.pre[fld](this, this.staff[fld]); } }
       step() {
@@ -400,7 +415,7 @@
       playInning() { const s = this.inning, t = this.top, out = []; while (!this.finished && this.inning === s && this.top === t) out.push(...this.step()); return out; }
       playToEnd() { const out = []; while (!this.finished) out.push(...this.step()); return out; }
       /* ---- 감독 개입 ---- */
-      changePitcher(side, pit) { if (side === this.fldSide) this.h.preDone = true; const ss = this.staff[side]; ss.cur = pit; ss.used.add(pit.name); ss.o = 0; this.log.push({ k: 'PC', side, p: pit }); return [{ k: 'PC', side, p: pit }]; }
+      changePitcher(side, pit) { if (side === this.fldSide) this.h.preDone = true; this.calm[side] = 0; const ss = this.staff[side]; ss.cur = pit; ss.used.add(pit.name); ss.o = 0; this.log.push({ k: 'PC', side, p: pit }); return [{ k: 'PC', side, p: pit }]; }
       pinchHit(side, slot, nb, kind) {   // 타순 slot(0~8) 선수를 nb 로 교체. 수비 위치도 nb 가 이어받는다.
         const old = this.L[side][slot]; this.L[side][slot] = nb;
         const as = this.assign[side].find(x => x[0] === old); if (as) as[0] = nb;
@@ -601,5 +616,5 @@
     };
   }
 
-  return { createEngine, PyRandom, TEAMS, PARKNAME, BAT_APP, PIT_APP };
+  return { createEngine, PyRandom, TEAMS, PARKNAME, BAT_APP, PIT_APP, platoonUnit };
 });

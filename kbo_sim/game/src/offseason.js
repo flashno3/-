@@ -42,7 +42,7 @@
   proto.retireChance = function (p) { const o = this.ovr(p), a = p.age; if (a >= 42) return 1; if (a < 35) return 0; return clamp(0.10 * (a - 34) + (o < 45 ? 0.25 : o < 50 ? 0.1 : 0) - (o >= 60 ? 0.15 : 0), 0, 0.95); };
 
   /* ---------------- 신인 생성 ---------------- */
-  proto.makeRookie = function (r, type) {
+  proto.makeRookie = function (r, type, forcePos) {
     const S = this.S, sc = S.calib.scale[type], lb = S.calib.lb, id = (type === 'B' ? 'B' : 'P') + (S.nextId++);
     const g = gauss(r, 0, 0.5), z = () => -1.1 + g + gauss(r, 0, 0.6);
     let name; do { name = SURN[Math.floor(r.random() * SURN.length)] + GIV[Math.floor(r.random() * GIV.length)]; } while (this._nameTaken && this._nameTaken.has(name) && this._nameTaken.size < 800);
@@ -53,6 +53,7 @@
       const cl = (v, a, b) => clamp(v, a, b);
       p.p = { k: cl(sc.k[0] - z() * sc.k[1], .08, .40), bb: cl(sc.bb[0] + z() * sc.bb[1], .02, .17), hr: cl(sc.hr[0] + z() * sc.hr[1], .002, .06), babip: cl(sc.babip[0] + z() * sc.babip[1], .25, .37), xbh: cl(sc.xbh[0] + z() * sc.xbh[1], .12, .30), sba: cl(sc.sba[0] + z() * sc.sba[1], .01, .2), hbp: lb.hbp * (0.6 + 0.8 * r.random()), tri: lb.tri * (0.6 + 0.9 * r.random()), sbp: cl(lb.sbp - 0.04 + gauss(r, 0, 0.07), .5, .9) };
       let x = r.random() * POSW.reduce((a, b) => a + b[1], 0), pos = 'LF'; for (const [q, w] of POSW) { if ((x -= w) < 0) { pos = q; break; } }
+      if (forcePos) pos = forcePos;
       p.pos = pos; p.gs = pos === 'DH' ? {} : { [pos]: 40 }; p.fr = {}; if (pos !== 'DH') p.fr[pos] = { range: clamp(50 + gauss(r, 0, 7), 28, 75), err_reg: S.calib.fielding.lg.err[pos] * clamp(1 + gauss(r, 0, 0.25), 0.5, 1.8) };
       if (pos === 'C') p.cs = clamp(S.calib.fielding.lg.cs + gauss(r, 0, 0.04), 0.1, 0.4);
       p.PA = 12; p.G = 10;
@@ -60,6 +61,7 @@
       p.p = { k: clamp(sc.k[0] + z() * sc.k[1], .08, .35), bb: clamp(sc.bb[0] - z() * sc.bb[1], .03, .16), hr: clamp(sc.hr[0] - z() * sc.hr[1], .006, .05), babip: clamp(sc.babip[0] - z() * sc.babip[1], .26, .36), hbp: lb.hbp * (0.7 + 0.6 * r.random()) };
       p.stamina = clamp(gauss(r, 45, 12), 25, 70); p.role = p.stamina >= 50 && r.random() < 0.7 ? 'SP' : 'RP'; p.GS = 0; p.G = 5; p.IP = 8; p.ipgs = null;
     }
+    if (type === 'B') p.bats = r.random() < 0.06 ? 'S' : r.random() < 0.35 ? 'L' : 'R'; else p.throws = r.random() < 0.27 ? 'L' : 'R';   // 가상 신인의 투타
     p.contract = { salary: 0.3, years: 3 };
     p.scout = { o: this.ovr(p) + Math.round(gauss(r, 0, 3)), pot: clamp(p.pot + gauss(r, 0, 0.25), 0, 2) };
     S.players[id] = p; return p;
@@ -170,6 +172,13 @@
         if (n >= 3 || S.teams[t].ids.length >= ROSTER_MAX - 4) break;
         const ask = this.askSalary(p); if (this.payroll(t) + ask > S.calib.cap) continue; if (this.war(p) < 1.0) continue;
         if (r.random() < (this.war(p) >= 2 ? 0.75 : 0.5)) { p.team = t; p.contract = { salary: ask, years: 1 + Math.floor(r.random() * 3) }; S.teams[t].ids.push(p.id); S.fa = S.fa.filter(x => x !== p.id); n++; }
+      }
+      // 핵심 포지션(포수·유격수·중견수·2루수·3루수)에 주포지션 선수가 2명 미만이면 보강
+      for (const pos of ['C', 'SS', 'CF', '2B', '3B']) {
+        while (this.hitters(t).filter(x => x.pos === pos).length < 2) {
+          const fa = this.faList().filter(x => x.type === 'B' && x.pos === pos).sort((a, b) => this.war(b) - this.war(a))[0], np = fa || this.makeRookie(r, 'B', pos);
+          if (fa) S.fa = S.fa.filter(x => x !== fa.id); np.team = t; np.contract = { salary: Math.max(0.3, Math.min(this.askSalary(np), 0.8)), years: 1 }; S.teams[t].ids.push(np.id);
+        }
       }
       // 최소 인원 보장
       for (const kind of ['B', 'P']) while (need(kind) < (kind === 'B' ? 24 : 26)) {
