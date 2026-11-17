@@ -62,3 +62,12 @@
 - 행에 'split': {팀: 비중} 을 두면 구장 효과 제거(팀별 환경의 비중 가중 평균)와 팀 수비 BABIP 집계에 그 비중을 사용 (parse_csv_2024.py 의 SPLIT)
 - 시라카와 2024: 베어스 7경기·랜더스 5경기 (사용자 확인). 결과: 2024 10개 팀 선발 합이 모두 정확히 144, 리그 1440
 - 나머지 소속불명(---) 선수는 비중이 확인될 때까지 중립(구장 보정 없음)
+
+## 최종 상태 / 실행 요약
+- 재현 모드 : REG_SCALE=0.03 PARK=y2026 OUT=ratings_replay_pk.json python3 ratings.py            (2026 단일, 수비·로스터 2026)
+- 예측 모드 : SEASONS="2026:1,2025:0.6,2024:0.4" REG_SCALE=1.0 PARK=blend OUT=ratings_forward_pk.json python3 ratings.py
+- 시뮬      : PARK=y2026 RAT=ratings_replay_pk.json python3 engine2.py N out.json  /  PARK=blend RAT=ratings_forward_pk.json python3 engine2.py N out.json
+- 검증      : python3 verify_parks.py (파크팩터 CSV 대조), python3 check_2025.py (2025 정합성)
+- 수비·포지션·포수·로스터는 2026 기준 (최신 반영 방침)
+- 미해결(중립 처리 유지): 2024 김휘집·손호영·박병호·오재일·우강훈, 2025 최원준·손아섭·이우성·천성호·김성욱·홍종표·정현창·김시훈·임준형 의 팀별 비중
+  → 확인되면 parse 스크립트의 split 필드로 추가 후 ratings 재생성
