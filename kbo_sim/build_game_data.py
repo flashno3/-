@@ -398,7 +398,11 @@ def load_finance():
     fa=D+'game/data/finance_audit_2025.csv'
     if os.path.exists(fa):
         for r in csv.DictReader(open(fa,encoding='utf-8-sig')): aud.setdefault(TMC[r['팀']],[]).append([r['구분'],r['항목'],fl(r['금액_억']),r['비고']])
-    return {TMC[r['팀']]:dict(audit=aud.get(TMC[r['팀']],[]),rev=fl(r['매출_억']),cost=fl(r['영업비용_억']),op=fl(r['영업이익_억']),gate=fl(r['입장수입_억']),md=fl(r['사업(MD)수입_억']),att=int(r['2026평균관중']),att25=int(r['2025평균관중']),g26=int(r['2026홈경기수']),tot26=int(r['2026총관중']),gate26=fl(r['2026입장수입_억']),tot25=int(r['2025총관중']),park=r['구장'],cap=int(r['수용인원']),capsrc=r['수용인원_근거'],par=fl(r['모기업의존도_%']),parsrc=r['의존도_근거'],capchg=[[int(x.split(':')[0]),int(x.split(':')[1])] for x in r['수용인원_변경'].split(';') if x],chgsrc=r['변경_근거'],note=r['비고']) for r in csv.DictReader(open(f,encoding='utf-8-sig'))}
+    cst={}
+    fc=D+'game/data/finance_cost_2025.csv'
+    if os.path.exists(fc):
+        for r in csv.DictReader(open(fc,encoding='utf-8-sig')): cst[TMC[r['팀']]]=dict(team=fl(r['선수단운영비_억']),staff=fl(r['직원급여_억']),game=fl(r['경기진행_억']),biz=fl(r['사업·구장원가_억']),unsplit=fl(r['선수단+사업 미분리_억']),other=fl(r['기타(감가·수수료·협회비 등)_억']),total=fl(r['영업비용_억']),note=r['분류 근거'])
+    return {TMC[r['팀']]:dict(costs=cst.get(TMC[r['팀']]),audit=aud.get(TMC[r['팀']],[]),rev=fl(r['매출_억']),cost=fl(r['영업비용_억']),op=fl(r['영업이익_억']),gate=fl(r['입장수입_억']),md=fl(r['사업(MD)수입_억']),att=int(r['2026평균관중']),att25=int(r['2025평균관중']),g26=int(r['2026홈경기수']),tot26=int(r['2026총관중']),gate26=fl(r['2026입장수입_억']),tot25=int(r['2025총관중']),park=r['구장'],cap=int(r['수용인원']),capsrc=r['수용인원_근거'],par=fl(r['모기업의존도_%']),parsrc=r['의존도_근거'],capchg=[[int(x.split(':')[0]),int(x.split(':')[1])] for x in r['수용인원_변경'].split(';') if x],chgsrc=r['변경_근거'],note=r['비고']) for r in csv.DictReader(open(f,encoding='utf-8-sig'))}
 FINANCE=load_finance()
 # 능력치 척도(20-80): ratings.py 와 같은 방식(규정 타자 PA≥300 / 규정 투수 TBF≥200 가중 평균·표준편차)
 def scale(rows,fields,w):

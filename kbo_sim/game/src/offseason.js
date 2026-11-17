@@ -564,8 +564,14 @@
     for (const t of TEAMS) {
       const d = data[t]; if (!d) continue;
       const price = d.gate26 ? d.gate26 / d.tot26 : d.gate ? d.gate / d.tot25 : avgPrice * d.tot25 / (d.att25 * FIN_GAMES), estGate = d.gate || d.att25 * FIN_GAMES * price, pay0 = this.payroll(t), par = d.par !== null && d.par !== undefined ? d.par / 100 : PAR_DEFAULT;
-      S.fin.teams[t] = { att0: d.att, cap: d.cap, capchg: d.capchg || [], capsrc: d.capsrc, chgsrc: d.chgsrc, price, pm: 1, par, parKnown: d.par !== null && d.par !== undefined, parAds: Math.round(d.rev * par * 10) / 10, other: Math.round((d.rev - estGate - d.rev * par - BC_BASE) * 10) / 10, opex: Math.round((d.cost - pay0) * 10) / 10, rev0: d.rev, op0: d.op, audit: d.audit || [], parsrc: d.parsrc, park: d.park, note: d.note, gateKnown: !!d.gate, price26: !!d.gate26, tot26: d.tot26, gate26: d.gate26, gate25: d.gate, gate: 0, games: 0, lastRev: d.rev, trust: 60 };
+      S.fin.teams[t] = { att0: d.att, cap: d.cap, capchg: d.capchg || [], capsrc: d.capsrc, chgsrc: d.chgsrc, price, pm: 1, par, parKnown: d.par !== null && d.par !== undefined, parAds: Math.round(d.rev * par * 10) / 10, other: Math.round((d.rev - estGate - d.rev * par - BC_BASE) * 10) / 10, opex: Math.round((d.cost - pay0) * 10) / 10, parts: this._opexParts(d, pay0), costNote: d.costs ? d.costs.note : '', rev0: d.rev, op0: d.op, audit: d.audit || [], parsrc: d.parsrc, park: d.park, note: d.note, gateKnown: !!d.gate, price26: !!d.gate26, tot26: d.tot26, gate26: d.gate26, gate25: d.gate, gate: 0, games: 0, lastRev: d.rev, trust: 60 };
     }
+  };
+  /* 운영비 분해(2025 감사보고서): 선수단 기타(선수단운영비 − 현재 보수) / 프런트·직원 / 경기진행 / 사업·구장 원가 / 기타(감가·수수료·협회비 등). 합 = 2025 영업비용 − 초기 보수 */
+  proto._opexParts = function (d, pay0) {
+    const c = d.costs, r1 = x => Math.round(x * 100) / 100; if (!c) return null;
+    const tm = c.team !== null ? c.team : c.unsplit;   // 두산: 선수단운영비와 사업원가가 분리되어 있지 않아 매출원가 전체를 선수단 쪽에 둔다
+    return { teamX: r1(tm - pay0), staff: c.staff || 0, game: c.game || 0, biz: c.biz || 0, other: c.other || 0, unsplit: c.team === null };
   };
   proto.finBC = function (year) { return (year || this.S.year) >= 2027 ? BC_NEXT : BC_BASE; };   // KBOP 중계권 균등 분배: 2024~2026 연 990억/10 = 99억, 2027~2031 연 1,440억/10 = 144억
   proto.finReady = function () { const F = this.S.fin; return !!(F && F.v === 3 && F.teams && F.teams.Lions); };
@@ -582,7 +588,7 @@
   proto.finPreview = function (t) {   // 시즌 예상 손익(진행분 + 남은 홈 경기를 현재 관중으로 환산), 포스트시즌 수입 제외
     const S = this.S, f = S.fin.teams[t], rem = Math.max(0, FIN_GAMES - f.games), gate = f.gate + rem * this.finAtt(t) * f.price * f.pm;
     const pay = this.payroll(t), v = this.cbtPreview(t), cbt = v.fee || 0, bc = this.finBC(), rev = gate + f.parAds + f.other + bc;
-    return { gate, par: f.parAds, other: f.other, bc, rev, pay, opex: f.opex, cbt, op: rev - pay - f.opex - cbt, att: this.finAtt(t), cap: this.finCap(t), room: this.faRoom(t), budget: this.finBudget(t), trust: f.trust, allowed: this.finAllowed(t) };
+    return { gate, par: f.parAds, other: f.other, bc, parts: f.parts, rev, pay, opex: f.opex, cbt, op: rev - pay - f.opex - cbt, att: this.finAtt(t), cap: this.finCap(t), room: this.faRoom(t), budget: this.finBudget(t), trust: f.trust, allowed: this.finAllowed(t) };
   };
   proto._psSettle = function () {   // 포스트시즌 입장수입 → 배당 재원 → 팀별 배당
     const P = this.S.post; if (!P || !P.rounds || !P.rounds.length) return null;

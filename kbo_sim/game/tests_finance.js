@@ -34,6 +34,9 @@ const before=L2.faList().length;for(let d=0;d<40;d++)L2._faMarketDay(d);ok(L2.fa
 // 6) 구버전 저장(재정 없음): 오류 없이 진행
 const S3=JSON.parse(JSON.stringify(S));delete S3.fin;const L3=League.fromJSON(S3);L3.advance(2);ok(L3.faRoom('Lions')>1e8,'재정 없으면 제한 없음');
 ok(base.finance.Lions.tot25===1640174&&T.reduce((a,t)=>a+base.finance[t].tot25,0)===12312519,'2025 총관중 합 12,312,519(KBO 공식)');
+// 비용 구조: 분해 합 = 2025 영업비용(감사보고서 항목), 항목 값 정합
+for(const t of T){const d=base.finance[t].costs,f=S.fin.teams[t],p=f.parts;ok(!!d&&!!p,t+' 비용 구조');const sum=(d.team||0)+(d.staff||0)+(d.game||0)+(d.biz||0)+(d.unsplit||0)+(d.other||0);ok(Math.abs(sum-base.finance[t].cost)<0.02,t+' 비용 분해 합=영업비용 '+sum+' vs '+base.finance[t].cost);ok(Math.abs(p.teamX+p.staff+p.game+p.biz+p.other-f.opex)<0.15,t+' 운영비=분해 합');ok(d.other>0&&d.staff>0,t+' 양수');}
+ok(base.finance.Tigers.costs.team===380.78&&base.finance.Lions.costs.team===439.83&&base.finance.Giants.costs.team===306.97&&base.finance.Bears.costs.team===null&&base.finance.Bears.costs.unsplit===522.66,'감사보고서 선수단운영비 값');
 console.log('finance tests ok',n);
 // 7) 계약 반영: 조수행(두산 4년 16억, 잔여 3년), 손아섭(NC 복귀 0.5억), 황재균(은퇴·제외)
 {const by=k=>Object.values(League.create(base,'Lions',7).S.players).filter(p=>p.ko===k);
