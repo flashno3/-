@@ -23,11 +23,11 @@
 
   class League {
     /* ------------------------------------------------------------ 생성/저장 */
-    constructor(S) { this.S = S; this._eng = null; this._engDirty = true; }
+    constructor(S) { this.S = S; this._eng = null; this._engDirty = true; this._eng2 = null; this._f2dirty = true; }
     static create(base, userTeam, seed) {
       const S = {
         v: 1, seed, year: 2027, userTeam, phase: 'preseason', day: 0, nextId: 1000, rc: 0, players: {}, teams: {}, schedule: [], results: [],
-        rec: {}, h2h: {}, stats: { bat: {}, pit: {} }, post: null, off: null, history: [], news: [],
+        rec: {}, rec2: {}, h2h: {}, stats: { bat: {}, pit: {} }, stats2: { bat: {}, pit: {} }, recent: {}, post: null, off: null, history: [], news: [],
         calib: { lb: base.league_bat, team_def: base.team_def, pf: base.pf, fielding: base.fielding, scale: base.scale }
       };
       for (const t of TEAMS) S.teams[t] = { ids: [], set: { lineup: [], rotation: [], rotIdx: 0, bullpen: { closer: null, setup: [], middle: [], long: [] }, autoLineup: true } };
@@ -51,7 +51,7 @@
       return L;
     }
     toJSON() { return this.S; }
-    static fromJSON(S) { const L = new League(S); return L; }
+    static fromJSON(S) { S.stats2 = S.stats2 || { bat: {}, pit: {} }; S.recent = S.recent || {}; if (!S.rec2 || !S.rec2[TEAMS[0]]) { S.rec2 = {}; for (const t of TEAMS) S.rec2[t] = [0, 0, 0, 0, 0]; } const L = new League(S); L._f2dirty = true; return L; }
     save() { return JSON.stringify(this.S); }
     static load(str) { return League.fromJSON(JSON.parse(str)); }
 
@@ -246,45 +246,108 @@
     }
 
     /* ------------------------------------------------------------ AI 팀 사용량(출전·등판) */
-    assignUsage(t) {
-      const S = this.S, H = this.hitters(t).slice(), P = this.pitchers(t).slice();
+    /* 2군 풀: 1군 엔트리에 없는 선수. 타자 9명/투수 8명에 못 미치면 1군 후보 중 가치가 낮은 선수로 메운다(드문 경우) */
+    farmPool(t) {
+      let H = this.hitters(t).filter(p => !p.active), P = this.pitchers(t).filter(p => !p.active);
+      if (H.length < 9) H = H.concat(this.hitters(t, true).sort((a, b) => this._runsB(a, true) - this._runsB(b, true)).slice(0, 9 - H.length));
+      if (P.length < 8) P = P.concat(this.pitchers(t, true).sort((a, b) => this._runsP(a) - this._runsP(b)).slice(0, 8 - P.length));
+      return { H, P };
+    }
+    /* 사용량(출전·등판) 배정. farm=false: 1군 엔트리 → p.PA 등, farm=true: 2군 → p.f.PA 등 */
+    assignUsage(t, farm) {
+      const S = this.S, pool = farm ? this.farmPool(t) : { H: this.hitters(t, true), P: this.pitchers(t, true) }, H = pool.H.slice(), P = pool.P.slice();
+      const U = p => farm ? (p.f || (p.f = {})) : p;
       const lineup = this.bestLineup(H), starters = new Set(lineup.map(x => x.id));
       const PAs = [560, 550, 540, 530, 520, 505, 490, 470, 450];
       const byV = lineup.map(x => S.players[x.id]).sort((a, b) => this._runsB(b) - this._runsB(a));
-      byV.forEach((p, i) => { p.PA = PAs[i]; p.G = Math.min(144, Math.round(p.PA / 4.15 * 1.04)); });
-      for (const x of lineup) { const p = S.players[x.id], st = Math.round(p.PA / 4.15 * 0.97); p.aiGs = x.pos === 'DH' ? Object.assign({}, p.gs) : Object.assign({}, p.gs, { [x.pos]: st }); }
-      for (const p of H) if (!starters.has(p.id)) p.aiGs = Object.assign({}, p.gs);
+      byV.forEach((p, i) => { const u = U(p); u.PA = PAs[i]; u.G = Math.min(144, Math.round(u.PA / 4.15 * 1.04)); });
+      for (const x of lineup) { const p = S.players[x.id], u = U(p), st = Math.round(u.PA / 4.15 * 0.97); u.aiGs = x.pos === 'DH' ? Object.assign({}, p.gs) : Object.assign({}, p.gs, { [x.pos]: st }); }
+      for (const p of H) if (!starters.has(p.id)) U(p).aiGs = Object.assign({}, p.gs);
       const bench = H.filter(p => !starters.has(p.id)).sort((a, b) => this._runsB(b, true) - this._runsB(a, true)), BP = [300, 220, 150, 100, 70, 45];
-      bench.forEach((p, i) => { p.PA = BP[i] || 12; p.G = Math.min(144, Math.round(p.PA / 4.15 * 1.4)); });
+      bench.forEach((p, i) => { const u = U(p); u.PA = BP[i] || 12; u.G = Math.min(144, Math.round(u.PA / 4.15 * 1.4)); });
       // 투수
-      const spc = P.filter(p => p.role === 'SP' || p.stamina >= 52).sort((a, b) => (this._runsP(b) + 0.2 * (b.stamina - 50)) - (this._runsP(a) + 0.2 * (a.stamina - 50))).slice(0, 5);
+      const spv = p => this._runsP(p) + 0.2 * (p.stamina - 50), spc = P.filter(p => p.role === 'SP' || p.stamina >= 52).sort((a, b) => spv(b) - spv(a)).slice(0, 5);
+      if (spc.length < Math.min(5, P.length)) { const have = new Set(spc.map(p => p.id)); spc.push(...P.filter(p => !have.has(p.id)).sort((a, b) => b.stamina - a.stamina).slice(0, Math.min(5, P.length) - spc.length)); }   // 선발감이 모자라면 체력 높은 순으로 메운다
       const GSs = [30, 29, 29, 28, 26], sid = new Set();
-      spc.forEach((p, i) => { p.role = 'SP'; p.GS = GSs[i]; p.G = p.GS; p.ipgs = clamp(5.3 + (p.stamina - 50) * 0.05, 4.2, 6.8); p.IP = Math.round(p.GS * p.ipgs * 10) / 10; sid.add(p.id); });
+      spc.forEach((p, i) => { const u = U(p); if (!farm) p.role = 'SP'; u.GS = GSs[i]; u.G = u.GS; u.ipgs = clamp(5.3 + (p.stamina - 50) * 0.05, 4.2, 6.8); u.IP = Math.round(u.GS * u.ipgs * 10) / 10; sid.add(p.id); });
       const rps = P.filter(p => !sid.has(p.id)).sort((a, b) => this._runsP(b) - this._runsP(a)), IPs = [66, 66, 64, 62, 60, 56, 52, 46, 40, 30];
-      rps.forEach((p, i) => { p.role = 'RP'; p.GS = 0; p.G = Math.round((IPs[i] || 8) * 1.05); p.IP = IPs[i] || 8; p.ipgs = null; });
+      rps.forEach((p, i) => { const u = U(p); if (!farm) p.role = 'RP'; u.GS = 0; u.G = Math.round((IPs[i] || 8) * 1.05); u.IP = IPs[i] || 8; u.ipgs = null; });
     }
+    /* AI 팀의 1군 28명 자동 편성: 주전 9 + 백업 5(포수 2명 이상) + 선발 5 + 불펜 9 */
+    autoActive(t) {
+      const S = this.S, H = this.hitters(t), P = this.pitchers(t), act = new Set();
+      const lineup = this.bestLineup(H); lineup.forEach(x => act.add(x.id));
+      const bench = H.filter(p => !act.has(p.id)).sort((a, b) => this._runsB(b, true) - this._runsB(a, true)); let nb = 0;
+      const needC = 2 - H.filter(p => act.has(p.id) && p.pos === 'C').length;
+      if (needC > 0) for (const c of bench.filter(p => p.pos === 'C').slice(0, needC)) { act.add(c.id); nb++; }
+      for (const p of bench) { if (nb >= 5) break; if (!act.has(p.id)) { act.add(p.id); nb++; } }
+      const spv = p => this._runsP(p) + 0.2 * (p.stamina - 50), spc = P.filter(p => p.role === 'SP' || p.stamina >= 52).sort((a, b) => spv(b) - spv(a)).slice(0, 5);
+      if (spc.length < 5) { const have = new Set(spc.map(p => p.id)); spc.push(...P.filter(p => !have.has(p.id)).sort((a, b) => b.stamina - a.stamina).slice(0, 5 - spc.length)); }
+      spc.forEach(p => act.add(p.id));
+      const rps = P.filter(p => !act.has(p.id)).sort((a, b) => this._runsP(b) - this._runsP(a)).slice(0, Math.max(0, ACTIVE_MAX - act.size)); rps.forEach(p => act.add(p.id));
+      for (const p of this.players(t)) p.active = act.has(p.id);
+      this._engDirty = true; this._f2dirty = true;
+    }
+    refreshTeam(t) { this.autoActive(t); this.assignUsage(t); this.assignUsage(t, true); this.invalidate(); }
+    /* 1군 등록/말소(2군행). 말소하면 10경기일 동안 재등록 불가 */
+    moveActive(id, on) {
+      const S = this.S, p = S.players[id]; if (!p || p.team !== S.userTeam) return '선수를 찾을 수 없습니다.';
+      const t = p.team, A = this.players(t).filter(x => x.active);
+      if (!!on === !!p.active) return null;
+      const locking = S.day < S.schedule.length;
+      if (on) {
+        if (A.length >= ACTIVE_MAX) return `1군 엔트리는 ${ACTIVE_MAX}명까지입니다. 먼저 한 명을 2군으로 내리세요.`;
+        if (locking && S.day < (p.lockUntil || 0)) return `${p.ko}은(는) 2군 말소 후 10경기일이 지나야 1군에 등록할 수 있습니다. (${p.lockUntil - S.day}일 남음)`;
+        p.active = true;
+      } else {
+        const same = A.filter(x => x.type === p.type).length;
+        if (p.type === 'B' && same <= 10) return '1군에는 타자가 최소 10명 필요합니다.';
+        if (p.type === 'P' && same <= 8) return '1군에는 투수가 최소 8명 필요합니다.';
+        p.active = false; if (locking && S.phase !== 'preseason') p.lockUntil = S.day + 10;
+      }
+      this.invalidate(); this.repairSettings(t); return null;
+    }
+    /* 1군 선수 한 명을 내리고 2군 선수 한 명을 올린다(검사를 모두 통과해야 실행) */
+    swapActive(upId, downId) {
+      const S = this.S, up = S.players[upId], dn = S.players[downId]; if (!up || !dn || up.team !== S.userTeam || dn.team !== S.userTeam) return '선수를 찾을 수 없습니다.';
+      if (up.active || !dn.active) return '1군/2군 상태가 바뀌었습니다.';
+      if (this.S.day < S.schedule.length && S.day < (up.lockUntil || 0)) return `${up.ko}은(는) 10경기일 잠금 중입니다. (${up.lockUntil - S.day}일 남음)`;
+      const prev = dn.lockUntil || 0, e1 = this.moveActive(downId, false); if (e1) return e1;
+      const e2 = this.moveActive(upId, true); if (e2) { dn.active = true; dn.lockUntil = prev; this.invalidate(); this.repairSettings(S.userTeam); return e2; }
+      return null;
+    }
+    lockLeft(p) { const S = this.S; return S.day < S.schedule.length ? Math.max(0, (p.lockUntil || 0) - S.day) : 0; }
 
     /* ------------------------------------------------------------ 엔진 */
     engine() {
-      if (!this._eng || this._engDirty) { this.mergeTracking(); this._eng = Engine.createEngine(this._engData(), 'g'); this._engDirty = false; }
+      if (!this._eng || this._engDirty) { this.mergeTracking(); this._eng = Engine.createEngine(this._engData(false), 'g'); this._engDirty = false; }
       return this._eng;
     }
-    _engData() {
+    engine2() {
+      if (!this._eng2 || this._eng2Dirty || this._engDirty2()) { if (this._eng2) this.mergeTracking2(); if (this._f2dirty) { for (const t of TEAMS) this.assignUsage(t, true); this._f2dirty = false; } this._eng2 = Engine.createEngine(this._engData(true), 'g'); this._eng2Dirty = false; }
+      return this._eng2;
+    }
+    _engDirty2() { return this._f2dirty; }
+    /* farm=false: 1군 엔트리 선수만, farm=true: 2군 선수만(사용량은 p.f) */
+    _engData(farm) {
       const S = this.S, C = S.calib, batters = [], pitchers = [], defense = {}, fplayers = {}, catchers = {};
-      for (const t of TEAMS) for (const id of S.teams[t].ids) {
-        const p = S.players[id];
-        if (p.type === 'B') {
-          batters.push({ id, key: id, name: p.name, team: t, age: p.age, PA: p.PA, G: p.G, p: p.p, hand: p.bats || null });
-          const gsE = (t !== S.userTeam && p.aiGs) || p.gs, d = {}; for (const k in gsE) d[k] = [0, gsE[k]]; defense[id] = d; const fr = {};
-          for (const k in (p.fr || {})) if ((p.gs[k] || 0) >= FAM || k === p.pos) fr[k] = p.fr[k];
-          for (const k in p.gs) { const g = p.gs[k]; if (g > 0 && g < FAM && k !== p.pos && PEN_R[k]) { const tt = 0.8 * g / FAM; fr[k] = { range: PEN_R[k] + (50 - PEN_R[k]) * tt, err_reg: C.fielding.lg.err[k] * (PEN_E[k] - (PEN_E[k] - 1) * tt) }; } }   // 경험이 조금 있는 포지션은 페널티를 경험만큼 줄인다
-          fplayers[id] = fr;
-          if (p.cs !== undefined && p.cs !== null) catchers[id] = { cs_reg: p.cs };
-        } else pitchers.push({ id, name: p.name, team: t, age: p.age, GS: p.GS, G: p.G, IP: p.IP, ip_per_start: p.ipgs, p: p.p, stamina: p.stamina, hand: p.throws || null });
+      for (const t of TEAMS) {
+        let list; if (farm) { const pl = this.farmPool(t); list = pl.H.concat(pl.P); } else list = this.players(t).filter(p => p.active);
+        for (const p of list) {
+          const id = p.id, u = farm ? (p.f || (p.f = {})) : p;
+          if (p.type === 'B') {
+            batters.push({ id, key: id, name: p.name, team: t, age: p.age, PA: u.PA, G: u.G, p: p.p, hand: p.bats || null });
+            const gsE = farm ? u.aiGs : ((t !== S.userTeam && p.aiGs) || p.gs), d = {}; for (const k in gsE) d[k] = [0, gsE[k]]; defense[id] = d; const fr = {};
+            for (const k in (p.fr || {})) if ((p.gs[k] || 0) >= FAM || k === p.pos) fr[k] = p.fr[k];
+            for (const k in p.gs) { const g = p.gs[k]; if (g > 0 && g < FAM && k !== p.pos && PEN_R[k]) { const tt = 0.8 * g / FAM; fr[k] = { range: PEN_R[k] + (50 - PEN_R[k]) * tt, err_reg: C.fielding.lg.err[k] * (PEN_E[k] - (PEN_E[k] - 1) * tt) }; } }   // 경험이 조금 있는 포지션은 페널티를 경험만큼 줄인다
+            fplayers[id] = fr;
+            if (p.cs !== undefined && p.cs !== null) catchers[id] = { cs_reg: p.cs };
+          } else pitchers.push({ id, name: p.name, team: t, age: p.age, GS: u.GS, G: u.G, IP: u.IP, ip_per_start: u.ipgs, p: p.p, stamina: p.stamina, hand: p.throws || null });
+        }
       }
       return { modes: { g: { label: 'game', noStint: true, platoon: true, league_bat: C.lb, team_def: C.team_def, pf: C.pf, batters, pitchers } }, shared: { positions: {}, defense, fielding: { players: fplayers, catchers, team_avg_range: C.fielding.team_avg_range, lg: C.fielding.lg } } };
     }
-    invalidate() { this._engDirty = true; }
+    invalidate() { this._engDirty = true; this._f2dirty = true; }
     mergeTracking() {
       if (!this._eng) return; const tr = this._eng.tracking(), S = this.S.stats;
       for (const id in tr.bat) { const c = S.bat[id] || (S.bat[id] = {}); for (const k in tr.bat[id]) c[k] = (c[k] || 0) + tr.bat[id][k]; }
@@ -292,19 +355,33 @@
       this._eng.resetTracking();
     }
 
+    mergeTracking2(day) {
+      if (!this._eng2) return; const tr = this._eng2.tracking(), S = this.S.stats2, R = this.S.recent;
+      for (const id in tr.bat) {
+        const c = S.bat[id] || (S.bat[id] = {}), x = tr.bat[id]; for (const k in x) c[k] = (c[k] || 0) + x[k];
+        if (day !== undefined && x.PA) { const h = x['1B'] + x['2B'] + x['3B'] + x.HR, ab = x.PA - x.BB - x.HBP - x.SF; (R[id] || (R[id] = [])).push([day, ab, h, x['1B'] + 2 * x['2B'] + 3 * x['3B'] + 4 * x.HR, x.BB + x.HBP, x.HR, x.PA]); if (R[id].length > 10) R[id].shift(); }
+      }
+      for (const id in tr.pit) {
+        const c = S.pit[id] || (S.pit[id] = {}), x = tr.pit[id]; for (const k in x) c[k] = (c[k] || 0) + x[k];
+        if (day !== undefined && x.BF) { (R[id] || (R[id] = [])).push([day, x.outs, x.R, x.K, x.BB + x.HBP, x.H, x.BF]); if (R[id].length > 10) R[id].shift(); }
+      }
+      this._eng2.resetTracking();
+    }
+
     /* ------------------------------------------------------------ 시즌 시작 */
     newSeasonSetup(first) {
       const S = this.S;
-      for (const t of TEAMS) { if (t !== S.userTeam) this.assignUsage(t); }
+      for (const p of Object.values(S.players)) p.lockUntil = 0;
+      for (const t of TEAMS) { if (t !== S.userTeam) { this.autoActive(t); this.assignUsage(t); } }
       this.repairSettings(S.userTeam);
-      S.day = 0; S.results = []; S.stats = { bat: {}, pit: {} }; S.post = null; S.phase = 'preseason';
+      S.day = 0; S.results = []; S.stats = { bat: {}, pit: {} }; S.stats2 = { bat: {}, pit: {} }; S.recent = {}; S.rec2 = {}; for (const t of TEAMS) S.rec2[t] = [0, 0, 0, 0, 0]; S.post = null; S.phase = 'preseason';
       S.rec = {}; S.h2h = {}; for (const t of TEAMS) { S.rec[t] = [0, 0, 0, 0, 0]; S.h2h[t] = {}; for (const u of TEAMS) S.h2h[t][u] = [0, 0, 0]; }
       for (const id in S.players) { S.players[id].fat = 0; S.players[id].lastStart = -99; }
       S.schedule = this.makeSchedule(); S.pendingDay = null; S.userGameDone = {};
       this.invalidate();
     }
-    makeSchedule() {
-      const r = rngFor(this.S.seed, this.S.year, 777), n = TEAMS.length, rounds = [];
+    makeSchedule(salt) {
+      const r = rngFor(this.S.seed, this.S.year, salt || 777), n = TEAMS.length, rounds = [];
       for (let c = 0; c < 16; c++) {
         const cyc = []; const arr = TEAMS.slice(); // 서클 방식 9라운드
         for (let k = 0; k < n - 1; k++) {
@@ -333,6 +410,21 @@
       });
       return order.map((t, i) => ({ rank: i + 1, team: t, w: R[t][0], l: R[t][1], d: R[t][2], pct: pct(t), rs: R[t][3], ra: R[t][4] }));
     }
+    farmSchedule() { const S = this.S; if (!this._sch2 || this._sch2.y !== S.year || this._sch2.s !== S.seed) this._sch2 = { y: S.year, s: S.seed, v: this.makeSchedule(888) }; return this._sch2.v; }
+    standings2() {
+      const R = this.S.rec2, pct = t => (R[t][0] + R[t][1]) ? R[t][0] / (R[t][0] + R[t][1]) : 0;
+      return TEAMS.slice().sort((x, y) => pct(y) - pct(x) || (R[y][3] - R[y][4]) - (R[x][3] - R[x][4]) || (x < y ? -1 : 1)).map((t, i) => ({ rank: i + 1, team: t, w: R[t][0], l: R[t][1], d: R[t][2], pct: pct(t), rs: R[t][3], ra: R[t][4] }));
+    }
+    /* 2군(퓨처스) 하루 경기: 모든 팀이 자동 진행 */
+    playFutures(d) {
+      const S = this.S, rd = this.farmSchedule()[d]; if (!rd) return; const E = this.engine2(), R = S.rec2;
+      rd.forEach((g, i) => {
+        const r = rngFor(S.seed, S.year, d, 9000 + i), [rh, ra] = E.game(g[0], g[1], 1 + d, 1 + d, r, E.newStats(), null);
+        R[g[0]][3] += rh; R[g[0]][4] += ra; R[g[1]][3] += ra; R[g[1]][4] += rh;
+        if (rh > ra) { R[g[0]][0]++; R[g[1]][1]++; } else if (ra > rh) { R[g[1]][0]++; R[g[0]][1]++; } else { R[g[0]][2]++; R[g[1]][2]++; }
+      });
+      this.mergeTracking2(d);
+    }
     commit(home, away, rh, ra, meta) {
       const S = this.S, R = S.rec; R[home][3] += rh; R[home][4] += ra; R[away][3] += ra; R[away][4] += rh;
       if (rh > ra) { R[home][0]++; R[away][1]++; S.h2h[home][away][0]++; S.h2h[away][home][1]++; }
@@ -356,7 +448,7 @@
       });
       this.mergeTracking();
       for (const o of others) this.commit(o.home, o.away, o.rh, o.ra, { spH: o.spH, spA: o.spA });
-      this._decayFatigue();
+      this._decayFatigue(); this.playFutures(d);
       if (!ug) { S.day++; return { status: 'ok', day: d }; }
       if (live) { S.pendingDay = d; return { status: 'userGame', day: d, game: ug.g, idx: ug.i }; }
       const L = this.startUserGame(ug.g, ug.i); L.live.playToEnd(); const res = this.finishUserGame(L);

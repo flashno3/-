@@ -6,6 +6,7 @@ python3 build_game_data.py >/dev/null
 ./web/tests/run_tests.sh | grep -E "일치|불변식" | sort | uniq -c
 node web/tests/live_parity.js
 node game/tests_live.js
+node game/tests_farm.js | tail -2
 node game/tests_offseason.js | tail -3
 node game/tests_longrun.js 10 11 | tail -2
 python3 build_game.py

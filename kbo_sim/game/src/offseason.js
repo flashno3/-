@@ -20,12 +20,20 @@
   /* ---------------- 선수 성장 / 노화 ---------------- */
   const BCURVE = { 18: .32, 19: .30, 20: .28, 21: .26, 22: .22, 23: .18, 24: .13, 25: .08, 26: .04, 27: .01, 28: -.02, 29: -.04, 30: -.06, 31: -.08, 32: -.11, 33: -.14, 34: -.18, 35: -.22 };
   const PCURVE = { 18: .30, 19: .28, 20: .26, 21: .22, 22: .18, 23: .14, 24: .10, 25: .06, 26: .03, 27: .0, 28: -.02, 29: -.04, 30: -.06, 31: -.09, 32: -.12, 33: -.16, 34: -.2, 35: -.25 };
-  proto.progress = function (p, r) {
+  /* 올 시즌 출전 비율(0~1): 1군 기록 + 0.8×2군 기록을 풀타임 기준(타자 450타석, 선발 550·불펜 200타자)과 비교 */
+  proto.playShare = function (p) {
+    const S = this.S, a = S.stats, b = S.stats2 || { bat: {}, pit: {} };
+    if (p.type === 'B') { const w = ((a.bat[p.id] || {}).PA || 0) + 0.8 * ((b.bat[p.id] || {}).PA || 0); return clamp(w / 450, 0, 1); }
+    const w = ((a.pit[p.id] || {}).BF || 0) + 0.8 * ((b.pit[p.id] || {}).BF || 0); return clamp(w / (p.role === 'SP' ? 550 : 200), 0, 1);
+  };
+  proto.progress = function (p, r, play) {   // play: 0~1 출전 비율(젊은 선수 성장에 반영)
     const sc = this.S.calib.scale[p.type], lb = this.S.calib.lb, old = this.ovr(p), a = p.age + 1;
     p.age = a;
     const curve = (p.type === 'B' ? BCURVE : PCURVE)[clamp(a, 18, 35)] !== undefined ? (p.type === 'B' ? BCURVE : PCURVE)[clamp(a, 18, 35)] : -.3;
     let gain = (a > 35 ? -.32 : curve) + gauss(r, 0, 0.12);
-    if (a <= 26 && p.pot > 0) { const g2 = Math.min(p.pot, 0.4) * (0.6 + 0.8 * r.random()); gain = Math.max(gain, g2); p.pot = Math.max(0, p.pot - Math.max(0, g2)); }
+    const pf = play === undefined ? 1 : 0.55 + 0.45 * clamp(play, 0, 1);   // 경기에 못 나온 젊은 선수는 성장이 더딘다(최대 -45%)
+    if (a <= 26 && gain > 0) gain *= pf;
+    if (a <= 26 && p.pot > 0) { const g2 = Math.min(p.pot, 0.4) * (0.6 + 0.8 * r.random()) * pf; gain = Math.max(gain, g2); p.pot = Math.max(0, p.pot - Math.max(0, g2)); }
     const shift = f => gain * 0.75 + gauss(r, 0, 0.1);
     const set = (f, dir, lo, hi, s) => { p.p[f] = clamp(p.p[f] + dir * s * sc[f][1], lo, hi); };
     if (p.type === 'B') {
@@ -84,7 +92,7 @@
     // 1) 성장·노화
     for (const id in S.players) {
       const p = S.players[id]; if (p.retired || p.team === 'DRAFT') continue;
-      const d = this.progress(p, rngFor(S.seed, S.year, 32, parseInt(id.slice(1))));
+      const d = this.progress(p, rngFor(S.seed, S.year, 32, parseInt(id.slice(1))), this.playShare(p));
       if (p.team === user) rep.prog.push({ id, d });
     }
     // 2) 은퇴
@@ -247,6 +255,6 @@
     for (const id of get) delete S.players[id].aiGs;
     for (const id of get) { this.removeFromTeam(aiTeam, id); S.players[id].team = me; S.players[id].active = false; S.teams[me].ids.push(id); }
     news(this, `트레이드: ${give.map(i => S.players[i].ko).join(', ')} ↔ ${get.map(i => S.players[i].ko).join(', ')} (${aiTeam})`);
-    this.assignUsage(aiTeam); this.repairSettings(me); this.invalidate(); return ev;
+    this.refreshTeam(aiTeam); this.repairSettings(me); this.invalidate(); return ev;
   };
 });
