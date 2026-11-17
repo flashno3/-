@@ -34,6 +34,23 @@ for x in R['pitchers']:
     team=LAST.get(x['name'],x['team']);assert team in TEAMS,(x['name'],team)
     players.append({'id':'P%d'%(len(players)+1),'type':'P','name':x['name'],'ko':kor(x['name']),'team':team,'age':age27(x),'p':x['p'],
         'GS':x['GS'],'G':x['G'],'IP':x['IP'],'ipgs':x['ip_per_start'],'role':x['role'],'stamina':x['r'].get('stamina',40)})
+
+# 실제 투타 정보: 퓨처스 선수등록 명단(사용자 제공)에서 이름+포지션군(투수/타자)+나이(±1)로 매칭. 소속이 다르면 건너뛴다.
+def load_hands():
+    f=D+'game/data/futures_roster_2026.txt'
+    if not os.path.exists(f): return 0,[],[]
+    TM={'한화':'Eagles','LG':'Twins','SSG':'Landers','두산':'Bears','히어로즈':'Heroes','KT':'Wiz','NC':'Dinos','롯데':'Giants','삼성':'Lions','KIA':'Tigers'}
+    hit=0;skip=[];miss=[]
+    for l in open(f,encoding='utf8'):
+        if not l.strip() or l.startswith('#'): continue
+        t,g,n,h,b,_,_=l.strip().split('|');ty='P' if g=='P' else 'B';y=int(b[:4])
+        c=[p for p in players if p['ko']==n and p['type']==ty and abs((2026-y)-p['age'])<=1]
+        if len(c)>1 and t in TM: c=[p for p in c if p['team']==TM[t]] or c
+        if not c: miss.append((t,n));continue
+        if len(c)>1 or (t in TM and c[0]['team']!=TM[t]): skip.append((t,n,[p['team'] for p in c]));continue
+        p=c[0];p['throws']={'우':'R','좌':'L'}[h[0]];p['bats']={'우':'R','좌':'L','양':'S'}[h[2]];hit+=1
+    return hit,skip,miss
+HITS,SKIP,MISS=load_hands()
 # 능력치 척도(20-80): ratings.py 와 같은 방식(규정 타자 PA≥300 / 규정 투수 TBF≥200 가중 평균·표준편차)
 def scale(rows,fields,w):
     out={}
@@ -50,3 +67,5 @@ from collections import Counter
 print('선수',len(players),Counter(p['type'] for p in players),'팀별',Counter(p['team'] for p in players).most_common(3),'| KB',os.path.getsize(D+'game/src/gamedata.json')//1024)
 print('나이 공란(28세 가정):',NOAGE)
 print('주 포지션 분포',Counter(p['pos'] for p in players if p['type']=='B'))
+
+print('투타 매칭',HITS,'| 건너뜀(소속 불일치/모호)',SKIP,'| 1군 데이터에 없는 2군 선수',len(MISS))
