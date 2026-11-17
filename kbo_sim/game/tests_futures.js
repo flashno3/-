@@ -7,9 +7,18 @@ let bad=0;const ids=new Set();
 for(const t of rows){const v=t.slice(4).map(Number),[avg,G,PA,AB,R,H,B2,B3,HR,RBI,SB,BB,HBP,SO,SLG]=v;
  if(AB&&Math.abs(H/AB-avg)>0.0006)bad++;if(AB&&Math.abs((H+B2+2*B3+3*HR)/AB-SLG)>0.0006)bad++;if(H<B2+B3+HR||PA<AB+BB+HBP)bad++;if(ids.has(t[2]))bad++;ids.add(t[2]);}
 ok(bad===0,'원본 기록 불일치 '+bad);console.log('원본 기록',rows.length,'행 검증');
+// 1b) 투수 원본 기록 정합성(ERA 재계산)
+const prow=fs.readFileSync(path.join(__dirname,'data/futures_pit_2026.txt'),'utf8').split('\n').filter(l=>l&&!l.startsWith('#')).map(l=>l.split(/\s+/));
+let pbad=0;const pids=new Set();
+for(const t of prow){const v=t.slice(3),era=v[0]==='-'?null:+v[0],ip=v[6].split('.'),outs=+ip[0]*3+ +ip[1],ER=+v[13],R=+v[12];
+ if(outs>0&&era!==null&&Math.abs(ER*27/outs-era)>0.011)pbad++;if(ER>R)pbad++;if(pids.has(t[1]))pbad++;pids.add(t[1]);}
+ok(pbad===0,'투수 원본 기록 불일치 '+pbad);console.log('투수 기록',prow.length,'행 검증');
 // 2) 게임 데이터
 const base=JSON.parse(fs.readFileSync(path.join(__dirname,'src/gamedata.json'),'utf8'));
-const L=League.create(base,'Lions',9),S=L.S;const F=Object.values(S.players).filter(p=>p.src==='F');
+const L=League.create(base,'Lions',9),S=L.S;const FA=Object.values(S.players).filter(p=>p.src==='F'),F=FA.filter(p=>p.type==='B'),FP=FA.filter(p=>p.type==='P');
+ok(FP.length>=180,'신규 2군 투수 수 '+FP.length);
+const PR={k:[.08,.4],bb:[.02,.18],hr:[.004,.06],babip:[.25,.37]};for(const p of FP){for(const k in PR)if(!(p.p[k]>=PR[k][0]&&p.p[k]<=PR[k][1])){ok(false,p.ko+' '+k+' '+p.p[k]);break}ok(p.team in S.teams&&(p.role==='SP'||p.role==='RP')&&p.stamina>=20&&p.stamina<=80,p.ko+' 투수 필드')}
+ok(Object.keys(S.teams).every(t=>L.pitchers(t).filter(p=>!p.active).length>=8&&L.hitters(t).filter(p=>!p.active).length>=9),'팀별 2군 풀');
 ok(F.length>=170,'신규 2군 타자 수 '+F.length);
 const R={k:[.06,.45],bb:[.015,.2],hr:[.002,.07],babip:[.24,.39],xbh:[.1,.32],sba:[.005,.25]};
 for(const p of F){for(const k in R)if(!(p.p[k]>=R[k][0]&&p.p[k]<=R[k][1])){ok(false,p.ko+' '+k+' 범위 '+p.p[k]);break}

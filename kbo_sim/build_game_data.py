@@ -120,9 +120,68 @@ def futures_hitters(players):
             h=info[1];q['throws']={'우':'R','좌':'L'}[h[0]];q['bats']={'우':'R','좌':'L','양':'S'}[h[2]]
         out.append(q)
     return out,fit,[(r['team'],r['name'],r['pid']) for r in unassigned],len(ov)
+
+# 퓨처스 투수: 타자와 같은 방식(수축 → 겹치는 1군 투수로 회귀 환산). 투구수·선발 여부(GS)가 없어 타자 상대 수(BF)=아웃+피안타+볼넷+사구로 추정,
+# 선발/구원은 경기당 이닝(≥3.5 & 25이닝 이상이면 선발)로 추정하고 체력은 ratings.py의 공식(선발: 경기당 이닝, 구원: 이닝/경기)을 그대로 적용.
+FPNs={'k':70,'bb':170,'hbp':300,'hr':1300,'babip':2000}
+def futures_pitchers(players,nb):
+    f=D+'game/data/futures_pit_2026.txt'
+    if not os.path.exists(f): return None
+    rows=[]
+    for l in open(f,encoding='utf8'):
+        if l.startswith('#') or not l.strip(): continue
+        t=l.split();team,pid,name=t[:3];v=t[3:]
+        w,fr=v[6].split('.');outs=int(w)*3+int(fr)
+        H,HR,BB,HBP,SO,Rr,ER=map(int,v[7:])
+        rows.append(dict(team=team,pid=pid,name=name,G=int(v[1]),outs=outs,H=H,HR=HR,BB=BB,HBP=HBP,SO=SO,R=Rr,ER=ER))
+    for r in rows:
+        r['BF']=r['outs']+r['H']+r['BB']+r['HBP']
+    def obs(r):
+        bip=r['BF']-r['SO']-r['BB']-r['HBP']-r['HR']
+        return {'k':(r['SO'],r['BF']),'bb':(r['BB'],r['BF']),'hbp':(r['HBP'],r['BF']),'hr':(r['HR'],r['BF']),'babip':(r['H']-r['HR'],max(bip,1))}
+    lg={s:sum(obs(r)[s][0] for r in rows)/sum(obs(r)[s][1] for r in rows) for s in FPNs}
+    shr=lambda r,s:(obs(r)[s][0]+lg[s]*FPNs[s])/(obs(r)[s][1]+FPNs[s])
+    by={}
+    for p in players:
+        if p['type']=='P': by.setdefault(p['ko'],[]).append(p)
+    used=set();ov=[];new=[];unassigned=[]
+    for r in rows:
+        c=[p for p in by.get(r['name'],[]) if p['team']==FUT_TM.get(r['team']) and p['id'] not in used]
+        if c: used.add(c[0]['id']);r['m']=c[0];ov.append(r)
+        elif r['team'] in FUT_TM: new.append(r)
+        else: unassigned.append(r)
+    fit={}
+    for s in ['k','bb','hr','babip']:
+        pts=[(shr(r,s),r['m']['p'][s],r['BF']) for r in ov if r['BF']>=40]
+        W=sum(w for _,_,w in pts);mx=sum(w*x for x,_,w in pts)/W;my=sum(w*y for _,y,w in pts)/W
+        sxx=sum(w*(x-mx)**2 for x,_,w in pts);sxy=sum(w*(x-mx)*(y-my) for x,y,w in pts);syy=sum(w*(y-my)**2 for _,y,w in pts)
+        fit[s]=dict(mx=mx,my=my,b=max(0.0,sxy/sxx),n=len(pts),corr=sxy/(sxx*syy)**.5)   # 음의 기울기는 0(예측력 없음)으로
+    lgB=R['league_bat'];ros={}
+    for l in open(D+'game/data/futures_roster_2026.txt',encoding='utf8'):
+        if not l.strip() or l.startswith('#'): continue
+        t,g,n,h,b,_,_=l.strip().split('|')
+        if g=='P': ros[(('고양' if t=='히어로즈' else t),n)]=(b,h)
+    out=[]
+    for r in new:
+        p={s:fit[s]['my']+fit[s]['b']*(shr(r,s)-fit[s]['mx']) for s in fit}
+        p['hbp']=shr(r,'hbp')*lgB['hbp']/lg['hbp']
+        p['k']=min(max(p['k'],0.08),0.40);p['bb']=min(max(p['bb'],0.02),0.18);p['hr']=min(max(p['hr'],0.004),0.06);p['babip']=min(max(p['babip'],0.25),0.37)
+        ipg=(r['outs']/3)/max(r['G'],1);sp=ipg>=3.5 and r['outs']>=75
+        if sp: ipgs=ipg;stam=max(20,min(80,round(50+10*(ipgs-5.3)/0.6)))
+        else: ipgs=None;stam=max(20,min(80,round(30+10*(ipg-1.0)/0.3)))
+        info=ros.get((r['team'],r['name']))
+        age=2026-int(info[0][:4])+1 if info else None
+        q=dict(id='P%d'%(len(players)+nb+len(out)+1),type='P',name=r['name'],ko=r['name'],team=FUT_TM[r['team']],age=age or 24,p=p,GS=0,G=0,IP=0,ipgs=ipgs,role='SP' if sp else 'RP',stamina=stam,src='F',fpid=r['pid'],roleEst=True)
+        if not age: q['ageEst']=True
+        if info: q['throws']={'우':'R','좌':'L'}[info[1][0]]
+        out.append(q)
+    return out,fit,[(r['team'],r['name'],r['pid']) for r in unassigned],len(ov)
 FUT=futures_hitters(players)
 if FUT:
     players.extend(FUT[0])
+FUTP=futures_pitchers(players,0)
+if FUTP:
+    players.extend(FUTP[0])
 # 능력치 척도(20-80): ratings.py 와 같은 방식(규정 타자 PA≥300 / 규정 투수 TBF≥200 가중 평균·표준편차)
 def scale(rows,fields,w):
     out={}
@@ -145,3 +204,7 @@ print('투타 매칭',HITS,'| 건너뜀(소속 불일치/모호)',SKIP,'| 1군 �
 if FUT:
     print('퓨처스 타자: 1군 선수와 매칭',FUT[3],'| 신규 2군 타자',len(FUT[0]),'| 소속 미정(상무·울산)',len(FUT[2]))
     print('환산식',{k:{a:round(b,4) for a,b in v.items()} for k,v in FUT[1].items()})
+
+if FUTP:
+    print('퓨처스 투수: 1군 선수와 매칭',FUTP[3],'| 신규 2군 투수',len(FUTP[0]),'(선발 추정 %d)'%sum(1 for p in FUTP[0] if p['role']=='SP'),'| 소속 미정(상무·울산)',len(FUTP[2]))
+    print('투수 환산식',{k:{a:round(b,4) for a,b in v.items()} for k,v in FUTP[1].items()})
