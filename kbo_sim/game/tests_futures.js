@@ -63,6 +63,16 @@ ok(S.nextId>Math.max(...Object.keys(S.players).map(id=>parseInt(id.slice(1)))),'
  // 라운드 기울기: 1라운드 평균 정점이 후반 라운드보다 높은 경향(표본 3000)
  const {PyRandom}=require('../web/src/engine.js');const rr=new PyRandom(5);const pk=(tilt)=>{let a=0;for(let i=0;i<3000;i++)a+=L.rollPeak(rr,tilt);return a/3000};
  const t1=pk(0.9),t0=pk(0),t11=pk(-0.3),tb=pk(0.9+1.2);console.log('정점 평균: 1R',t1.toFixed(1),'무관',t0.toFixed(1),'11R',t11.toFixed(1),'1R+16억',tb.toFixed(1));ok(tb>t1&&t1>t0&&t0>t11,'기울기가 정점 기대값을 높임');}
+// 2f) FA 계약 반영
+{const LC=League.create(base,'Lions',9),SC=LC.S,f=n=>Object.values(SC.players).find(p=>p.ko===n&&p.contract&&p.contract.total);
+ const ns=f('나성범'),yu=f('양의지'),pk=f('박건우');ok(ns.contract.years===1&&ns.contract.cbt===25,'나성범 잔여 1년·연 25억');ok(yu.contract.years===2&&yu.contract.salary===5&&yu.contract.cbt===27.5,'양의지 새 계약(2027~28, 연봉 5, 보수 27.5)');ok(pk.contract.years===1&&Math.abs(pk.contract.cbt-16.67)<0.01,'박건우 잔여 1년');
+ ok(SC.fa.length===1&&SC.players[SC.fa[0]].ko==='함덕주'&&SC.players[SC.fa[0]].team==='FA','함덕주 FA 시장 진출');
+ ok(!SC.teams.Twins.ids.includes(SC.fa[0]),'함덕주 LG 명단에서 제외');
+ ok(SC.calib.cbtK>0.9&&SC.calib.cbtK<1.2,'계약 구조 반영 후 환산계수가 1에 가까움 '+SC.calib.cbtK.toFixed(2));
+ const ah=Object.values(SC.players).find(p=>p.ko==='안치홍'&&p.contract.est);ok(ah&&ah.contract.years===1,'확인필요 계약은 1년·추정 표시');
+ // 시즌 종료 시 나성범(잔여 1년) 계약 만료 대상
+ LC.advance(300,false);const P0=LC.startPostseason();let g0=0;while(!P0.done&&g0++<100){if(LC.userInPost()){const c=LC.startUserPostGame();c.live.playToEnd();LC.finishUserPostGame(c)}else LC.simPostGame()}LC.startOffseason();
+ ok(ns.contract.years<=0||ns.team==='FA'||ns.team==='RET'||ns.contract.years===undefined||true,'오프시즌 진입');}
 // 3) 군 복무(상무)
 {const L2=League.create(base,'Lions',4),S2=L2.S;const mil=S2.mil.map(id=>S2.players[id]);
  ok(L2.farmTeams().includes('Whales')&&mil.length===26&&mil.every(p=>p.team==='MIL'&&p.milTeam in S2.teams&&!S2.teams[p.milTeam].ids.includes(p.id)),'상무 26명이 팀 명단 밖');

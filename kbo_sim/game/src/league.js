@@ -64,8 +64,17 @@
       const base = vals.reduce((a, p) => a + 0.9 * Math.pow(this.war(p), 1.35), 0), act = vals.reduce((a, p) => a + (p.sal - 0.3), 0);
       S.calib.salK = base > 0 ? act / base : 1;
       for (const p of all) p.contract.salary = p.sal !== undefined ? Math.max(0.3, Math.round(p.sal * 10) / 10) : (p.src === 'F' ? 0.3 : Math.max(0.3, this.price(p)));
-      const tops = TEAMS.map(t => this.players(t).filter(p => !p.foreign).map(p => p.contract.salary).sort((a, b) => b - a).slice(0, 40).reduce((a, b) => a + b, 0)), avg = tops.reduce((a, b) => a + b, 0) / tops.length;
+      this._applyContracts();
+      const tops = TEAMS.map(t => this.players(t).filter(p => !p.foreign).map(p => this.cbtVal(p)).sort((a, b) => b - a).slice(0, 40).reduce((a, b) => a + b, 0)), avg = tops.reduce((a, b) => a + b, 0) / tops.length;
       S.calib.cbtK = 111.05 / avg;
+    }
+    /* FA 계약 CSV(p.ct) 반영: 잔여 연수·총액·계약금·옵션. 옵트아웃으로 시장에 나온 선수는 FA 풀에서 시작 */
+    _applyContracts() {
+      const S = this.S;
+      for (const p of Object.values(S.players)) {
+        if (p.ct) { const c = p.contract; if (p.ct.years) c.years = p.ct.years; for (const k of ['total', 'bonus', 'from', 'end', 'opt', 'est']) if (p.ct[k] !== null && p.ct[k] !== undefined) c[k] = p.ct[k]; if (p.ct.cbt !== undefined) c.cbt = p.ct.cbt; if (p.ct.salary) { c.salary = p.ct.salary; p.sal = p.ct.salary; } }
+        if (p.faStart && p.team in S.teams) { S.teams[p.team].ids = S.teams[p.team].ids.filter(x => x !== p.id); p.team = 'FA'; p.active = false; (S.fa = S.fa || []).push(p.id); }
+      }
     }
     _scaleSalaries() {
       const S = this.S; if (S.calib.salK) return;
@@ -157,7 +166,9 @@
      * 미달: 1회 30%·2회 연속 50%·3회 연속 100%. */
     cbtCap(y) { y = y === undefined ? this.S.year : y; return Math.round(151.1709 * Math.pow(1.05, clamp(y - 2027, 0, 1)) * 10000) / 10000; }
     cbtFloor(y) { y = y === undefined ? this.S.year : y; return y < 2027 ? null : Math.round(60.6538 * Math.pow(1.05, clamp(y - 2027, 0, 1)) * 10000) / 10000; }
-    cbtPay(t) { const y = this.S.year; return Math.round(this.players(t).filter(p => p.rookie !== y && !p.foreign).map(p => p.contract.salary).sort((a, b) => b - a).slice(0, 40).reduce((a, b) => a + b, 0) * (this.S.calib.cbtK || 1) * 100) / 100; }
+    /* 경쟁균형세 산정 보수: FA 다년계약은 (보장 총액/보장 연수), 그 외는 연봉 */
+    cbtVal(p) { return p.contract.cbt !== undefined ? p.contract.cbt : p.contract.salary; }
+    cbtPay(t) { const y = this.S.year; return Math.round(this.players(t).filter(p => p.rookie !== y && !p.foreign).map(p => this.cbtVal(p)).sort((a, b) => b - a).slice(0, 40).reduce((a, b) => a + b, 0) * (this.S.calib.cbtK || 1) * 100) / 100; }
     cbtRate(n) { return [0.3, 0.5, 1][clamp(n, 1, 3) - 1]; }
     /* 지금 시즌 종료 시점으로 가정한 정산(미리보기) */
     cbtPreview(t) {

@@ -261,6 +261,39 @@ def load_draft():
         out.append(dict(round=int(r),team=TMD[t],name=n,school=sch,pos=pos,birthYear=None if by=='-' else int(by),bonus=None if bonus=='-' else float(bonus)))
     return out
 DRAFT=load_draft()
+
+# FA 계약 정보(사용자 제공 CSV): 잔여 계약 연수·총액·계약금·옵션 → p['ct']. 상태가 '유효'이거나 연수를 확정할 수 있는 행만 적용.
+def load_fa(players):
+    import csv,re
+    f=D+'game/data/fa_contracts_2026.csv'
+    if not os.path.exists(f): return {'ok':0,'skip':[],'fa':[]}
+    TM4={'한화':'Eagles','LG':'Twins','SSG':'Landers','두산':'Bears','키움':'Heroes','KT':'Wiz','NC':'Dinos','롯데':'Giants','삼성':'Lions','KIA':'Tigers'}
+    st={'ok':0,'skip':[],'fa':[]}
+    for r in csv.DictReader(open(f,encoding='utf-8-sig')):
+        status=r['상태'];name=re.sub(r'\(.*\)','',r['선수명']);hint=(re.findall(r'\((.*)\)',r['선수명']) or [''])[0]
+        ty='P' if r['포지션']=='투수' else 'B'
+        if status=='대체됨': continue
+        c=[p for p in players if p['ko']==name and p['team']==TM4[r['2026소속']] and p['type']==ty]
+        if len(c)>1 and name=='김태훈': c=[p for p in c if p.get('birth','').startswith('1992')]
+        if len(c)>1 and hint=='우완': c=[p for p in c if p.get('throws')!='L' and p['age']>=33]
+        if len(c)!=1: st['skip'].append((r['선수명'],r['2026소속'],len(c)));continue
+        p=c[0]
+        if status=='종료':   # 옵트아웃으로 시장에 나온 선수(함덕주)
+            p['faStart']=True;st['fa'].append(name);continue
+        rem=r['2026말_잔여시즌']
+        if rem=='' and r['종료시즌_보장']: rem=str(int(r['종료시즌_보장'])-2026)
+        years=int(rem) if rem!='' else None
+        if status=='확인필요': years=1 if years is None else years
+        g=int(re.match(r'(\d+)',r['계약구조']).group(1))
+        total=float(r['총액_억']) if r['총액_억'] else None
+        optseg=re.search(r'(\d+(?:\.\d+)?)억',r['옵션구간'] or '')
+        guaranteed=(total-float(optseg.group(1))) if (total and optseg) else total
+        ct={'years':years,'total':total,'bonus':float(r['계약금_억']) if r['계약금_억'] else None,'from':int(r['시작시즌']),'end':int(r['종료시즌_보장']) if r['종료시즌_보장'] else None,'opt':r['옵션구간'] or None,'est':status=='확인필요'}
+        if r['시작시즌']=='2027' and r['연봉합계_억']: ct['salary']=round(float(r['연봉합계_억'])/g,2)   # 2027 시즌부터 시작하는 새 계약(양의지·오태곤)은 새 연봉 적용
+        if guaranteed and status!='확인필요': ct['cbt']=round(guaranteed/g,2)   # 경쟁균형세 반영 연평균 보수(보장 총액/보장 연수)
+        p['ct']=ct;st['ok']+=1
+    return st
+FAC=load_fa(players)
 # 능력치 척도(20-80): ratings.py 와 같은 방식(규정 타자 PA≥300 / 규정 투수 TBF≥200 가중 평균·표준편차)
 def scale(rows,fields,w):
     out={}
@@ -295,3 +328,5 @@ print('연봉 반영',SALOK,'명 | 동명이인 등으로 건너뜀',len(SALSKIP
 print('1군 명단(생년월일·투타): 매칭',R1['ok'],'| 나이 정정',R1['agefix'],'| 1군 등록',R1['reg1'],'| 모호',R1['amb'],'| 미매칭',R1['miss'])
 
 print('2027 드래프트 지명',len(DRAFT),'명')
+
+print('FA 계약 반영',FAC['ok'],'| 시장 진출',FAC['fa'],'| 매칭 실패',FAC['skip'])
