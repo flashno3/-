@@ -56,7 +56,7 @@
     let name; do { name = SURN[Math.floor(r.random() * SURN.length)] + GIV[Math.floor(r.random() * GIV.length)]; } while (this._nameTaken && this._nameTaken.has(name) && this._nameTaken.size < 800);
     (this._nameTaken = this._nameTaken || new Set()).add(name);
     const age = 18 + Math.min(5, Math.floor(r.random() * r.random() * 6 + r.random() * 2));
-    const p = { id, type, name, ko: name, team: 'DRAFT', age, active: false, fat: 0, lastStart: -99, retired: false, pot: Math.max(0, gauss(r, 0.75, 0.5)), p: {} };
+    const p = { id, type, name, ko: name, team: 'DRAFT', age, rookie: S.year + 1, foreign: false, active: false, fat: 0, lastStart: -99, retired: false, pot: Math.max(0, gauss(r, 0.75, 0.5)), p: {} };
     if (type === 'B') {
       const cl = (v, a, b) => clamp(v, a, b);
       p.p = { k: cl(sc.k[0] - z() * sc.k[1], .08, .40), bb: cl(sc.bb[0] + z() * sc.bb[1], .02, .17), hr: cl(sc.hr[0] + z() * sc.hr[1], .002, .06), babip: cl(sc.babip[0] + z() * sc.babip[1], .25, .37), xbh: cl(sc.xbh[0] + z() * sc.xbh[1], .12, .30), sba: cl(sc.sba[0] + z() * sc.sba[1], .01, .2), hbp: lb.hbp * (0.6 + 0.8 * r.random()), tri: lb.tri * (0.6 + 0.9 * r.random()), sbp: cl(lb.sbp - 0.04 + gauss(r, 0, 0.07), .5, .9) };
@@ -89,6 +89,11 @@
     const S = this.S, r = rngFor(S.seed, S.year, 31), user = S.userTeam, rep = { prog: [], retired: [], expiring: [] };
     const st = this.standings(); S.history.push({ year: S.year, champion: S.post ? S.post.champion : null, runnerUp: S.post ? S.post.runnerUp : null, userRank: st.find(x => x.team === user).rank, userRec: st.find(x => x.team === user), top: st.slice(0, 5).map(x => x.team) });
     this.mergeTracking();
+    // 0) 경쟁균형세 정산(시즌 종료 시점 연봉 기준)
+    { const log = this.settleCBT(), my = log.find(x => x.team === user);
+      if (my.kind === 'over') news(this, `경쟁균형세: 연봉 ${my.pay}억이 상한 ${my.cap}억을 초과(${my.n}회 연속) → 야구발전기금 ${my.fee}억 납부${my.drop ? ', 다음 드래프트 1라운드 지명 9단계 하락' : ''}`);
+      else if (my.kind === 'under') news(this, `경쟁균형세: 연봉 ${my.pay}억이 하한 ${my.fl}억에 미달(${my.n}회 연속) → 유소년 발전기금 ${my.fee}억 납부`);
+    }
     // 1) 성장·노화
     for (const id in S.players) {
       const p = S.players[id]; if (p.retired || p.team === 'DRAFT') continue;
@@ -117,8 +122,7 @@
   proto.resign = function (id, years) {
     const S = this.S, p = S.players[id], ask = this.askSalary(p), off = S.off;
     if (!off || !off.rep.expiring.includes(id)) return '재계약 대상이 아닙니다.';
-    const t = S.userTeam, newPay = this.payroll(t) - p.contract.salary + ask;
-    if (newPay > S.calib.cap + 1e-9) return `연봉 총액 상한(${S.calib.cap}억)을 넘습니다.`;
+    const t = S.userTeam;
     p.contract = { salary: ask, years: clamp(years || 2, 1, 4) }; off.rep.expiring = off.rep.expiring.filter(x => x !== id); news(this, `${p.ko} 재계약 (${ask}억, ${p.contract.years}년)`); return null;
   };
   proto.finishContracts = function () {   // 재계약하지 않은 선수는 FA 시장으로
@@ -130,7 +134,9 @@
   proto.buildDraft = function () {
     const S = this.S, r = rngFor(S.seed, S.year, 41), pool = [];
     for (let i = 0; i < 120; i++) pool.push(this.makeRookie(r, i % 2 === 0 ? 'B' : 'P').id);
-    const st = this.standings().slice().reverse().map(x => x.team), order = []; for (let k = 0; k < 10; k++) order.push(...st);
+    const st = this.standings().slice().reverse().map(x => x.team), order = [], st1 = st.slice();
+    for (const t of st) if (S.cbt && S.cbt.drop && S.cbt.drop[t]) { const i = st1.indexOf(t); st1.splice(i, 1); st1.splice(Math.min(i + 9, st1.length), 0, t); }   // 경쟁균형세 3회 연속 초과: 1라운드 지명 9단계 하락
+    order.push(...st1); for (let k = 1; k < 10; k++) order.push(...st);
     S.off.draft = { pool, order, pick: 0, picks: [], rounds: 10 }; return S.off.draft;
   };
   proto.draftOnClock = function () { const d = this.S.off.draft; return d.pick < d.order.length ? d.order[d.pick] : null; };
@@ -167,7 +173,7 @@
   proto.faList = function () { const S = this.S; return (S.fa || []).map(id => S.players[id]).filter(p => p && p.team === 'FA'); };
   proto.signFA = function (id, years) {
     const S = this.S, p = S.players[id], t = S.userTeam; if (!p || p.team !== 'FA') return '이미 계약된 선수입니다.';
-    const ask = this.askSalary(p); if (this.payroll(t) + ask > S.calib.cap + 1e-9) return `연봉 총액 상한(${S.calib.cap}억)을 넘습니다. (현재 ${this.payroll(t)}억 + ${ask}억)`;
+    const ask = this.askSalary(p);   // 상한 초과는 허용(시즌 종료 시 야구발전기금 부과)
     if (S.teams[t].ids.length >= ROSTER_MAX) return `보유 선수 ${ROSTER_MAX}명 제한입니다.`;
     p.team = t; p.contract = { salary: ask, years: clamp(years || 2, 1, 4) }; S.teams[t].ids.push(id); S.fa = S.fa.filter(x => x !== id); this.invalidate(); news(this, `FA ${p.ko} 영입 (${ask}억, ${p.contract.years}년)`); return null;
   };
@@ -178,9 +184,14 @@
       const pool = this.faList().sort((a, b) => this.war(b) - this.war(a));
       for (const p of pool) {
         if (n >= 3 || S.teams[t].ids.length >= ROSTER_MAX - 4) break;
-        const ask = this.askSalary(p); if (this.payroll(t) + ask > S.calib.cap) continue; if (this.war(p) < 1.0) continue;
+        const ask = this.askSalary(p); if (this.cbtPay(t) + ask > this.cbtCap() * 0.97) continue; if (this.war(p) < 1.0) continue;   // AI 구단은 상한을 지킨다
         if (r.random() < (this.war(p) >= 2 ? 0.75 : 0.5)) { p.team = t; p.contract = { salary: ask, years: 1 + Math.floor(r.random() * 3) }; S.teams[t].ids.push(p.id); S.fa = S.fa.filter(x => x !== p.id); n++; }
       }
+      // 연봉 하한(2027~) 미달이면 하한을 넘길 때까지 FA를 영입한다(미달 시 기금 납부를 피하려고)
+      { const fl = this.cbtFloor(); if (fl !== null) for (let k = 0; k < 6 && this.cbtPay(t) < fl * 1.03 && S.teams[t].ids.length < ROSTER_MAX; k++) {
+        const p = this.faList().filter(x => this.cbtPay(t) + this.askSalary(x) <= this.cbtCap() * 0.97).sort((a, b) => this.war(b) - this.war(a))[0]; if (!p) break;
+        p.team = t; p.contract = { salary: this.askSalary(p), years: 1 + Math.floor(r.random() * 3) }; S.teams[t].ids.push(p.id); S.fa = S.fa.filter(x => x !== p.id);
+      } }
       // 핵심 포지션(포수·유격수·중견수·2루수·3루수)에 주포지션 선수가 2명 미만이면 보강
       for (const pos of ['C', 'SS', 'CF', '2B', '3B']) {
         while (this.hitters(t).filter(x => x.pos === pos).length < 2) {
@@ -243,8 +254,9 @@
     const aiN = S.teams[aiTeam].ids.length - tp.length + gp.length, myN = S.teams[me].ids.length + tp.length - gp.length;
     if (aiN > ROSTER_MAX || myN > ROSTER_MAX) return { ok: false, why: `보유 선수 ${ROSTER_MAX}명 제한을 넘습니다.` };
     if (aiN < ROSTER_MIN || myN < ROSTER_MIN) return { ok: false, why: `보유 선수 최소 ${ROSTER_MIN}명이 필요합니다.` };
-    const myPay = this.payroll(me) - gp.reduce((a, p) => a + p.contract.salary, 0) + tp.reduce((a, p) => a + p.contract.salary, 0);
-    if (myPay > S.calib.cap + 1e-9 && myPay > this.payroll(me)) return { ok: false, why: `연봉 총액 상한(${S.calib.cap}억)을 넘습니다.` };
+    // AI 구단은 트레이드로 상한을 넘기지 않는다
+    const aiPay = this.cbtPay(aiTeam) + gp.reduce((a, p) => a + (p.rookie === S.year || p.foreign ? 0 : p.contract.salary), 0) - tp.reduce((a, p) => a + (p.rookie === S.year || p.foreign ? 0 : p.contract.salary), 0);
+    if (aiPay > this.cbtCap() && aiPay > this.cbtPay(aiTeam)) return { ok: false, why: `${aiTeam} 구단이 연봉 상한(${this.cbtCap()}억)을 넘게 되어 수락하지 않습니다.` };
     // AI가 핵심 선수를 내줄 때는 더 큰 대가를 요구
     const star = tp.some(p => this.ovr(p) >= 65) ? 1.25 : 1.0, need = vGet * 1.12 * star + 0.1;
     return { ok: vGive >= need, vGive: Math.round(vGive * 10) / 10, vGet: Math.round(vGet * 10) / 10, need: Math.round(need * 10) / 10, why: vGive >= need ? null : `상대 구단이 받는 가치(${Math.round(vGive * 10) / 10})가 요구 수준(${Math.round(need * 10) / 10})에 못 미칩니다.` };

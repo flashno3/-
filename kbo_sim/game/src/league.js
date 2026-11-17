@@ -32,7 +32,7 @@
       };
       for (const t of TEAMS) S.teams[t] = { ids: [], set: { lineup: [], rotation: [], rotIdx: 0, bullpen: { closer: null, setup: [], middle: [], long: [] }, autoLineup: true } };
       for (const x of base.players) {
-        const p = JSON.parse(JSON.stringify(x)); p.active = false; p.fat = 0; p.lastStart = -99; p.retired = false;
+        const p = JSON.parse(JSON.stringify(x)); p.foreign = !/[가-힣]/.test(p.ko || ''); p.active = false; p.fat = 0; p.lastStart = -99; p.retired = false;
         if (p.type === 'B') { p.fr = p.fr || {}; p.gs = p.gs || {}; } else { p.role = p.role || (p.GS >= 0.5 * p.G && p.GS >= 3 ? 'SP' : 'RP'); }
         S.players[p.id] = p; S.teams[p.team].ids.push(p.id);
       }
@@ -44,14 +44,26 @@
         p.contract = { salary: Math.round(L.price(p) * clamp(1 + gauss(r, 0, 0.12), 0.7, 1.4) * 10) / 10, years: 1 + Math.floor(r.random() * 4) };
         p.contract.salary = Math.max(0.3, p.contract.salary);
       }
-      const pay = TEAMS.map(t => L.payroll(t)); S.calib.cap = Math.round(pay.reduce((a, b) => a + b, 0) / pay.length * 1.25);
+      L._scaleSalaries();   // 실제 KBO 규모(2025 구단 평균 상위 40명 합계 111.05억)로 환산
+      S.cbt = { over: {}, under: {}, drop: {}, fees: {}, log: [] };
       for (const t of TEAMS) L.initTeam(t);
       S.calib.base = L.talentLevel();
       L.newSeasonSetup(true);
       return L;
     }
+    /* 계약 연봉을 실제 KBO 규모로 환산: 최저 0.3억은 고정, 초과분만 배율 적용(리그 평균 상위 40명 합계 = 111.05억, 2025 발표 기준) */
+    _scaleSalaries() {
+      const S = this.S; if (S.calib.salK) return;
+      const tops = TEAMS.map(t => this.players(t).map(p => p.contract.salary).sort((a, b) => b - a).slice(0, 40).reduce((a, b) => a + b, 0)), avg = tops.reduce((a, b) => a + b, 0) / tops.length;
+      const k = (111.05 - 0.3 * 40) / (avg - 0.3 * 40); S.calib.salK = k;
+      for (const id in S.players) { const c = S.players[id].contract; if (c) c.salary = Math.max(0.3, Math.round((0.3 + (c.salary - 0.3) * k) * 10) / 10); }
+    }
     toJSON() { return this.S; }
-    static fromJSON(S) { S.stats2 = S.stats2 || { bat: {}, pit: {} }; S.recent = S.recent || {}; if (!S.rec2 || !S.rec2[TEAMS[0]]) { S.rec2 = {}; for (const t of TEAMS) S.rec2[t] = [0, 0, 0, 0, 0]; } const L = new League(S); L._f2dirty = true; return L; }
+    static fromJSON(S) { S.stats2 = S.stats2 || { bat: {}, pit: {} }; S.recent = S.recent || {}; if (!S.rec2 || !S.rec2[TEAMS[0]]) { S.rec2 = {}; for (const t of TEAMS) S.rec2[t] = [0, 0, 0, 0, 0]; } const L = new League(S); L._f2dirty = true;
+      if (!S.calib.salK) L._scaleSalaries();   // 예전 저장: 연봉을 실제 규모로 환산
+      if (!S.cbt) S.cbt = { over: {}, under: {}, drop: {}, fees: {}, log: [] };
+      for (const id in S.players) { const p = S.players[id]; if (p.foreign === undefined) p.foreign = !/[가-힣]/.test(p.ko || ''); }
+      return L; }
     save() { return JSON.stringify(this.S); }
     static load(str) { return League.fromJSON(JSON.parse(str)); }
 
@@ -112,12 +124,39 @@
       if (p.type === 'B') return Math.max(0, (this._runsB(p) + 12) / 10);
       return Math.max(0, (this._runsP(p) + 9) / 10 * (p.role === 'SP' ? 1 : 0.42));
     }
-    price(p) { return Math.round((0.3 + 0.9 * Math.pow(this.war(p), 1.35)) * 10) / 10; }
+    price(p) { return Math.round((0.3 + 0.9 * Math.pow(this.war(p), 1.35) * (this.S.calib.salK || 1)) * 10) / 10; }   // 최저연봉 0.3억 + 가치분(실제 KBO 연봉 규모로 환산)
     /* 시장 가치(억 원 환산): 나이·잠재력 반영 */
     marketValue(p) {
       let v = this.price(p); const a = p.age;
       if (a <= 24) v *= 1 + 0.18 * (25 - a) / 3 + 0.35 * (p.pot || 0); else if (a >= 33) v *= Math.max(0.35, 1 - 0.12 * (a - 32));
       return Math.max(0.2, Math.round(v * 10) / 10);
+    }
+    /* ---- 경쟁균형세(샐러리캡): KBO 규정 ----
+     * 산정: 연봉 상위 40명 합계(신인·외국인 제외). 상한 2027년 151.1709억, 2028년 158.7294억(+5%), 이후 동결 가정.
+     * 하한 2027년부터 60.6538억(2028년 +5%). 초과: 1회 30%·2회 연속 50%·3회 연속 100%를 야구발전기금으로 납부(3회 연속이면 1라운드 지명 9단계 하락).
+     * 미달: 1회 30%·2회 연속 50%·3회 연속 100%. */
+    cbtCap(y) { y = y === undefined ? this.S.year : y; return Math.round(151.1709 * Math.pow(1.05, clamp(y - 2027, 0, 1)) * 10000) / 10000; }
+    cbtFloor(y) { y = y === undefined ? this.S.year : y; return y < 2027 ? null : Math.round(60.6538 * Math.pow(1.05, clamp(y - 2027, 0, 1)) * 10000) / 10000; }
+    cbtPay(t) { const y = this.S.year; return Math.round(this.players(t).filter(p => p.rookie !== y && !p.foreign).map(p => p.contract.salary).sort((a, b) => b - a).slice(0, 40).reduce((a, b) => a + b, 0) * 100) / 100; }
+    cbtRate(n) { return [0.3, 0.5, 1][clamp(n, 1, 3) - 1]; }
+    /* 지금 시즌 종료 시점으로 가정한 정산(미리보기) */
+    cbtPreview(t) {
+      const S = this.S, pay = this.cbtPay(t), cap = this.cbtCap(), fl = this.cbtFloor(), c = S.cbt || { over: {}, under: {} };
+      if (pay > cap) { const n = (c.over[t] || 0) + 1; return { kind: 'over', pay, cap, fl, n, fee: (pay - cap) * this.cbtRate(n), drop: n >= 3 }; }
+      if (fl !== null && pay < fl) { const n = (c.under[t] || 0) + 1; return { kind: 'under', pay, cap, fl, n, fee: (fl - pay) * this.cbtRate(n), drop: false }; }
+      return { kind: null, pay, cap, fl, n: 0, fee: 0, drop: false };
+    }
+    /* 시즌 종료 정산: 기금 납부액 기록, 연속 횟수 갱신 */
+    settleCBT() {
+      const S = this.S; S.cbt = S.cbt || { over: {}, under: {}, drop: {}, fees: {}, log: [] }; const c = S.cbt; c.drop = {};
+      for (const t of TEAMS) {
+        const v = this.cbtPreview(t);
+        c.over[t] = v.kind === 'over' ? v.n : 0; c.under[t] = v.kind === 'under' ? v.n : 0;
+        if (v.drop) c.drop[t] = true; c.fees[t] = Math.round(((c.fees[t] || 0) + v.fee) * 100) / 100;
+        c.log.push({ year: S.year, team: t, pay: v.pay, cap: v.cap, fl: v.fl, kind: v.kind, n: v.n, fee: Math.round(v.fee * 100) / 100, drop: v.drop });
+      }
+      if (c.log.length > 200) c.log.splice(0, c.log.length - 200);
+      return c.log.slice(-TEAMS.length);
     }
     payroll(t) { return Math.round(this.S.teams[t].ids.reduce((a, id) => a + this.S.players[id].contract.salary, 0) * 10) / 10; }
     /* 포지션 숙련도: 2=주포지션, 1=소화 가능(해당 포지션 선발 15경기 이상), 0=부적합 */

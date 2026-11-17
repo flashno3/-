@@ -21,7 +21,7 @@ for(let y=0;y<4;y++){
   L.finishDraft();
   // FA: 상한 안에서 가장 가치 높은 선수 한 명
   const fa=L.faList().sort((a,b)=>L.war(b)-L.war(a));let signed=null;for(const p of fa){const e=L.signFA(p.id,2);if(!e){signed=p;break}}
-  console.log(`   드래프트 내 지명 ${mine}명 | FA 시장 ${fa.length}명 중 영입: ${signed?signed.ko+'(OVR'+L.ovr(signed)+') '+signed.contract.salary+'억':'없음(상한)'} | 연봉 ${L.payroll(U)}/${S.calib.cap}억`);
+  console.log(`   드래프트 내 지명 ${mine}명 | FA 시장 ${fa.length}명 중 영입: ${signed?signed.ko+'(OVR'+L.ovr(signed)+') '+signed.contract.salary+'억':'없음(상한)'} | 연봉 ${L.payroll(U)}/${L.cbtCap()}억`);
   L.finishFA();
   // 트레이드 시도: 내 팀 비핵심 선수 ↔ 타 팀 비슷한 가치
   const ai='Wiz';const mine2=L.players(U).filter(p=>!p.active).sort((a,b)=>L.marketValue(b)-L.marketValue(a))[0],theirs=L.players(ai).filter(p=>!p.active).sort((a,b)=>L.marketValue(a)-L.marketValue(b))[0];
