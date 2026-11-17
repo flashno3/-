@@ -14,6 +14,16 @@ ok(L.faGrade(mk({age:36,fa:{svc:8,used:0}}))==='C','만 35세 이상 C');
 const t=Object.values(S.players).filter(p=>p.team==='Bears'&&!p.foreign).sort((a,b)=>L._salAvg(b)-L._salAvg(a));
 t.slice(0,3).forEach(p=>{p.fa={svc:8,used:0,last:null};p.age=29});const g0=L.faGrade(t[0]);t[14].fa={svc:8,used:0,last:null};t[14].age=29;
 console.log('팀 상위 연봉자 등급',g0,'/ 팀 15위',L.faGrade(t[14]));ok(L.faGrade(t[14])==='C','팀 11위 이하 C');
+// 1b) 드래프트 이력 반영(입단 연도·고졸/대졸·데뷔)
+const dh=Object.values(S.players).filter(p=>p.dh);console.log('드래프트 이력 선수',dh.length);ok(dh.length>600,'드래프트 이력 매칭 '+dh.length);
+const fd=n=>Object.values(S.players).find(p=>p.ko===n&&p.dh);
+const kb=fd("강백호"),lj=fd("노시환"),ys=fd("양의지");
+ok(kb&&kb.dh.y===2018&&!kb.dh.univ&&kb.fa.univ===false,'강백호 2018 입단 고졸');
+ok(lj&&lj.dh.y===2019&&!lj.dh.univ,'노시환 2019 입단');
+ok(ys&&ys.dh.y===2006,'양의지 2006 입단 '+(ys&&ys.dh.y));
+{const LD=League.create(base,U,11),univ=Object.values(LD.S.players).filter(p=>p.dh&&p.dh.univ);ok(univ.length>60&&univ.every(p=>p.fa.univ===true&&LD.faReq(p)===(p.fa.used>0?4:7)),'대졸 7시즌 적용 '+univ.length);}
+ok(dh.every(p=>!p.dh.deb||p.fa.svc<=p.dh.ss+1e-9),'자격 연수가 출전 시즌 수를 넘지 않음');
+const young=dh.filter(p=>p.peak!==undefined&&p.age<=24);ok(young.length>20&&young.every(p=>p.scout&&p.peak>=L.ovr(p)),'어린 기존 선수에도 확률적 정점 '+young.length);
 // 2) 시즌 진행 → 1군 등록일수 누적
 L.advance(300,false);const reg=Object.values(S.players).filter(p=>p.active&&p.team in S.teams);const rd=reg.map(p=>p.fa.regDays).sort((a,b)=>a-b);ok(reg.length>250&&rd[rd.length>>1]>160&&rd.filter(x=>x>150).length/rd.length>0.6,'1군 풀타임 등록일수 누적(약 168일) 중앙값 '+Math.round(rd[rd.length>>1]));
 const before=reg.slice(0,40).map(p=>[p,p.fa.svc]);

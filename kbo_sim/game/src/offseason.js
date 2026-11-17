@@ -277,12 +277,22 @@
       if (p.fa) continue;
       const age26 = p.age - 1, played = (p.PA || 0) + (p.IP || 0) * 1.5;
       let svc = p.src === 'F' ? Math.max(0, p.age - 21) * 0.3 : Math.max(0, age26 - 19) * clamp(played / 350, 0.25, 1);   // 1군 출전량으로 등록일수 보정(벤치·2군 선수는 연수 적게 인정)
+      const dh = p.dh;
+      if (dh) {   // 드래프트 이력이 있으면 1군 출전 시즌 수 × 시즌당 출전량(타자 250타석·투수 55이닝이면 풀타임)으로 계산
+        const per = dh.ss ? (p.type === 'B' ? dh.pa : dh.ip) / dh.ss : 0;
+        svc = dh.deb ? dh.ss * clamp(per / (p.type === 'B' ? 250 : 55), 0.3, 1) : 0;
+      }
       if (p.rookie === S.year || p.draft) svc = 0;
       if (p.team === 'MIL') svc = Math.max(0, svc - 1.5);
-      p.fa = { svc: Math.round(svc * 10) / 10, used: 0, last: null, regDays: 0, rem: 0, univ: !!(p.draft && /대/.test(p.draft.school.replace('메이저리그', ''))), est: true };
+      p.fa = { svc: Math.round(svc * 10) / 10, used: 0, last: null, regDays: 0, rem: 0, univ: p.dh ? p.dh.univ : !!(p.draft && /대/.test(p.draft.school.replace('메이저리그', ''))), est: !dh };
       if (p.ct && p.ct.from && p.ct.from <= 2026) { p.fa.used = p.age >= 37 ? 2 : 1; p.fa.svc = Math.max(0, 2026 - p.ct.from + 1); p.fa.last = p.ct.total >= 60 ? 'A' : p.ct.total >= 30 ? 'B' : 'C'; }
       else if (p.ct && p.ct.from === 2027) { p.fa.used = 1; p.fa.svc = 0; p.fa.last = p.ct.total >= 60 ? 'A' : 'B'; }
       p.salHist = [p.contract.salary, p.contract.salary, p.contract.salary];   // 최근 3년 연봉(자료는 2026년뿐이라 같은 값으로 가정)
+      if (dh && p.age <= 24 && p.peak === undefined && !p.draft && p.team !== 'MIL') {   // 드래프트 순번으로 기울인 확률적 정점(젊은 기존 선수)
+        const rr = this._pkRng || (this._pkRng = rngFor(S.seed, 2027, 77)), tilt = dh.kind === '1차' ? (dh.pick && dh.pick <= 3 ? 1.2 : 0.9) : dh.round ? (dh.round === 1 && dh.pick && dh.pick <= 3 ? 1.2 : DRAFT_TILT[Math.min(dh.round, 11) - 1]) : dh.kind === '육성선수' ? -0.5 : dh.kind === '해외' ? 0.5 : 0;
+        const ov = this.ovr(p), pk = clamp(Math.max(this.rollPeak(rr, tilt), ov + 1 + (27 - p.age) * 0.8), 25, 85);
+        p.peak = pk; p.scout = { o: ov, ceil: clamp(pk + gauss(rr, 0, 16), 25, 85) }; p.pot = clamp((pk - ov) / 30, 0, 1.4);
+      }
       if (p.foreign) p.contract.years = 1;
     }
     this._initForeign();

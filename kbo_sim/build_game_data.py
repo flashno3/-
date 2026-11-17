@@ -294,6 +294,49 @@ def load_fa(players):
         p['ct']=ct;st['ok']+=1
     return st
 FAC=load_fa(players)
+
+# 2002~2027 신인 드래프트 정리 파일(사용자 제공): 입단 연도·고졸/대졸·지명 순번·1군 데뷔·통산 출전 → p['dh']
+def load_drafthist(players):
+    import csv,re
+    f=D+'game/data/draft_2002_2027.csv'
+    if not os.path.exists(f): return {'ok':0,'amb':[],'miss':0}
+    ALI={'SK':'Landers','SSG':'Landers','넥센':'Heroes','키움':'Heroes','히어로즈':'Heroes','우리':'Heroes','두산':'Bears','LG':'Twins','KT':'Wiz','kt':'Wiz','NC':'Dinos','롯데':'Giants','삼성':'Lions','KIA':'Tigers','해태':'Tigers','한화':'Eagles','현대':'Heroes'}
+    TWO=re.compile(r'과학|전문|영동|산업|관광|디지털|사이버|국제대')
+    by={}
+    for r in csv.DictReader(open(f,encoding='utf-8-sig')):
+        toks=r['이력'].split('-');r['_teams']=[ALI[t] for t in toks if t in ALI];r['_toks']=toks
+        nm=r['선수'];names={re.sub(r'\s*\(.*\)','',nm)}|set(re.findall(r'\((.*?)\)',nm))
+        for n in names: by.setdefault(n.strip(),[]).append(r)
+    st={'ok':0,'amb':[],'miss':0}
+    for p in players:
+        if p.get('foreign') or p['ko'] not in by: st['miss']+=1;continue
+        team=p.get('milTeam') or (p['team'] if p['team'] in ('Bears','Twins','Wiz','Dinos','Giants','Lions','Tigers','Eagles','Landers','Heroes') else None)
+        isP=p['type']=='P'
+        allc=by[p['ko']]
+        if team: allc=[r for r in allc if team in r['_teams']]
+        c=[r for r in allc if ((('투수' in r['포지션'] or r['포지션']=='투타겸업') if isP else (r['포지션']!='투수' )))]
+        if not c: c=allc   # 자료의 포지션 표기가 다른 경우(예: 최정이 투수로 표기)는 이름·팀·나이로만 매칭
+        def birth(r):
+            y=int(r['연도']);univ=any(re.search(r'대$',t) and t not in ALI for t in r['_toks'])
+            return y-(21 if any(TWO.search(t) for t in r['_toks']) else 23) if univ else y-19
+        cur=2027-p['age']
+        tol=2 if p.get('birth') else 5
+        c=[r for r in c if abs(birth(r)-cur)<=tol and int(r['연도'])<=2027]
+        if len(c)>1:
+            c.sort(key=lambda r:abs(birth(r)-cur))
+            if abs(birth(c[0])-cur)==abs(birth(c[1])-cur): st['amb'].append(p['ko']);continue
+        if len(c)!=1: st['miss']+=1;continue
+        r=c[0];toks=r['_toks']
+        univ=any(re.search(r'대$',t) and t not in ALI for t in toks) and not any('중퇴' in t for t in toks)
+        rnd=re.match(r'(\d+)라운드',r['갈래']);pick=re.search(r'(\d+)',r['자리'] or '')
+        p['dh']={'y':int(r['연도']),'univ':univ,'two':any(TWO.search(t) for t in toks),'deb':int(r['데뷔']) if r['데뷔'] else None,'ss':int(r['시즌']) if r['시즌'] else 0,
+                 'g':int(r['통산 경기']) if r['통산 경기'] else 0,'pa':int(r['타석']) if r['타석'] else 0,'ip':float(r['이닝'].split('.')[0]) if r['이닝'] else 0,
+                 'kind':r['갈래'],'round':int(rnd.group(1)) if rnd else None,'pick':int(pick.group(1)) if pick else None,'school':toks[0]}
+        if p.get('ageEst'):   # 생년월일을 모르는 선수는 입단 연도·학력으로 나이를 다시 추정
+            p['age']=2027-birth(r);p['ageEstDraft']=True
+        st['ok']+=1
+    return st
+DHS=load_drafthist(players)
 # 능력치 척도(20-80): ratings.py 와 같은 방식(규정 타자 PA≥300 / 규정 투수 TBF≥200 가중 평균·표준편차)
 def scale(rows,fields,w):
     out={}
@@ -330,3 +373,5 @@ print('1군 명단(생년월일·투타): 매칭',R1['ok'],'| 나이 정정',R1[
 print('2027 드래프트 지명',len(DRAFT),'명')
 
 print('FA 계약 반영',FAC['ok'],'| 시장 진출',FAC['fa'],'| 매칭 실패',FAC['skip'])
+
+print('드래프트 이력 매칭',DHS['ok'],'| 모호',DHS['amb'],'| 미매칭',DHS['miss'],'| 나이 재추정',sum(1 for p in players if p.get('ageEstDraft')))
