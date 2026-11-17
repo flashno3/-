@@ -2,19 +2,9 @@
   'use strict';
   const { League, KO, POSS } = KBOLeague, E0 = KBOEngine, TEAMS = E0.TEAMS, PARK = E0.PARKNAME;
   const COL = { Bears: '#1A1748', Twins: '#C30452', Heroes: '#820024', Landers: '#CE0E2D', Wiz: '#6B6B6B', Eagles: '#FF6600', Tigers: '#EA0029', Giants: '#0B2A56', Dinos: '#315288', Lions: '#0A5BC4' };
-  const BADGE = {
-    Bears: { p: '#131230', s: '#E60012', t: '두산', fs: 12, back: '<circle cx="11" cy="10" r="6" fill="@S"/><circle cx="33" cy="10" r="6" fill="@S"/>' },
-    Twins: { p: '#C30452', s: '#1B1B1B', t: 'LG', fs: 13, front: '<rect x="-6" y="32" width="60" height="5" fill="@S" transform="rotate(-18 22 34)"/>' },
-    Heroes: { p: '#820024', s: '#C9A55C', t: '키움', fs: 12, back: '<path d="M10 13 L13 3 L19 10 L22 1.5 L25 10 L31 3 L34 13Z" fill="@S"/>' },
-    Landers: { p: '#CE0E2D', s: '#F2B705', t: 'SSG', fs: 11, front: '<path d="M0 33 Q8 28 15 33 T30 33 T44 33 V44 H0Z" fill="@S" opacity=".6"/>' },
-    Wiz: { p: '#1C1C1C', s: '#D60C0C', t: 'KT', fs: 13, back: '<path d="M22 0 L11 13 L33 13Z" fill="@S"/>' },
-    Eagles: { p: '#F26A1B', s: '#1A1A1A', t: '한화', fs: 12, back: '<path d="M1 21 L11 8 L12 19Z M43 21 L33 8 L32 19Z" fill="@S"/>' },
-    Tigers: { p: '#E4002B', s: '#1A1A1A', t: 'KIA', fs: 11, front: '<path d="M6 8 L15 17 M29 8 L38 17 M3 24 L11 28 M33 28 L41 24" stroke="@S" stroke-width="3.2" stroke-linecap="round" fill="none"/>' },
-    Giants: { p: '#0A2547', s: '#E31837', t: '롯데', fs: 12, back: '<circle cx="22" cy="22" r="20.8" fill="none" stroke="@S" stroke-width="1.8"/>' },
-    Dinos: { p: '#1E3F78', s: '#C2A76F', t: 'NC', fs: 13, back: '<path d="M7 15 L10 6 L14 12 L18 3.5 L22 11 L26 3.5 L30 12 L34 6 L37 15Z" fill="@S"/>' },
-    Lions: { p: '#0A5BC4', s: '#FFFFFF', t: '삼성', fs: 12, back: '<circle cx="22" cy="22" r="20.5" fill="none" stroke="@S" stroke-width="4" stroke-dasharray="3.2 2.1"/>' }
-  };
-  const logo = (t, size) => { const b = BADGE[t]; if (!b) return ''; const w = size || 22; return `<svg class="logo" width="${w}" height="${w}" viewBox="0 0 44 44" role="img" aria-label="${KO[t]}"><defs><clipPath id="cp${t}"><circle cx="22" cy="22" r="17"/></clipPath></defs>${(b.back || '').replace(/@S/g, b.s)}<circle cx="22" cy="22" r="17.5" fill="${b.p}"/><g clip-path="url(#cp${t})">${(b.front || '').replace(/@S/g, b.s)}</g><circle cx="22" cy="22" r="17" fill="none" stroke="${b.s}" stroke-width="2.2"/><text x="22" y="${22 + b.fs * 0.36}" text-anchor="middle" font-family="Space Grotesk,Noto Sans KR,sans-serif" font-weight="700" font-size="${b.fs}" fill="#fff">${b.t}</text></svg>`; };
+  // 팀 색(테마용). 로고는 사용자가 제공한 이미지(KBO_LOGOS)를 사용한다.
+  const BADGE = { Bears: { p: '#131230' }, Twins: { p: '#C30452' }, Heroes: { p: '#820024' }, Landers: { p: '#CE0E2D' }, Wiz: { p: '#1C1C1C' }, Eagles: { p: '#F26A1B' }, Tigers: { p: '#E4002B' }, Giants: { p: '#0A2547' }, Dinos: { p: '#1E3F78' }, Lions: { p: '#0A5BC4' } };
+  const logo = (t, size) => (KBO_LOGOS[t] ? `<img class="logo" src="${KBO_LOGOS[t]}" alt="${KO[t]}" style="height:${size || 22}px">` : '');
   const applyTheme = () => { const r = document.documentElement.style; if (L) { r.setProperty('--tp', BADGE[L.S.userTeam].p); } else r.setProperty('--tp', '#1D7A4E'); };
   const SAVE_KEY = 'kbo.mgr.save.v1';
   const $ = (s, r) => (r || document).querySelector(s);
@@ -27,7 +17,7 @@
   const U = () => L.S.userTeam;
   const tier = v => (v >= 70 ? 4 : v >= 60 ? 3 : v >= 50 ? 2 : v >= 42 ? 1 : 0);
   const ovrChip = v => `<span class="ovr" data-t="${tier(v)}">${v}</span>`;
-  const teamTag = t => (BADGE[t] ? `<span class="team">${logo(t, 22)}${KO[t]}</span>` : `<span class="team">${KO[t] || ''}</span>`);
+  const teamTag = t => (BADGE[t] ? `<span class="team">${logo(t, 24)}${KO[t]}</span>` : `<span class="team">${KO[t] || ''}</span>`);
   const pct3 = x => (x >= 1 ? '1.000' : x.toFixed(3).replace(/^0/, ''));
   const money = x => (Math.round(x * 10) / 10).toFixed(1) + '억';
   const sgn = n => (n > 0 ? '+' + n : String(n));
@@ -322,6 +312,8 @@
       case 'SB': return { t: `${nm(e.b)} 도루 성공` }; case 'CS': return { t: `${nm(e.b)} 도루 실패` }; case 'WP': return { t: '폭투로 주자 진루' };
       case 'PC': return { t: `${e.auto ? '[자동] ' : ''}투수 교체: ${nm(e.p)}`, sys: true };
       case 'PH': return { t: `대타: ${nm(e.out)} → ${nm(e.in)}`, sys: true };
+      case 'HAR': return { t: `히트앤드런! ${nm(e.b)} 스타트`, sys: true };
+      case 'PO': return { t: e.balk ? '보크! 견제를 너무 많이 던져 주자가 진루합니다' : e.out ? `${nm(e.b)} 견제사!` : e.err ? `견제 악송구! ${nm(e.b)} 진루` : `견제구 — ${nm(e.b)} 귀루`, run: !!e.out, sys: !e.out };
       case 'DS': return { t: `수비 교체: ${nm(e.out)} → ${nm(e.in)} (${posName[e.pos] || '지명'})`, sys: true };
       case 'PR': return { t: `대주자: ${nm(e.out)} → ${nm(e.in)}`, sys: true };
       case 'SW': return { t: `수비 위치 변경: ${nm(e.a)} ${posName[e.pa] || '지명'} · ${nm(e.b)} ${posName[e.pb] || '지명'}`, sys: true };
@@ -346,7 +338,7 @@
   }
   function liveTactic(kind, arg) {
     const lv = ui.live, g = lv.ctx.live, us = lv.ctx.userSide, E = lv.ctx.E; lv.lbl = `${g.inning}${g.top ? '초' : '말'}`; const l0 = g.log.length;
-    if (kind === 'ibb') g.ibb(); else if (kind === 'bunt') g.bunt(); else if (kind === 'steal') g.steal();
+    if (kind === 'ibb') g.ibb(); else if (kind === 'bunt') g.bunt(); else if (kind === 'steal') g.steal(); else if (kind === 'har') g.hitAndRun(); else if (kind === 'po') g.pickoff();
     else if (kind === 'pc') g.changePitcher(us, E.pitById[arg]);
     else if (kind === 'ph') g.pinchHit(us, g.idx[us] % 9, E.batById[arg]);
     else if (kind === 'pr') { const [bs, id] = arg.split(':'); g.pinchRun(us, +bs, E.batById[id]); }
@@ -362,6 +354,7 @@
       const f = g.pitchFatigue(us), pp = P(g.pitcher.id);
       if (f.over > 0) out.push({ t: `${pp.ko}의 체력이 한계를 넘었습니다 (상대 타자 ${f.bf}명 / 한계 ${f.lim}). 볼넷·피홈런이 늘고 삼진이 줄고 있습니다.`, a: 'pcOpen', l: '투수 교체' });
       else if (f.pct >= 0.85) out.push({ t: `${pp.ko}의 체력이 거의 한계입니다 (${f.bf}/${f.lim}). 다음 위기에서 교체를 고려하세요.`, a: 'pcOpen', l: '투수 교체' });
+      { const rn = b[0] && !b[1] ? P(b[0].id) : null; if (rn && !g.tact[us].hold && L.sub(rn).주력 >= 58) out.push({ t: `1루 주자 ${esc(rn.ko)}는 발이 매우 빠릅니다. 주자 견제 지시로 도루를 억제할 수 있습니다.`, a: 'hold', l: '견제 지시' }); }
       if (g.outs < 2 && (b[1] || b[2]) && !b[0] && inn >= 7 && Math.abs(diff) <= 2 && bo >= 60) out.push({ t: `1루가 비어 있고 상대 타자(${esc(bt.ko)}, ${bo})가 강합니다. 고의사구로 병살 기회를 만들 수 있습니다.`, a: 'ibb', l: '고의사구' });
       if (b[2] && g.outs < 2 && inn >= 7 && diff >= 0 && diff <= 2 && !g.tact[us].inf) out.push({ t: '1~2점 차 리드에서 3루 주자입니다. 전진 수비로 쉬운 득점을 막아 보세요(안타는 조금 늘어납니다).', a: 'inf', l: '전진 수비' });
     }
@@ -370,6 +363,7 @@
       if (inn >= 7 && diff < 0 && diff >= -3 && g.tact[us].bat !== 'power' && !b[2]) out.push({ t: `${-diff}점 뒤진 후반입니다. 장타 접근으로 한 방을 노려볼 수 있습니다.`, a: 'power', l: '장타 접근' });
       const bb = bench[0]; if (bb && inn >= 6 && L.ovr(bb) >= bo + 8) out.push({ t: `대타 후보 ${esc(bb.ko)}(${L.ovr(bb)})가 현재 타자 ${esc(bt ? bt.ko : '')}(${bo})보다 확실히 낫습니다.`, a: 'phOpen', l: '대타' });
       const runner = b[0] && !b[1] ? P(b[0].id) : null; if (runner && inn >= 8 && diff <= 0 && runner.p.sba < 0.05 && bench.some(x => x.p.sba > 0.09)) out.push({ t: `접전 후반, 1루 주자 ${esc(runner.ko)}는 발이 느립니다. 대주자를 쓰면 득점 확률이 올라갑니다.`, a: 'prOpen', l: '대주자' });
+      { const rn = b[0] && !b[1] ? P(b[0].id) : null; if (rn && g.outs < 2 && bt && L.sub(bt).컨택 >= 55 && L.sub(rn).주력 >= 52 && inn >= 3) out.push({ t: `1루 주자 ${esc(rn.ko)}는 발이 빠르고 타자 ${esc(bt.ko)}는 컨택이 좋습니다. 히트앤드런이 잘 맞는 조합입니다.`, a: 'har', l: '히트앤드런' }); }
       if (g.outs === 0 && b[0] && !b[1] && bo < 48 && inn >= 6 && diff >= -1 && diff <= 0) out.push({ t: '타자가 약하고 무사 1루입니다. 희생번트로 주자를 2루에 보낼 수 있습니다.', a: 'bunt', l: '번트' });
     }
     return out.slice(0, 3);
@@ -414,8 +408,8 @@
       return `<div class="sheet-bg" data-act="liveSheetClose"><div class="sheet" data-stop="1"><div class="grabber"></div><div class="row"><h2>작전</h2><span class="sp"></span><button class="sm" data-act="liveSheetClose">닫기</button></div>
         <div><h3>공격 접근 <span class="muted small">(내가 공격할 때)</span></h3>${seg('bat', T.bat, BAT_LBL)}<p class="help">${BAT_HELP[T.bat] || '기본: 선수 능력치대로 타석에 섭니다.'}</p></div>
         <div><h3>투구 접근 <span class="muted small">(내가 수비할 때)</span></h3>${seg('pit', T.pit, PIT_LBL)}<p class="help">${PIT_HELP[T.pit] || '기본: 투수 능력치대로 던집니다.'}</p></div>
-        <div><h3>수비 위치</h3><div class="seg"><button data-act="liveSet" data-a="inf" data-b="${T.inf ? 0 : 1}" aria-pressed="${T.inf}">전진 수비 ${T.inf ? 'ON' : 'OFF'}</button></div><p class="help">3루 주자·2사 미만에서만 작동합니다. 쉬운 득점을 줄이는 대신 내야를 뚫는 안타가 늘어납니다.</p></div>
-        <div><h3>즉시 작전</h3><div class="tacts"><button data-act="liveTac" data-a="bunt" ${myBat && runners && g.outs < 2 ? '' : 'disabled'}>희생번트</button><button data-act="liveTac" data-a="steal" ${myBat && runners && g.outs < 2 ? '' : 'disabled'}>도루</button><button data-act="liveTac" data-a="ibb" ${myField ? '' : 'disabled'}>고의사구</button></div><p class="help">번트·도루는 내 공격 중 주자가 있고 2사 미만일 때, 고의사구는 내 수비 중에만 쓸 수 있습니다.</p></div></div></div>`;
+        <div><h3>수비 위치</h3><div class="seg"><button data-act="liveSet" data-a="inf" data-b="${T.inf ? 0 : 1}" aria-pressed="${T.inf}">전진 수비 ${T.inf ? 'ON' : 'OFF'}</button><button data-act="liveSet" data-a="hold" data-b="${T.hold ? 0 : 1}" aria-pressed="${T.hold}">주자 견제 ${T.hold ? 'ON' : 'OFF'}</button></div><p class="help">전진 수비: 3루 주자·2사 미만에서 쉬운 득점을 줄이는 대신 내야를 뚫는 안타가 늘어납니다.<br>주자 견제: 1루 주자가 있을 때 도루 시도와 성공을 크게 줄이지만 투구에 약간 부담이 됩니다.</p></div>
+        <div><h3>즉시 작전</h3><div class="tacts"><button data-act="liveTac" data-a="bunt" ${myBat && runners && g.outs < 2 ? '' : 'disabled'}>희생번트</button><button data-act="liveTac" data-a="steal" ${myBat && runners && g.outs < 2 ? '' : 'disabled'}>도루</button><button data-act="liveTac" data-a="har" ${myBat && bs[0] && !bs[1] && g.outs < 2 ? '' : 'disabled'}>히트앤드런</button><button data-act="liveTac" data-a="ibb" ${myField ? '' : 'disabled'}>고의사구</button><button class="${(g.h.pk || 0) >= 2 ? 'warn' : ''}" data-act="liveTac" data-a="po" ${myField && runners ? '' : 'disabled'}>견제구 (${g.h.pk || 0}회${(g.h.pk || 0) >= 2 ? ' · 다음은 보크' : ''})</button></div><p class="help">번트·도루는 내 공격 중 주자가 있고 2사 미만일 때 쓸 수 있습니다.<br>히트앤드런: 1루 주자가 스타트하고 타자는 맞히려 합니다. 삼진·병살이 줄고 주자가 한 베이스 더 가기 쉽지만, 컨택이 약한 타자는 약한 타구가 늘고 빠르지 않은 주자는 이득이 적습니다.<br>견제구: 주자를 잡을 수 있지만 성공률이 낮고, 이닝 중 3번째 견제는 보크입니다.</p></div></div></div>`;
     }
     if (lv.sheet === 'subs') return `<div class="sheet-bg" data-act="liveSheetClose"><div class="sheet" data-stop="1"><div class="grabber"></div><div class="row"><h2>교체</h2><span class="sp"></span><button class="sm" data-act="liveSheetClose">닫기</button></div>
         <div class="seg" style="flex-direction:column;align-items:stretch"><button class="big" data-act="liveTac" data-a="pcOpen" ${myField ? '' : 'disabled'}>투수 교체</button><button class="big" data-act="liveTac" data-a="phOpen" ${myBat ? '' : 'disabled'}>대타</button><button class="big" data-act="liveTac" data-a="prOpen" ${myBat && runners ? '' : 'disabled'}>대주자</button><button class="big" data-act="liveTac" data-a="dsOpen">수비 교체 · 위치 변경</button></div><p class="help">투수 교체는 내 수비 중, 대타·대주자는 내 공격 중에 쓸 수 있습니다. 교체된 선수는 다시 나올 수 없습니다.</p></div></div>`;
@@ -425,7 +419,7 @@
     const lv = ui.live, ctx = lv.ctx, g = ctx.live, us = ctx.userSide, myBat = g.batSide === us, myField = g.fldSide === us, fin = g.finished, E = ctx.E, T = g.tact[us];
     const b = g.batter, pt = g.pitcher, bp = P(b.id), pp = P(pt.id), tr = E.tracking().pit[pt.id] || { outs: 0, R: 0, K: 0 }, f = g.pitchFatigue(g.fldSide);
     const lp = lv.feed.find(x => !x.sys) || lv.feed[0], lpHtml = lp ? `<div class="lastplay ${lp.run ? 'run' : ''}" aria-live="polite"><span class="w">${lp.w || ''}</span><span class="t">${esc(lp.t)}</span></div>` : '<div class="lastplay"><span class="t">「다음 타석」을 눌러 경기를 시작하세요</span></div>';
-    const chips = `<div class="tacts small"><span class="chip ${T.bat !== 'normal' ? 'in' : ''}">공격 ${BAT_LBL[T.bat]}</span><span class="chip ${T.pit !== 'normal' ? 'in' : ''}">투구 ${PIT_LBL[T.pit]}</span>${T.inf ? '<span class="chip in">전진 수비</span>' : ''}${ctx.auto ? '<span class="chip">자동 불펜</span>' : '<span class="chip bad">수동 불펜</span>'}</div>`;
+    const chips = `<div class="tacts small"><span class="chip ${T.bat !== 'normal' ? 'in' : ''}">공격 ${BAT_LBL[T.bat]}</span><span class="chip ${T.pit !== 'normal' ? 'in' : ''}">투구 ${PIT_LBL[T.pit]}</span>${T.inf ? '<span class="chip in">전진 수비</span>' : ''}${T.hold ? '<span class="chip in">견제 지시</span>' : ''}${ctx.auto ? '<span class="chip">자동 불펜</span>' : '<span class="chip bad">수동 불펜</span>'}</div>`;
     const stick = `<div class="lvstick"><div class="card score"><div class="tablewrap">${liveScore(g)}</div><div class="situ" style="margin-top:6px"><div class="outs" aria-label="${g.outs}아웃">${[0, 1, 2].map(i => `<i class="${i < g.outs && !fin ? 'on' : ''}"></i>`).join('')}</div><span class="small">${g.inning}회${g.top ? '초' : '말'} · ${fin ? '종료' : (g.top ? KO[g.away] : KO[g.home]) + ' 공격'} · ${g.outs}아웃</span><span class="sp"></span>${diamond(g)}</div></div>${lpHtml}</div>`;
     const fcls = f.over > 0 ? 'dead' : f.pct >= 0.85 ? 'warn' : '';
     const matchup = `<div class="cards2"><div class="pcard"><div class="small muted">${myBat ? '내 타자' : '상대 타자'} (${g.idx[g.batSide] % 9 + 1}번)</div><div class="nm">${esc(bp ? bp.ko : b.name)} ${bp ? ovrChip(L.ovr(bp)) : ''}</div><div class="small muted">${bp ? posName[bp.pos] : ''} · 올 시즌 ${bp ? batLine(bp.id) : ''}</div>${bp ? subHtml(bp) : ''}</div>
@@ -504,10 +498,10 @@
     liveRun(a) { liveRun(a); },
     liveTac(a) { const lv = ui.live; if (a === 'pcOpen') { lv.pick = { t: 'pc' }; lv.sheet = null; render(); } else if (a === 'phOpen') { lv.pick = { t: 'ph' }; lv.sheet = null; render(); } else if (a === 'prOpen') { lv.pick = { t: 'pr', base: null }; lv.sheet = null; render(); } else if (a === 'dsOpen') { lv.pick = { t: 'ds', slot: null }; lv.sheet = null; render(); } else liveTactic(a); },
     liveSheet(a) { ui.live.sheet = a; render(); }, liveSheetClose() { ui.live.sheet = null; render(); }, sheetClose() { ui.sheet = null; render(); },
-    liveSet(a, b) { const lv = ui.live, us = lv.ctx.userSide; lv.ctx.live.setTactic(us, a, a === 'inf' ? b === '1' : b); render(); },
+    liveSet(a, b) { const lv = ui.live, us = lv.ctx.userSide; lv.ctx.live.setTactic(us, a, (a === 'inf' || a === 'hold') ? b === '1' : b); render(); },
     liveAuto() { ui.live.ctx.auto = !ui.live.ctx.auto; render(); },
     livePrBase(a) { ui.live.pick.base = +a; render(); }, liveDsSlot(a) { ui.live.pick.slot = +a; render(); },
-    liveAdv(a) { const lv = ui.live, us = lv.ctx.userSide; if (a === 'pcOpen' || a === 'phOpen' || a === 'prOpen') A.liveTac(a); else if (a === 'ibb' || a === 'bunt') liveTactic(a); else if (a === 'inf') { lv.ctx.live.setTactic(us, 'inf', true); render(); } else { lv.ctx.live.setTactic(us, 'bat', a); render(); } },
+    liveAdv(a) { const lv = ui.live, us = lv.ctx.userSide; if (a === 'pcOpen' || a === 'phOpen' || a === 'prOpen') A.liveTac(a); else if (a === 'ibb' || a === 'bunt' || a === 'har') liveTactic(a); else if (a === 'inf' || a === 'hold') { lv.ctx.live.setTactic(us, a, true); render(); } else { lv.ctx.live.setTactic(us, 'bat', a); render(); } },
     livePickClose() { ui.live.pick = null; render(); },
     liveDo(a, b) { liveTactic(a, b); },
     liveAbort() { const lv = ui.live; lv.ctx.auto = true; const g = lv.ctx.live; g.playToEnd(); lv.feed.unshift({ w: '', t: `경기 종료 ${KO[g.away]} ${g.score.away} : ${g.score.home} ${KO[g.home]}`, sys: true }); lv.sheet = null; lv.pick = null; render(); },

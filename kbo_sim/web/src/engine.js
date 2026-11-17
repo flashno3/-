@@ -233,9 +233,16 @@
     /* 한 타석의 결과를 주자·아웃·득점에 반영. 반환: 'END'(이닝 종료) | 'CONT'(병살: 득점 한도 검사 생략) | null */
     function applyEvent(h, e, b, rng, stats, tc) {
       const bases = h.bases;
-      if (e === 'K') h.outs++;
+      if (e === 'K') {
+        h.outs++;
+        if (h.har && bases[0] && h.outs < 3) {   // 히트앤드런 중 삼진: 스타트한 주자는 도루 시도와 같은 결과
+          const runner = bases[0];
+          if (rng.random() < comb(runner.p.sbp - (h.holdPen || 0), 1 - h.dm[2], 1 - CSLG)) { bases[1] = runner; bases[0] = null; }
+          else { bases[0] = null; h.outs++; stats.CS++; trackRun(runner, 'CS'); }
+        }
+      }
       else if (e === 'OUT') {
-        if (bases[0] && h.outs < 2 && rng.random() < ENV.gdp) {
+        if (bases[0] && h.outs < 2 && rng.random() < ENV.gdp * (h.har ? 0.55 : 1)) {
           bases[0] = null; h.outs += 2; stats.GDP++;
           if (h.outs >= 3) return 'END';
           if (bases[2]) { h.runs++; bases[2] = null; }
@@ -246,7 +253,7 @@
         if (h.outs < 3 && bases[2] && rng.random() < ENV.sf * (h.sfMult || 1)) { h.runs++; bases[2] = null; stats.SF++; tc.SF++; }
         else {
           if (h.outs < 3 && bases[1] && !bases[2] && rng.random() < ENV.prod) { bases[2] = bases[1]; bases[1] = null; }
-          if (h.outs < 3 && bases[0] && !bases[1] && rng.random() < ENV.prod * 0.7) { bases[1] = bases[0]; bases[0] = null; }
+          if (h.outs < 3 && bases[0] && !bases[1] && rng.random() < (h.har ? Math.min(0.95, 0.55 + 0.2 * h.harS) : ENV.prod * 0.7)) { bases[1] = bases[0]; bases[0] = null; }
         }
       } else if (e === 'BB' || e === 'HBP') {
         if (bases[0]) { if (bases[1]) { if (bases[2]) h.runs++; bases[2] = bases[1]; } bases[1] = bases[0]; }
@@ -255,13 +262,13 @@
       else if (e === '3B') { h.runs += (bases[0] ? 1 : 0) + (bases[1] ? 1 : 0) + (bases[2] ? 1 : 0); bases[0] = null; bases[1] = null; bases[2] = b; }
       else if (e === '2B') {
         h.runs += (bases[2] ? 1 : 0) + (bases[1] ? 1 : 0); let n3 = null;
-        if (bases[0]) { if (rng.random() < ENV.sc1on2) h.runs++; else n3 = bases[0]; }
+        if (bases[0]) { if (rng.random() < (h.har ? 0.40 + 0.22 * h.harS : ENV.sc1on2)) h.runs++; else n3 = bases[0]; }
         bases[0] = null; bases[1] = b; bases[2] = n3;
       } else {
         if (bases[2]) h.runs++;
         let n3 = null, n2 = null;
         if (bases[1]) { if (rng.random() < ENV.sc2on1) h.runs++; else n3 = bases[1]; }
-        if (bases[0]) { if (n3 === null && rng.random() < ENV.adv13) n3 = bases[0]; else n2 = bases[0]; }
+        if (bases[0]) { if (n3 === null && rng.random() < (h.har ? 0.30 + 0.25 * h.harS : ENV.adv13)) n3 = bases[0]; else n2 = bases[0]; }
         bases[0] = b; bases[1] = n2; bases[2] = n3;
       }
       return null;
@@ -269,10 +276,10 @@
 
     /* 반 이닝의 한 반복(도루/폭투 + 타석 1회). 반환 true 면 반 이닝 종료. h: {L, idx, outs, bases, runs, limit, log} */
     function advance(h, ss, rng, stats, dm) {
-      const p = ss.cur, b = h.L[h.idx % 9], bases = h.bases, r0 = h.runs, o0 = h.outs; h.idx++;
-      if (bases[0] && !bases[1] && h.outs < 2 && rng.random() < bases[0].p.sba * ENV.sb_mult) {
+      const p = ss.cur, b = h.L[h.idx % 9], bases = h.bases, r0 = h.runs, o0 = h.outs; h.idx++; h.dm = dm;
+      if (!h.har && bases[0] && !bases[1] && h.outs < 2 && rng.random() < bases[0].p.sba * ENV.sb_mult * (h.holdMult || 1)) {
         const runner = bases[0];
-        if (rng.random() < comb(runner.p.sbp, 1 - dm[2], 1 - CSLG)) { bases[1] = runner; bases[0] = null; stats.SB++; trackRun(runner, 'SB'); if (h.log) h.log.push({ k: 'SB', b: runner }); }
+        if (rng.random() < comb(runner.p.sbp - (h.holdPen || 0), 1 - dm[2], 1 - CSLG)) { bases[1] = runner; bases[0] = null; stats.SB++; trackRun(runner, 'SB'); if (h.log) h.log.push({ k: 'SB', b: runner }); }
         else { bases[0] = null; h.outs++; stats.CS++; trackRun(runner, 'CS'); if (h.log) h.log.push({ k: 'CS', b: runner }); }
         if (h.outs >= 3) { h.idx--; trackP(p, null, h.outs - o0, h.runs - r0); return true; }
       }
@@ -334,7 +341,7 @@
         this.idx = { home: 0, away: 0 }; this.score = { home: 0, away: 0 }; this.inns = []; this.inning = 1; this.top = true;
         this.finished = false; this.stats = newStats(); this.log = []; this.curInn = null; this.subs = { home: [], away: [] };
         this.fatigue = !!o.fatigue; this.bf = {};
-        this.tact = { home: { bat: 'normal', pit: 'normal', inf: false }, away: { bat: 'normal', pit: 'normal', inf: false } };
+        this.tact = { home: { bat: 'normal', pit: 'normal', inf: false, hold: false }, away: { bat: 'normal', pit: 'normal', inf: false, hold: false } };
         this._dm();
         this._startHalf();
       }
@@ -359,6 +366,8 @@
         let mod = null; const mul = (k, v) => { if (!v) return; if (!mod) mod = {}; mod[k] = (mod[k] || 1) * v; };
         if (B) for (const k in B) mul(k, B[k]); if (Pm) for (const k in Pm) mul(k, Pm[k]);
         if (this.fatigue) { const f = this.pitchFatigue(fld); if (f.over > 0) { mul('bb', 1 + 0.03 * f.over); mul('hr', 1 + 0.04 * f.over); mul('babip', 1 + 0.008 * f.over); mul('k', Math.max(0.6, 1 - 0.015 * f.over)); } }
+        h.holdMult = undefined; h.holdPen = undefined;
+        if (this.tact[fld].hold && h.bases[0]) { h.holdMult = 0.4; h.holdPen = 0.10; mul('bb', 1.04); }   // 주자 견제 지시: 도루 시도·성공 억제, 투구엔 약간 부담
         h.sfMult = 1;
         if (this.tact[bat].bat === 'contact' && h.bases[2] && h.outs < 2) h.sfMult = 1.35;   // 3루 주자: 컨택 접근은 땅볼·플라이로도 불러들인다
         if (this.tact[fld].inf && h.bases[2] && h.outs < 2) { mul('babip', 1.07); h.sfMult *= 0.55; }
@@ -414,6 +423,30 @@
         if (pb_ !== 'DH') this.assign[side].push([A, pb_]); if (pa_ !== 'DH') this.assign[side].push([B, pa_]);
         this._dm(); const e = { k: 'SW', side, a: A, b: B, pa: pb_, pb: pa_ }; this.log.push(e); return [e];
       }
+      /* 히트앤드런: 1루 주자가 스타트, 타자는 어떻게든 맞힌다. 삼진·볼넷은 줄고 병살이 줄며 주자가 한 베이스 더 가기 쉽다. 헛스윙 삼진이면 도루 실패 위험 */
+      hitAndRun() {
+        this._pre(); CURPF = PFS[this.home]; this._mods();
+        const h = this.h, bs = h.bases; if (!(bs[0] && !bs[1]) || h.outs >= 2) return [];
+        const runner = bs[0], bat = this.batter, m = h.mod || (h.mod = {});
+        h.harS = Math.max(0.3, Math.min(1.8, runner.p.sba / 0.07));                           // 주자의 발: 진루·득점 확률에 반영
+        const ck = Math.max(-1, Math.min(1, (0.19 - bat.p.k) / 0.07));                         // 타자의 컨택: 좋을수록 억지로 맞혀도 질 좋은 타구
+        m.k = (m.k || 1) * (0.88 - 0.05 * ck); m.bb = (m.bb || 1) * 0.72; m.hr = (m.hr || 1) * 0.78; m.babip = (m.babip || 1) * (0.90 + 0.06 * ck);
+        h.har = true; h.log.push({ k: 'HAR', b: bs[0] });
+        const ended = advance(h, this.staff[this.fldSide], this.rng, this.stats, this.dm[this.fldSide]); h.har = false;
+        return this._after(ended);
+      }
+      /* 견제구: 주자를 잡을 수도 있지만 횟수가 늘수록 효과가 줄고 가끔 악송구가 나온다 */
+      pickoff(base) {
+        this._pre(); const h = this.h, bs = h.bases, b = base === undefined ? (bs[0] ? 0 : (bs[1] ? 1 : 2)) : base, runner = bs[b]; if (!runner) return [];
+        h.pk = (h.pk || 0) + 1; const pit = this.staff[this.fldSide].cur; this.bf[pit.id] = (this.bf[pit.id] || 0) + 0.5;
+        if (h.pk >= 3) { for (let i = 2; i >= 0; i--) if (bs[i] && i < 2 && !bs[i + 1]) { bs[i + 1] = bs[i]; bs[i] = null; } else if (bs[i] && i === 2) { h.runs++; bs[2] = null; }   // 3번째 견제는 보크: 주자 전원 진루
+          h.log.push({ k: 'PO', b: runner, balk: true }); return this._after(h.limit !== null && h.runs > h.limit); }
+        const speed = Math.min(1, runner.p.sba / 0.15), pOut = (0.03 + 0.08 * (1 - speed)) * Math.pow(0.6, h.pk - 1), x = this.rng.random();
+        if (x < pOut) { bs[b] = null; h.outs++; this.stats.CS++; trackRun(runner, 'CS'); trackP(this.staff[this.fldSide].cur, null, 1, 0); h.log.push({ k: 'PO', b: runner, out: true }); }
+        else if (x > 0.985 && b < 2 && !bs[b + 1]) { bs[b + 1] = runner; bs[b] = null; h.log.push({ k: 'PO', b: runner, err: true }); }
+        else h.log.push({ k: 'PO', b: runner });
+        return this._after(false);
+      }
       ibb() {
         this._pre(); CURPF = PFS[this.home]; const h = this.h, b = this.batter, ss = this.staff[this.fldSide], r0 = h.runs; h.idx++;
         this.stats.PA++; this.stats.BB++; const tc = track(b, 'BB'); applyEvent(h, 'BB', b, this.rng, this.stats, tc); tc.RBI += h.runs - r0;
@@ -425,7 +458,7 @@
         const h = this.h, bs = h.bases, ss = this.staff[this.fldSide], dm = this.dm[this.fldSide], o0 = h.outs;
         let from = -1; if (bs[1] && !bs[2]) from = 1; else if (bs[0] && !bs[1]) from = 0; if (from < 0 || h.outs >= 2) return [];
         const runner = bs[from], pen = from === 1 ? 0.12 : 0;
-        const ok = this.rng.random() < Math.max(0.05, comb(runner.p.sbp, 1 - dm[2], 1 - CSLG) - pen);
+        const ok = this.rng.random() < Math.max(0.05, comb(runner.p.sbp - (this.tact[this.fldSide].hold ? 0.10 : 0), 1 - dm[2], 1 - CSLG) - pen);
         if (ok) { bs[from + 1] = runner; bs[from] = null; this.stats.SB++; trackRun(runner, 'SB'); h.log.push({ k: 'SB', b: runner }); }
         else { bs[from] = null; h.outs++; this.stats.CS++; trackRun(runner, 'CS'); trackP(ss.cur, null, 1, 0); h.log.push({ k: 'CS', b: runner }); }
         return this._after(false);
