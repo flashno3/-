@@ -75,10 +75,31 @@
     ['슈퍼스타', 0.025, 68, 80], ['확실한 주전', 0.12, 57, 67.9], ['준주전', 0.25, 48, 56.9], ['후보', 0.38, 38, 47.9], ['육성', 0.225, 28, 37.9]
   ];
   /* tilt: 지명 순위·계약금 등 사전 평가에 따른 기울기(0=무관). 등급 확률 ∝ 기본확률 × exp(tilt × [2,1,0,-1,-2]) — 확률만 바뀌고 결과는 열려 있다 */
-  proto.rollPeak = function (r, tilt) {
-    const q = [2, 1, 0, -1, -2], w = TIERS.map((t, i) => t[1] * Math.exp((tilt || 0) * q[i])), tot = w.reduce((a, b) => a + b, 0);
+  proto.rollPeak = function (r, tilt, prior) {   // prior: 슬롯별 실제 등급 분포(5개 확률), 없으면 기본 확률
+    const q = [2, 1, 0, -1, -2], w = TIERS.map((t, i) => (prior ? prior[i] : t[1]) * Math.exp((tilt || 0) * q[i])), tot = w.reduce((a, b) => a + b, 0);
     let x = r.random() * tot; for (let i = 0; i < TIERS.length; i++) { if ((x -= w[i]) < 0) return TIERS[i][2] + (TIERS[i][3] - TIERS[i][2]) * r.random(); }
     return 36;
+  };
+  /* 2002~2017 신인 드래프트 1,528명의 실제 경력(통산 타석·이닝)으로 본 지명 슬롯별 최종 등급 분포 [슈퍼스타, 확실한 주전, 준주전, 후보, 육성급].
+   * 등급 기준: 타자 통산 타석 5000/2500/1000/200, 투수 통산 이닝 1200/600/250/50 이상. 표본이 작은 슬롯은 기본 분포를 15% 섞는다. */
+  const SLOT_PRIOR = { '1차': [0.124, 0.124, 0.143, 0.248, 0.362], 'R1top3': [0.083, 0.312, 0.25, 0.229, 0.125], 'R1': [0.098, 0.174, 0.174, 0.196, 0.359], 'R2': [0.058, 0.094, 0.174, 0.283, 0.391], 'R3': [0.036, 0.087, 0.116, 0.174, 0.587], 'R4': [0.007, 0.029, 0.109, 0.159, 0.696], 'R5': [0.008, 0.028, 0.044, 0.111, 0.809], '육성': [0.039, 0.039, 0.109, 0.305, 0.508] };
+  const slotPrior = dh => {
+    let k = 'R5'; if (dh) { if (dh.kind === '1차') k = '1차'; else if (dh.kind === '육성선수') k = '육성'; else if (dh.kind === '해외') k = 'R1'; else if (dh.round) k = dh.round === 1 ? (dh.pick && dh.pick <= 3 ? 'R1top3' : 'R1') : 'R' + Math.min(dh.round, 5); }
+    return SLOT_PRIOR[k].map((v, i) => 0.85 * v + 0.15 * TIERS[i][1]);
+  };
+  const GROW = age => age <= 19 ? 17 : age === 20 ? 15 : age === 21 ? 12 : age === 22 ? 9 : age === 23 ? 6 : age === 24 ? 3.5 : age === 25 ? 1.5 : 0.5;   // 정점까지 남은 기대 성장(엔진 성장 곡선 기준 OVR)
+  /* 현재 OVR·나이를 증거로 갱신한 정점 분포에서 표본 추출: 사전분포(슬롯) × 관측 가능도 N(현재 OVR; 정점 − 남은 성장, σ=5.5) */
+  proto._posteriorPeak = function (r, ov, age, prior) {
+    const g = GROW(age), w = []; let tot = 0;
+    for (let pk = 28; pk <= 80; pk++) { const ti = TIERS.findIndex(t => pk >= t[2] && pk <= t[3] + 0.99), den = prior[ti < 0 ? 4 : ti] / (TIERS[ti < 0 ? 4 : ti][3] - TIERS[ti < 0 ? 4 : ti][2] + 1), z = (ov - (pk - g)) / 5.5, wt = pk >= ov ? den * Math.exp(-0.5 * z * z) : 0; w.push(wt); tot += wt; }
+    if (!(tot > 0)) return clamp(ov + g, 25, 85);
+    let x = r.random() * tot; for (let i = 0; i < w.length; i++) { if ((x -= w[i]) < 0) return 28 + i + r.random() * 0.99; }
+    return clamp(ov + g, 25, 85);
+  };
+  /* 잠재력 등급(절대 정점 기준): A 슈퍼스타급(68+) · B 확실한 주전급(57+) · C 준주전급(48+) · D 후보급(38+) · E 육성급. 현재 OVR보다 낮게 표시되지 않는다 */
+  proto.potLetter = function (p) {
+    const est = Math.max(this.ovr(p), p.scout ? p.scout.ceil : p.peak !== undefined ? p.peak : this.ovr(p) + (p.pot || 0) * 30);
+    return est >= 68 ? 'A' : est >= 57 ? 'B' : est >= 48 ? 'C' : est >= 38 ? 'D' : 'E';
   };
   proto.tierLabel = function (v) { return v >= 68 ? '슈퍼스타급' : v >= 57 ? '확실한 주전급' : v >= 48 ? '준주전급' : v >= 38 ? '후보급' : '육성급'; };
   /* 능력치를 gain만큼 이동(1.0 ≈ OVR +14 정도). 잠재력 정렬과 성장에 공통 사용 */
@@ -93,7 +114,7 @@
   const TWOYR = ['동의과학대', '부산과학기술대', '동원과학기술대', '강릉영동대', '김포대'];
   proto._addDraftClass = function (list) {
     if (!list || !list.length) return;
-    const S = this.S, r = rngFor(S.seed, 2027, 61);
+    const S = this.S, r = rngFor(S.seed, 2027, 61), pk = {};
     for (const d of list) {
       const parts = d.school.split('-').map(x => x.replace('[얼리]', '')), univ = parts.filter(x => /대$/.test(x) && x !== '메이저리그')[0];
       let by = d.birthYear, ageEst = false; if (!by) { by = /\[얼리\]/.test(d.school) ? 2006 : univ ? (TWOYR.includes(univ) ? 2005 : 2004) : 2008; ageEst = !d.birthYear; }
@@ -101,10 +122,10 @@
       // 이미 데이터에 있는 선수(예: 울산 웨일즈 출신 최지만)는 새로 만들지 않고 구단만 옮긴다
       const ex = Object.values(S.players).find(p => p.ko === d.name && p.team === 'Whales' && p.type === type);
       if (ex) { S.fteams.Whales.ids = S.fteams.Whales.ids.filter(x => x !== ex.id); ex.team = d.team; S.teams[d.team].ids.push(ex.id); ex.rookie = S.year; ex.draft = { round: d.round, school: d.school }; if (d.name === '최지만') { ex.age = 2027 - 1991; ex.birth = '1991-05-26'; delete ex.ageEst; } continue; }
-      const tilt = DRAFT_TILT[d.round - 1] + (d.bonus ? Math.min(1.2, 0.12 * Math.max(0, d.bonus - 2.5)) : 0);
-      const p = this.makeRookie(r, type, pos, { name: d.name, age: 2027 - by, tilt });
+      const pickNo = (pk[d.round] = (pk[d.round] || 0) + 1), tilt = d.bonus ? Math.min(1.2, 0.12 * Math.max(0, d.bonus - 2.5)) : 0;   // 지명 슬롯은 실제 분포(사전), 계약금은 추가 기울기
+      const p = this.makeRookie(r, type, pos, { name: d.name, age: 2027 - by, tilt, prior: slotPrior({ round: d.round, pick: pickNo }) });
       p.team = d.team; p.rookie = S.year; p.draft = { round: d.round, school: d.school }; if (d.bonus) p.bonus = d.bonus; if (d.name === '윤예성') p.bonusUnknown = true; if (d.pos === '투타겸업') p.twoWay = true; if (ageEst) p.ageEst = true;
-      p.contract = { salary: 0.3, years: 3 }; p.fa.univ = !!univ; S.teams[d.team].ids.push(p.id);
+      p.contract = { salary: 0.3, years: 1 }; p.fa.univ = !!univ; S.teams[d.team].ids.push(p.id);
     }
     this.invalidate();
   };
@@ -131,9 +152,9 @@
       p.stamina = clamp(gauss(r, 45, 12), 25, 70); p.role = p.stamina >= 50 && r.random() < 0.7 ? 'SP' : 'RP'; p.GS = 0; p.G = 5; p.IP = 8; p.ipgs = null;
     }
     if (type === 'B') p.bats = r.random() < 0.06 ? 'S' : r.random() < 0.35 ? 'L' : 'R'; else p.throws = r.random() < 0.27 ? 'L' : 'R';   // 가상 신인의 투타
-    p.contract = { salary: 0.3, years: 3 }; p.fa = { svc: 0, used: 0, last: null, regDays: 0, rem: 0, univ: false }; p.salHist = [0.3];
+    p.contract = { salary: 0.3, years: 1 }; p.fa = { svc: 0, used: 0, last: null, regDays: 0, rem: 0, univ: false }; p.salHist = [0.3];
     S.players[id] = p;
-    p.peak = this.rollPeak(r, opts.tilt);   // 숨은 정점 OVR
+    p.peak = this.rollPeak(r, opts.tilt, opts.prior);   // 숨은 정점 OVR
     const target = Math.min(clamp(p.peak - (27 - p.age) * 2.0 - 4 + gauss(r, 0, 7), 20, p.peak), 38 + (p.age - 18) * 4);   // 어린 신인이 곧바로 주전급이 되지 않도록 현재 능력치 상한   // 현재 능력치를 정점에 맞춰 정렬(어릴수록 격차 큼)
     for (let k = 0; k < 5; k++) { const g = (target - this.ovr(p)) / 14; if (Math.abs(g) < 0.08) break; this._gain(p, g, r, 0); }
     p.pot = clamp((p.peak - this.ovr(p)) / 30, 0, 1.4);
@@ -144,6 +165,62 @@
 
   /* ---------------- 오프시즌 ---------------- */
   proto.askSalary = function (p) { return Math.max(0.3, Math.round(this.price(p) * (p.age >= 34 ? 0.9 : 1.12) * 10) / 10); };
+  /* ---------------- FA 시장가·제시(계약금 포함) ----------------
+   * 시장가(mv) = 연 보수(계약금 + 연봉 합계 ÷ 계약 연수). FA 승인 선수 풀에서 가치 순위(WAR + 최근 연봉 평균의 10%)를 매겨 실제 FA 계약 분포로 환산한다.
+   * 2025·2026 FA 계약(연 보수): 1위권 25~28억 · 상위 10% 20억 · 20% 16.5억 · 35% 13억 · 중간 10억 · 65% 7.5억 · 80% 5억 · 하위 2.5억.
+   * 선수는 제시 연 보수(= (계약금 + 연봉 × 연수) ÷ 연수)가 요구액 이상일 때만 응한다. 요구액 = 시장가 × 이적 프리미엄(원소속 외 +4%) × 경쟁(관심 구단당 +1.5%, 최대 4곳)
+   * × 계약 기간 보정(선호 기간보다 짧으면 연 4%↑) × 시장 경과 할인(시즌 중 하루 0.4%↓, 최대 30%). 계약금은 계약 시 한 번에 지급(현금), 경쟁균형세는 연 평균 보수로 계산. */
+  const FA_CURVE = [[0, 28], [0.1, 21], [0.2, 17], [0.35, 13], [0.5, 10], [0.65, 7.5], [0.8, 5], [1, 2.5]];
+  const faCurve = q => { for (let i = 1; i < FA_CURVE.length; i++) if (q <= FA_CURVE[i][0]) { const a = FA_CURVE[i - 1], b = FA_CURVE[i]; return a[1] + (b[1] - a[1]) * (q - a[0]) / (b[0] - a[0]); } return FA_CURVE[FA_CURVE.length - 1][1]; };
+  const BONUS_SHARE = 0.35;   // 실제 FA 계약 26건의 계약금 비중 평균 36%(12~73%)
+  proto._fvScore = function (p) { const a = p.age, f = a <= 29 ? 1.12 : a <= 31 ? 1 : Math.max(0.55, 1 - 0.07 * (a - 31)); return Math.max(0, this.war(p)) * f + 0.1 * this._salAvg(p); };   // 가치 = WAR × 나이 보정(젊을수록 가산, 32세부터 감가) + 최근 연봉 평균의 10%
+  proto._prefYears = function (p) { const a = p.age; return a <= 34 ? 4 : a <= 37 ? 3 : a <= 40 ? 2 : 1; };
+  proto._priceClass = function (final) {   // FA 승인 선수 풀의 시장가 산정(final=true 이면 확정)
+    const pool = this.faList().filter(p => p.faInfo && p.faInfo.grade && !p.foreign && !p.faInfo.mvFinal).sort((a, b) => this._fvScore(b) - this._fvScore(a)), n = pool.length;
+    pool.forEach((p, i) => { p.faInfo.mv = Math.round(faCurve(n > 1 ? i / (n - 1) : 0) * 10) / 10; if (final) p.faInfo.mvFinal = true; });
+  };
+  proto.faMV = function (p) { if (!p.faInfo || !p.faInfo.grade || p.foreign) return null; if (p.faInfo.mv === undefined) this._priceClass(false); return p.faInfo.mv; };
+  /* FA 자격자의 1년 재계약 요구액: 리그 FA 자격자 중 가치 순위 상위 27%가 시장에 나온다고 보고 시장가 곡선에 대입(재계약은 시장가의 80%) */
+  /* 1년 재계약 연봉: 현재 연봉에서 시장 요구액(가치)으로 부분 조정 — 오르면 60%, 내리면 40%만 반영(연봉 급등락 완화) */
+  proto._blendAsk = function (p) { const cur = p.contract.salary, ask = this.askSalary(p); return Math.max(0.3, Math.round((cur + (ask > cur ? 0.6 : 0.4) * (ask - cur)) * 10) / 10); };
+  proto.resignAsk = function (p) {
+    const base = this._blendAsk(p); if (p.foreign || !this.faEligible(p)) return base;
+    const sc = this._fvScore(p); let n = 0, rank = 0; for (const t of TEAMS) for (const q of this.players(t)) if (!q.foreign && this.faEligible(q)) { n++; if (this._fvScore(q) > sc) rank++; }
+    const mv = faCurve(Math.min(1, rank / Math.max(1, 0.27 * n)));
+    return Math.max(base, Math.round(0.8 * mv * 10) / 10);
+  };
+  proto._marketDecay = function () { const S = this.S; return 1 - Math.min(0.3, 0.004 * (S.phase === 'offseason' ? 0 : (S.day || 0))); };
+  proto.faTerms = function (p, t) {
+    const S = this.S; t = t || S.userTeam; const info = p.faInfo, graded = !!(info && info.grade) && !p.foreign, decay = this._marketDecay();
+    if (!graded) { const ask = Math.round(this.askSalary(p) * decay * 10) / 10; return { graded: false, pref: 1, maxYears: 1, mv: ask, ext: false, comp: 1, req: () => Math.max(0.3, ask) }; }
+    const mv = this.faMV(p), pref = this._prefYears(p), ext = info.from !== t;
+    let n = 0; for (const x of TEAMS) if (x !== t && x !== S.userTeam && this.faRoom(x) >= mv && this.cbtPay(x) + mv < this.cbtCap() * 0.97) n++;
+    const comp = info.grade === 'C' ? 1 : 1 + 0.015 * Math.min(4, n), base = mv * decay * (ext ? 1.04 : 1) * comp;
+    return { graded: true, pref, maxYears: 4, mv, ext, comp, req: y => Math.round(base * (1 + 0.04 * Math.max(0, pref - y)) * (1 - 0.02 * Math.max(0, y - pref)) * 100) / 100 };
+  };
+  /* 요구 조건에 맞춘 기본 제시(계약금 35%): 연봉은 올림해서 요구액을 넘긴다 */
+  proto.faDefaultOffer = function (p, t, years) {
+    const tm = this.faTerms(p, t), y = clamp(years || tm.pref, 1, tm.maxYears), total = tm.req(y) * y;
+    if (!tm.graded) return { years: 1, salary: Math.ceil(tm.req(1) * 10) / 10, bonus: 0 };
+    const bonus = Math.round(total * BONUS_SHARE * 10) / 10, salary = Math.ceil(((total - bonus) / y) * 10 - 1e-9) / 10;
+    return { years: y, salary, bonus };
+  };
+  proto.faEvaluate = function (p, offer, t) {
+    const tm = this.faTerms(p, t), y = Math.round(offer.years), sal = +offer.salary, bon = +offer.bonus || 0;
+    if (!(y >= 1 && y <= tm.maxYears)) return { ok: false, msg: tm.graded ? `계약 기간은 1~${tm.maxYears}년이어야 합니다.` : 'FA 자격이 없는 선수는 1년 계약만 가능합니다.' };
+    if (!(sal >= 0.3)) return { ok: false, msg: '연봉은 최소 0.3억입니다.' };
+    if (bon < 0 || (!tm.graded && bon > 0)) return { ok: false, msg: tm.graded ? '계약금은 0 이상이어야 합니다.' : '자격이 없는 선수에게는 계약금을 줄 수 없습니다.' };
+    const per = (bon + sal * y) / y, req = tm.req(y);
+    if (bon > 0.7 * (bon + sal * y)) return { ok: false, msg: '계약금은 총액의 70%를 넘을 수 없습니다.', per, req, tm };
+    if (per + 1e-9 < req) return { ok: false, msg: `거절: 제시 총액 ${(per * y).toFixed(1)}억(연 ${per.toFixed(1)}억 × ${y}년)이 요구액 ${(req * y).toFixed(1)}억(연 ${req.toFixed(1)}억)에 못 미칩니다.${per >= req * 0.9 ? ' 근접합니다.' : ''}`, per, req, tm };
+    return { ok: true, per, req, tm, y, sal, bon };
+  };
+  proto._aiDeal = function (t, p) {   // AI 구단의 영입 조건(선호 기간, 요구액 그대로, 계약금 35%) — 여유자금·상한 안이면 계약
+    const tm = this.faTerms(p, t), o = this.faDefaultOffer(p, t, tm.pref), per = (o.bonus + o.salary * o.years) / o.years;
+    if (this.cbtPay(t) + per * (this.S.calib.cbtK || 1) > this.cbtCap() * 0.97) return null;
+    if (this.faRoom(t) < o.salary + o.bonus / o.years) return null;
+    return Object.assign({ per, tm }, o);
+  };
   proto.release = function (t, id, exercise) {
     const S = this.S, p = S.players[id]; if (!p || p.team !== t) return;
     p.faInfo = { from: t, grade: exercise && !p.foreign ? this.faGrade(p, t) : null, prev: p.contract.salary };   // FA 자격이 있으면 등급·보상 정보를 남긴다
@@ -180,25 +257,32 @@
     // 3) 계약 만료
     for (const t of TEAMS) for (const id of S.teams[t].ids.slice()) {
       const p = S.players[id]; p.contract.years -= 1; if (p.contract.years > 0) continue;
-      if (t === user) { rep.expiring.push(id); continue; }
-      const o = this.ovr(p), elig = this.faEligible(p), keep = r.random() < (elig || p.foreign ? clamp(0.25 + (o - 40) * 0.025 - (p.age >= 34 ? 0.25 : 0), 0.08, 0.72) : 0.9);   // FA 자격자는 시장에 나올 수 있고, 미자격자는 구단이 계속 보유(재계약 우선)
-      let ask = this.askSalary(p); if (p.foreign) ask = Math.min(ask, p.faInfo ? 1e9 : Math.max(FOREIGN_NEW[p.aq ? 'aq' : 'gen'], p.contract.salary + FOREIGN_RAISE[p.aq ? 'aq' : 'gen']));
-      const over = this.cbtPay(t) + Math.max(0, this._cbtAdd(p, ask, 2) - this.cbtVal(p) * (S.calib.cbtK || 1)) > this.cbtCap() * 0.97;   // AI 구단은 상한을 넘기는 재계약은 하지 않는다
-      if (keep && !over) { p.contract = this._newContract(p, ask, p.foreign ? 1 : 1 + Math.floor(r.random() * 3)); p.salHist = (p.salHist || []).slice(-2).concat([ask]); } else { this.release(t, id, true); }
+      if (t === user) {   // 내 팀: 모든 계약이 1년이므로 FA 자격자·외국인·연봉 2억 이상·35세 이상만 직접 협상하고, 나머지는 시장 요구액(연봉 조정 반영)으로 자동 재계약
+        if (p.foreign || this.faEligible(p) || p.contract.salary >= 2 || p.age >= 35) rep.expiring.push(id); else { const a = this._blendAsk(p); p.contract = this._newContract(p, a, 1); p.salHist = (p.salHist || []).slice(-2).concat([a]); rep.auto = (rep.auto || 0) + 1; }
+        continue;
+      }
+      const o = this.ovr(p), elig = !p.foreign && this.faEligible(p);
+      // 모든 비FA 계약은 1년. FA 자격자는 약 20~30%가 FA를 신청하고(가치가 높을수록 신청), 나머지는 1년 재계약. 미자격자·외국인은 구단이 재계약을 우선한다
+      const decl = elig ? clamp(0.12 + 0.07 * Math.max(0, this.war(p)) - (p.age >= 36 ? 0.05 : 0), 0.08, 0.5) : 0, keepBase = p.foreign ? clamp(0.25 + (o - 40) * 0.025 - (p.age >= 34 ? 0.25 : 0), 0.08, 0.72) : (elig ? 1 : 0.9);
+      const keep = r.random() >= decl && r.random() < keepBase;
+      let ask = p.foreign ? this.askSalary(p) : this.resignAsk(p); if (p.foreign) ask = Math.min(ask, p.faInfo ? 1e9 : Math.max(FOREIGN_NEW[p.aq ? 'aq' : 'gen'], p.contract.salary + FOREIGN_RAISE[p.aq ? 'aq' : 'gen']));
+      const inc = Math.max(0, ask - this.cbtVal(p) * (S.calib.cbtK || 1)), over = inc > 0.05 && this.cbtPay(t) + inc > this.cbtCap() * 0.97;   // AI 구단은 상한을 넘기게 되는 증액 재계약은 하지 않는다(증액이 없으면 재계약)
+      if (keep && over && !elig && !p.foreign) ask = p.contract.salary;   // 상한 때문에 증액할 수 없으면 현 연봉으로 재계약
+      if (keep && (!over || (!elig && !p.foreign))) { p.contract = this._newContract(p, ask, 1); p.salHist = (p.salHist || []).slice(-2).concat([ask]); } else { this.release(t, id, true); }
     }
     S.phase = 'offseason'; S.off = { step: 'review', rep, year: S.year + 1, draft: null, fa: S.fa || [] };
     this.repairSettings(user); this.invalidate();
     return S.off;
   };
-  proto.resign = function (id, years) {
-    const S = this.S, p = S.players[id], ask = this.askSalary(p), off = S.off;
+  proto.resign = function (id) {   // 재계약은 모두 1년(연봉 계약). FA 자격자가 여러 해 계약을 원하면 FA 시장에서 계약금을 포함해 협상한다
+    const S = this.S, p = S.players[id], ask = this.resignAsk(p), off = S.off;
     if (!off || !off.rep.expiring.includes(id)) return '재계약 대상이 아닙니다.';
-    const t = S.userTeam;
-    p.contract = this._newContract(p, ask, clamp(years || 2, 1, 4)); off.rep.expiring = off.rep.expiring.filter(x => x !== id); news(this, `${p.ko} 재계약 (${ask}억, ${p.contract.years}년)`); return null;
+    p.contract = this._newContract(p, ask, 1); p.salHist = (p.salHist || []).slice(-2).concat([ask]); off.rep.expiring = off.rep.expiring.filter(x => x !== id); news(this, `${p.ko} 재계약 (${ask}억, 1년)`); return null;
   };
+  proto.resignAll = function () { const off = this.S.off; if (!off) return 0; let n = 0; for (const id of off.rep.expiring.slice()) { const p = this.S.players[id]; if (p.foreign) continue; if (!this.resign(id)) n++; } return n; };   // 외국인을 제외한 전원을 1년 재계약
   proto.finishContracts = function () {   // 재계약하지 않은 선수는 FA 시장으로
     const S = this.S, off = S.off; for (const id of off.rep.expiring.slice()) this.release(S.userTeam, id, true);
-    off.rep.expiring = []; off.fa = S.fa; this.invalidate();
+    off.rep.expiring = []; off.fa = S.fa; this._priceClass(true); this.invalidate();   // 이번 FA 풀의 시장가 확정
   };
 
   /* ---------- 드래프트 ---------- */
@@ -212,7 +296,7 @@
   };
   proto.draftOnClock = function () { const d = this.S.off.draft; return d.pick < d.order.length ? d.order[d.pick] : null; };
   proto._draftTake = function (t, id) {
-    const S = this.S, d = S.off.draft, p = S.players[id]; d.pool = d.pool.filter(x => x !== id); p.team = t; p.contract = { salary: 0.3, years: 3 }; S.teams[t].ids.push(id);
+    const S = this.S, d = S.off.draft, p = S.players[id]; d.pool = d.pool.filter(x => x !== id); p.team = t; p.contract = { salary: 0.3, years: 1 }; S.teams[t].ids.push(id);
     d.picks.push({ pick: d.pick + 1, team: t, id }); d.pick++; this.invalidate();
     if (t === S.userTeam) news(this, `드래프트 ${Math.ceil(d.pick / 10)}라운드: ${p.ko} 지명`);
     if (S.teams[t].ids.length > ROSTER_MAX) { const worst = S.teams[t].ids.map(x => S.players[x]).filter(x => x.id !== id && !x.active).sort((a, b) => this.marketValue(a) - this.marketValue(b))[0]; if (worst) { if (t === S.userTeam) { /* 사용자 팀은 직접 정리 */ } else this._retireOrRelease(t, worst.id); } }
@@ -249,10 +333,10 @@
    * 외부 FA 영입은 구단당 스토브리그 3명. 외국인: 일반 3명(같은 포지션 3명 불가) + 아시아쿼터 1명, 신규 상한 100만$(14억)·AQ 20만$(2.8억). */
   const FA_REG_DAYS = 145, EXT_LIMIT = 3, FOREIGN_NEW = { gen: 14, aq: 2.8 }, FOREIGN_RAISE = { gen: 7, aq: 1.4 };
   const FSUR = ['카르', '로페', '미첼', '스미', '브라', '윌슨', '존슨', '해리', '터너', '로저', '필립', '데이', '콜린', '다니', '레이', '헤이', '모리', '샌더', '프레', '그랜'], FGIV = ['스', '슨', '즈', '트', '드', '로', '닐', '크'];
-  /* 새 다년계약: 연봉 3억 이상·2년 이상이면 계약금이 포함된 FA형 계약으로 보고 경쟁균형세 보수를 연봉×1.6으로 계산(FA 계약 CSV의 보수/연봉 비율 1.7~3.1 기준의 보수적 값) */
-  proto._newContract = function (p, salary, years) { const c = { salary, years }; if (!p.foreign && years >= 2 && salary >= 3) c.cbt = Math.round(salary * 1.6 * 100) / 100; return c; };
+  /* 새 계약: 비FA는 모두 1년(연봉 계약). FA 다년계약은 계약금(현금, 계약 시 지급)을 포함하며 경쟁균형세 보수는 (계약금 + 연봉 × 연수) ÷ 연수 */
+  proto._newContract = function (p, salary, years, bonus) { const c = { salary, years }; if (bonus > 0) { c.bonus = bonus; c.yrs0 = years; c.amort = Math.round(bonus / years * 100) / 100; c.total = Math.round((bonus + salary * years) * 10) / 10; if (!p.foreign) c.cbt = Math.round((bonus + salary * years) / years * 100) / 100; } return c; };
   /* AI 구단의 상한 점검용: 이 계약을 맺으면 늘어나는 경쟁균형세 보수 */
-  proto._cbtAdd = function (p, ask, years) { const c = this._newContract(p, ask, years || 2); return (c.cbt !== undefined ? c.cbt : ask) * (this.S.calib.cbtK || 1); };
+  proto._cbtAdd = function (p, ask, years, bonus) { const c = this._newContract(p, ask, years || 1, bonus || 0); return (c.cbt !== undefined ? c.cbt : ask) * (this.S.calib.cbtK || 1); };
   proto.faReq = function (p) { return p.fa.used > 0 ? 4 : (p.fa.univ ? 7 : 8); };
   proto.faEligible = function (p) { return !!(p.fa && !p.foreign && p.fa.svc >= this.faReq(p)); };
   proto.faSeasonsLeft = function (p) { return p.fa ? Math.max(0, Math.ceil(this.faReq(p) - p.fa.svc)) : null; };
@@ -292,7 +376,7 @@
       if (p.team === 'MIL') svc = Math.max(0, svc - 1.5);
       p.fa = { svc: Math.round(svc * 10) / 10, used: 0, last: null, regDays: 0, rem: 0, univ: p.dh ? p.dh.univ : !!(p.draft && /대/.test(p.draft.school.replace('메이저리그', ''))), est: !dh };
       if (p.ct && p.ct.from && p.ct.from <= 2026) { p.fa.used = p.age >= 37 ? 2 : 1; p.fa.svc = Math.max(0, 2026 - p.ct.from + 1); p.fa.last = p.ct.total >= 60 ? 'A' : p.ct.total >= 30 ? 'B' : 'C'; }
-      else if (p.ct && p.ct.from === 2027) { p.fa.used = 1; p.fa.svc = 0; p.fa.last = p.ct.total >= 60 ? 'A' : 'B'; }
+      else if (p.ct && p.ct.from === 2027 && !p.ct.nonfa) { p.fa.used = 1; p.fa.svc = 0; p.fa.last = p.ct.total >= 60 ? 'A' : 'B'; }
       if (p.fah) {   // FA 이력 CSV: 행사(승인)한 선수는 횟수·등급, 미신청 자격자는 자격 유지
         const ex = p.fah.filter(h => h.st === '승인'), known = Math.max(0, ...p.fah.map(h => h.used || 0));
         if (ex.length) { const last = ex.filter(h => h.g).pop(); p.fa.used = Math.max(p.fa.used, known, 1); if (last) p.fa.last = last.g; if (!(p.ct && p.ct.from)) p.fa.svc = Math.max(0, 2026 - ex[ex.length - 1].y + 1); }
@@ -300,10 +384,9 @@
         p.fa.est = false;
       }
       p.salHist = [p.contract.salary, p.contract.salary, p.contract.salary];   // 최근 3년 연봉(자료는 2026년뿐이라 같은 값으로 가정)
-      if (dh && p.age <= 24 && p.peak === undefined && !p.draft && p.team !== 'MIL') {   // 드래프트 순번으로 기울인 확률적 정점(젊은 기존 선수)
-        const rr = this._pkRng || (this._pkRng = rngFor(S.seed, 2027, 77)), tilt = dh.kind === '1차' ? (dh.pick && dh.pick <= 3 ? 1.2 : 0.9) : dh.round ? (dh.round === 1 && dh.pick && dh.pick <= 3 ? 1.2 : DRAFT_TILT[Math.min(dh.round, 11) - 1]) : dh.kind === '육성선수' ? -0.5 : dh.kind === '해외' ? 0.5 : 0;
-        const ov = this.ovr(p), pk = clamp(Math.max(this.rollPeak(rr, tilt), ov + 1 + (27 - p.age) * 0.8), 25, 85);
-        p.peak = pk; p.scout = { o: ov, ceil: clamp(pk + gauss(rr, 0, 16), 25, 85) }; p.pot = clamp((pk - ov) / 30, 0, 1.4);
+      if (p.age <= 25 && p.peak === undefined && !p.draft && !p.foreign && p.team !== 'MIL') {   // 젊은 선수(2군 포함): 지명 슬롯 실제 분포 × 현재 OVR(나이 대비) 증거로 갱신한 정점
+        const rr = this._pkRng || (this._pkRng = rngFor(S.seed, 2027, 77)), ov = this.ovr(p), pk = clamp(this._posteriorPeak(rr, ov, p.age, slotPrior(dh)), 25, 85), ss = dh ? dh.ss || 0 : 0;
+        p.peak = pk; p.scout = { o: ov, ceil: clamp(pk + gauss(rr, 0, 3 + 9 * Math.exp(-ss / 2)), 25, 85) }; p.pot = clamp((pk - ov) / 30, 0, 1.4);   // 프로 경험이 길수록 스카우트 평가 오차가 줄어든다
       }
       if (p.foreign) p.contract.years = 1;
     }
@@ -326,7 +409,8 @@
       }
       if (!p) continue;
       p.f27 = { status: c.status, total: c.total, date: c.date, term: c.term }; p.aq = !!c.aq; keep.add(p.id);
-      if (c.total) { const yrs = /2년/.test(c.term) ? 2 : 1, sal = Math.round(c.total / yrs * KRW * 10) / 10; p.contract = { salary: sal, years: yrs }; p.salHist = [sal, sal, sal]; p.sal = sal; }
+      if (c.total) { const yrs = /2년/.test(c.term) ? 2 : 1, sal = Math.round(c.total / yrs * KRW * 10) / 10; p.contract = { salary: sal, years: 1 };   // 외국인은 계약 기간이 '최대 2년'이어도 1년 단위(다음 해는 구단 옵션·재계약)
+         p.salHist = [sal, sal, sal]; p.sal = sal; }
       else p.contract.years = 1;
     }
     for (const t of TEAMS) for (const p of this.foreignOf(t)) if (!keep.has(p.id)) { S.teams[t].ids = S.teams[t].ids.filter(x => x !== p.id); p.team = 'FA'; p.active = false; p.faInfo = { from: t, grade: null, prev: p.contract.salary }; (S.fa = S.fa || []).push(p.id); }
@@ -361,10 +445,10 @@
     }
   };
   /* 공통 영입 처리: 팀 이동·계약·FA 행사(재취득 연수 리셋)·보상 */
-  proto._doSign = function (t, p, years, ask) {
+  proto._doSign = function (t, p, years, ask, bonus) {
     const S = this.S, info = p.faInfo, graded = info && info.grade, comp = graded && info.from !== t ? graded : null;
     S.fa = (S.fa || []).filter(x => x !== p.id); p.team = t; p.active = false; S.teams[t].ids.push(p.id);
-    ask = Math.round(ask * 10) / 10; p.contract = this._newContract(p, ask, p.foreign ? 1 : years); p.salHist = (p.salHist || []).slice(-2).concat([ask]);
+    ask = Math.round(ask * 10) / 10; bonus = Math.round((bonus || 0) * 10) / 10; p.contract = this._newContract(p, ask, p.foreign || !graded ? 1 : years, p.foreign || !graded ? 0 : bonus); p.salHist = (p.salHist || []).slice(-2).concat([Math.round(((p.contract.bonus || 0) / p.contract.years + ask) * 10) / 10]);
     if (graded && p.fa) { p.fa.used += 1; p.fa.last = graded; p.fa.svc = 0; p.fa.rem = 0; }
     if (comp) { this._faCount(t, 1); this._compensate(t, p, info); }
     p.faInfo = undefined; this.invalidate();
@@ -412,7 +496,7 @@
       S.teams[p.team].ids = S.teams[p.team].ids.filter(x => x !== p.id);
       p.faInfo = { from: p.team, grade: gr.get(p.id), prev: p.contract.salary, year: 2027 }; p.team = 'FA'; p.active = false; p.reg1 = false; (S.fa = S.fa || []).push(p.id);
     }
-    this.invalidate();
+    this._priceClass(true); this.invalidate();
   };
   /* FA 시장 진행: 개막 후 매일 AI 구단이 확률적으로 FA를 영입(초반에 많고 점차 줄어듦). 사용자는 언제든 직접 협상 가능 */
   proto._faMarketDay = function (d) {
@@ -421,25 +505,34 @@
     for (const t of teams) {
       if (r.random() > pr) continue;
       if (this._faCount(t) >= EXT_LIMIT || S.teams[t].ids.length >= ROSTER_MAX - 4) continue;
-      const cand = this.faList().filter(p => !p.foreign && !(p.faInfo && p.faInfo.from === t && false)).sort((a, b) => this.war(b) - this.war(a)).find(p => {
-        const ask = this.askSalary(p); return this.war(p) >= 1.0 && this.cbtPay(t) + this._cbtAdd(p, ask, 2) <= this.cbtCap() * 0.97 && this.faRoom(t) >= ask && (!(p.faInfo && p.faInfo.grade) || p.faInfo.from === t || this._faCount(t) < EXT_LIMIT) && r.random() < (this.war(p) >= 2 ? 0.7 : 0.45);
+      let deal = null;
+      const cand = this.faList().filter(p => !p.foreign).sort((a, b) => this.war(b) - this.war(a)).find(p => {
+        if (this.war(p) < 1.0 || !((!(p.faInfo && p.faInfo.grade)) || p.faInfo.from === t || this._faCount(t) < EXT_LIMIT) || !(r.random() < (this.war(p) >= 2 ? 0.7 : 0.45))) return false;
+        deal = this._aiDeal(t, p); return !!deal;
       });
       if (!cand) continue;
-      const ask = this.askSalary(cand), yrs = 1 + Math.floor(r.random() * 3), g = cand.faInfo && cand.faInfo.grade, from = cand.faInfo && cand.faInfo.from;
-      this._doSign(t, cand, yrs, ask); this.refreshTeam(t);
-      if (g || this.war(cand) >= 2) { const text = `FA ${cand.ko}(${from ? KO0[from] + ' ' : ''}${g ? g + '등급' : ''}) → ${KO0[t]} (${ask}억, ${yrs}년)`; (S.faLog = S.faLog || []).unshift({ year: S.year, day: d, text }); if (S.faLog.length > 40) S.faLog.pop(); news(this, text); }
+      const ask = deal.salary, yrs = deal.years, g = cand.faInfo && cand.faInfo.grade, from = cand.faInfo && cand.faInfo.from;
+      this._doSign(t, cand, yrs, ask, deal.bonus); this.refreshTeam(t);
+      if (g || this.war(cand) >= 2) { const text = `FA ${cand.ko}(${from ? KO0[from] + ' ' : ''}${g ? g + '등급' : ''}) → ${KO0[t]} (${yrs}년 총 ${(deal.per * yrs).toFixed(1)}억, 계약금 ${deal.bonus.toFixed(1)})`; (S.faLog = S.faLog || []).unshift({ year: S.year, day: d, text }); if (S.faLog.length > 40) S.faLog.pop(); news(this, text); }
     }
   };
   proto.faList = function () { const S = this.S; return (S.fa || []).map(id => S.players[id]).filter(p => p && p.team === 'FA'); };
-  proto.signFA = function (id, years) {
+  proto.signFA = function (id, offer) {
     const S = this.S, p = S.players[id], t = S.userTeam; if (!p || p.team !== 'FA') return '이미 계약된 선수입니다.';
     if (S.teams[t].ids.length >= ROSTER_MAX) return `보유 선수 ${ROSTER_MAX}명 제한입니다.`;
     const info = p.faInfo, graded = info && info.grade, ext = graded && info.from !== t;
     if (ext && this._faCount(t) >= EXT_LIMIT) return `외부 FA는 한 시즌에 ${EXT_LIMIT}명까지만 영입할 수 있습니다.`;
-    let ask = this.askSalary(p);
-    if (p.foreign) { if (!this.foreignOK(t, p)) return p.aq ? '아시아쿼터는 구단당 1명입니다.' : '일반 외국인은 3명까지이며 같은 포지션 3명은 안 됩니다.'; ask = Math.min(ask, this.foreignCap(p, t)); }
-    this._doSign(t, p, clamp(years || 2, 1, 4), ask);   // 상한 초과는 허용(시즌 종료 시 야구발전기금 부과)
-    news(this, `FA ${p.ko} 영입 (${ask}억, ${p.contract.years}년${graded ? `, ${graded}등급` : ''})`); return null;
+    if (p.foreign) {
+      if (!this.foreignOK(t, p)) return p.aq ? '아시아쿼터는 구단당 1명입니다.' : '일반 외국인은 3명까지이며 같은 포지션 3명은 안 됩니다.';
+      const ask = Math.min(this.askSalary(p), this.foreignCap(p, t)); this._doSign(t, p, 1, ask, 0);
+      news(this, `FA ${p.ko} 영입 (${ask}억, 1년)`); return null;
+    }
+    if (typeof offer !== 'object' || offer === null) offer = this.faDefaultOffer(p, t, typeof offer === 'number' ? offer : undefined);   // 숫자만 주면 요구 조건에 맞춘 기본 제시
+    const ev = this.faEvaluate(p, offer, t); if (!ev.ok) return ev.msg;
+    const cost = ev.sal + ev.bon / ev.y, room = this.faRoom(t);   // 계약금은 계약 기간 동안 균등 상각(선수단 비용)
+    if (room < cost) return `예산 부족: 연간 비용(연봉 ${ev.sal.toFixed(1)} + 계약금 상각 ${(ev.bon / ev.y).toFixed(1)} = ${cost.toFixed(1)}억)이 FA 여유자금 ${room.toFixed(1)}억을 넘습니다. 이사회가 승인하지 않습니다.`;
+    this._doSign(t, p, ev.y, ev.sal, ev.bon);   // 경쟁균형세 상한 초과는 허용(시즌 종료 시 야구발전기금 부과)
+    news(this, `FA ${p.ko} 영입 (${graded ? `${graded}등급, ` : ''}${ev.y}년 총 ${(ev.per * ev.y).toFixed(1)}억 = 계약금 ${ev.bon.toFixed(1)} + 연봉 ${ev.sal.toFixed(1)}×${ev.y})`); return null;
   };
   proto.finishFA = function () {   // AI 팀이 남은 FA를 영입하고 로스터를 채운다
     const S = this.S, r = rngFor(S.seed, S.year, 51), teams = TEAMS.filter(t => t !== S.userTeam).sort(() => r.random() - 0.5);
@@ -449,14 +542,14 @@
       for (const p of pool) {
         if (this._faCount(t) >= EXT_LIMIT || S.teams[t].ids.length >= ROSTER_MAX - 4) break;
         if (p.foreign) continue;   // 외국인은 아래에서 슬롯별로 채운다
-        let ask = this.askSalary(p); if (this.cbtPay(t) + this._cbtAdd(p, ask, 2) > this.cbtCap() * 0.97) continue; if (this.war(p) < 1.0) continue;   // AI 구단은 상한을 지킨다
-        if (r.random() < (this.war(p) >= 2 ? 0.75 : 0.5)) this._doSign(t, p, 1 + Math.floor(r.random() * 3), ask);
+        if (this.war(p) < 1.0) continue; const deal = this._aiDeal(t, p); if (!deal) continue;   // AI 구단은 상한·여유자금을 지킨다
+        if (r.random() < (this.war(p) >= 2 ? 0.75 : 0.5)) this._doSign(t, p, deal.years, deal.salary, deal.bonus);
       }
       this._fillForeign(t, r);
       // 연봉 하한(2027~) 미달이면 하한을 넘길 때까지 FA를 영입한다(미달 시 기금 납부를 피하려고)
       { const fl = this.cbtFloor(); if (fl !== null) for (let k = 0; k < 6 && this.cbtPay(t) < fl * 1.03 && S.teams[t].ids.length < ROSTER_MAX; k++) {
-        const p = this.faList().filter(x => !x.foreign && !(x.faInfo && x.faInfo.grade && x.faInfo.from !== t && this._faCount(t) >= EXT_LIMIT) && this.cbtPay(t) + this._cbtAdd(x, this.askSalary(x), 2) <= this.cbtCap() * 0.97).sort((a, b) => this.war(b) - this.war(a))[0]; if (!p) break;
-        this._doSign(t, p, 1 + Math.floor(r.random() * 3), this.askSalary(p));
+        let dl = null; const p = this.faList().filter(x => !x.foreign && !(x.faInfo && x.faInfo.grade && x.faInfo.from !== t && this._faCount(t) >= EXT_LIMIT)).sort((a, b) => this.war(b) - this.war(a)).find(x => { dl = this._aiDeal(t, x); return !!dl; }); if (!p) break;
+        this._doSign(t, p, dl.years, dl.salary, dl.bonus);   // 연봉 하한 미달 팀의 보강 영입(계약금 포함)
       } }
       // 핵심 포지션(포수·유격수·중견수·2루수·3루수)에 주포지션 선수가 2명 미만이면 보강
       for (const pos of ['C', 'SS', 'CF', '2B', '3B']) {
@@ -582,12 +675,13 @@
   };
   proto._finGame = function (home) { if (!this.finReady()) return; const f = this.S.fin.teams[home]; if (!f) return; f.gate += this.finAtt(home) * f.price * f.pm; f.games++; };
   proto.setTicketPolicy = function (t, pm) { if (!this.finReady() || !PRICE_PM.includes(pm)) return false; this.S.fin.teams[t].pm = pm; return true; };
+  proto.finPay = function (t) { return Math.round((this.payroll(t) + this.S.teams[t].ids.reduce((a, id) => { const c = this.S.players[id].contract; return a + (c.amort && c.years > 0 ? c.amort : 0); }, 0)) * 10) / 10; };   // 선수단 보수 = 연봉 + 신규 FA 계약금 상각
   proto.finAllowed = function (t) { const f = this.S.fin.teams[t]; return f.lastRev * LOSS * (0.5 + f.trust / 100); };
   proto.finBudget = function (t) { const f = this.S.fin.teams[t]; return Math.round((f.lastRev - f.opex + this.finAllowed(t)) * 10) / 10; };
-  proto.faRoom = function (t) { return this.finReady() ? Math.round((this.finBudget(t) - this.payroll(t)) * 10) / 10 : 1e9; };
+  proto.faRoom = function (t) { return this.finReady() ? Math.round((this.finBudget(t) - this.finPay(t)) * 10) / 10 : 1e9; };
   proto.finPreview = function (t) {   // 시즌 예상 손익(진행분 + 남은 홈 경기를 현재 관중으로 환산), 포스트시즌 수입 제외
     const S = this.S, f = S.fin.teams[t], rem = Math.max(0, FIN_GAMES - f.games), gate = f.gate + rem * this.finAtt(t) * f.price * f.pm;
-    const pay = this.payroll(t), v = this.cbtPreview(t), cbt = v.fee || 0, bc = this.finBC(), rev = gate + f.parAds + f.other + bc;
+    const pay = this.finPay(t), v = this.cbtPreview(t), cbt = v.fee || 0, bc = this.finBC(), rev = gate + f.parAds + f.other + bc;
     return { gate, par: f.parAds, other: f.other, bc, parts: f.parts, rev, pay, opex: f.opex, cbt, op: rev - pay - f.opex - cbt, att: this.finAtt(t), cap: this.finCap(t), room: this.faRoom(t), budget: this.finBudget(t), trust: f.trust, allowed: this.finAllowed(t) };
   };
   proto._psSettle = function () {   // 포스트시즌 입장수입 → 배당 재원 → 팀별 배당

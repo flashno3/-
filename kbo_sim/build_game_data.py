@@ -289,7 +289,7 @@ def load_fa(players):
         total=float(r['총액_억']) if r['총액_억'] else None
         optseg=re.search(r'(\d+(?:\.\d+)?)억',r['옵션구간'] or '')
         guaranteed=(total-float(optseg.group(1))) if (total and optseg) else total
-        ct={'years':years,'total':total,'bonus':float(r['계약금_억']) if r['계약금_억'] else None,'from':int(r['시작시즌']),'end':int(r['종료시즌_보장']) if r['종료시즌_보장'] else None,'opt':r['옵션구간'] or None,'est':status=='확인필요'}
+        ct={'years':years,'total':total,'bonus':float(r['계약금_억']) if r['계약금_억'] else None,'from':int(r['시작시즌']),'end':int(r['종료시즌_보장']) if r['종료시즌_보장'] else None,'opt':r['옵션구간'] or None,'est':status=='확인필요','nonfa':r['FA연도'].startswith('비FA')}
         if r['시작시즌']=='2027' and r['연봉합계_억']: ct['salary']=round(float(r['연봉합계_억'])/g,2)   # 2027 시즌부터 시작하는 새 계약(양의지·오태곤)은 새 연봉 적용
         if guaranteed and status!='확인필요': ct['cbt']=round(guaranteed/g,2)   # 경쟁균형세 반영 연평균 보수(보장 총액/보장 연수)
         p['ct']=ct;st['ok']+=1
