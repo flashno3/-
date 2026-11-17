@@ -1,7 +1,7 @@
 import subprocess,json,os
 PK=['잠실','고척','문학','수원','대전','광주','사직','창원','대구']
 MODES={'y2026':('ratings_replay_pk.json','0.03'),'blend':('ratings_forward_pk.json','1.0')}
-SEAS={'y2026':'2026','blend':os.environ.get('BLEND_SEASONS','2026:1,2025:0.6')}  # 예측 모드: 2026 + 2025(가중 0.6). 2024 추가 시 '2026:1,2025:0.6,2024:0.4'
+SEAS={'y2026':'2026','blend':os.environ.get('BLEND_SEASONS','2026:1,2025:0.6,2024:0.4')}  # 예측 모드: 2026 + 2025(가중 0.6). 2024까지 포함 (2시즌만 쓰려면 BLEND_SEASONS='2026:1,2025:0.6')
 resid={m:{p:1.0 for p in PK} for m in MODES}
 def run(cmd,**env): return subprocess.run(cmd,env=dict(os.environ,**env),capture_output=True,text=True)
 for it in range(1,5):

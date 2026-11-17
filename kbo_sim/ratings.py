@@ -10,17 +10,19 @@ PRIMARY=SEASONS[0][0];NORM=int(os.environ.get('NORM','1'))
 if PARK!='none':
     _E=json.load(open('parks.json',encoding='utf8'))[PARK]['env']
     fac=lambda t,f:_E.get(t,{}).get(f,1.0)
+NEUTRAL={(2024,'Eagles')}   # 2024 한화는 옛 대전구장(파크팩터 없음) -> 구장 효과 제거 없이 사용
 def load(y):
+    fac_=lambda t,f:1.0 if (y,t) in NEUTRAL else fac(t,f)
     B=json.load(open(f'batting_{y}.json',encoding='utf8'));PT=json.load(open(f'pitching_{y}.json',encoding='utf8'))
     if PARK!='none':
         _B=[]
         for r in B:
             q=dict(r);t=r['team'];q['H0']=r['H'];q['HR0']=r['HR']
-            q['B1']=r['B1']/fac(t,'b1');q['B2']=r['B2']/fac(t,'b2');q['B3']=r['B3']/fac(t,'b3');q['HR']=r['HR']/fac(t,'hr')
+            q['B1']=r['B1']/fac_(t,'b1');q['B2']=r['B2']/fac_(t,'b2');q['B3']=r['B3']/fac_(t,'b3');q['HR']=r['HR']/fac_(t,'hr')
             q['H']=q['B1']+q['B2']+q['B3']+q['HR'];_B.append(q)
         B=_B;_P=[]
         for r in PT:
-            q=dict(r);t=r['team'];nh=(r['H']-r['HR'])/fac(t,'nh');q['HR']=r['HR']/fac(t,'hr');q['H']=nh+q['HR'];_P.append(q)
+            q=dict(r);t=r['team'];nh=(r['H']-r['HR'])/fac_(t,'nh');q['HR']=r['HR']/fac_(t,'hr');q['H']=nh+q['HR'];_P.append(q)
         PT=_P
     return B,PT
 key=lambda r:f"{r['name']}|{r['team']}|{r['age']}"
@@ -67,14 +69,14 @@ FB={y:{k:(lg[k]/LGB[y][k] if NORM else 1.0) for k in lg} for y,_ in SEASONS}
 FP={y:{k:(lgp[k]/LGP[y][k] if NORM else 1.0) for k in lgp} for y,_ in SEASONS}
 # ---------- 동일 선수 연결 (이름 + 나이 +1) ----------
 def kor(n): return n.split()[-1]
-def link(prow,cands,used):
+def link(prow,cands,used,dy=1):
     """기준 시즌 행 -> 과거 시즌 행. 영문명+한글명 일치 & 나이차 정확히 1, 없으면 한글명 일치(미사용 중 유일) & 나이차 1."""
     try: a=int(prow['age'])
     except: a=None
     def okage(c):
-        try: return a is not None and int(c['age'])==a-1
+        try: return a is not None and int(c['age'])==a-dy
         except: return False
-    ex=[c for c in cands.get(kor(prow['name']),[]) if id(c) not in used and c['name']==prow['name'] and (okage(c) or (a is None and not c['age']))]
+    ex=[c for c in cands.get(kor(prow['name']),[]) if id(c) not in used and c['name']==prow['name'] and (okage(c) or not c['age'] or a is None)]
     if len(ex)==1: return ex[0]
     ko=[c for c in cands.get(kor(prow['name']),[]) if id(c) not in used and okage(c)]
     return ko[0] if len(ko)==1 else None
@@ -87,7 +89,7 @@ def gather(prow,idx,which):
     """[(season_weight, row)] 기준 시즌 + 연결된 과거 시즌 행"""
     out=[(SEASONS[0][1],PRIMARY,prow)]
     for y,w in SEASONS[1:]:
-        c=link(prow,idx[y][which],USED[y][which])
+        c=link(prow,idx[y][which],USED[y][which],PRIMARY-y)
         if c is not None: USED[y][which].add(id(c));out.append((w,y,c));LINK[(y,which)]+=1
     return out
 IDX={y:{'b':index(D[y][0]),'p':index(D[y][1])} for y,_ in SEASONS[1:]}
