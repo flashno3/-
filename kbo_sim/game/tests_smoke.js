@@ -2,7 +2,7 @@ const fs=require('fs'),path=require('path');
 const {League}=require('./src/league.js');
 const base=JSON.parse(fs.readFileSync(path.join(__dirname,'src/gamedata.json'),'utf8'));
 const t0=Date.now();const L=League.create(base,'Lions',2027);
-console.log('생성',Date.now()-t0,'ms | 연봉총액상한',L.L.cbtCap(),'억 | 팀 연봉:',Object.fromEntries(Object.keys(L.S.teams).map(t=>[t,L.payroll(t)])));
+console.log('생성',Date.now()-t0,'ms | 연봉총액상한',L.cbtCap(),'억 | 팀 연봉:',Object.fromEntries(Object.keys(L.S.teams).map(t=>[t,L.payroll(t)])));
 const T='Lions';const me=L.hitters(T,true);console.log('내 팀 1군 타자',me.length,'투수',L.pitchers(T,true).length);
 console.log('라인업',L.S.teams[T].set.lineup.map(x=>L.S.players[x.id].ko+'/'+x.pos).join(' '));
 console.log('로테이션',L.S.teams[T].set.rotation.map(id=>L.S.players[id].ko).join(' '),'| 마무리',L.S.players[L.S.teams[T].set.bullpen.closer].ko);

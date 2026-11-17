@@ -1695,7 +1695,7 @@ details.card > summary { cursor: pointer; font-family: var(--font-display); font
       const o = this.ovr(p), elig = this.faEligible(p), keep = r.random() < (elig || p.foreign ? clamp(0.25 + (o - 40) * 0.025 - (p.age >= 34 ? 0.25 : 0), 0.08, 0.72) : 0.9);   // FA 자격자는 시장에 나올 수 있고, 미자격자는 구단이 계속 보유(재계약 우선)
       let ask = this.askSalary(p); if (p.foreign) ask = Math.min(ask, p.faInfo ? 1e9 : Math.max(FOREIGN_NEW[p.aq ? 'aq' : 'gen'], p.contract.salary + FOREIGN_RAISE[p.aq ? 'aq' : 'gen']));
       const over = this.cbtPay(t) + Math.max(0, ask - p.contract.salary) * (S.calib.cbtK || 1) > this.cbtCap() * 0.97;   // AI 구단은 상한을 넘기는 재계약은 하지 않는다
-      if (keep && !over) { p.contract = { salary: ask, years: p.foreign ? 1 : 1 + Math.floor(r.random() * 3) }; p.salHist = (p.salHist || []).slice(-2).concat([ask]); } else { this.release(t, id, true); }
+      if (keep && !over) { p.contract = this._newContract(p, ask, p.foreign ? 1 : 1 + Math.floor(r.random() * 3)); p.salHist = (p.salHist || []).slice(-2).concat([ask]); } else { this.release(t, id, true); }
     }
     S.phase = 'offseason'; S.off = { step: 'review', rep, year: S.year + 1, draft: null, fa: S.fa || [] };
     this.repairSettings(user); this.invalidate();
@@ -1705,7 +1705,7 @@ details.card > summary { cursor: pointer; font-family: var(--font-display); font
     const S = this.S, p = S.players[id], ask = this.askSalary(p), off = S.off;
     if (!off || !off.rep.expiring.includes(id)) return '재계약 대상이 아닙니다.';
     const t = S.userTeam;
-    p.contract = { salary: ask, years: clamp(years || 2, 1, 4) }; off.rep.expiring = off.rep.expiring.filter(x => x !== id); news(this, `${p.ko} 재계약 (${ask}억, ${p.contract.years}년)`); return null;
+    p.contract = this._newContract(p, ask, clamp(years || 2, 1, 4)); off.rep.expiring = off.rep.expiring.filter(x => x !== id); news(this, `${p.ko} 재계약 (${ask}억, ${p.contract.years}년)`); return null;
   };
   proto.finishContracts = function () {   // 재계약하지 않은 선수는 FA 시장으로
     const S = this.S, off = S.off; for (const id of off.rep.expiring.slice()) this.release(S.userTeam, id, true);
@@ -1760,6 +1760,8 @@ details.card > summary { cursor: pointer; font-family: var(--font-display); font
    * 외부 FA 영입은 구단당 스토브리그 3명. 외국인: 일반 3명(같은 포지션 3명 불가) + 아시아쿼터 1명, 신규 상한 100만$(14억)·AQ 20만$(2.8억). */
   const FA_REG_DAYS = 145, EXT_LIMIT = 3, FOREIGN_NEW = { gen: 14, aq: 2.8 }, FOREIGN_RAISE = { gen: 7, aq: 1.4 };
   const FSUR = ['카르', '로페', '미첼', '스미', '브라', '윌슨', '존슨', '해리', '터너', '로저', '필립', '데이', '콜린', '다니', '레이', '헤이', '모리', '샌더', '프레', '그랜'], FGIV = ['스', '슨', '즈', '트', '드', '로', '닐', '크'];
+  /* 새 다년계약: 연봉 3억 이상·2년 이상이면 계약금이 포함된 FA형 계약으로 보고 경쟁균형세 보수를 연봉×1.6으로 계산(FA 계약 CSV의 보수/연봉 비율 1.7~3.1 기준의 보수적 값) */
+  proto._newContract = function (p, salary, years) { const c = { salary, years }; if (!p.foreign && years >= 2 && salary >= 3) c.cbt = Math.round(salary * 1.6 * 100) / 100; return c; };
   proto.faReq = function (p) { return p.fa.used > 0 ? 4 : (p.fa.univ ? 7 : 8); };
   proto.faEligible = function (p) { return !!(p.fa && !p.foreign && p.fa.svc >= this.faReq(p)); };
   proto.faSeasonsLeft = function (p) { return p.fa ? Math.max(0, Math.ceil(this.faReq(p) - p.fa.svc)) : null; };
@@ -1855,7 +1857,7 @@ details.card > summary { cursor: pointer; font-family: var(--font-display); font
   proto._doSign = function (t, p, years, ask) {
     const S = this.S, info = p.faInfo, graded = info && info.grade, comp = graded && info.from !== t ? graded : null;
     S.fa = (S.fa || []).filter(x => x !== p.id); p.team = t; p.active = false; S.teams[t].ids.push(p.id);
-    p.contract = { salary: ask, years: p.foreign ? 1 : years }; p.salHist = (p.salHist || []).slice(-2).concat([ask]);
+    p.contract = this._newContract(p, ask, p.foreign ? 1 : years); p.salHist = (p.salHist || []).slice(-2).concat([ask]);
     if (graded && p.fa) { p.fa.used += 1; p.fa.last = graded; p.fa.svc = 0; p.fa.rem = 0; }
     if (comp) { this._faCount(t, 1); this._compensate(t, p, info); }
     p.faInfo = undefined; this.invalidate();

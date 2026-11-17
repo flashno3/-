@@ -32,6 +32,6 @@ for(let y=0;y<4;y++){
  for(const p of L.players(U)){delete p.contract.cbt;p.contract.salary=Math.min(p.contract.salary,4)}   // 다음 해 원복
 }
 // 저장 호환: 구버전(연봉 환산 없음)
-const old=JSON.parse(L.save());delete old.calib.salK;delete old.calib.cbtK;delete old.cbt;for(const id in old.players){delete old.players[id].sal;old.players[id].foreign=false}for(const id in old.players){const c=old.players[id].contract;if(c)c.salary=Math.round((0.3+(c.salary-0.3)/2.2)*10)/10;}
+const old=JSON.parse(L.save());delete old.calib.salK;delete old.calib.cbtK;delete old.cbt;for(const id in old.players){delete old.players[id].sal;old.players[id].foreign=false;delete old.players[id].contract.cbt}for(const id in old.players){const c=old.players[id].contract;if(c)c.salary=Math.round((0.3+(c.salary-0.3)/2.2)*10)/10;}
 const L2=League.load(JSON.stringify(old));ok(L2.S.calib.salK>1&&L2.S.cbt,'구버전 환산');const a2=T.map(t=>L2.cbtPay(t)).reduce((a,b)=>a+b,0)/10;ok(Math.abs(a2-111.05)<1.2,'환산 후 평균 '+a2.toFixed(1));
 console.log(fail?'실패 '+fail:'모두 통과');process.exit(fail?1:0);
