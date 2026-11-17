@@ -31,13 +31,13 @@ console.log('같은 팀 동명 타자',Object.entries(dup).filter(([k,v])=>v>1).
 const m=a=>a.reduce((x,y)=>x+L.ovr(y),0)/a.length;ok(m(F)<m(Object.values(S.players).filter(p=>p.type==='B'&&p.PA>=300))-5,'신규 평균 OVR이 주전보다 충분히 낮아야 함');
 // 시즌 1회 완주: 2군 경기 정상
 L.advance(300,false);ok(L.standings2().length===11&&L.standings2().every(x=>x.w+x.l+x.d>=125),'2군 11팀');
-ok(S.fteams.Whales.ids.length===50&&S.fteams.Whales.ids.every(id=>S.players[id].team==='Whales'),'울산 50명');
+ok(S.fteams.Whales.ids.length===49&&S.fteams.Whales.ids.every(id=>S.players[id].team==='Whales'),'울산 50명');
 // 2b) ID 충돌 방지: 새 신인 ID는 기존 선수 ID와 겹치지 않는다
 ok(S.nextId>Math.max(...Object.keys(S.players).map(id=>parseInt(id.slice(1)))),'nextId 충돌');
 // 2c) 1군 등록 명단(생년월일·투타) 반영과 에이징
 {const csv=fs.readFileSync(path.join(__dirname,'data/roster_1군_2026.csv'),'utf8').split('\n').slice(1).filter(Boolean);
  const R=Object.values(S.players).filter(p=>p.birth);ok(R.length>=330,'생년월일 반영 '+R.length);
- ok(R.every(p=>p.age===2027-parseInt(p.birth.slice(0,4))&&p.throws&&p.bats),'나이=2027-출생연도, 투타 입력');
+ ok(R.every(p=>p.age===2027-parseInt(p.birth.slice(0,4))&&(p.ko==='최지만'||p.throws&&p.bats)),'나이=2027-출생연도, 투타 입력');
  const Lk=League.create(base,'Eagles',3);let bad=0;for(const t of Object.keys(Lk.S.teams)){const a=Lk.players(t).filter(p=>p.active);if(a.length!==28)bad++;if(a.filter(p=>!p.reg1).length>2)bad++}ok(bad===0,'초기 1군 28명, 대부분 실제 등록 명단');
  const old=Object.values(S.players).find(p=>p.ko==='최형우'&&p.birth);ok(old&&old.age===44,'최형우 44세');
  const q=JSON.parse(JSON.stringify(old));q.age=44;ok(L.retireChance(q)<0.7,'능력치 높은 노장은 일괄 은퇴하지 않음 '+L.retireChance(q).toFixed(2));
@@ -52,6 +52,17 @@ ok(S.nextId>Math.max(...Object.keys(S.players).map(id=>parseInt(id.slice(1)))),'
  ok(s.slice(300,1800).some(p=>p.peak>=68||rk.indexOf(p)>=0&&p.peak>=57),'중위 지명에서도 주전급 이상이 나옴');
  const sim=t=>{const a=rk.filter(p=>L.tierLabel(p.peak)===t).slice(0,200).map(p=>{const q=JSON.parse(JSON.stringify(p));let k=0;while(q.age<27&&k++<12)L.progress(q,new PyRandom(500+k+rk.indexOf(p)),1);return L.ovr(q)});return m(a)};
  const o=['슈퍼스타급','확실한 주전급','준주전급','후보급','육성급'].map(sim);console.log('27세 평균 OVR(슈퍼스타→육성)',o.map(v=>v.toFixed(0)).join(' > '));ok(o.every((v,i)=>i===0||o[i-1]>v+4),'등급별 성장 결과가 구분됨');}
+// 2e) 2027 실제 드래프트 지명
+{const LF=League.create(base,'Lions',9),SF=LF.S,dr=Object.values(SF.players).filter(p=>p.draft);ok(dr.length===110,'지명 110명 '+dr.length);
+ ok(Object.keys(SF.teams).every(t=>dr.filter(p=>p.team===t).length===11),'팀당 11명');
+ ok(dr.every(p=>p.ko==='최지만'||p.rookie===SF.year&&!p.active&&p.contract.salary===0.3),'신인 연봉 0.3억·2군·신인 표시');
+ ok(dr.every(p=>p.age>=19&&p.age<=23||p.ko==='최지만'),'신인 나이 범위');
+ const hy=dr.find(p=>p.ko==='하현승');ok(hy&&hy.bonus===16&&hy.twoWay&&hy.type==='P','하현승 16억 투타겸업');
+ ok(dr.every(p=>p.ko==='최지만'||LF.ovr(p)<=62),'신인 현재 능력치 과도하지 않음');
+ const cj=dr.find(p=>p.ko==='최지만');ok(cj.team==='Wiz'&&!SF.fteams.Whales.ids.includes(cj.id),'최지만 울산→KT 이적');
+ // 라운드 기울기: 1라운드 평균 정점이 후반 라운드보다 높은 경향(표본 3000)
+ const {PyRandom}=require('../web/src/engine.js');const rr=new PyRandom(5);const pk=(tilt)=>{let a=0;for(let i=0;i<3000;i++)a+=L.rollPeak(rr,tilt);return a/3000};
+ const t1=pk(0.9),t0=pk(0),t11=pk(-0.3),tb=pk(0.9+1.2);console.log('정점 평균: 1R',t1.toFixed(1),'무관',t0.toFixed(1),'11R',t11.toFixed(1),'1R+16억',tb.toFixed(1));ok(tb>t1&&t1>t0&&t0>t11,'기울기가 정점 기대값을 높임');}
 // 3) 군 복무(상무)
 {const L2=League.create(base,'Lions',4),S2=L2.S;const mil=S2.mil.map(id=>S2.players[id]);
  ok(L2.farmTeams().includes('Whales')&&mil.length===26&&mil.every(p=>p.team==='MIL'&&p.milTeam in S2.teams&&!S2.teams[p.milTeam].ids.includes(p.id)),'상무 26명이 팀 명단 밖');

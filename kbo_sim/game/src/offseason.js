@@ -73,8 +73,10 @@
   const TIERS = [   // [이름, 확률, 정점 OVR 범위]
     ['슈퍼스타', 0.025, 68, 80], ['확실한 주전', 0.12, 57, 67.9], ['준주전', 0.25, 48, 56.9], ['후보', 0.38, 38, 47.9], ['육성', 0.225, 28, 37.9]
   ];
-  proto.rollPeak = function (r) {
-    let x = r.random(); for (const [name, pr, lo, hi] of TIERS) { if ((x -= pr) < 0) return lo + (hi - lo) * r.random(); }
+  /* tilt: 지명 순위·계약금 등 사전 평가에 따른 기울기(0=무관). 등급 확률 ∝ 기본확률 × exp(tilt × [2,1,0,-1,-2]) — 확률만 바뀌고 결과는 열려 있다 */
+  proto.rollPeak = function (r, tilt) {
+    const q = [2, 1, 0, -1, -2], w = TIERS.map((t, i) => t[1] * Math.exp((tilt || 0) * q[i])), tot = w.reduce((a, b) => a + b, 0);
+    let x = r.random() * tot; for (let i = 0; i < TIERS.length; i++) { if ((x -= w[i]) < 0) return TIERS[i][2] + (TIERS[i][3] - TIERS[i][2]) * r.random(); }
     return 36;
   };
   proto.tierLabel = function (v) { return v >= 68 ? '슈퍼스타급' : v >= 57 ? '확실한 주전급' : v >= 48 ? '준주전급' : v >= 38 ? '후보급' : '육성급'; };
@@ -84,13 +86,36 @@
     if (p.type === 'B') { set('k', -1, 0.06, 0.45); set('bb', 1, 0.015, 0.20); set('hr', 1, 0.002, 0.07); set('babip', 1, 0.24, 0.39); set('xbh', 1, 0.10, 0.32); }
     else { set('k', 1, 0.08, 0.40); set('bb', -1, 0.02, 0.18); set('hr', -1, 0.004, 0.06); set('babip', -1, 0.25, 0.37); }
   };
+  /* ---------------- 2027 신인 드래프트 지명 결과(실제) ----------------
+   * 순번·라운드·계약금으로 정점 확률을 기울인다(1라운드 +0.9 … 11라운드 −0.3, 계약금은 2.5억 초과분 ×0.12, 최대 +1.2). 능력치는 가상(확률적). */
+  const DRAFT_TILT = [0.9, 0.45, 0.25, 0.1, 0.1, 0, 0, -0.15, -0.15, -0.3, -0.3];
+  const TWOYR = ['동의과학대', '부산과학기술대', '동원과학기술대', '강릉영동대', '김포대'];
+  proto._addDraftClass = function (list) {
+    if (!list || !list.length) return;
+    const S = this.S, r = rngFor(S.seed, 2027, 61);
+    for (const d of list) {
+      const parts = d.school.split('-').map(x => x.replace('[얼리]', '')), univ = parts.filter(x => /대$/.test(x) && x !== '메이저리그')[0];
+      let by = d.birthYear, ageEst = false; if (!by) { by = /\[얼리\]/.test(d.school) ? 2006 : univ ? (TWOYR.includes(univ) ? 2005 : 2004) : 2008; ageEst = !d.birthYear; }
+      const type = d.pos === '투수' || d.pos === '투타겸업' ? 'P' : 'B', pos = { 포수: 'C' }[d.pos] || (d.pos === '내야수' ? ['1B', '2B', '3B', 'SS'][Math.floor(r.random() * 4)] : d.pos === '외야수' ? ['LF', 'CF', 'RF'][Math.floor(r.random() * 3)] : undefined);
+      // 이미 데이터에 있는 선수(예: 울산 웨일즈 출신 최지만)는 새로 만들지 않고 구단만 옮긴다
+      const ex = Object.values(S.players).find(p => p.ko === d.name && p.team === 'Whales' && p.type === type);
+      if (ex) { S.fteams.Whales.ids = S.fteams.Whales.ids.filter(x => x !== ex.id); ex.team = d.team; S.teams[d.team].ids.push(ex.id); ex.rookie = S.year; ex.draft = { round: d.round, school: d.school }; if (d.name === '최지만') { ex.age = 2027 - 1991; ex.birth = '1991-05-26'; delete ex.ageEst; } continue; }
+      const tilt = DRAFT_TILT[d.round - 1] + (d.bonus ? Math.min(1.2, 0.12 * Math.max(0, d.bonus - 2.5)) : 0);
+      const p = this.makeRookie(r, type, pos, { name: d.name, age: 2027 - by, tilt });
+      p.team = d.team; p.rookie = S.year; p.draft = { round: d.round, school: d.school }; if (d.bonus) p.bonus = d.bonus; if (d.name === '윤예성') p.bonusUnknown = true; if (d.pos === '투타겸업') p.twoWay = true; if (ageEst) p.ageEst = true;
+      p.contract = { salary: 0.3, years: 3 }; S.teams[d.team].ids.push(p.id);
+    }
+    this.invalidate();
+  };
+
   proto.scoutScore = function (p) { return 0.35 * p.scout.o + 0.65 * p.scout.ceil; };
-  proto.makeRookie = function (r, type, forcePos) {
+  proto.makeRookie = function (r, type, forcePos, opts) {
+    opts = opts || {};
     const S = this.S, sc = S.calib.scale[type], lb = S.calib.lb, id = (type === 'B' ? 'B' : 'P') + (S.nextId++);
     const g = gauss(r, 0, 0.5), z = () => -1.1 + g + gauss(r, 0, 0.6);
-    let name; do { name = SURN[Math.floor(r.random() * SURN.length)] + GIV[Math.floor(r.random() * GIV.length)]; } while (this._nameTaken && this._nameTaken.has(name) && this._nameTaken.size < 800);
+    let name = opts.name; if (!name) do { name = SURN[Math.floor(r.random() * SURN.length)] + GIV[Math.floor(r.random() * GIV.length)]; } while (this._nameTaken && this._nameTaken.has(name) && this._nameTaken.size < 800);
     (this._nameTaken = this._nameTaken || new Set()).add(name);
-    const age = 18 + Math.min(5, Math.floor(r.random() * r.random() * 6 + r.random() * 2));
+    const age = opts.age || 18 + Math.min(5, Math.floor(r.random() * r.random() * 6 + r.random() * 2));
     const p = { id, type, name, ko: name, team: 'DRAFT', age, rookie: S.year + 1, foreign: false, active: false, fat: 0, lastStart: -99, retired: false, pot: Math.max(0, gauss(r, 0.75, 0.5)), p: {} };
     if (type === 'B') {
       const cl = (v, a, b) => clamp(v, a, b);
@@ -107,8 +132,8 @@
     if (type === 'B') p.bats = r.random() < 0.06 ? 'S' : r.random() < 0.35 ? 'L' : 'R'; else p.throws = r.random() < 0.27 ? 'L' : 'R';   // 가상 신인의 투타
     p.contract = { salary: 0.3, years: 3 };
     S.players[id] = p;
-    p.peak = this.rollPeak(r);   // 숨은 정점 OVR
-    const target = clamp(p.peak - (27 - p.age) * 2.0 - 4 + gauss(r, 0, 7), 20, p.peak);   // 현재 능력치를 정점에 맞춰 정렬(어릴수록 격차 큼)
+    p.peak = this.rollPeak(r, opts.tilt);   // 숨은 정점 OVR
+    const target = Math.min(clamp(p.peak - (27 - p.age) * 2.0 - 4 + gauss(r, 0, 7), 20, p.peak), 38 + (p.age - 18) * 4);   // 어린 신인이 곧바로 주전급이 되지 않도록 현재 능력치 상한   // 현재 능력치를 정점에 맞춰 정렬(어릴수록 격차 큼)
     for (let k = 0; k < 5; k++) { const g = (target - this.ovr(p)) / 14; if (Math.abs(g) < 0.08) break; this._gain(p, g, r, 0); }
     p.pot = clamp((p.peak - this.ovr(p)) / 30, 0, 1.4);
     p.scout = { o: this.ovr(p) + Math.round(gauss(r, 0, 3)), ceil: clamp(p.peak + gauss(r, 0, 16), 25, 85) };

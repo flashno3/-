@@ -249,6 +249,18 @@ def load_roster1(players):
         if '등록명단 외' not in r['비고']: p['reg1']=True;st['reg1']+=1
     return st
 R1=load_roster1(players)
+
+# 2027 신인 드래프트 지명 결과(사용자 제공)
+def load_draft():
+    f=D+'game/data/draft_2027.txt';out=[]
+    if not os.path.exists(f): return out
+    TMD={'키움':'Heroes','두산':'Bears','KIA':'Tigers','롯데':'Giants','KT':'Wiz','NC':'Dinos','삼성':'Lions','SSG':'Landers','한화':'Eagles','LG':'Twins'}
+    for l in open(f,encoding='utf8'):
+        if not l.strip() or l.startswith('#'): continue
+        r,t,n,sch,pos,by,bonus=l.strip().split('|')
+        out.append(dict(round=int(r),team=TMD[t],name=n,school=sch,pos=pos,birthYear=None if by=='-' else int(by),bonus=None if bonus=='-' else float(bonus)))
+    return out
+DRAFT=load_draft()
 # 능력치 척도(20-80): ratings.py 와 같은 방식(규정 타자 PA≥300 / 규정 투수 TBF≥200 가중 평균·표준편차)
 def scale(rows,fields,w):
     out={}
@@ -256,7 +268,7 @@ def scale(rows,fields,w):
         v=[r['p'][f] for r in rows];t=[w(r) for r in rows];mu=sum(a*b for a,b in zip(v,t))/sum(t);sd=math.sqrt(sum(b*(a-mu)**2 for a,b in zip(v,t))/sum(t));out[f]=[mu,sd]
     return out
 regB=[b for b in R['batters'] if b['PA']>=300];regP=[p for p in R['pitchers'] if p['TBF']>=200]
-out={'teams':TEAMS,'players':players,'league_bat':R['league_bat'],'team_def':R['team_def'],'pf':PK['pf_by_team'],
+out={'draft2027':DRAFT,'teams':TEAMS,'players':players,'league_bat':R['league_bat'],'team_def':R['team_def'],'pf':PK['pf_by_team'],
  'fielding':{'lg':F['lg'],'team_avg_range':F['team_avg_range']},
  'scale':{'B':scale(regB,['k','bb','hr','babip','xbh','sba'],lambda r:r['PA']),'P':scale(regP,['k','bb','hr','babip'],lambda r:r['TBF'])}}
 os.makedirs(D+'game/src',exist_ok=True)
@@ -281,3 +293,5 @@ print('군 복무(상무) 반영:',sum(1 for p in players if p.get('team')=='MIL
 print('연봉 반영',SALOK,'명 | 동명이인 등으로 건너뜀',len(SALSKIP),'| 선수 데이터에 없음',len(SALMISS),'| 외국인',sum(1 for p in players if p.get('foreign')))
 
 print('1군 명단(생년월일·투타): 매칭',R1['ok'],'| 나이 정정',R1['agefix'],'| 1군 등록',R1['reg1'],'| 모호',R1['amb'],'| 미매칭',R1['miss'])
+
+print('2027 드래프트 지명',len(DRAFT),'명')
