@@ -58,8 +58,21 @@ HITS,SKIP,MISS=load_hands()
 #  - 퓨처스 비율은 1군과 같은 사전 표본(ratings.py의 N)으로 퓨처스 리그 평균 쪽으로 수축
 #  - 상무·울산 소속 선수는 원소속 구단을 몰라 게임에 넣지 않고 별도 파일에 보관
 #  - 포지션 세부(1B/2B/3B/SS, LF/CF/RF)·수비 능력·나이(명단에 없는 경우)는 데이터가 없어 추정값(posEst/ageEst)
+MILORG={}   # 이름 -> (원소속 한글, 입대 yyyy-mm, 전역 예정 연월 인덱스)
+def load_mil():
+    f=D+'game/data/military_2026.txt'
+    if not os.path.exists(f): return
+    for l in open(f,encoding='utf8'):
+        if not l.strip() or l.startswith('#'): continue
+        n,t,enl,_,_=l.strip().split('|');y,m=map(int,enl.split('.'));ym=y*12+(m-1)+18   # 18개월 복무
+        MILORG[n]=({'히어로즈':'고양','키움':'고양'}.get(t,t),enl,ym)   # ym = 연*12+(월-1): 전역 월
+load_mil()
 FUT_TM={'한화':'Eagles','LG':'Twins','SSG':'Landers','두산':'Bears','고양':'Heroes','KT':'Wiz','NC':'Dinos','롯데':'Giants','삼성':'Lions','KIA':'Tigers'}
 FNs={'k':60,'bb':120,'hbp':240,'hr':170,'babip':820,'xbh':400,'sba':150}
+def eff_team(r):   # 상무 선수는 원소속(알려진 경우)으로 매칭
+    return MILORG[r['name']][0] if r['team']=='상무' and r['name'] in MILORG else r['team']
+def mark_mil(p,r):
+    t,enl,ym=MILORG[r['name']];p['milTeam']=FUT_TM[t];p['milReturn']=ym;p['milFrom']=enl;p['team']='MIL'
 def futures_hitters(players):
     f=D+'game/data/futures_bat_2026.txt'
     if not os.path.exists(f): return None
@@ -86,9 +99,11 @@ def futures_hitters(players):
         if p['type']=='B': byname.setdefault(p['ko'],[]).append(p)
     used=set();ov=[];new=[];unassigned=[]
     for r in rows:
-        c=[p for p in byname.get(r['name'],[]) if p['team']==FUT_TM.get(r['team']) and p['id'] not in used]
-        if c: used.add(c[0]['id']);r['m']=c[0];ov.append(r)
-        elif r['team'] in FUT_TM: new.append(r)
+        c=[p for p in byname.get(r['name'],[]) if p['team']==FUT_TM.get(eff_team(r)) and p['id'] not in used]
+        if c:
+            used.add(c[0]['id']);r['m']=c[0];ov.append(r)
+            if r['team']=='상무' and r['name'] in MILORG: mark_mil(c[0],r)
+        elif eff_team(r) in FUT_TM: new.append(r)
         else: unassigned.append(r)
     fit={}
     for s in ['k','bb','hr','babip','xbh','sba']:
@@ -114,8 +129,9 @@ def futures_hitters(players):
         grp={'C':['C'],'IF':['1B','2B','3B','SS'],'OF':['LF','CF','RF']}[r['g']]
         gs={pos:50};[gs.__setitem__(q,8) for q in grp if q!=pos]
         fr={pos:{'range':50,'err_reg':F['lg']['err'][pos]}}
-        q=dict(id='B%d'%(len(players)+len(out)+1),type='B',name=r['name'],ko=r['name'],team=FUT_TM[r['team']],age=age or 24,p=p,pos=pos,gs=gs,fr=fr,cs=None,PA=0,G=0,src='F',fpid=r['pid'],posEst=True)
+        q=dict(id='B%d'%(len(players)+len(out)+1),type='B',name=r['name'],ko=r['name'],team=FUT_TM[eff_team(r)],age=age or 24,p=p,pos=pos,gs=gs,fr=fr,cs=None,PA=0,G=0,src='F',fpid=r['pid'],posEst=True)
         if not age: q['ageEst']=True
+        if r['team']=='상무' and r['name'] in MILORG: mark_mil(q,r)
         if info:
             h=info[1];q['throws']={'우':'R','좌':'L'}[h[0]];q['bats']={'우':'R','좌':'L','양':'S'}[h[2]]
         out.append(q)
@@ -146,9 +162,11 @@ def futures_pitchers(players,nb):
         if p['type']=='P': by.setdefault(p['ko'],[]).append(p)
     used=set();ov=[];new=[];unassigned=[]
     for r in rows:
-        c=[p for p in by.get(r['name'],[]) if p['team']==FUT_TM.get(r['team']) and p['id'] not in used]
-        if c: used.add(c[0]['id']);r['m']=c[0];ov.append(r)
-        elif r['team'] in FUT_TM: new.append(r)
+        c=[p for p in by.get(r['name'],[]) if p['team']==FUT_TM.get(eff_team(r)) and p['id'] not in used]
+        if c:
+            used.add(c[0]['id']);r['m']=c[0];ov.append(r)
+            if r['team']=='상무' and r['name'] in MILORG: mark_mil(c[0],r)
+        elif eff_team(r) in FUT_TM: new.append(r)
         else: unassigned.append(r)
     fit={}
     for s in ['k','bb','hr','babip']:
@@ -171,8 +189,9 @@ def futures_pitchers(players,nb):
         else: ipgs=None;stam=max(20,min(80,round(30+10*(ipg-1.0)/0.3)))
         info=ros.get((r['team'],r['name']))
         age=2026-int(info[0][:4])+1 if info else None
-        q=dict(id='P%d'%(len(players)+nb+len(out)+1),type='P',name=r['name'],ko=r['name'],team=FUT_TM[r['team']],age=age or 24,p=p,GS=0,G=0,IP=0,ipgs=ipgs,role='SP' if sp else 'RP',stamina=stam,src='F',fpid=r['pid'],roleEst=True)
+        q=dict(id='P%d'%(len(players)+nb+len(out)+1),type='P',name=r['name'],ko=r['name'],team=FUT_TM[eff_team(r)],age=age or 24,p=p,GS=0,G=0,IP=0,ipgs=ipgs,role='SP' if sp else 'RP',stamina=stam,src='F',fpid=r['pid'],roleEst=True)
         if not age: q['ageEst']=True
+        if r['team']=='상무' and r['name'] in MILORG: mark_mil(q,r)
         if info: q['throws']={'우':'R','좌':'L'}[info[1][0]]
         out.append(q)
     return out,fit,[(r['team'],r['name'],r['pid']) for r in unassigned],len(ov)
@@ -208,3 +227,5 @@ if FUT:
 if FUTP:
     print('퓨처스 투수: 1군 선수와 매칭',FUTP[3],'| 신규 2군 투수',len(FUTP[0]),'(선발 추정 %d)'%sum(1 for p in FUTP[0] if p['role']=='SP'),'| 소속 미정(상무·울산)',len(FUTP[2]))
     print('투수 환산식',{k:{a:round(b,4) for a,b in v.items()} for k,v in FUTP[1].items()})
+
+print('군 복무(상무) 반영:',sum(1 for p in players if p.get('team')=='MIL'),'명 (기존 1군 데이터 %d, 신규 %d)'%(sum(1 for p in players if p.get('team')=='MIL' and p.get('src')!='F'),sum(1 for p in players if p.get('team')=='MIL' and p.get('src')=='F')))

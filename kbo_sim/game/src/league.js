@@ -34,7 +34,7 @@
       for (const x of base.players) {
         const p = JSON.parse(JSON.stringify(x)); p.foreign = !/[가-힣]/.test(p.ko || ''); p.active = false; p.fat = 0; p.lastStart = -99; p.retired = false;
         if (p.type === 'B') { p.fr = p.fr || {}; p.gs = p.gs || {}; } else { p.role = p.role || (p.GS >= 0.5 * p.G && p.GS >= 3 ? 'SP' : 'RP'); }
-        S.players[p.id] = p; S.teams[p.team].ids.push(p.id);
+        S.players[p.id] = p; if (p.team === 'MIL') (S.mil = S.mil || []).push(p.id); else S.teams[p.team].ids.push(p.id);   // 상무 복무 중인 선수는 팀 명단 밖
       }
       const L = new League(S);
       L._calibrate(base);
@@ -59,7 +59,7 @@
       for (const id in S.players) { const c = S.players[id].contract; if (c) c.salary = Math.max(0.3, Math.round((0.3 + (c.salary - 0.3) * k) * 10) / 10); }
     }
     toJSON() { return this.S; }
-    static fromJSON(S) { S.stats2 = S.stats2 || { bat: {}, pit: {} }; S.recent = S.recent || {}; if (!S.rec2 || !S.rec2[TEAMS[0]]) { S.rec2 = {}; for (const t of TEAMS) S.rec2[t] = [0, 0, 0, 0, 0]; } const L = new League(S); L._f2dirty = true;
+    static fromJSON(S) { S.mil = S.mil || []; S.stats2 = S.stats2 || { bat: {}, pit: {} }; S.recent = S.recent || {}; if (!S.rec2 || !S.rec2[TEAMS[0]]) { S.rec2 = {}; for (const t of TEAMS) S.rec2[t] = [0, 0, 0, 0, 0]; } const L = new League(S); L._f2dirty = true;
       if (!S.calib.salK) L._scaleSalaries();   // 예전 저장: 연봉을 실제 규모로 환산
       if (!S.cbt) S.cbt = { over: {}, under: {}, drop: {}, fees: {}, log: [] };
       for (const id in S.players) { const p = S.players[id]; if (p.foreign === undefined) p.foreign = !/[가-힣]/.test(p.ko || ''); }
@@ -454,6 +454,20 @@
       const R = this.S.rec2, pct = t => (R[t][0] + R[t][1]) ? R[t][0] / (R[t][0] + R[t][1]) : 0;
       return TEAMS.slice().sort((x, y) => pct(y) - pct(x) || (R[y][3] - R[y][4]) - (R[x][3] - R[x][4]) || (x < y ? -1 : 1)).map((t, i) => ({ rank: i + 1, team: t, w: R[t][0], l: R[t][1], d: R[t][2], pct: pct(t), rs: R[t][3], ra: R[t][4] }));
     }
+    /* 군 복무(상무) 선수 복귀: 전역 월이 되면 원소속 구단 2군으로 돌아온다. ym = 연*12+(월-1) */
+    returnMilitary(ym) {
+      const S = this.S, back = [];
+      for (const id of (S.mil || []).slice()) {
+        const p = S.players[id]; if (!p || p.retired) { S.mil = S.mil.filter(x => x !== id); continue; }
+        if (p.milReturn > ym) continue;
+        const t = p.milTeam; if (!(t in S.teams)) continue;
+        p.team = t; p.active = false; p.lockUntil = 0; S.teams[t].ids.push(id); delete p.milTeam; delete p.milReturn; delete p.milFrom; S.mil = S.mil.filter(x => x !== id); back.push(p);
+        if (t === S.userTeam) { S.news.unshift({ year: S.year, day: S.day, text: `${p.ko} 전역 — 2군으로 복귀` }); }
+      }
+      if (back.length) { for (const t of new Set(back.map(p => p.team))) { if (t !== S.userTeam) this.refreshTeam(t); } this.invalidate(); }
+      return back;
+    }
+    milYM(day) { const d = this.dateOf(day); return d.getUTCFullYear() * 12 + d.getUTCMonth(); }
     /* 2군(퓨처스) 하루 경기: 모든 팀이 자동 진행 */
     playFutures(d) {
       const S = this.S, rd = this.farmSchedule()[d]; if (!rd) return; const E = this.engine2(), R = S.rec2;
@@ -487,7 +501,7 @@
       });
       this.mergeTracking();
       for (const o of others) this.commit(o.home, o.away, o.rh, o.ra, { spH: o.spH, spA: o.spA });
-      this._decayFatigue(); this.playFutures(d);
+      this._decayFatigue(); this.playFutures(d); this.returnMilitary(this.milYM(d));
       if (!ug) { S.day++; return { status: 'ok', day: d }; }
       if (live) { S.pendingDay = d; return { status: 'userGame', day: d, game: ug.g, idx: ug.i }; }
       const L = this.startUserGame(ug.g, ug.i); L.live.playToEnd(); const res = this.finishUserGame(L);

@@ -22,6 +22,7 @@
   const PCURVE = { 18: .30, 19: .28, 20: .26, 21: .22, 22: .18, 23: .14, 24: .10, 25: .06, 26: .03, 27: .0, 28: -.02, 29: -.04, 30: -.06, 31: -.09, 32: -.12, 33: -.16, 34: -.2, 35: -.25 };
   /* 올 시즌 출전 비율(0~1): 1군 기록 + 0.8×2군 기록을 풀타임 기준(타자 450타석, 선발 550·불펜 200타자)과 비교 */
   proto.playShare = function (p) {
+    if (p.team === 'MIL') return 0.7;   // 상무에서 꾸준히 출전한다고 가정
     const S = this.S, a = S.stats, b = S.stats2 || { bat: {}, pit: {} };
     if (p.type === 'B') { const w = ((a.bat[p.id] || {}).PA || 0) + 0.8 * ((b.bat[p.id] || {}).PA || 0); return clamp(w / 450, 0, 1); }
     const w = ((a.pit[p.id] || {}).BF || 0) + 0.8 * ((b.pit[p.id] || {}).BF || 0); return clamp(w / (p.role === 'SP' ? 550 : 200), 0, 1);
@@ -83,7 +84,7 @@
     S.teams[t].ids = S.teams[t].ids.filter(x => x !== id); p.active = false; p.team = 'FA'; p.contract = { salary: this.askSalary(p), years: 1 };
     S.fa = S.fa || []; S.fa.push(id); this.invalidate(); if (t === S.userTeam) this.repairSettings(t);
   };
-  proto.removeFromTeam = function (t, id) { const S = this.S; S.teams[t].ids = S.teams[t].ids.filter(x => x !== id); };
+  proto.removeFromTeam = function (t, id) { const S = this.S; if (!S.teams[t]) { S.mil = (S.mil || []).filter(x => x !== id); return; } S.teams[t].ids = S.teams[t].ids.filter(x => x !== id); };
 
   proto.startOffseason = function () {
     const S = this.S, r = rngFor(S.seed, S.year, 31), user = S.userTeam, rep = { prog: [], retired: [], expiring: [] };
@@ -237,6 +238,7 @@
     for (const id in S.players) if (S.players[id].retired || S.players[id].team === 'RET') delete S.players[id];   // 은퇴·이탈 선수 정리(저장 용량)
     this.finishFA === undefined; const adj = this.normalizeTalent(); S.lastAdj = adj;
     for (const t of TEAMS) if (t === S.userTeam) this.ensureActive(t);
+    this.returnMilitary(S.year * 12 + 2);   // 새 시즌 개막(3월) 전까지 전역한 선수 복귀
     this.newSeasonSetup(false); this.repairSettings(S.userTeam);
     const cap = S.calib.cap; S.calib.cap = cap;
     news(this, `${S.year} 시즌 개막 준비`);
