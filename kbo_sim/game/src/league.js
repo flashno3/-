@@ -12,7 +12,8 @@
   const POSS = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'];
   const WD = { '2B': .18, 'SS': .22, '3B': .16, '1B': .07, 'LF': .10, 'CF': .17, 'RF': .10, C: 0.12 };
   const KO = { Bears: '두산', Twins: 'LG', Heroes: '키움', Landers: 'SSG', Wiz: 'KT', Eagles: '한화', Tigers: 'KIA', Giants: '롯데', Dinos: 'NC', Lions: '삼성' };
-  const POSPEN = { C: 32, SS: 28, CF: 22, '2B': 20, '3B': 18, RF: 12, LF: 10, '1B': 6, DH: 0 };
+  const FAM = 15;   // 소화 가능 기준(해당 포지션 선발 경기 수)
+  const POSPEN = { C: 70, SS: 55, CF: 40, '2B': 38, '3B': 32, RF: 20, LF: 16, '1B': 10, DH: 0 };
   const ACTIVE_MAX = 28, ROSTER_MAX = 70, ROSTER_MIN = 44;
   const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
   const rngFor = (...ns) => { let h = 2166136261; for (const n of ns) { h = Math.imul(h ^ (n | 0), 16777619) >>> 0; h = (h ^ (h >>> 13)) >>> 0; } return new PyRandom(h); };
@@ -118,27 +119,41 @@
       return Math.max(0.2, Math.round(v * 10) / 10);
     }
     payroll(t) { return Math.round(this.S.teams[t].ids.reduce((a, id) => a + this.S.players[id].contract.salary, 0) * 10) / 10; }
-    fit(p, pos) { if (pos === 'DH') return 'ok'; if (p.pos === pos || (p.gs[pos] || 0) > 0) return 'ok'; return 'bad'; }
+    /* 포지션 숙련도: 2=주포지션, 1=소화 가능(해당 포지션 선발 15경기 이상), 0=부적합 */
+    fitLevel(p, pos) {
+      if (pos === 'DH') return 2; if (p.pos === pos) return 2;
+      if ((p.gs[pos] || 0) >= FAM) return 1;
+      return 0;
+    }
+    fit(p, pos) { return this.fitLevel(p, pos) >= 1 ? 'ok' : 'bad'; }
+    fitPenalty(p, pos) { const l = this.fitLevel(p, pos); return l === 2 ? 0 : l === 1 ? 3 : POSPEN[pos]; }
+    /* 선발로 나선 경기를 쌓으면 그 포지션에 익숙해진다(15경기 → 가능) */
+    learnPosition(p, pos) {
+      if (pos === 'DH' || p.type !== 'B') return; p.gs[pos] = (p.gs[pos] || 0) + 1;
+      if (p.gs[pos] >= FAM && !p.fr[pos]) { p.fr[pos] = { range: 44, err_reg: this.S.calib.fielding.lg.err[pos] * 1.25 }; this.invalidate(); }
+    }
 
     /* ------------------------------------------------------------ 로스터/설정 */
     team(t) { return this.S.teams[t]; }
     players(t) { return this.S.teams[t].ids.map(id => this.S.players[id]); }
     hitters(t, activeOnly) { return this.players(t).filter(p => p.type === 'B' && (!activeOnly || p.active)); }
     pitchers(t, activeOnly) { return this.players(t).filter(p => p.type === 'P' && (!activeOnly || p.active)); }
-    /* 주어진 타자 풀에서 최적 라인업(포지션 배정+타순) */
+    /* 주어진 타자 풀에서 최적 라인업(포지션 배정+타순). 9자리를 한 번에 최적화(동적계획법) */
     bestLineup(pool) {
-      const used = new Set(), spec = [];
-      const fitScore = (p, pos) => this._runsB(p, true) + this.defRuns(p, pos) + (this.fit(p, pos) === 'ok' ? 0 : -POSPEN[pos]);
-      const asg = {};
-      for (const pos of ORDER) {
-        let best = null, bs = -1e9;
-        for (const p of pool) { if (used.has(p.id)) continue; const s = fitScore(p, pos) + (p.pos === pos ? 1.5 : 0); if (s > bs) { bs = s; best = p; } }
-        if (best) { used.add(best.id); asg[pos] = best; }
+      const slots = ORDER.concat(['DH']), score = (p, pos) => (pos === 'DH' ? this._runsB(p, true) : this._runsB(p, true) + this.defRuns(p, pos) - this.fitPenalty(p, pos) + (p.pos === pos ? 1.5 : 0));
+      let cand = pool.slice();
+      if (cand.length > 15) cand = cand.map(p => ({ p, v: Math.max(...slots.map(q => score(p, q))) })).sort((a, b) => b.v - a.v).slice(0, 15).map(x => x.p);
+      const n = cand.length, K = slots.length; if (n < K) return cand.map((p, i) => ({ id: p.id, pos: slots[i] }));
+      const M = 1 << n, NEG = -1e9, val = cand.map(p => slots.map(q => score(p, q)));
+      const dp = [new Float64Array(M).fill(NEG)]; dp[0][0] = 0; const ch = [];
+      for (let k = 0; k < K; k++) {
+        const nx = new Float64Array(M).fill(NEG), pr = new Int8Array(M).fill(-1), cur = dp[k];
+        for (let m = 0; m < M; m++) { const base = cur[m]; if (base === NEG) continue; for (let j = 0; j < n; j++) { if (m & (1 << j)) continue; const nm = m | (1 << j), v = base + val[j][k]; if (v > nx[nm]) { nx[nm] = v; pr[nm] = j; } } }
+        dp.push(nx); ch.push(pr);
       }
-      let dh = null, ds = -1e9; for (const p of pool) { if (used.has(p.id)) continue; const s = this._runsB(p, true); if (s > ds) { ds = s; dh = p; } }
-      if (dh) asg.DH = dh;
-      const arr = Object.entries(asg).map(([pos, p]) => ({ id: p.id, pos, v: this._batRate(p.p) }));
-      if (arr.length < 9) return arr.map(x => ({ id: x.id, pos: x.pos }));
+      let bm = 0, bv = NEG; for (let m = 0; m < M; m++) if (dp[K][m] > bv) { bv = dp[K][m]; bm = m; }
+      const asg = {}; let m = bm; for (let k = K - 1; k >= 0; k--) { const j = ch[k][m]; asg[slots[k]] = cand[j]; m &= ~(1 << j); }
+      const arr = Object.entries(asg).map(([pos, p]) => ({ id: p.id, pos }));
       // 타순: 엔진 방식(출루·장타 기준 정렬 후 4·2·1·3 순으로 배치)과 같은 규칙
       const sorted = arr.map(x => ({ ...x, o: this._obpSlg(this.S.players[x.id]) })).sort((a, b) => b.o - a.o);
       const ord = [sorted[3], sorted[1], sorted[0], sorted[2], sorted[4], sorted[5], sorted[6], sorted[7], sorted[8]];
@@ -195,7 +210,8 @@
       const PAs = [560, 550, 540, 530, 520, 505, 490, 470, 450];
       const byV = lineup.map(x => S.players[x.id]).sort((a, b) => this._runsB(b) - this._runsB(a));
       byV.forEach((p, i) => { p.PA = PAs[i]; p.G = Math.min(144, Math.round(p.PA / 4.15 * 1.04)); });
-      for (const x of lineup) { const p = S.players[x.id], st = Math.round(p.PA / 4.15 * 0.97); if (x.pos === 'DH') { p.gs = Object.assign({}, p.gs); } else p.gs = Object.assign({}, p.gs, { [x.pos]: st }); }
+      for (const x of lineup) { const p = S.players[x.id], st = Math.round(p.PA / 4.15 * 0.97); p.aiGs = x.pos === 'DH' ? Object.assign({}, p.gs) : Object.assign({}, p.gs, { [x.pos]: st }); }
+      for (const p of H) if (!starters.has(p.id)) p.aiGs = Object.assign({}, p.gs);
       const bench = H.filter(p => !starters.has(p.id)).sort((a, b) => this._runsB(b, true) - this._runsB(a, true)), BP = [300, 220, 150, 100, 70, 45];
       bench.forEach((p, i) => { p.PA = BP[i] || 12; p.G = Math.min(144, Math.round(p.PA / 4.15 * 1.4)); });
       // 투수
@@ -217,7 +233,7 @@
         const p = S.players[id];
         if (p.type === 'B') {
           batters.push({ id, key: id, name: p.name, team: t, age: p.age, PA: p.PA, G: p.G, p: p.p });
-          const d = {}; for (const k in p.gs) d[k] = [0, p.gs[k]]; defense[id] = d; fplayers[id] = p.fr || {};
+          const gsE = (t !== S.userTeam && p.aiGs) || p.gs, d = {}; for (const k in gsE) d[k] = [0, gsE[k]]; defense[id] = d; const fr = {}; for (const k in (p.fr || {})) if ((p.gs[k] || 0) >= FAM || k === p.pos) fr[k] = p.fr[k]; fplayers[id] = fr;
           if (p.cs !== undefined && p.cs !== null) catchers[id] = { cs_reg: p.cs };
         } else pitchers.push({ id, name: p.name, team: t, age: p.age, GS: p.GS, G: p.G, IP: p.IP, ip_per_start: p.ipgs, p: p.p, stamina: p.stamina });
       }
@@ -320,7 +336,7 @@
       spec.forEach((x, i) => {
         if (r.random() < 0.05) {   // 컨디션 난조 등으로 결장(다른 팀의 출전 확률과 비슷한 수준의 변동)
           const pool = H.filter(h => !inLine.has(h.id) && !spec.some(s => s.id === h.id)); if (!pool.length) return;
-          const pl = pool.sort((a, b) => (this._runsB(b, true) + this.defRuns(b, x.pos) + (this.fit(b, x.pos) === 'ok' ? 0 : -POSPEN[x.pos])) - (this._runsB(a, true) + this.defRuns(a, x.pos) + (this.fit(a, x.pos) === 'ok' ? 0 : -POSPEN[x.pos])))[0];
+          const pl = pool.sort((a, b) => (this._runsB(b, true) + this.defRuns(b, x.pos) - this.fitPenalty(b, x.pos)) - (this._runsB(a, true) + this.defRuns(a, x.pos) - this.fitPenalty(a, x.pos)))[0];
           absent.push({ out: S.players[x.id], in: pl, pos: x.pos }); spec[i] = { id: pl.id, pos: x.pos };
         }
       });
@@ -368,6 +384,7 @@
       // 투수 피로·선발 기록
       const tr = E.tracking().pit;
       for (const p of this.pitchers(t)) { const c = tr[p.id]; if (c && c.outs > 0) p.fat = (p.fat || 0) + 5 + 5 * c.outs; }   // 1이닝(3아웃) = 20, 3일 연투하면 휴식 필요
+      for (const x of ctx.prep.spec) { const q = S.players[x.id]; if (q) this.learnPosition(q, x.pos); }
       const sp = ctx.prep.sp; sp.lastStart = d; const set = S.teams[t].set; set.rotIdx = (ctx.prep.rotIdx + 1) % set.rotation.length;
       this.mergeTracking();
       this.commit(live.home, live.away, rh, ra, { user: true, inns: live.inns, spH: live.staff.home.sp.name, spA: live.staff.away.sp.name, subs: { home: live.subs.home.length, away: live.subs.away.length } });

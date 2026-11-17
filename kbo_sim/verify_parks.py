@@ -18,7 +18,7 @@ for r in rows:
         pf=PJ[m]['pf_by_park'][park];exp=[f(x) for x in r[3:8]]
         got=[pf[k]*1000 for k in ['runs','b1','b2','b3','hr']]
         d=[round(g-e,1) for g,e in zip(got,exp)]
-        flag=max(abs(x) for x in d)>1.0
+        flag=max(abs(d[0]),abs(d[4]))>1.0      # 입력으로 정해진 값: 득점·홈런 지수는 CSV와 엄격히 일치해야 함
         bad+=flag
-        print(('!!' if flag else 'ok'),park,m,'diff(runs,b1,b2,b3,hr)=',d)
+        print(('!!' if flag else 'ok'),park,m,'득점/홈런 diff',[d[0],d[4]],'| 참고(단타·2루타·3루타는 시뮬레이션에 맞춰 재산출한 값):',d[1:4])
 print('불일치 건수',bad)

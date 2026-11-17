@@ -30,7 +30,7 @@
   function pitLine(id) { const c = L.S.stats.pit[id]; if (!c || !c.outs) return '<span class="muted">-</span>'; return `${Math.floor(c.outs / 3)}${c.outs % 3 ? '.' + (c.outs % 3) : ''}이닝 · RA9 ${(c.R * 27 / c.outs).toFixed(2)} · ${c.K}K`; }
   const statLine = p => (p.type === 'B' ? batLine(p.id) : pitLine(p.id));
   const subHtml = p => { const s = L.sub(p); return '<span class="sub">' + Object.entries(s).map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join('') + '</span>'; };
-  const fitBadge = (p, ps) => (p.type !== 'B' ? '' : (L.fit(p, ps) === 'ok' ? '<span class="chip in">적합</span>' : '<span class="chip bad">부적합</span>'));
+  const fitBadge = (p, ps) => { if (p.type !== 'B' || ps === 'DH') return ''; const l = L.fitLevel(p, ps); return l === 2 ? '<span class="chip in">주포지션</span>' : l === 1 ? `<span class="chip">소화 가능 (${p.gs[ps]}경기)</span>` : `<span class="chip bad">부적합 · 수비 크게 하락</span>`; };
 
   /* ---------------- 시작 화면 ---------------- */
   function teamRating(Lg, t) {
@@ -134,7 +134,8 @@
   function modalPlayer(id) {
     const p = P(id), mine = p.team === U(), s = L.sub(p);
     const bars = Object.entries(s).map(([k, v]) => `<span>${k}</span><div class="bar"><i style="width:${(v - 20) / 60 * 100}%"></i></div><b class="num">${v}</b>`).join('');
-    const fits = p.type === 'B' ? `<div class="small">포지션 적합: ${['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF'].map(ps => `<span class="chip ${L.fit(p, ps) === 'ok' ? 'in' : ''}">${posName[ps]}</span>`).join(' ')}</div>` : '';
+    const gsl = p.type === 'B' ? Object.entries(p.gs).filter(([k, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${posName[k]} ${v}경기`).join(' · ') : '';
+    const fits = p.type === 'B' ? `<div class="small">수비 숙련: ${['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF'].map(ps => { const l = L.fitLevel(p, ps); return `<span class="chip ${l === 2 ? 'ks' : l === 1 ? 'in' : ''}">${posName[ps]}${l === 2 ? ' ●' : l === 1 ? ' ○' : ''}</span>`; }).join(' ')}</div><div class="small muted">● 주포지션 ○ 소화 가능(선발 15경기 이상). 선발로 나서면 경기 수가 쌓여 새 포지션에 적응합니다.${gsl ? ' 선발 기록: ' + gsl : ''}</div>` : '';
     const pot = p.age <= 25 ? `<span class="chip">잠재력 ${L.potGrade(p.pot || 0)}</span>` : '';
     const acts = mine ? `<div class="row"><button data-act="toggleActive" data-a="${p.id}">${p.active ? '2군으로 내림' : '1군 등록'}</button><button class="warn" data-act="releaseAsk" data-a="${p.id}">${ui.confirm === p.id ? '정말 방출(되돌릴 수 없음)' : '방출'}</button></div>` : '';
     return `<div class="modal-bg" data-act="closeModal"><div class="modal" data-stop="1"><div class="row"><h2>${esc(p.name === p.ko ? p.ko : p.name)}</h2><span class="chip">${pos(p)}</span><span class="chip">${p.age}세</span>${pot}<span class="sp"></span><button class="sm" data-act="closeModal">닫기</button></div>
@@ -148,9 +149,11 @@
     const set = L.team(U()).set, H = L.hitters(U(), true), inL = new Set(set.lineup.map(x => x.id)), bench = H.filter(h => !inL.has(h.id));
     const opts = id => H.map(q => `<option value="${q.id}" ${q.id === id ? 'selected' : ''}>${esc(q.ko)} · ${posName[q.pos]} · ${L.ovr(q)}</option>`).join('');
     const rows = set.lineup.map((x, i) => { const p = P(x.id); return `<tr><td class="n">${i + 1}</td><td class="l"><select data-sel="lpl" data-i="${i}">${opts(x.id)}</select></td><td class="l"><select data-sel="lpos" data-i="${i}">${POSS.map(q => `<option value="${q}" ${q === x.pos ? 'selected' : ''}>${posName[q]}</option>`).join('')}</select></td><td>${fitBadge(p, x.pos)}</td><td>${ovrChip(L.ovr(p))}</td><td class="l small">${batLine(p.id)}</td><td><button class="sm" data-act="lmove" data-a="${i}" data-b="-1">▲</button><button class="sm" data-act="lmove" data-a="${i}" data-b="1">▼</button></td></tr>`; }).join('');
+    const nBad = set.lineup.filter(x => L.fitLevel(P(x.id), x.pos) === 0).length;
     const tot = set.lineup.reduce((a, x) => a + L._runsB(P(x.id), true) + L.defRuns(P(x.id), x.pos) - (L.fit(P(x.id), x.pos) === 'ok' ? 0 : 1) * 0, 0);
     const br = bench.map(p => `<tr class="click" data-act="player" data-a="${p.id}"><td class="l">${esc(p.ko)}</td><td class="l">${posName[p.pos]}</td><td>${ovrChip(L.ovr(p))}</td><td class="l small">${batLine(p.id)}</td></tr>`).join('');
     return `<div class="card"><div class="row"><h2>선발 라인업</h2><span class="sp"></span><button data-act="autoLineup">자동 설정</button></div>
+      ${nBad ? `<p class="chip bad" style="display:block;padding:6px 10px;margin:0 0 8px">익숙하지 않은 포지션에 선 선수가 ${nBad}명 있습니다. 해당 포지션의 수비 범위가 크게 줄고 실책이 늘어 안타를 더 맞습니다. [자동 설정]으로 최적 배치를 받을 수 있습니다.</p>` : ''}
       <p class="small muted" style="margin:0 0 8px">타순과 수비 위치를 정합니다. 선수가 익숙하지 않은 포지션에 서면 수비가 크게 나빠집니다(부적합). 경기 당일 컨디션 난조로 결장하는 선수는 후보 중 같은 포지션에 가장 적합한 선수가 대신합니다.</p>
       <div class="tablewrap"><table><thead><tr><th>타순</th><th class="l">선수</th><th class="l">수비</th><th></th><th>OVR</th><th class="l">올 시즌</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>
       <div class="card"><h2>후보 (1군 야수)</h2>${br ? `<div class="tablewrap"><table><tbody>${br}</tbody></table></div>` : '<p class="muted">후보 야수가 없습니다. 로스터에서 1군에 등록하세요.</p>'}</div>`;

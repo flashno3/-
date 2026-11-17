@@ -78,7 +78,7 @@ def def_mods(team,assign):
         if pos in WD:
             rr=fr['range'] if fr else 50;avg=F['team_avg_range'][team].get(pos,50);s+=WD[pos]*(rr-avg)/10
         er=fr['err_reg'] if fr else ERRLG[pos];e+=SHARE[pos]*er/ERRLG[pos];wsum+=SHARE[pos]
-    return TEAMDEF.get(team,0.0)+K2*s,e/wsum,cs
+    return TEAMDEF.get(team,0.0)-K2*s,e/wsum,cs
 def pa(b,p,rng,dm):
     bp,pp=b.p,p.p
     k=comb(bp['k'],pp['k'],LB['k']);bb=comb(bp['bb'],pp['bb'],LB['bb']);hbp=comb(bp['hbp'],pp['hbp'],LB['hbp']);hr=comb(bp['hr'],pp['hr'],LB['hr'])*CURPF['hr']

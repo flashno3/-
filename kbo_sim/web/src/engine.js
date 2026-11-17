@@ -178,7 +178,7 @@
         const er = fr ? fr.err_reg : ERRLG[pos];
         e += SHARE[pos] * er / ERRLG[pos]; wsum += SHARE[pos];
       }
-      return [(TEAMDEF[team] !== undefined ? TEAMDEF[team] : 0.0) + K2 * s, e / wsum, cs];
+      return [(TEAMDEF[team] !== undefined ? TEAMDEF[team] : 0.0) - K2 * s, e / wsum, cs];
     }
 
     function pa(b, p, rng, dm) {

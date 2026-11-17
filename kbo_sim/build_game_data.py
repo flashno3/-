@@ -22,7 +22,9 @@ for x in R['batters']:
     else:
         pl=[q for q in POS[x['key']] if q not in('P','DH')]
         pos={'OF':'LF'}.get(pl[0],pl[0]) if pl else 'DH'
-    fr={k:{'range':v['range'],'err_reg':v['err_reg']} for k,v in F['players'].get(x['key'],{}).items()}
+    starts=x['PA']/4.15
+    if gs and sum(gs.values())<0.35*starts: pos='DH'        # 수비 출전이 거의 없는 지명타자형(예: 최형우 좌익수 6경기)
+    fr={k:{'range':v['range'],'err_reg':v['err_reg']} for k,v in F['players'].get(x['key'],{}).items() if gs.get(k,0)>=15 or k==pos}   # 출전 0~소수 경기의 자리표시 값 제외
     cs=F['catchers'].get(x['key'],{}).get('cs_reg')
     team=LAST.get(x['name'],x['team']);assert team in TEAMS,(x['name'],team)
     bnames.add(x['name'])
