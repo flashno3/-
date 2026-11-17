@@ -208,6 +208,24 @@ if FUT:
 FUTP=futures_pitchers(players,0)
 if FUTP:
     players.extend(FUTP[0])
+
+# 2026 연봉·외국인 구분(사용자 제공 CSV): 이름+소속팀(군 복무 선수는 원소속)으로 유일하게 매칭되는 선수에만 반영.
+# 팀 내 동명이인(Y)이거나 같은 이름·팀 선수가 2명 이상이면 구분할 수 없어 건너뛴다(추정 연봉 유지).
+def load_salary(players):
+    import csv
+    f=D+'game/data/salary_2026.csv'
+    if not os.path.exists(f): return 0,[],[]
+    TM2={'한화':'Eagles','LG':'Twins','SSG':'Landers','두산':'Bears','키움':'Heroes','KT':'Wiz','NC':'Dinos','롯데':'Giants','삼성':'Lions','KIA':'Tigers'}
+    by={}
+    for p in players: by.setdefault((p['ko'],p.get('milTeam') or p['team']),[]).append(p)
+    ok=0;skip=[];miss=[]
+    for r in csv.DictReader(open(f,encoding='utf-8-sig')):
+        c=by.get((r['선수명'],TM2[r['구단']]),[])
+        if not c: miss.append((r['구단'],r['선수명'],int(r['연봉_만원'])));continue
+        if len(c)>1 or r['동명이인_팀내']=='Y': skip.append((r['구단'],r['선수명']));continue
+        c[0]['sal']=int(r['연봉_만원'])/10000;c[0]['foreign']=bool(r['외국인구분']);ok+=1
+    return ok,skip,miss
+SALOK,SALSKIP,SALMISS=load_salary(players)
 # 능력치 척도(20-80): ratings.py 와 같은 방식(규정 타자 PA≥300 / 규정 투수 TBF≥200 가중 평균·표준편차)
 def scale(rows,fields,w):
     out={}
@@ -236,3 +254,5 @@ if FUTP:
     print('투수 환산식',{k:{a:round(b,4) for a,b in v.items()} for k,v in FUTP[1].items()})
 
 print('군 복무(상무) 반영:',sum(1 for p in players if p.get('team')=='MIL'),'명 (기존 1군 데이터 %d, 신규 %d)'%(sum(1 for p in players if p.get('team')=='MIL' and p.get('src')!='F'),sum(1 for p in players if p.get('team')=='MIL' and p.get('src')=='F')))
+
+print('연봉 반영',SALOK,'명 | 동명이인 등으로 건너뜀',len(SALSKIP),'| 선수 데이터에 없음',len(SALMISS),'| 외국인',sum(1 for p in players if p.get('foreign')))

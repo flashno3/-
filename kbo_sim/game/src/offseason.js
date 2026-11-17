@@ -114,7 +114,8 @@
       const p = S.players[id]; p.contract.years -= 1; if (p.contract.years > 0) continue;
       if (t === user) { rep.expiring.push(id); continue; }
       const o = this.ovr(p), keep = r.random() < clamp(0.25 + (o - 40) * 0.025 - (p.age >= 34 ? 0.25 : 0), 0.08, 0.72);   // 스타도 28%는 FA 시장에 나온다
-      if (keep) { p.contract = { salary: this.askSalary(p), years: 1 + Math.floor(r.random() * 3) }; } else { this.release(t, id); }
+      const ask = this.askSalary(p), over = this.cbtPay(t) + Math.max(0, ask - p.contract.salary) * (S.calib.cbtK || 1) > this.cbtCap() * 0.97;   // AI 구단은 상한을 넘기는 재계약은 하지 않는다
+      if (keep && !over) { p.contract = { salary: ask, years: 1 + Math.floor(r.random() * 3) }; } else { this.release(t, id); }
     }
     S.phase = 'offseason'; S.off = { step: 'review', rep, year: S.year + 1, draft: null, fa: S.fa || [] };
     this.repairSettings(user); this.invalidate();
@@ -185,12 +186,12 @@
       const pool = this.faList().sort((a, b) => this.war(b) - this.war(a));
       for (const p of pool) {
         if (n >= 3 || S.teams[t].ids.length >= ROSTER_MAX - 4) break;
-        const ask = this.askSalary(p); if (this.cbtPay(t) + ask > this.cbtCap() * 0.97) continue; if (this.war(p) < 1.0) continue;   // AI 구단은 상한을 지킨다
+        const ask = this.askSalary(p); if (this.cbtPay(t) + ask * (S.calib.cbtK || 1) > this.cbtCap() * 0.97) continue; if (this.war(p) < 1.0) continue;   // AI 구단은 상한을 지킨다
         if (r.random() < (this.war(p) >= 2 ? 0.75 : 0.5)) { p.team = t; p.contract = { salary: ask, years: 1 + Math.floor(r.random() * 3) }; S.teams[t].ids.push(p.id); S.fa = S.fa.filter(x => x !== p.id); n++; }
       }
       // 연봉 하한(2027~) 미달이면 하한을 넘길 때까지 FA를 영입한다(미달 시 기금 납부를 피하려고)
       { const fl = this.cbtFloor(); if (fl !== null) for (let k = 0; k < 6 && this.cbtPay(t) < fl * 1.03 && S.teams[t].ids.length < ROSTER_MAX; k++) {
-        const p = this.faList().filter(x => this.cbtPay(t) + this.askSalary(x) <= this.cbtCap() * 0.97).sort((a, b) => this.war(b) - this.war(a))[0]; if (!p) break;
+        const p = this.faList().filter(x => this.cbtPay(t) + this.askSalary(x) * (S.calib.cbtK || 1) <= this.cbtCap() * 0.97).sort((a, b) => this.war(b) - this.war(a))[0]; if (!p) break;
         p.team = t; p.contract = { salary: this.askSalary(p), years: 1 + Math.floor(r.random() * 3) }; S.teams[t].ids.push(p.id); S.fa = S.fa.filter(x => x !== p.id);
       } }
       // 핵심 포지션(포수·유격수·중견수·2루수·3루수)에 주포지션 선수가 2명 미만이면 보강
@@ -265,7 +266,7 @@
     if (aiN > ROSTER_MAX || myN > ROSTER_MAX) return { ok: false, why: `보유 선수 ${ROSTER_MAX}명 제한을 넘습니다.` };
     if (aiN < ROSTER_MIN || myN < ROSTER_MIN) return { ok: false, why: `보유 선수 최소 ${ROSTER_MIN}명이 필요합니다.` };
     // AI 구단은 트레이드로 상한을 넘기지 않는다
-    const aiPay = this.cbtPay(aiTeam) + gp.reduce((a, p) => a + (p.rookie === S.year || p.foreign ? 0 : p.contract.salary), 0) - tp.reduce((a, p) => a + (p.rookie === S.year || p.foreign ? 0 : p.contract.salary), 0);
+    const aiPay = this.cbtPay(aiTeam) + (S.calib.cbtK || 1) * (gp.reduce((a, p) => a + (p.rookie === S.year || p.foreign ? 0 : p.contract.salary), 0) - tp.reduce((a, p) => a + (p.rookie === S.year || p.foreign ? 0 : p.contract.salary), 0));
     if (aiPay > this.cbtCap() && aiPay > this.cbtPay(aiTeam)) return { ok: false, why: `${aiTeam} 구단이 연봉 상한(${this.cbtCap()}억)을 넘게 되어 수락하지 않습니다.` };
     // AI가 핵심 선수를 내줄 때는 더 큰 대가를 요구
     const star = tp.some(p => this.ovr(p) >= 65) ? 1.25 : 1.0, need = vGet * 1.12 * star + 0.1;

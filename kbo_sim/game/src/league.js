@@ -33,7 +33,7 @@
       S.fteams = { Whales: { ids: [] } };
       for (const t of TEAMS) S.teams[t] = { ids: [], set: { lineup: [], rotation: [], rotIdx: 0, bullpen: { closer: null, setup: [], middle: [], long: [] }, autoLineup: true } };
       for (const x of base.players) {
-        const p = JSON.parse(JSON.stringify(x)); p.foreign = !/[가-힣]/.test(p.ko || ''); p.active = false; p.fat = 0; p.lastStart = -99; p.retired = false;
+        const p = JSON.parse(JSON.stringify(x)); if (p.foreign === undefined) p.foreign = !/[가-힣]/.test(p.ko || ''); p.active = false; p.fat = 0; p.lastStart = -99; p.retired = false;
         if (p.type === 'B') { p.fr = p.fr || {}; p.gs = p.gs || {}; } else { p.role = p.role || (p.GS >= 0.5 * p.G && p.GS >= 3 ? 'SP' : 'RP'); }
         S.players[p.id] = p; if (p.team === 'MIL') (S.mil = S.mil || []).push(p.id); else if (p.team === 'Whales') S.fteams.Whales.ids.push(p.id); else S.teams[p.team].ids.push(p.id);   // 상무 복무 중인 선수는 팀 명단 밖
       }
@@ -46,7 +46,7 @@
         p.contract = { salary: Math.round(L.price(p) * clamp(1 + gauss(r, 0, 0.12), 0.7, 1.4) * 10) / 10, years: 1 + Math.floor(r.random() * 4) };
         p.contract.salary = Math.max(0.3, p.contract.salary);
       }
-      L._scaleSalaries();   // 실제 KBO 규모(2025 구단 평균 상위 40명 합계 111.05억)로 환산
+      L._calibrateSalaries();   // 2026 연봉 데이터가 있으면 실제 연봉 사용, 없으면 모델 연봉을 실제 규모로 환산
       S.cbt = { over: {}, under: {}, drop: {}, fees: {}, log: [] };
       for (const t of TEAMS) L.initTeam(t);
       S.calib.base = L.talentLevel();
@@ -54,6 +54,18 @@
       return L;
     }
     /* 계약 연봉을 실제 KBO 규모로 환산: 최저 0.3억은 고정, 초과분만 배율 적용(리그 평균 상위 40명 합계 = 111.05억, 2025 발표 기준) */
+    /* 연봉: 실제 2026 연봉(p.sal, 억)이 있는 선수는 그대로, 나머지는 모델값.
+     * 모델 가격(salK)은 실제 연봉이 있는 1군 데이터 선수로 맞추고, 연봉 합계가 실제 경쟁균형세 규모(2025 평균 111.05억)와 같아지도록 cbtK(계약금·옵션 등 연봉 외 보수 환산)를 둔다. */
+    _calibrateSalaries() {
+      const S = this.S, all = Object.values(S.players), real = all.filter(p => p.sal !== undefined);
+      if (!real.length) { this._scaleSalaries(); return; }
+      const vals = real.filter(p => p.src !== 'F' && p.sal >= 1.0 && this.war(p) >= 0.5);
+      const base = vals.reduce((a, p) => a + 0.9 * Math.pow(this.war(p), 1.35), 0), act = vals.reduce((a, p) => a + (p.sal - 0.3), 0);
+      S.calib.salK = base > 0 ? act / base : 1;
+      for (const p of all) p.contract.salary = p.sal !== undefined ? Math.max(0.3, Math.round(p.sal * 10) / 10) : (p.src === 'F' ? 0.3 : Math.max(0.3, this.price(p)));
+      const tops = TEAMS.map(t => this.players(t).filter(p => !p.foreign).map(p => p.contract.salary).sort((a, b) => b - a).slice(0, 40).reduce((a, b) => a + b, 0)), avg = tops.reduce((a, b) => a + b, 0) / tops.length;
+      S.calib.cbtK = 111.05 / avg;
+    }
     _scaleSalaries() {
       const S = this.S; if (S.calib.salK) return;
       const tops = TEAMS.map(t => this.players(t).map(p => p.contract.salary).sort((a, b) => b - a).slice(0, 40).reduce((a, b) => a + b, 0)), avg = tops.reduce((a, b) => a + b, 0) / tops.length;
@@ -144,7 +156,7 @@
      * 미달: 1회 30%·2회 연속 50%·3회 연속 100%. */
     cbtCap(y) { y = y === undefined ? this.S.year : y; return Math.round(151.1709 * Math.pow(1.05, clamp(y - 2027, 0, 1)) * 10000) / 10000; }
     cbtFloor(y) { y = y === undefined ? this.S.year : y; return y < 2027 ? null : Math.round(60.6538 * Math.pow(1.05, clamp(y - 2027, 0, 1)) * 10000) / 10000; }
-    cbtPay(t) { const y = this.S.year; return Math.round(this.players(t).filter(p => p.rookie !== y && !p.foreign).map(p => p.contract.salary).sort((a, b) => b - a).slice(0, 40).reduce((a, b) => a + b, 0) * 100) / 100; }
+    cbtPay(t) { const y = this.S.year; return Math.round(this.players(t).filter(p => p.rookie !== y && !p.foreign).map(p => p.contract.salary).sort((a, b) => b - a).slice(0, 40).reduce((a, b) => a + b, 0) * (this.S.calib.cbtK || 1) * 100) / 100; }
     cbtRate(n) { return [0.3, 0.5, 1][clamp(n, 1, 3) - 1]; }
     /* 지금 시즌 종료 시점으로 가정한 정산(미리보기) */
     cbtPreview(t) {
