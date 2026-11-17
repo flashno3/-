@@ -563,8 +563,8 @@
     const kn = TEAMS.filter(t => data[t] && data[t].gate), avgPrice = kn.length ? kn.reduce((a, t) => a + data[t].gate / data[t].tot25, 0) / kn.length : FIN_PRICE;   // 객단가 = 2025 입장수입 ÷ 2025 총관중(KBO 공식). 입장수입 미공시 구단에는 평균 적용
     for (const t of TEAMS) {
       const d = data[t]; if (!d) continue;
-      const price = d.gate ? d.gate / (d.att25 * FIN_GAMES) : avgPrice * d.tot25 / (d.att25 * FIN_GAMES), estGate = d.gate || d.att25 * FIN_GAMES * price, pay0 = this.payroll(t), par = d.par !== null && d.par !== undefined ? d.par / 100 : PAR_DEFAULT;
-      S.fin.teams[t] = { att0: d.att, cap: d.cap, capchg: d.capchg || [], capsrc: d.capsrc, chgsrc: d.chgsrc, price, pm: 1, par, parKnown: d.par !== null && d.par !== undefined, parAds: Math.round(d.rev * par * 10) / 10, other: Math.round((d.rev - estGate - d.rev * par) * 10) / 10, opex: Math.round((d.cost - pay0) * 10) / 10, rev0: d.rev, op0: d.op, audit: d.audit || [], parsrc: d.parsrc, park: d.park, note: d.note, gateKnown: !!d.gate, gate: 0, games: 0, lastRev: d.rev, trust: 60 };
+      const price = d.gate26 ? d.gate26 / (d.att * FIN_GAMES) : d.gate ? d.gate / (d.att25 * FIN_GAMES) : avgPrice * d.tot25 / (d.att25 * FIN_GAMES), estGate = d.gate || d.att25 * FIN_GAMES * price, pay0 = this.payroll(t), par = d.par !== null && d.par !== undefined ? d.par / 100 : PAR_DEFAULT;
+      S.fin.teams[t] = { att0: d.att, cap: d.cap, capchg: d.capchg || [], capsrc: d.capsrc, chgsrc: d.chgsrc, price, pm: 1, par, parKnown: d.par !== null && d.par !== undefined, parAds: Math.round(d.rev * par * 10) / 10, other: Math.round((d.rev - estGate - d.rev * par) * 10) / 10, opex: Math.round((d.cost - pay0) * 10) / 10, rev0: d.rev, op0: d.op, audit: d.audit || [], parsrc: d.parsrc, park: d.park, note: d.note, gateKnown: !!d.gate, price26: !!d.gate26, gate: 0, games: 0, lastRev: d.rev, trust: 60 };
     }
   };
   proto.finReady = function () { const F = this.S.fin; return !!(F && F.v === 2 && F.teams && F.teams.Lions); };
