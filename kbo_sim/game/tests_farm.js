@@ -25,8 +25,8 @@ L.hitters(T).filter(p=>!p.active&&S.day>=(p.lockUntil||0)).forEach(p=>L.moveActi
 // 3) 시즌 완주 + 2군 기록
 L.advance(300,false);
 const st2=L.standings2();console.log(st2.map(x=>`${x.rank} ${x.team} ${x.w}-${x.l}-${x.d} ${x.rs}/${x.ra}`).join(' | '));
-let g2=0,r2=0;for(const x of st2){g2+=x.w+x.l+x.d;r2+=x.rs}console.log('2군 팀경기',g2/10,'경기당 득점',(r2/g2).toFixed(2));
-ok(g2/10===144,'2군 144경기');
+let g2=0,r2=0;for(const x of st2){g2+=x.w+x.l+x.d;r2+=x.rs}console.log('2군 팀경기',(g2/11).toFixed(1),'경기당 득점',(r2/g2).toFixed(2));
+ok(st2.length===11&&st2.every(x=>x.w+x.l+x.d>=125&&x.w+x.l+x.d<=144),'2군 11팀 부전 포함 125~144경기');
 const st1=L.standings();let g1=0,r1=0;for(const x of st1){g1+=x.w+x.l+x.d;r1+=x.rs}console.log('1군 경기당 득점',(r1/g1).toFixed(2));
 ok(Math.abs(r1/g1-5.1)<0.45,'1군 득점환경 '+(r1/g1).toFixed(2));
 for(const t of TEAMS){const hs2=L.hitters(t).filter(p=>S.stats2.bat[p.id]&&S.stats2.bat[p.id].PA>0);ok(hs2.length>=9,t+' 2군 타자 기록 '+hs2.length);
@@ -37,5 +37,5 @@ const rid=Object.keys(S.recent)[0];ok(S.recent[rid].length<=10,'recent 10개 이
 // 4) 저장/불러오기
 const L2=League.load(L.save());ok(L2.standings2()[0].team===st2[0].team,'저장 후 2군 순위 보존');
 // 구버전 저장(2군 필드 없음)
-const old=JSON.parse(L.save());delete old.stats2;delete old.rec2;delete old.recent;const L3=League.load(JSON.stringify(old));L3.S.day=0;L3.S.phase='regular';L3.S.day=10;L3.playFutures(10);ok(L3.standings2().reduce((a,x)=>a+x.w+x.l,0)===10,'구버전 저장 호환');
+const old=JSON.parse(L.save());delete old.stats2;delete old.rec2;delete old.recent;const L3=League.load(JSON.stringify(old));L3.S.day=0;L3.S.phase='regular';L3.S.day=10;L3.playFutures(10);ok(L3.standings2().reduce((a,x)=>a+x.w+x.l,0)>=8,'구버전 저장 호환');
 console.log(fail?'실패 '+fail:'모두 통과');process.exit(fail?1:0);

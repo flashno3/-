@@ -17,12 +17,12 @@ ok(pbad===0,'투수 원본 기록 불일치 '+pbad);console.log('투수 기록',
 const base=JSON.parse(fs.readFileSync(path.join(__dirname,'src/gamedata.json'),'utf8'));
 const L=League.create(base,'Lions',9),S=L.S;const FA=Object.values(S.players).filter(p=>p.src==='F'),F=FA.filter(p=>p.type==='B'),FP=FA.filter(p=>p.type==='P');
 ok(FP.length>=180,'신규 2군 투수 수 '+FP.length);
-const PR={k:[.08,.4],bb:[.02,.18],hr:[.004,.06],babip:[.25,.37]};for(const p of FP){for(const k in PR)if(!(p.p[k]>=PR[k][0]&&p.p[k]<=PR[k][1])){ok(false,p.ko+' '+k+' '+p.p[k]);break}ok((p.team in S.teams||p.team==='MIL')&&(p.role==='SP'||p.role==='RP')&&p.stamina>=20&&p.stamina<=80,p.ko+' 투수 필드')}
+const PR={k:[.08,.4],bb:[.02,.18],hr:[.004,.06],babip:[.25,.37]};for(const p of FP){for(const k in PR)if(!(p.p[k]>=PR[k][0]&&p.p[k]<=PR[k][1])){ok(false,p.ko+' '+k+' '+p.p[k]);break}ok((p.team in S.teams||p.team==='MIL'||p.team==='Whales')&&(p.role==='SP'||p.role==='RP')&&p.stamina>=20&&p.stamina<=80,p.ko+' 투수 필드')}
 ok(Object.keys(S.teams).every(t=>L.pitchers(t).filter(p=>!p.active).length>=8&&L.hitters(t).filter(p=>!p.active).length>=9),'팀별 2군 풀');
 ok(F.length>=170,'신규 2군 타자 수 '+F.length);
 const R={k:[.06,.45],bb:[.015,.2],hr:[.002,.07],babip:[.24,.39],xbh:[.1,.32],sba:[.005,.25]};
 for(const p of F){for(const k in R)if(!(p.p[k]>=R[k][0]&&p.p[k]<=R[k][1])){ok(false,p.ko+' '+k+' 범위 '+p.p[k]);break}
- ok((p.team in S.teams||p.team==='MIL')&&p.gs[p.pos]>0&&p.fr[p.pos],p.ko+' 필드');}
+ ok((p.team in S.teams||p.team==='MIL'||p.team==='Whales')&&p.gs[p.pos]>0&&p.fr[p.pos],p.ko+' 필드');}
 ok(new Set(F.map(p=>p.fpid)).size===F.length,'fpid 중복');
 // 겹치는 선수 중복 생성 없음: 같은 팀 같은 이름 타자는 1명(동명이인 제외 목록)
 const dup={};for(const p of Object.values(S.players))if(p.type==='B'){const k=p.team+p.ko;dup[k]=(dup[k]||0)+1}
@@ -30,10 +30,13 @@ console.log('같은 팀 동명 타자',Object.entries(dup).filter(([k,v])=>v>1).
 // 환산 후 평균 OVR이 1군 주전(PA>=300)보다 낮다
 const m=a=>a.reduce((x,y)=>x+L.ovr(y),0)/a.length;ok(m(F)<m(Object.values(S.players).filter(p=>p.type==='B'&&p.PA>=300))-5,'신규 평균 OVR이 주전보다 충분히 낮아야 함');
 // 시즌 1회 완주: 2군 경기 정상
-L.advance(300,false);ok(L.standings2().every(x=>x.w+x.l+x.d===144),'2군 144경기');
+L.advance(300,false);ok(L.standings2().length===11&&L.standings2().every(x=>x.w+x.l+x.d>=125),'2군 11팀');
+ok(S.fteams.Whales.ids.length===50&&S.fteams.Whales.ids.every(id=>S.players[id].team==='Whales'),'울산 50명');
+// 2b) ID 충돌 방지: 새 신인 ID는 기존 선수 ID와 겹치지 않는다
+ok(S.nextId>Math.max(...Object.keys(S.players).map(id=>parseInt(id.slice(1)))),'nextId 충돌');
 // 3) 군 복무(상무)
 {const L2=League.create(base,'Lions',4),S2=L2.S;const mil=S2.mil.map(id=>S2.players[id]);
- ok(mil.length===26&&mil.every(p=>p.team==='MIL'&&p.milTeam in S2.teams&&!S2.teams[p.milTeam].ids.includes(p.id)),'상무 26명이 팀 명단 밖');
+ ok(L2.farmTeams().includes('Whales')&&mil.length===26&&mil.every(p=>p.team==='MIL'&&p.milTeam in S2.teams&&!S2.teams[p.milTeam].ids.includes(p.id)),'상무 26명이 팀 명단 밖');
  const lionsMil=mil.filter(p=>p.milTeam==='Lions').length,before=L2.players('Lions').length;
  const one=mil.find(p=>p.milReturn%12+1===6);const cbtBefore=L2.cbtPay(one.milTeam);
  // 2027 시즌 진행: 6월 이후 복귀(전역 2027.06), 10월 입대자는 시즌 종료 후
@@ -46,5 +49,7 @@ L.advance(300,false);ok(L.standings2().every(x=>x.w+x.l+x.d===144),'2군 144경�
  L2.startOffseason();L2.finishContracts();L2.buildDraft();L2.draftAutoRest();L2.finishDraft();L2.finishFA();L2.startNewSeason();
  ok(S2.mil.length===0||S2.mil.every(id=>S2.players[id].milReturn%12<12),'복무자 정리');
  ok(mil.filter(p=>!p.retired&&p.team==='MIL').length===0,'2028 개막 전 전원 복귀(은퇴 제외)');
+ ok(S2.fteams.Whales.ids.length>=46&&S2.fteams.Whales.ids.every(id=>S2.players[id]&&S2.players[id].team==='Whales'),'울산 규모 유지 '+S2.fteams.Whales.ids.length);
+ L2.advance(5,false);ok(L2.standings2().length===11,'2028 시즌 2군 11팀');
  const L3=League.load(L2.save());ok(L3.S.mil.length===S2.mil.length,'저장/불러오기');}
 console.log(fail?'실패 '+fail:'모두 통과');process.exit(fail?1:0);

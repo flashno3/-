@@ -103,7 +103,7 @@
   function createEngine(DATA, modeKey) {
     const M = DATA.modes[modeKey], SH = DATA.shared, F = SH.fielding;
     const LB = M.league_bat, TEAMDEF = M.team_def, ERRLG = F.lg.err, SHARE = F.lg.share, CSLG = F.lg.cs;
-    const PFS = {}; for (const t of TEAMS) PFS[t] = M.pf[t];
+    const PFS = {}; for (const t of Object.keys(M.pf)) PFS[t] = M.pf[t];   // 1군 10개 구단 + (있다면) 퓨처스 전용 구단
     let CURPF = PFS.Bears;
 
     class Bat {

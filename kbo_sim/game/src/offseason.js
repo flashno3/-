@@ -84,7 +84,7 @@
     S.teams[t].ids = S.teams[t].ids.filter(x => x !== id); p.active = false; p.team = 'FA'; p.contract = { salary: this.askSalary(p), years: 1 };
     S.fa = S.fa || []; S.fa.push(id); this.invalidate(); if (t === S.userTeam) this.repairSettings(t);
   };
-  proto.removeFromTeam = function (t, id) { const S = this.S; if (!S.teams[t]) { S.mil = (S.mil || []).filter(x => x !== id); return; } S.teams[t].ids = S.teams[t].ids.filter(x => x !== id); };
+  proto.removeFromTeam = function (t, id) { const S = this.S; if (!S.teams[t]) { if (S.fteams && S.fteams[t]) S.fteams[t].ids = S.fteams[t].ids.filter(x => x !== id); else S.mil = (S.mil || []).filter(x => x !== id); return; } S.teams[t].ids = S.teams[t].ids.filter(x => x !== id); };
 
   proto.startOffseason = function () {
     const S = this.S, r = rngFor(S.seed, S.year, 31), user = S.userTeam, rep = { prog: [], retired: [], expiring: [] };
@@ -233,11 +233,19 @@
     if (act.length < ACTIVE_MAX) fill(() => true, ACTIVE_MAX - act.length);
     act = P.filter(p => p.active); while (act.length > ACTIVE_MAX) { const w = act.filter(p => p.type === 'B').sort((a, b) => this.marketValue(a) - this.marketValue(b))[0]; w.active = false; act = P.filter(p => p.active); }
   };
+  /* 울산 웨일즈(퓨처스 전용): 은퇴로 줄어든 선수를 신인으로 채워 규모(타자 24·투수 22 이상)를 유지 */
+  proto.topUpWhales = function () {
+    const S = this.S, w = S.fteams && S.fteams.Whales; if (!w || w.ids.length < 20) return;
+    const r = rngFor(S.seed, S.year, 61), cnt = k => w.ids.filter(id => S.players[id] && S.players[id].type === k).length;
+    for (const k of ['B', 'P']) while (cnt(k) < (k === 'B' ? 24 : 22)) { const p = this.makeRookie(r, k); p.team = 'Whales'; p.rookie = undefined; p.contract = { salary: 0.3, years: 2 }; w.ids.push(p.id); }
+    this.invalidate();
+  };
   proto.startNewSeason = function () {
     const S = this.S; S.year += 1; S.off = null; S.fa = (S.fa || []);
     for (const id in S.players) if (S.players[id].retired || S.players[id].team === 'RET') delete S.players[id];   // 은퇴·이탈 선수 정리(저장 용량)
     this.finishFA === undefined; const adj = this.normalizeTalent(); S.lastAdj = adj;
     for (const t of TEAMS) if (t === S.userTeam) this.ensureActive(t);
+    this.topUpWhales();
     this.returnMilitary(S.year * 12 + 2);   // 새 시즌 개막(3월) 전까지 전역한 선수 복귀
     this.newSeasonSetup(false); this.repairSettings(S.userTeam);
     const cap = S.calib.cap; S.calib.cap = cap;

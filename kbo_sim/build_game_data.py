@@ -66,11 +66,18 @@ def load_mil():
         if not l.strip() or l.startswith('#'): continue
         n,t,enl,_,_=l.strip().split('|');y,m=map(int,enl.split('.'));ym=y*12+(m-1)+18   # 18개월 복무
         MILORG[n]=({'히어로즈':'고양','키움':'고양'}.get(t,t),enl,ym)   # ym = 연*12+(월-1): 전역 월
+DISCH={}   # 2026.11 전역해 원소속에 복귀한 선수: 이름 -> 원소속(한글)
+for l in (open(D+'game/data/military_discharged_2026.txt',encoding='utf8') if os.path.exists(D+'game/data/military_discharged_2026.txt') else []):
+    if l.strip() and not l.startswith('#'):
+        n,t,_=l.strip().split('|');DISCH[n]={'히어로즈':'고양','키움':'고양'}.get(t,t)
 load_mil()
-FUT_TM={'한화':'Eagles','LG':'Twins','SSG':'Landers','두산':'Bears','고양':'Heroes','KT':'Wiz','NC':'Dinos','롯데':'Giants','삼성':'Lions','KIA':'Tigers'}
+FUT_TM={'울산':'Whales','한화':'Eagles','LG':'Twins','SSG':'Landers','두산':'Bears','고양':'Heroes','KT':'Wiz','NC':'Dinos','롯데':'Giants','삼성':'Lions','KIA':'Tigers'}
 FNs={'k':60,'bb':120,'hbp':240,'hr':170,'babip':820,'xbh':400,'sba':150}
 def eff_team(r):   # 상무 선수는 원소속(알려진 경우)으로 매칭
-    return MILORG[r['name']][0] if r['team']=='상무' and r['name'] in MILORG else r['team']
+    if r['team']=='상무':
+        if r['name'] in MILORG: return MILORG[r['name']][0]
+        if r['name'] in DISCH: return DISCH[r['name']]
+    return r['team']
 def mark_mil(p,r):
     t,enl,ym=MILORG[r['name']];p['milTeam']=FUT_TM[t];p['milReturn']=ym;p['milFrom']=enl;p['team']='MIL'
 def futures_hitters(players):

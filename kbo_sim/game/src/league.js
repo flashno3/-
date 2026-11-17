@@ -11,7 +11,7 @@
   const ORDER = ['C', 'SS', 'CF', '2B', '3B', 'RF', 'LF', '1B'];
   const POSS = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'];
   const WD = { '2B': .18, 'SS': .22, '3B': .16, '1B': .07, 'LF': .10, 'CF': .17, 'RF': .10, C: 0.12 };
-  const KO = { Bears: '두산', Twins: 'LG', Heroes: '키움', Landers: 'SSG', Wiz: 'KT', Eagles: '한화', Tigers: 'KIA', Giants: '롯데', Dinos: 'NC', Lions: '삼성' };
+  const KO = { Whales: '울산', Bears: '두산', Twins: 'LG', Heroes: '키움', Landers: 'SSG', Wiz: 'KT', Eagles: '한화', Tigers: 'KIA', Giants: '롯데', Dinos: 'NC', Lions: '삼성' };
   const PEN_R = { SS: 22, '2B': 26, '3B': 28, CF: 24, LF: 36, RF: 36, '1B': 44, C: 40 }, PEN_E = { SS: 2.2, '2B': 2.2, '3B': 2.2, CF: 1.8, LF: 1.5, RF: 1.5, '1B': 1.2, C: 1.6 };   // 엔진의 낯선 포지션 페널티와 같은 값
   const FAM = 15;   // 소화 가능 기준(해당 포지션 선발 경기 수)
   const POSPEN = { C: 70, SS: 55, CF: 40, '2B': 38, '3B': 32, RF: 20, LF: 16, '1B': 10, DH: 0 };
@@ -30,14 +30,16 @@
         rec: {}, rec2: {}, h2h: {}, stats: { bat: {}, pit: {} }, stats2: { bat: {}, pit: {} }, recent: {}, post: null, off: null, history: [], news: [],
         calib: { lb: base.league_bat, team_def: base.team_def, pf: base.pf, fielding: base.fielding, scale: base.scale }
       };
+      S.fteams = { Whales: { ids: [] } };
       for (const t of TEAMS) S.teams[t] = { ids: [], set: { lineup: [], rotation: [], rotIdx: 0, bullpen: { closer: null, setup: [], middle: [], long: [] }, autoLineup: true } };
       for (const x of base.players) {
         const p = JSON.parse(JSON.stringify(x)); p.foreign = !/[가-힣]/.test(p.ko || ''); p.active = false; p.fat = 0; p.lastStart = -99; p.retired = false;
         if (p.type === 'B') { p.fr = p.fr || {}; p.gs = p.gs || {}; } else { p.role = p.role || (p.GS >= 0.5 * p.G && p.GS >= 3 ? 'SP' : 'RP'); }
-        S.players[p.id] = p; if (p.team === 'MIL') (S.mil = S.mil || []).push(p.id); else S.teams[p.team].ids.push(p.id);   // 상무 복무 중인 선수는 팀 명단 밖
+        S.players[p.id] = p; if (p.team === 'MIL') (S.mil = S.mil || []).push(p.id); else if (p.team === 'Whales') S.fteams.Whales.ids.push(p.id); else S.teams[p.team].ids.push(p.id);   // 상무 복무 중인 선수는 팀 명단 밖
       }
+      S.nextId = Math.max(S.nextId, 1 + Math.max(...Object.keys(S.players).map(id => parseInt(id.slice(1)))));   // 데이터 선수 ID와 신인 ID가 겹치지 않게
       const L = new League(S);
-      L._calibrate(base);
+      L._ensureWhales(); L._calibrate(base);
       const r = rngFor(seed, 1);
       for (const id in S.players) {
         const p = S.players[id]; p.pot = p.age <= 25 ? Math.max(0, (27 - p.age) * 0.10 + gauss(r, 0, 0.15)) : 0;
@@ -58,8 +60,13 @@
       const k = (111.05 - 0.3 * 40) / (avg - 0.3 * 40); S.calib.salK = k;
       for (const id in S.players) { const c = S.players[id].contract; if (c) c.salary = Math.max(0.3, Math.round((0.3 + (c.salary - 0.3) * k) * 10) / 10); }
     }
+    /* 울산 웨일즈(퓨처스 전용)의 구장·수비 보정은 중립(리그 평균)으로 둔다 */
+    _ensureWhales() {
+      const C = this.S.calib; if (!C.pf.Whales) C.pf = Object.assign({}, C.pf, { Whales: { runs: 1, b1: 1, b2: 1, b3: 1, hr: 1 } });
+      const tar = C.fielding.team_avg_range; if (!tar.Whales) { const w = {}; for (const pos in tar[TEAMS[0]]) w[pos] = TEAMS.reduce((a, t) => a + tar[t][pos], 0) / TEAMS.length; tar.Whales = w; }
+    }
     toJSON() { return this.S; }
-    static fromJSON(S) { S.mil = S.mil || []; S.stats2 = S.stats2 || { bat: {}, pit: {} }; S.recent = S.recent || {}; if (!S.rec2 || !S.rec2[TEAMS[0]]) { S.rec2 = {}; for (const t of TEAMS) S.rec2[t] = [0, 0, 0, 0, 0]; } const L = new League(S); L._f2dirty = true;
+    static fromJSON(S) { S.mil = S.mil || []; S.fteams = S.fteams || { Whales: { ids: [] } }; S.stats2 = S.stats2 || { bat: {}, pit: {} }; S.recent = S.recent || {}; const L = new League(S); L._f2dirty = true; L._ensureWhales(); if (!S.rec2 || !S.rec2[TEAMS[0]] || L.farmTeams().some(t => !S.rec2[t])) { S.rec2 = {}; for (const t of L.farmTeams()) S.rec2[t] = [0, 0, 0, 0, 0]; }
       if (!S.calib.salK) L._scaleSalaries();   // 예전 저장: 연봉을 실제 규모로 환산
       if (!S.cbt) S.cbt = { over: {}, under: {}, drop: {}, fees: {}, log: [] };
       for (const id in S.players) { const p = S.players[id]; if (p.foreign === undefined) p.foreign = !/[가-힣]/.test(p.ko || ''); }
@@ -212,7 +219,9 @@
     handTemplate() { return Object.values(this.S.players).filter(p => (p.team in this.S.teams) && !(p.type === 'B' ? p.bats : p.throws)).map(p => `${p.ko},${KO[p.team]},${p.type === 'B' ? '타자' : '투수'},`).join('\n'); }
     /* ------------------------------------------------------------ 로스터/설정 */
     team(t) { return this.S.teams[t]; }
-    players(t) { return this.S.teams[t].ids.map(id => this.S.players[id]); }
+    players(t) { return (this.S.teams[t] || this.S.fteams[t]).ids.map(id => this.S.players[id]); }
+    /* 2군(퓨처스) 리그 참가팀: 1군 10개 구단 + 울산 웨일즈(퓨처스 전용, 선수 20명 이상일 때) */
+    farmTeams() { const w = this.S.fteams && this.S.fteams.Whales; return w && w.ids.length >= 20 ? TEAMS.concat(['Whales']) : TEAMS.slice(); }
     hitters(t, activeOnly) { return this.players(t).filter(p => p.type === 'B' && (!activeOnly || p.active)); }
     pitchers(t, activeOnly) { return this.players(t).filter(p => p.type === 'P' && (!activeOnly || p.active)); }
     /* 주어진 타자 풀에서 최적 라인업(포지션 배정+타순). 9자리를 한 번에 최적화(동적계획법) */
@@ -363,14 +372,14 @@
       return this._eng;
     }
     engine2() {
-      if (!this._eng2 || this._eng2Dirty || this._engDirty2()) { if (this._eng2) this.mergeTracking2(); if (this._f2dirty) { for (const t of TEAMS) this.assignUsage(t, true); this._f2dirty = false; } this._eng2 = Engine.createEngine(this._engData(true), 'g'); this._eng2Dirty = false; }
+      if (!this._eng2 || this._eng2Dirty || this._engDirty2()) { if (this._eng2) this.mergeTracking2(); if (this._f2dirty) { for (const t of this.farmTeams()) this.assignUsage(t, true); this._f2dirty = false; } this._eng2 = Engine.createEngine(this._engData(true), 'g'); this._eng2Dirty = false; }
       return this._eng2;
     }
     _engDirty2() { return this._f2dirty; }
     /* farm=false: 1군 엔트리 선수만, farm=true: 2군 선수만(사용량은 p.f) */
     _engData(farm) {
       const S = this.S, C = S.calib, batters = [], pitchers = [], defense = {}, fplayers = {}, catchers = {};
-      for (const t of TEAMS) {
+      for (const t of (farm ? this.farmTeams() : TEAMS)) {
         let list; if (farm) { const pl = this.farmPool(t); list = pl.H.concat(pl.P); } else list = this.players(t).filter(p => p.active);
         for (const p of list) {
           const id = p.id, u = farm ? (p.f || (p.f = {})) : p;
@@ -413,25 +422,27 @@
       for (const p of Object.values(S.players)) p.lockUntil = 0;
       for (const t of TEAMS) { if (t !== S.userTeam) { this.autoActive(t); this.assignUsage(t); } }
       this.repairSettings(S.userTeam);
-      S.day = 0; S.results = []; S.stats = { bat: {}, pit: {} }; S.stats2 = { bat: {}, pit: {} }; S.recent = {}; S.rec2 = {}; for (const t of TEAMS) S.rec2[t] = [0, 0, 0, 0, 0]; S.post = null; S.phase = 'preseason';
+      S.day = 0; S.results = []; S.stats = { bat: {}, pit: {} }; S.stats2 = { bat: {}, pit: {} }; S.recent = {}; S.rec2 = {}; for (const t of this.farmTeams()) S.rec2[t] = [0, 0, 0, 0, 0]; S.post = null; S.phase = 'preseason';
       S.rec = {}; S.h2h = {}; for (const t of TEAMS) { S.rec[t] = [0, 0, 0, 0, 0]; S.h2h[t] = {}; for (const u of TEAMS) S.h2h[t][u] = [0, 0, 0]; }
       for (const id in S.players) { S.players[id].fat = 0; S.players[id].lastStart = -99; }
       S.schedule = this.makeSchedule(); S.pendingDay = null; S.userGameDone = {};
       this.invalidate();
     }
-    makeSchedule(salt) {
-      const r = rngFor(this.S.seed, this.S.year, salt || 777), n = TEAMS.length, rounds = [];
-      for (let c = 0; c < 16; c++) {
-        const cyc = []; const arr = TEAMS.slice(); // 서클 방식 9라운드
+    makeSchedule(salt, teams) {
+      const T = (teams || TEAMS).slice(); if (T.length % 2) T.push(null);   // 홀수 팀이면 경기 없는 날(부전) 슬롯 추가
+      const r = rngFor(this.S.seed, this.S.year, salt || 777), n = T.length, rounds = [], cycles = Math.ceil(144 / (n - 1));
+      for (let c = 0; c < cycles; c++) {
+        const cyc = []; const arr = T.slice();   // 서클 방식 n-1라운드
         for (let k = 0; k < n - 1; k++) {
-          const games = []; for (let i = 0; i < n / 2; i++) { const a = arr[i], b = arr[n - 1 - i]; games.push([a, b]); }
+          const games = []; for (let i = 0; i < n / 2; i++) { const a = arr[i], b = arr[n - 1 - i]; if (a && b) games.push([a, b]); }
           cyc.push(games); arr.splice(1, 0, arr.pop());
         }
         // 한 주기 안의 라운드 순서를 섞어 변화를 준다
         for (let i = cyc.length - 1; i > 0; i--) { const j = r.randbelow(i + 1); [cyc[i], cyc[j]] = [cyc[j], cyc[i]]; }
         rounds.push(...cyc);
       }
-      // 홈/원정 균형: 같은 매치업은 만날 때마다 홈 구장이 번갈아 간다(16경기 = 홈 8 + 원정 8)
+      rounds.length = Math.min(rounds.length, 144);
+      // 홈/원정 균형: 같은 매치업은 만날 때마다 홈 구장이 번갈아 간다
       const seen = {};
       for (const rd of rounds) for (const g of rd) { const key = [g[0], g[1]].sort().join('|'); seen[key] = (seen[key] || 0) + 1; if (seen[key] % 2 === 0) { const t = g[0]; g[0] = g[1]; g[1] = t; } }
       return rounds;
@@ -449,10 +460,10 @@
       });
       return order.map((t, i) => ({ rank: i + 1, team: t, w: R[t][0], l: R[t][1], d: R[t][2], pct: pct(t), rs: R[t][3], ra: R[t][4] }));
     }
-    farmSchedule() { const S = this.S; if (!this._sch2 || this._sch2.y !== S.year || this._sch2.s !== S.seed) this._sch2 = { y: S.year, s: S.seed, v: this.makeSchedule(888) }; return this._sch2.v; }
+    farmSchedule() { const S = this.S; if (!this._sch2 || this._sch2.y !== S.year || this._sch2.s !== S.seed || this._sch2.n !== this.farmTeams().length) this._sch2 = { y: S.year, s: S.seed, n: this.farmTeams().length, v: this.makeSchedule(888, this.farmTeams()) }; return this._sch2.v; }
     standings2() {
       const R = this.S.rec2, pct = t => (R[t][0] + R[t][1]) ? R[t][0] / (R[t][0] + R[t][1]) : 0;
-      return TEAMS.slice().sort((x, y) => pct(y) - pct(x) || (R[y][3] - R[y][4]) - (R[x][3] - R[x][4]) || (x < y ? -1 : 1)).map((t, i) => ({ rank: i + 1, team: t, w: R[t][0], l: R[t][1], d: R[t][2], pct: pct(t), rs: R[t][3], ra: R[t][4] }));
+      return this.farmTeams().sort((x, y) => pct(y) - pct(x) || (R[y][3] - R[y][4]) - (R[x][3] - R[x][4]) || (x < y ? -1 : 1)).map((t, i) => ({ rank: i + 1, team: t, w: R[t][0], l: R[t][1], d: R[t][2], pct: pct(t), rs: R[t][3], ra: R[t][4] }));
     }
     /* 군 복무(상무) 선수 복귀: 전역 월이 되면 원소속 구단 2군으로 돌아온다. ym = 연*12+(월-1) */
     returnMilitary(ym) {
