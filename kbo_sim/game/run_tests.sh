@@ -10,6 +10,7 @@ node game/tests_farm.js | tail -2
 node game/tests_cbt.js | tail -3
 node game/tests_futures.js | tail -3
 node game/tests_fa.js | tail -3
+node game/tests_finance.js | tail -2
 node game/tests_schedule.js | tail -2
 node game/tests_offseason.js | tail -3
 node game/tests_longrun.js 10 11 | tail -2

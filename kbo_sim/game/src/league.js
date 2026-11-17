@@ -54,6 +54,7 @@
       if (L._applyFAClass) L._applyFAClass(L._faclass);   // 2027 FA 승인 선수: 미계약 20명은 시장에서 시작
       if (L._addDraftClass) L._addDraftClass(base.draft2027);   // 2027 신인 드래프트 지명 결과(실제 지명·가상 능력치)
       for (const t of TEAMS) L.initTeam(t);
+      if (L._initFinance) L._initFinance(base.finance);   // 재정: 초기 보수 합계로 운영비를 역산
       S.calib.base = L.talentLevel(undefined, true);
       L.newSeasonSetup(true);
       return L;
@@ -95,6 +96,7 @@
     static fromJSON(S) { S.mil = S.mil || []; S.fteams = S.fteams || { Whales: { ids: [] } }; S.stats2 = S.stats2 || { bat: {}, pit: {} }; S.recent = S.recent || {}; const L = new League(S); L._f2dirty = true; L._ensureWhales(); if (!S.rec2 || !S.rec2[TEAMS[0]] || L.farmTeams().some(t => !S.rec2[t])) { S.rec2 = {}; for (const t of L.farmTeams()) S.rec2[t] = [0, 0, 0, 0, 0]; }
       if (!S.calib.salK) L._scaleSalaries();   // 예전 저장: 연봉을 실제 규모로 환산
       if (!S.cbt) S.cbt = { over: {}, under: {}, drop: {}, fees: {}, log: [] };
+      L._legacyFin = !S.fin;   // 예전 저장: 재정 데이터 없음(데이터 파일이 필요해 복원하지 않음)
       for (const id in S.players) { const p = S.players[id]; if (p.foreign === undefined) p.foreign = !/[가-힣]/.test(p.ko || ''); }
       return L; }
     save() { return JSON.stringify(this.S); }
@@ -562,7 +564,7 @@
       this.mergeTracking2(d);
     }
     commit(home, away, rh, ra, meta) {
-      const S = this.S, R = S.rec; R[home][3] += rh; R[home][4] += ra; R[away][3] += ra; R[away][4] += rh;
+      const S = this.S, R = S.rec; if (this._finGame && S.fin) this._finGame(home); R[home][3] += rh; R[home][4] += ra; R[away][3] += ra; R[away][4] += rh;
       if (rh > ra) { R[home][0]++; R[away][1]++; S.h2h[home][away][0]++; S.h2h[away][home][1]++; }
       else if (ra > rh) { R[away][0]++; R[home][1]++; S.h2h[away][home][0]++; S.h2h[home][away][1]++; }
       else { R[home][2]++; R[away][2]++; S.h2h[home][away][2]++; S.h2h[away][home][2]++; }

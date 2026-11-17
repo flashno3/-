@@ -161,6 +161,7 @@
       if (my.kind === 'over') news(this, `경쟁균형세: 연봉 ${my.pay}억이 상한 ${my.cap}억을 초과(${my.n}회 연속) → 야구발전기금 ${my.fee}억 납부${my.drop ? ', 다음 드래프트 1라운드 지명 9단계 하락' : ''}`);
       else if (my.kind === 'under') news(this, `경쟁균형세: 연봉 ${my.pay}억이 하한 ${my.fl}억에 미달(${my.n}회 연속) → 유소년 발전기금 ${my.fee}억 납부`);
     }
+    this.settleFinance();   // 시즌 재정 결산(CBT 정산과 같은 시점의 보수 기준)
     // 1) 성장·노화
     for (const id in S.players) {
       const p = S.players[id]; if (p.retired || p.team === 'DRAFT') continue;
@@ -421,7 +422,7 @@
       if (r.random() > pr) continue;
       if (this._faCount(t) >= EXT_LIMIT || S.teams[t].ids.length >= ROSTER_MAX - 4) continue;
       const cand = this.faList().filter(p => !p.foreign && !(p.faInfo && p.faInfo.from === t && false)).sort((a, b) => this.war(b) - this.war(a)).find(p => {
-        const ask = this.askSalary(p); return this.war(p) >= 1.0 && this.cbtPay(t) + this._cbtAdd(p, ask, 2) <= this.cbtCap() * 0.97 && (!(p.faInfo && p.faInfo.grade) || p.faInfo.from === t || this._faCount(t) < EXT_LIMIT) && r.random() < (this.war(p) >= 2 ? 0.7 : 0.45);
+        const ask = this.askSalary(p); return this.war(p) >= 1.0 && this.cbtPay(t) + this._cbtAdd(p, ask, 2) <= this.cbtCap() * 0.97 && this.faRoom(t) >= ask && (!(p.faInfo && p.faInfo.grade) || p.faInfo.from === t || this._faCount(t) < EXT_LIMIT) && r.random() < (this.war(p) >= 2 ? 0.7 : 0.45);
       });
       if (!cand) continue;
       const ask = this.askSalary(cand), yrs = 1 + Math.floor(r.random() * 3), g = cand.faInfo && cand.faInfo.grade, from = cand.faInfo && cand.faInfo.from;
@@ -542,5 +543,51 @@
     for (const id of get) { this.removeFromTeam(aiTeam, id); S.players[id].team = me; S.players[id].active = false; S.teams[me].ids.push(id); }
     news(this, `트레이드: ${give.map(i => S.players[i].ko).join(', ')} ↔ ${get.map(i => S.players[i].ko).join(', ')} (${aiTeam})`);
     this.refreshTeam(aiTeam); this.repairSettings(me); this.invalidate(); return ev;
+  };
+
+  /* ---------------- 재정(손익) 모델 ----------------
+   * 입력: finance_2025.csv(감사보고서·언론 종합 매출·영업비용·영업이익) + 2026 평균 관중 + 구장 수용인원.
+   * 입장 수입 = 홈 경기 관중 × 객단가(롯데는 공시 입장수입 232억에서 역산, 나머지는 리그 평균 추정 15,600원 — 가정).
+   * 그 외 매출(중계·광고·MD·기타) = 2025 매출 − 입장 추정치, 시즌마다 동일(가정).
+   * 선수단 외 운영비 = 2025 영업비용 − 현재 선수단 보수 합계(2026 연봉을 2025 보수의 대용으로 사용 — 가정).
+   * 영업이익 = 입장 + 그 외 매출 − 선수단 보수 − 운영비 − 야구발전기금(CBT). FA 여유자금 = 예산 − 선수단 보수,
+   * 예산 = 직전 시즌 매출 − 운영비 + 허용 적자(매출의 3%, 모기업 보전 가정). */
+  const FIN_PRICE = 15600 / 1e8, FIN_GAMES = 72, FIN_LOSS = 0.03;
+  proto._initFinance = function (data) {
+    const S = this.S; S.fin = { teams: {}, hist: [] }; if (!data) return;
+    for (const t of TEAMS) {
+      const d = data[t]; if (!d) continue;
+      const price = d.gate ? d.gate / (d.att * FIN_GAMES) : FIN_PRICE, estGate = d.gate || d.att * FIN_GAMES * price, pay0 = this.payroll(t);
+      S.fin.teams[t] = { att0: d.att, cap: d.cap, price, other: Math.round((d.rev - estGate) * 10) / 10, opex: Math.round((d.cost - pay0) * 10) / 10, rev0: d.rev, op0: d.op, park: d.park, note: d.note, gateKnown: !!d.gate, gate: 0, games: 0, lastRev: d.rev };
+    }
+  };
+  proto.finReady = function () { return !!(this.S.fin && this.S.fin.teams && this.S.fin.teams.Lions); };
+  proto.finAtt = function (t) {   // 이번 시즌 홈 관중 예상: 기준 관중 × 성적 보정(승률 ±), 수용인원 이내
+    const S = this.S, f = S.fin.teams[t], r = S.rec[t], g = r[0] + r[1] + r[2];
+    const wp = g >= 10 ? r[0] / Math.max(1, r[0] + r[1]) : 0.5;
+    return Math.min(f.cap, Math.round(f.att0 * clamp(1 + 0.8 * (wp - 0.5), 0.8, 1.25)));
+  };
+  proto._finGame = function (home) {   // 홈 경기 1경기 입장 수입 적립
+    if (!this.finReady()) return; const f = this.S.fin.teams[home]; if (!f) return;
+    f.gate += this.finAtt(home) * f.price; f.games++;
+  };
+  proto.finBudget = function (t) { const f = this.S.fin.teams[t]; return Math.round((f.lastRev - f.opex + f.lastRev * FIN_LOSS) * 10) / 10; };
+  proto.faRoom = function (t) { return this.finReady() ? Math.round((this.finBudget(t) - this.payroll(t)) * 10) / 10 : 1e9; };
+  proto.finPreview = function (t) {   // 시즌 예상 손익(진행분 + 남은 홈 경기를 현재 관중으로 환산)
+    const S = this.S, f = S.fin.teams[t], rem = Math.max(0, FIN_GAMES - f.games), gate = f.gate + rem * this.finAtt(t) * f.price;
+    const pay = this.payroll(t), fee = (S.cbt && S.cbt.log.length) ? 0 : 0, v = this.cbtPreview(t), cbt = v.fee || 0, rev = gate + f.other;
+    return { gate, other: f.other, rev, pay, opex: f.opex, cbt, op: rev - pay - f.opex - cbt, att: this.finAtt(t), room: this.faRoom(t), budget: this.finBudget(t) };
+  };
+  proto.settleFinance = function () {
+    const S = this.S; if (!this.finReady()) return; const row = { year: S.year, teams: {} };
+    for (const t of TEAMS) {
+      const f = S.fin.teams[t], v = this.finPreview(t), lg = (S.cbt.log || []).filter(x => x.team === t && x.year === S.year).pop(); if (lg) { v.op += v.cbt - lg.fee; v.cbt = lg.fee; }   // 야구발전기금은 방금 정산한 실제 금액
+      const rr = S.rec[t], g = Math.max(1, rr[0] + rr[1] + rr[2]), wp = rr[0] / Math.max(1, rr[0] + rr[1]);
+      row.teams[t] = { gate: Math.round(v.gate * 10) / 10, rev: Math.round(v.rev * 10) / 10, pay: Math.round(v.pay * 10) / 10, opex: f.opex, cbt: Math.round(v.cbt * 100) / 100, op: Math.round(v.op * 10) / 10, att: v.att };
+      f.lastRev = v.rev; f.att0 = Math.min(f.cap, Math.round(f.att0 * clamp(1 + 0.35 * (wp - 0.5), 0.92, 1.1)));   // 성적이 좋으면 다음 해 기준 관중 상승
+      f.gate = 0; f.games = 0;
+    }
+    S.fin.hist.push(row); if (S.fin.hist.length > 20) S.fin.hist.shift();
+    const my = row.teams[S.userTeam]; news(this, `재정 결산 ${S.year}: 매출 ${my.rev}억 · 선수단 ${my.pay}억 · 영업이익 ${my.op >= 0 ? '+' : ''}${my.op}억 (평균 관중 ${my.att.toLocaleString()}명)`);
   };
 });

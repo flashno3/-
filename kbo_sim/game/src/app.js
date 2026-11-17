@@ -60,7 +60,7 @@
   }
 
   /* ---------------- 공통 셸 ---------------- */
-  const NAV = [['home', '대시보드'], ['roster', '로스터'], ['farm', '2군'], ['lineup', '라인업'], ['pitching', '투수진'], ['schedule', '일정·결과'], ['standings', '순위·기록'], ['market', '이적시장'], ['offseason', '오프시즌'], ['save', '저장·설정']];
+  const NAV = [['home', '대시보드'], ['roster', '로스터'], ['farm', '2군'], ['lineup', '라인업'], ['pitching', '투수진'], ['schedule', '일정·결과'], ['standings', '순위·기록'], ['finance', '재정'], ['market', '이적시장'], ['offseason', '오프시즌'], ['save', '저장·설정']];
   function primary() {
     const S = L.S, st = L.standings(), my = st.find(x => x.team === U());
     if (S.phase === 'offseason') return { label: '오프시즌 진행', act: 'go', a: 'offseason' };
@@ -255,6 +255,17 @@
     return `<div class="card"><h2>팀 연봉 현황 (경쟁균형세)</h2><div class="small muted">연봉 상위 40명 합계(신인·외국인 제외). 상한 ${cap.toFixed(1)}억 초과 시 초과분의 30%(2회 연속 50%, 3회 연속 100%)를 야구발전기금으로 내고, 3회 연속이면 다음 드래프트 1라운드 지명이 9단계 내려갑니다. 2027년부터 하한 ${L.cbtFloor(Math.max(2027, S.year)).toFixed(1)}억 미달 시에도 같은 비율로 납부합니다. 시즌 종료 시 정산합니다.</div>
       <div class="tablewrap"><table><thead><tr><th class="l">팀</th><th>상위 40 합계</th><th class="l">상한 대비</th><th>상태</th><th>누적 기금</th></tr></thead><tbody>${rows.map(r => `<tr class="${r.t === U() ? 'me' : ''}"><td class="l">${teamTag(r.t)}</td><td class="n">${r.v.pay}</td><td class="l"><div class="bar"><i style="width:${Math.min(100, r.v.pay / cap * 100)}%"></i></div></td><td>${r.v.kind === 'over' ? '<span class="chip warn">초과</span>' : r.v.kind === 'under' ? '<span class="chip warn">하한 미달</span>' : '<span class="chip in">정상</span>'}</td><td class="n">${r.fee ? r.fee.toFixed(1) + '억' : '-'}</td></tr>`).join('')}</tbody></table></div>
       ${last.length ? `<div class="small muted">내 팀 정산 기록: ${last.map(x => `${x.year} ${x.pay}억 ${x.kind === 'over' ? `초과 ${x.n}회차 기금 ${x.fee}억${x.drop ? ' · 지명 9단계 하락' : ''}` : x.kind === 'under' ? `미달 ${x.n}회차 기금 ${x.fee}억` : '정상'}`).join(' / ')}</div>` : ''}</div>`;
+  }
+  function screenFinance() {
+    const S = L.S; if (!L.finReady()) return `<div class="card"><h2>재정</h2><div class="small muted">이 저장 데이터에는 재정 정보가 없습니다. 새 게임을 시작하면 구단 재정이 반영됩니다.</div></div>`;
+    const f1 = x => (Math.round(x * 10) / 10).toFixed(1), sg = x => (x >= 0 ? '+' : '') + f1(x);
+    const rows = TEAMS.map(t => ({ t, f: S.fin.teams[t], v: L.finPreview(t) })).sort((a, b) => b.v.op - a.v.op);
+    const me = S.fin.teams[U()], mv = L.finPreview(U()), hist = S.fin.hist.map(h => ({ year: h.year, r: h.teams[U()] })).reverse();
+    return `<div class="kpis"><div class="kpi"><div class="l">예상 영업이익</div><div class="v ${mv.op >= 0 ? 'pos' : 'neg'}">${sg(mv.op)}억</div></div><div class="kpi"><div class="l">선수단 보수</div><div class="v">${f1(mv.pay)}억</div></div><div class="kpi"><div class="l">FA 여유자금</div><div class="v ${mv.room >= 0 ? '' : 'neg'}">${f1(mv.room)}억</div></div><div class="kpi"><div class="l">홈 평균 관중</div><div class="v">${mv.att.toLocaleString()}</div></div></div>
+    <div class="card"><h2>구단 재정 (시즌 예상, 억 원)</h2><div class="small muted">매출 = 입장(홈 관중 × 객단가) + 그 외(중계·광고·MD, 2025 매출에서 역산해 고정). 비용 = 선수단 보수 + 운영비(2025 영업비용 − 보수) + 야구발전기금. FA 여유자금 = (직전 시즌 매출 − 운영비 + 허용 적자 3%) − 현재 선수단 보수. 시즌 종료 시 결산합니다.</div>
+      <div class="tablewrap"><table><thead><tr><th class="l">팀</th><th>평균 관중</th><th>입장</th><th>그 외 매출</th><th>선수단</th><th>운영비</th><th>기금</th><th>영업이익</th><th>FA 여유</th></tr></thead><tbody>${rows.map(r => `<tr class="${r.t === U() ? 'me' : ''}"><td class="l">${teamTag(r.t)}</td><td class="n">${r.v.att.toLocaleString()}<span class="muted small"> / ${r.f.cap.toLocaleString()}</span></td><td class="n">${f1(r.v.gate)}</td><td class="n">${f1(r.v.other)}</td><td class="n">${f1(r.v.pay)}</td><td class="n">${f1(r.v.opex)}</td><td class="n">${r.v.cbt ? f1(r.v.cbt) : '-'}</td><td class="n ${r.v.op >= 0 ? 'pos' : 'neg'}"><b>${sg(r.v.op)}</b></td><td class="n ${r.v.room >= 0 ? '' : 'neg'}">${f1(r.v.room)}</td></tr>`).join('')}</tbody></table></div></div>
+    <div class="card"><h2>${KO[U()]} 재정 자료</h2><div class="small muted">2025 감사보고서·보도 기준 매출 ${f1(me.rev0)}억 · 영업이익 ${sg(me.op0)}억 · 구장 ${esc(me.park)}(수용 ${me.cap.toLocaleString()}) · 입장 객단가 ${Math.round(me.price * 1e8).toLocaleString()}원${me.gateKnown ? ' (공시 입장수입 역산)' : ' <span class="chip warn">추정(리그 평균 가정)</span>'}<br>${esc(me.note || '')}</div>
+      ${hist.length ? `<div class="tablewrap"><table><thead><tr><th class="l">시즌</th><th>매출</th><th>선수단</th><th>운영비</th><th>기금</th><th>영업이익</th><th>평균 관중</th></tr></thead><tbody>${hist.map(h => `<tr><td class="l">${h.year}</td><td class="n">${f1(h.r.rev)}</td><td class="n">${f1(h.r.pay)}</td><td class="n">${f1(h.r.opex)}</td><td class="n">${h.r.cbt ? f1(h.r.cbt) : '-'}</td><td class="n ${h.r.op >= 0 ? 'pos' : 'neg'}">${sg(h.r.op)}</td><td class="n">${h.r.att.toLocaleString()}</td></tr>`).join('')}</tbody></table></div>` : '<div class="small muted">아직 결산 기록이 없습니다.</div>'}</div>`;
   }
   function screenStandings() {
     const S = L.S, st = L.standings(), top = st[0];
@@ -517,7 +528,7 @@
     if (!L) { root.innerHTML = renderStart() + toastHtml(); return; }
     const scroll = window.scrollY;
     if (ui.live) { root.innerHTML = screenLive() + toastHtml(); window.scrollTo(0, scroll); return; }
-    const S = ui.screen, f = { home: screenHome, roster: screenRoster, farm: screenFarm, lineup: screenLineup, pitching: screenPitching, schedule: screenSchedule, standings: screenStandings, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
+    const S = ui.screen, f = { home: screenHome, roster: screenRoster, farm: screenFarm, lineup: screenLineup, pitching: screenPitching, schedule: screenSchedule, standings: screenStandings, finance: screenFinance, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
     root.innerHTML = shell(f()) + (ui.modal ? modalPlayer(ui.modal) : '') + sheetHtml() + toastHtml();
     window.scrollTo(0, scroll);
   }

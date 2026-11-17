@@ -278,6 +278,7 @@ def load_fa(players):
         if len(c)>1 and hint=='우완': c=[p for p in c if p.get('throws')!='L' and p['age']>=33]
         if len(c)!=1: st['skip'].append((r['선수명'],r['2026소속'],len(c)));continue
         p=c[0]
+        if r['계약구단'] and TM4.get(r['계약구단'])!=TM4[r['2026소속']] and r['계약구단'] in TM4: p['team']=TM4[r['계약구단']];p['moved']=True   # 이적 계약(손아섭 두산→NC)
         if status=='종료':   # 옵트아웃으로 시장에 나온 선수(함덕주)
             p['faStart']=True;st['fa'].append(name);continue
         rem=r['2026말_잔여시즌']
@@ -294,6 +295,8 @@ def load_fa(players):
         p['ct']=ct;st['ok']+=1
     return st
 FAC=load_fa(players)
+RETIRED=[('황재균','Wiz')]   # 2026 시즌 후 은퇴(사용자 확인) → 게임에서 제외
+players[:]=[p for p in players if (p['ko'],p['team']) not in RETIRED]
 
 # 2002~2027 신인 드래프트 정리 파일(사용자 제공): 입단 연도·고졸/대졸·지명 순번·1군 데뷔·통산 출전 → p['dh']
 def load_drafthist(players):
@@ -384,6 +387,15 @@ def load_faclass():
     TMC={'한화':'Eagles','LG':'Twins','SSG':'Landers','두산':'Bears','키움':'Heroes','KT':'Wiz','NC':'Dinos','롯데':'Giants','삼성':'Lions','KIA':'Tigers'}
     return [dict(team=TMC[r['팀']],name=r['선수명'],type='P' if r['포지션']=='투수' else 'B',pos=r['포지션'],signed=r['상태']=='계약',note=r['계약']) for r in csv.DictReader(open(f,encoding='utf-8-sig'))]
 FACLASS=load_faclass()
+# 2025 구단 재무(감사보고서·언론 보도 종합, finance_2025.csv) + 2026 평균 관중·구장 수용인원 → 입장 수입 모델의 입력
+def load_finance():
+    import csv
+    f=D+'game/data/finance_2025.csv'
+    if not os.path.exists(f): return {}
+    TMC={'한화':'Eagles','LG':'Twins','SSG':'Landers','두산':'Bears','키움':'Heroes','KT':'Wiz','NC':'Dinos','롯데':'Giants','삼성':'Lions','KIA':'Tigers'}
+    fl=lambda v: float(v) if v not in ('',None) else None
+    return {TMC[r['팀']]:dict(rev=fl(r['매출_억']),cost=fl(r['영업비용_억']),op=fl(r['영업이익_억']),gate=fl(r['입장수입_억']),md=fl(r['사업(MD)수입_억']),att=int(r['2026평균관중']),park=r['구장'],cap=int(r['수용인원']),note=r['비고']) for r in csv.DictReader(open(f,encoding='utf-8-sig'))}
+FINANCE=load_finance()
 # 능력치 척도(20-80): ratings.py 와 같은 방식(규정 타자 PA≥300 / 규정 투수 TBF≥200 가중 평균·표준편차)
 def scale(rows,fields,w):
     out={}
@@ -391,7 +403,7 @@ def scale(rows,fields,w):
         v=[r['p'][f] for r in rows];t=[w(r) for r in rows];mu=sum(a*b for a,b in zip(v,t))/sum(t);sd=math.sqrt(sum(b*(a-mu)**2 for a,b in zip(v,t))/sum(t));out[f]=[mu,sd]
     return out
 regB=[b for b in R['batters'] if b['PA']>=300];regP=[p for p in R['pitchers'] if p['TBF']>=200]
-out={'faclass2027':FACLASS,'foreign2027':FOREIGN27,'draft2027':DRAFT,'teams':TEAMS,'players':players,'league_bat':R['league_bat'],'team_def':R['team_def'],'pf':PK['pf_by_team'],
+out={'finance':FINANCE,'faclass2027':FACLASS,'foreign2027':FOREIGN27,'draft2027':DRAFT,'teams':TEAMS,'players':players,'league_bat':R['league_bat'],'team_def':R['team_def'],'pf':PK['pf_by_team'],
  'fielding':{'lg':F['lg'],'team_avg_range':F['team_avg_range']},
  'scale':{'B':scale(regB,['k','bb','hr','babip','xbh','sba'],lambda r:r['PA']),'P':scale(regP,['k','bb','hr','babip'],lambda r:r['TBF'])}}
 os.makedirs(D+'game/src',exist_ok=True)
