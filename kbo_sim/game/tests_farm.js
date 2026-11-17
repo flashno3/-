@@ -5,12 +5,12 @@ const base=JSON.parse(fs.readFileSync(path.join(__dirname,'src/gamedata.json'),'
 let fail=0;const ok=(c,m)=>{if(!c){fail++;console.log('FAIL',m)}};
 const L=League.create(base,'Lions',2027),S=L.S,T='Lions',TEAMS=Object.keys(S.teams);
 // 1) 초기 상태
-for(const t of TEAMS){const a=L.players(t).filter(p=>p.active);ok(a.length<=28&&a.length>=26,t+' 1군 인원 '+a.length);
+for(const t of TEAMS){const a=L.players(t).filter(p=>p.active);ok(a.length<=29&&a.length>=27,t+' 1군 인원 '+a.length);
  ok(L.farmPool(t).H.length>=9&&L.farmPool(t).P.length>=8,t+' 2군 풀 부족');}
 console.log('1군/2군 인원',TEAMS.map(t=>L.players(t).filter(p=>p.active).length+'/'+L.players(t).filter(p=>!p.active).length).join(' '));
 // 2) 규칙
 const farmB=L.hitters(T).filter(p=>!p.active),act=L.players(T).filter(p=>p.active);
-let err=L.moveActive(farmB[0].id,true);ok(err&&err.includes('28'),'28명 초과 차단: '+err);
+let err=L.moveActive(farmB[0].id,true);ok(err&&err.includes('29'),'29명 초과 차단: '+err);
 const down=L.hitters(T,true).sort((a,b)=>L._runsB(a,true)-L._runsB(b,true)).find(p=>!S.teams[T].set.lineup.some(x=>x.id===p.id));
 ok(L.moveActive(down.id,false)===null,'말소 성공');ok(!down.active,'말소됨');
 ok(L.moveActive(down.id,true)===null&&down.active,'프리시즌 재등록은 자유');

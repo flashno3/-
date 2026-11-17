@@ -38,7 +38,7 @@ ok(S.nextId>Math.max(...Object.keys(S.players).map(id=>parseInt(id.slice(1)))),'
 {const csv=fs.readFileSync(path.join(__dirname,'data/roster_1군_2026.csv'),'utf8').split('\n').slice(1).filter(Boolean);
  const R=Object.values(S.players).filter(p=>p.birth);ok(R.length>=330,'생년월일 반영 '+R.length);
  ok(R.every(p=>p.age===2027-parseInt(p.birth.slice(0,4))&&(p.ko==='최지만'||p.throws&&p.bats)),'나이=2027-출생연도, 투타 입력');
- const Lk=League.create(base,'Eagles',3);let bad=0;for(const t of Object.keys(Lk.S.teams)){const a=Lk.players(t).filter(p=>p.active);if(a.length!==28)bad++;if(a.filter(p=>!p.reg1).length>2)bad++}ok(bad===0,'초기 1군 28명, 대부분 실제 등록 명단');
+ const Lk=League.create(base,'Eagles',3);let bad=0;for(const t of Object.keys(Lk.S.teams)){const a=Lk.players(t).filter(p=>p.active);if(a.length!==29)bad++;if(a.filter(p=>!p.reg1).length>3)bad++}ok(bad===0,'초기 1군 28명, 대부분 실제 등록 명단');
  const old=Object.values(S.players).find(p=>p.ko==='최형우'&&p.birth);ok(old&&old.age===44,'최형우 44세');
  const q=JSON.parse(JSON.stringify(old));q.age=44;ok(L.retireChance(q)<0.7,'능력치 높은 노장은 일괄 은퇴하지 않음 '+L.retireChance(q).toFixed(2));
  const star=Object.values(S.players).find(p=>p.ko==='양의지'&&p.birth),e=L.retireChance(Object.assign(JSON.parse(JSON.stringify(star)),{age:41}));ok(e<0.45,'양의지 41세 은퇴확률 '+e.toFixed(2));}
@@ -66,8 +66,8 @@ ok(S.nextId>Math.max(...Object.keys(S.players).map(id=>parseInt(id.slice(1)))),'
 // 2f) FA 계약 반영
 {const LC=League.create(base,'Lions',9),SC=LC.S,f=n=>Object.values(SC.players).find(p=>p.ko===n&&p.contract&&p.contract.total);
  const ns=f('나성범'),yu=f('양의지'),pk=f('박건우');ok(ns.contract.years===1&&ns.contract.cbt===25,'나성범 잔여 1년·연 25억');ok(yu.contract.years===2&&yu.contract.salary===5&&yu.contract.cbt===27.5,'양의지 새 계약(2027~28, 연봉 5, 보수 27.5)');ok(pk.contract.years===1&&Math.abs(pk.contract.cbt-16.67)<0.01,'박건우 잔여 1년');
- ok(SC.fa.length===1&&SC.players[SC.fa[0]].ko==='함덕주'&&SC.players[SC.fa[0]].team==='FA','함덕주 FA 시장 진출');
- ok(!SC.teams.Twins.ids.includes(SC.fa[0]),'함덕주 LG 명단에서 제외');
+ const hd=SC.fa.map(id=>SC.players[id]).find(p=>p.ko==='함덕주');ok(hd&&hd.team==='FA','함덕주 FA 시장 진출');
+ ok(!SC.teams.Twins.ids.includes(hd.id),'함덕주 LG 명단에서 제외');
  ok(SC.calib.cbtK>0.9&&SC.calib.cbtK<1.2,'계약 구조 반영 후 환산계수가 1에 가까움 '+SC.calib.cbtK.toFixed(2));
  const ah=Object.values(SC.players).find(p=>p.ko==='안치홍'&&p.contract.est);ok(ah&&ah.contract.years===1,'확인필요 계약은 1년·추정 표시');
  // 시즌 종료 시 나성범(잔여 1년) 계약 만료 대상

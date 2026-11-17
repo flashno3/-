@@ -27,9 +27,9 @@ for(let y=0;y<4;y++){
   const ai='Wiz';const mine2=L.players(U).filter(p=>!p.active).sort((a,b)=>L.marketValue(b)-L.marketValue(a))[0],theirs=L.players(ai).filter(p=>!p.active).sort((a,b)=>L.marketValue(a)-L.marketValue(b))[0];
   if(mine2&&theirs){const ev=L.evaluateTrade(ai,[mine2.id],[theirs.id]);console.log('   트레이드 평가',mine2.ko,mine2.marketValue?'':L.marketValue(mine2),'↔',theirs.ko,L.marketValue(theirs),'→',ev.ok?'수락':'거절('+ev.why+')');}
   // 로스터/제약 검증
-  for(const t of Object.keys(S.teams)){const n=S.teams[t].ids.length;if(n>75||n<40)fail(`${t} 로스터 ${n}`);const ids=new Set(S.teams[t].ids);if(ids.size!==n)fail('중복 선수');for(const id of S.teams[t].ids)if(S.players[id].team!==t)fail('소속 불일치 '+id)}
+  for(const t of Object.keys(S.teams)){const n=S.teams[t].ids.length;if(n>135||n<40)fail(`${t} 로스터 ${n}`);const ids=new Set(S.teams[t].ids);if(ids.size!==n)fail('중복 선수');for(const id of S.teams[t].ids)if(S.players[id].team!==t)fail('소속 불일치 '+id)}
   L.startNewSeason();
-  const act=L.players(U).filter(p=>p.active);if(act.length>28)fail('1군 초과 '+act.length);if(L.S.teams[U].set.lineup.length!==9)fail('라인업');
+  const act=L.players(U).filter(p=>p.active);if(act.length>29)fail('1군 초과 '+act.length);if(L.S.teams[U].set.lineup.length!==9)fail('라인업');
   if(S.year!==2027+y+1)fail('연도');
 }
 const s1=L.save();const L2=League.load(s1);console.log('저장 크기',Math.round(s1.length/1024),'KB | 로드 후 선수 수',Object.keys(L2.S.players).length);

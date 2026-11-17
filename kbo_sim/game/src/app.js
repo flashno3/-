@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const { League, KO, POSS } = KBOLeague, E0 = KBOEngine, TEAMS = E0.TEAMS, PARK = E0.PARKNAME;
+  const { League, KO, POSS, ACTIVE_MAX } = KBOLeague, E0 = KBOEngine, TEAMS = E0.TEAMS, PARK = E0.PARKNAME;
   const COL = { Bears: '#1A1748', Twins: '#C30452', Heroes: '#820024', Landers: '#CE0E2D', Wiz: '#6B6B6B', Eagles: '#FF6600', Tigers: '#EA0029', Giants: '#0B2A56', Dinos: '#315288', Lions: '#0A5BC4' };
   // 팀 색(테마용). 로고는 사용자가 제공한 이미지(KBO_LOGOS)를 사용한다.
   const BADGE = { Bears: { p: '#131230' }, Twins: { p: '#C30452' }, Heroes: { p: '#820024' }, Landers: { p: '#CE0E2D' }, Wiz: { p: '#1C1C1C' }, Eagles: { p: '#F26A1B' }, Tigers: { p: '#E4002B' }, Giants: { p: '#0A2547' }, Dinos: { p: '#1E3F78' }, Lions: { p: '#0A5BC4' } };
@@ -132,7 +132,7 @@
     const n1 = L.players(U()).filter(p => p.active).length;
     const tr = rows.map(p => `<tr class="click" data-act="player" data-a="${p.id}"><td class="l"><b>${esc(p.ko)}</b> ${p.active ? '<span class="chip in">1군</span>' : '<span class="chip">2군</span>'}${L.handLabel(p) ? ` <span class="chip">${L.handLabel(p)}</span>` : ''}</td><td class="l">${pos(p)}</td><td class="n">${p.age}</td><td>${ovrChip(L.ovr(p))}</td><td class="l">${subHtml(p)}</td><td class="n">${money(p.contract.salary)} · ${p.contract.years}년</td><td class="l small">${statLine(p)}</td></tr>`).join('');
     const tabs = [['all', '전체'], ['B', '타자'], ['P', '투수'], ['act', '1군'], ['res', '2군']];
-    return `<div class="card"><div class="row"><h2>로스터</h2><span class="muted small">총 ${L.players(U()).length}명 · 1군 ${n1}/28 · ${cbtText(U())}</span><span class="sp"></span><select data-sel="rsort"><option value="ovr" ${ui.rf.s === 'ovr' ? 'selected' : ''}>능력치순</option><option value="age" ${ui.rf.s === 'age' ? 'selected' : ''}>나이순</option><option value="sal" ${ui.rf.s === 'sal' ? 'selected' : ''}>연봉순</option></select></div>
+    return `<div class="card"><div class="row"><h2>로스터</h2><span class="muted small">총 ${L.players(U()).length}명 · 1군 ${n1}/${ACTIVE_MAX} · ${cbtText(U())}</span><span class="sp"></span><select data-sel="rsort"><option value="ovr" ${ui.rf.s === 'ovr' ? 'selected' : ''}>능력치순</option><option value="age" ${ui.rf.s === 'age' ? 'selected' : ''}>나이순</option><option value="sal" ${ui.rf.s === 'sal' ? 'selected' : ''}>연봉순</option></select></div>
       <div class="tabs" role="tablist">${tabs.map(t => `<button role="tab" aria-selected="${f === t[0]}" data-act="rfilter" data-a="${t[0]}">${t[1]}</button>`).join('')}</div>
       <div class="tablewrap"><table><thead><tr><th class="l">선수</th><th class="l">포지션</th><th>나이</th><th>OVR</th><th class="l">세부 능력</th><th>연봉·계약</th><th class="l">올 시즌</th></tr></thead><tbody>${tr}</tbody></table></div></div>`;
   }
@@ -147,7 +147,7 @@
     const milChip = p.team === 'MIL' ? `<span class="chip" title="상무 야구단 복무 중이라 전역 전에는 뛸 수 없습니다.">상무 복무 · ${milText(p)} 전역 예정</span>` : '';
     const src = p.src === 'F' ? `<span class="chip" title="2026 퓨처스 기록을 1군 능력치로 환산한 값입니다. 기록이 적을수록 평균에 가깝게 보정됩니다.">퓨처스 환산</span>${p.posEst ? '<span class="chip" title="세부 포지션(1B/2B/3B/SS, LF/CF/RF)과 수비 능력은 데이터가 없어 추정한 값입니다.">포지션 추정</span>' : ''}${p.roleEst ? '<span class="chip" title="선발 기록(GS)이 없어 경기당 이닝으로 선발/구원과 체력을 추정했습니다.">보직 추정</span>' : ''}${p.ageEst ? '<span class="chip" title="명단에 생년월일이 없어 나이를 추정했습니다.">나이 추정</span>' : ''}` : '';
     const acts = mine ? `<div class="row"><button data-act="toggleActive" data-a="${p.id}">${p.active ? '2군으로 내림' : '1군 등록'}</button><button class="warn" data-act="releaseAsk" data-a="${p.id}">${ui.confirm === p.id ? '정말 방출(되돌릴 수 없음)' : '방출'}</button></div>` : '';
-    return `<div class="modal-bg" data-act="closeModal"><div class="modal" data-stop="1"><div class="row"><h2>${esc(p.name === p.ko ? p.ko : p.name)}</h2><span class="chip">${pos(p)}</span><span class="chip">${p.age}세</span>${pot}${draftChip}${birthChip}${src}${milChip}<span class="sp"></span><button class="sm" data-act="closeModal">닫기</button></div>
+    return `<div class="modal-bg" data-act="closeModal"><div class="modal" data-stop="1"><div class="row"><h2>${esc(p.name === p.ko ? p.ko : p.name)}</h2><span class="chip">${pos(p)}</span><span class="chip">${p.age}세</span>${pot}${draftChip}${birthChip}${faStatus(p)}${src}${milChip}<span class="sp"></span><button class="sm" data-act="closeModal">닫기</button></div>
       <div class="row"><div>종합 ${ovrChip(L.ovr(p))}</div><div class="small muted">${teamTag(p.team in KO ? p.team : U())} · 연봉 ${money(p.contract.salary)} · 계약 ${p.contract.years}년 남음${p.contract.total ? ` · FA 계약 총 ${p.contract.total}억${p.contract.bonus ? '(계약금 ' + p.contract.bonus + '억)' : ''}${p.contract.end ? ' ~' + p.contract.end : ''}${p.contract.opt ? ' · 옵션 ' + esc(p.contract.opt) : ''}${p.contract.est ? ' · 기간 추정' : ''}` : ''} · 시장 가치 ${money(L.marketValue(p))}</div></div>
       <div class="pbars">${bars}</div>${fits}<div class="small">올 시즌 1군 기록: ${statLine(p)}</div>${(L.S.stats2.bat[p.id] || L.S.stats2.pit[p.id]) ? `<div class="small">올 시즌 2군 기록: ${p.type === 'B' ? batLine(p.id, true) : pitLine(p.id, true)}</div>` : ''}${p.lockUntil > L.S.day && p.team === U() && !p.active ? `<div class="small muted">1군 재등록 잠금: ${L.lockLeft(p)}경기일 남음</div>` : ''}${acts}</div></div>`;
   }
@@ -219,6 +219,10 @@
     }
     return out;
   }
+  /* FA 표시: 등급·보상 안내 */
+  const gradeTip = { A: '보호선수 20명 외 1명 + 전년 연봉 200%, 또는 300%', B: '보호선수 25명 외 1명 + 전년 연봉 100%, 또는 200%', C: '보상선수 없이 전년 연봉 150%' };
+  const faChip = p => { if (p.foreign) return `<span class="chip" title="외국인은 FA 제도 대상이 아닙니다(일반 3명 + 아시아쿼터 1명, 신규 상한 ${p.aq ? '2.8억' : '14억'})">${p.aq ? '아시아쿼터' : '외국인'}</span>`; const g = p.faInfo && p.faInfo.grade; return g ? `<span class="chip ${g === 'C' ? '' : 'in'}" title="${gradeTip[g]}">${g}등급 FA</span>` : '<span class="muted small">자유계약</span>'; };
+  const faStatus = p => { if (p.foreign || !p.fa) return ''; if (L.faEligible(p)) return `<span class="chip in" title="FA 자격 취득(${p.fa.used ? '재취득' : p.fa.univ ? '대졸 7시즌' : '고졸 8시즌'})">FA 자격 · 예상 ${L.faGrade(p)}등급</span>`; return `<span class="chip" title="1군 등록 145일을 1시즌으로 계산합니다">FA 자격까지 약 ${L.faSeasonsLeft(p)}시즌</span>`; };
   const milText = p => `${Math.floor(p.milReturn / 12)}.${String(p.milReturn % 12 + 1).padStart(2, '0')}`;
   function milCard() {
     const S = L.S, mine = (S.mil || []).map(id => P(id)).filter(p => p && p.milTeam === U()).sort((a, b) => a.milReturn - b.milReturn), all = (S.mil || []).length;
@@ -226,13 +230,13 @@
   }
   function screenFarm() {
     const S = L.S, me = U(), all = L.players(me), farm = all.filter(p => !p.active).sort((a, b) => L.ovr(b) - L.ovr(a)), act = all.filter(p => p.active);
-    const full = act.length >= 28, st2 = L.standings2(), my2 = st2.find(x => x.team === me), recs = farmRecs();
+    const full = act.length >= ACTIVE_MAX, st2 = L.standings2(), my2 = st2.find(x => x.team === me), recs = farmRecs();
     const line = p => p.type === 'B' ? batLine(p.id, true) : pitLine(p.id, true);
     const frow = p => { const lk = L.lockLeft(p), f = formOf(p); return `<tr class="click" data-act="player" data-a="${p.id}"><td class="l"><b>${esc(p.ko)}</b>${p.age <= 25 ? ` <span class="chip">잠재력 ${L.potGrade(p.pot || 0)}</span>` : ''}</td><td class="l">${pos(p)}</td><td class="n">${p.age}</td><td>${ovrChip(L.ovr(p))}</td><td class="l small">${line(p)}</td><td class="l small">${f ? f.txt : '<span class="muted">-</span>'}</td><td data-stop="1">${lk ? `<span class="chip">잠금 ${lk}일</span>` : `<button class="sm" data-act="toggleActive" data-a="${p.id}" ${full ? 'disabled' : ''}>1군 등록</button>`}</td></tr>`; };
     const arow = p => `<tr class="click" data-act="player" data-a="${p.id}"><td class="l"><b>${esc(p.ko)}</b></td><td class="l">${pos(p)}</td><td class="n">${p.age}</td><td>${ovrChip(L.ovr(p))}</td><td class="l small">${statLine(p)}</td><td data-stop="1"><button class="sm" data-act="toggleActive" data-a="${p.id}">2군으로</button></td></tr>`;
     const rec = recs.length ? recs.map(r => `<div class="row small"><span>↑ <b>${esc(r.up.p.ko)}</b> (OVR ${L.ovr(r.up.p)}${r.up.f ? ' · 최근 ' + r.up.f.txt : ''}) ↔ ↓ <b>${esc(r.down.ko)}</b> (OVR ${L.ovr(r.down)})</span><span class="sp"></span><button class="sm" data-act="swapFarm" data-a="${r.up.p.id}|${r.down.id}">교체</button></div>`).join('') : '<div class="small muted">지금 1군 후보보다 확실히 나은 2군 선수가 없습니다.</div>';
     const th = '<thead><tr><th class="l">선수</th><th class="l">포지션</th><th>나이</th><th>OVR</th><th class="l">2군 기록</th><th class="l">최근 10경기</th><th></th></tr></thead>';
-    return `<div class="card"><div class="row"><h2>2군 (퓨처스)</h2><span class="muted small">1군 ${act.length}/28 · 2군 ${farm.length}명 · 2군 성적 ${my2.w}승 ${my2.l}패 ${my2.d}무 (${my2.rank}위)</span></div>
+    return `<div class="card"><div class="row"><h2>2군 (퓨처스)</h2><span class="muted small">1군 ${act.length}/${ACTIVE_MAX} · 2군 ${farm.length}명 · 2군 성적 ${my2.w}승 ${my2.l}패 ${my2.d}무 (${my2.rank}위)</span></div>
       <div class="small muted">1군 말소 후 10경기일(약 열흘) 동안은 재등록할 수 없습니다. 2군에서 꾸준히 뛴 어린 선수는 성장이 빠르고, 출전하지 못하면 성장이 더딥니다. 추천은 능력치와 최근 10경기 성적을 함께 본 참고용입니다.</div></div>
       <div class="card"><h2>콜업 추천</h2>${rec}</div>
       <div class="card"><h2>2군 선수</h2><div class="tablewrap"><table>${th}<tbody>${farm.map(frow).join('') || '<tr><td class="muted">2군 선수가 없습니다.</td></tr>'}</tbody></table></div></div>
@@ -287,9 +291,9 @@
   }
   function screenFA() {
     const S = L.S, list = L.faList().sort((a, b) => ui.faSort === 'ovr' ? L.ovr(b) - L.ovr(a) : ui.faSort === 'age' ? a.age - b.age : L.war(b) - L.war(a)).slice(0, 80);
-    const rows = list.map(p => `<tr><td class="l"><b>${esc(p.ko)}</b></td><td class="l">${pos(p)}</td><td class="n">${p.age}</td><td>${ovrChip(L.ovr(p))}</td><td class="l">${subHtml(p)}</td><td class="n">${money(L.askSalary(p))}</td><td><select data-sel="fayears" data-a="${p.id}">${[1, 2, 3, 4].map(y => `<option value="${y}" ${y === 2 ? 'selected' : ''}>${y}년</option>`).join('')}</select> <button class="sm primary" data-act="signFA" data-a="${p.id}">영입</button></td></tr>`).join('');
-    return `<div class="card"><div class="row"><h2>FA 시장</h2><span class="muted small">${cbtText(U())} · 보유 ${S.teams[U()].ids.length}명</span><span class="sp"></span><select data-sel="fasort"><option value="war" ${ui.faSort === 'war' ? 'selected' : ''}>가치순</option><option value="ovr" ${ui.faSort === 'ovr' ? 'selected' : ''}>능력치순</option><option value="age" ${ui.faSort === 'age' ? 'selected' : ''}>나이순</option></select></div>
-      ${list.length ? `<div class="tablewrap"><table><thead><tr><th class="l">선수</th><th class="l">포지션</th><th>나이</th><th>OVR</th><th class="l">세부 능력</th><th>요구 연봉</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="muted">시장에 나온 FA가 없습니다. 오프시즌에 계약이 끝난 선수가 시장에 나옵니다.</p>'}</div>`;
+    const rows = list.map(p => `<tr><td class="l"><b>${esc(p.ko)}</b></td><td class="l">${pos(p)}</td><td class="n">${p.age}</td><td>${ovrChip(L.ovr(p))}</td><td class="l">${faChip(p)}${p.faInfo && p.faInfo.from ? ` <span class="muted small">${KO[p.faInfo.from] || ''}</span>` : ''}</td><td class="l">${subHtml(p)}</td><td class="n">${money(p.foreign ? Math.min(L.askSalary(p), L.foreignCap(p, U())) : L.askSalary(p))}</td><td><select data-sel="fayears" data-a="${p.id}">${[1, 2, 3, 4].map(y => `<option value="${y}" ${y === 2 ? 'selected' : ''}>${y}년</option>`).join('')}</select> <button class="sm primary" data-act="signFA" data-a="${p.id}">영입</button></td></tr>`).join('');
+    return `<div class="card"><div class="row"><h2>FA 시장</h2><span class="muted small">${cbtText(U())} · 보유 ${S.teams[U()].ids.length}명 · 외부 FA ${L._faCount(U())}/3 · 외국인 일반 ${L.foreignOf(U()).filter(x => !x.aq).length}/3 + AQ ${L.foreignOf(U()).filter(x => x.aq).length}/1</span><span class="sp"></span><select data-sel="fasort"><option value="war" ${ui.faSort === 'war' ? 'selected' : ''}>가치순</option><option value="ovr" ${ui.faSort === 'ovr' ? 'selected' : ''}>능력치순</option><option value="age" ${ui.faSort === 'age' ? 'selected' : ''}>나이순</option></select></div>
+      ${list.length ? `<div class="tablewrap"><table><thead><tr><th class="l">선수</th><th class="l">포지션</th><th>나이</th><th>OVR</th><th class="l">FA 등급·원소속</th><th class="l">세부 능력</th><th>요구 연봉</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="muted">시장에 나온 FA가 없습니다. 오프시즌에 계약이 끝난 선수가 시장에 나옵니다.</p>'}</div>`;
   }
 
   /* ---------------- 오프시즌 ---------------- */
@@ -300,10 +304,10 @@
     if (cur === 'review') {
       const h = S.history[S.history.length - 1], prog = off.rep.prog.slice().sort((a, b) => b.d - a.d);
       const pr = prog.map(x => `<tr class="click" data-act="player" data-a="${x.id}"><td class="l">${esc(P(x.id).ko)}</td><td class="n">${P(x.id).age}</td><td>${ovrChip(L.ovr(P(x.id)))}</td><td class="n ${x.d > 0 ? 'pos' : x.d < 0 ? 'neg' : ''}">${x.d > 0 ? '▲' : x.d < 0 ? '▼' : ''}${Math.abs(x.d)}</td></tr>`).join('');
-      const ex = off.rep.expiring.map(id => { const p = P(id), ask = L.askSalary(p); return `<tr><td class="l"><b>${esc(p.ko)}</b></td><td class="l">${pos(p)}</td><td class="n">${p.age}</td><td>${ovrChip(L.ovr(p))}</td><td class="n">${money(ask)}</td><td><select data-sel="ryears" data-a="${id}">${[1, 2, 3].map(y => `<option value="${y}" ${y === 2 ? 'selected' : ''}>${y}년</option>`).join('')}</select> <button class="sm primary" data-act="resign" data-a="${id}">재계약</button></td></tr>`; }).join('');
+      const ex = off.rep.expiring.map(id => { const p = P(id), ask = L.askSalary(p); return `<tr><td class="l"><b>${esc(p.ko)}</b></td><td class="l">${pos(p)}</td><td class="n">${p.age}</td><td>${ovrChip(L.ovr(p))}</td><td class="l">${faStatus(p) || '<span class="muted small">외국인(1년 계약)</span>'}</td><td class="n">${money(ask)}</td><td><select data-sel="ryears" data-a="${id}">${[1, 2, 3].map(y => `<option value="${y}" ${y === 2 ? 'selected' : ''}>${y}년</option>`).join('')}</select> <button class="sm primary" data-act="resign" data-a="${id}">재계약</button></td></tr>`; }).join('');
       return `${bar}<div class="card"><h2>${S.year} 시즌 결산</h2><p style="margin:0">${S.year}년 최종 ${h.userRank}위 (${h.userRec.w}승 ${h.userRec.l}패 ${h.userRec.d}무) · 우승 ${h.champion ? teamTag(h.champion) : '-'}</p>${off.rep.retired.length ? `<p class="small muted">은퇴: ${off.rep.retired.map(id => esc(P(id).ko)).join(', ')}</p>` : ''}</div>
         <div class="grid"><div class="card"><h2>선수 성장·노화 (내 팀)</h2><div class="tablewrap" style="max-height:360px;overflow-y:auto"><table><thead><tr><th class="l">선수</th><th>나이</th><th>OVR</th><th>변화</th></tr></thead><tbody>${pr}</tbody></table></div></div>
-        <div class="card"><h2>계약 만료 선수</h2>${ex ? `<div class="tablewrap"><table><thead><tr><th class="l">선수</th><th class="l">포지션</th><th>나이</th><th>OVR</th><th>요구 연봉</th><th></th></tr></thead><tbody>${ex}</tbody></table></div>` : '<p class="muted">계약이 만료된 선수가 없습니다.</p>'}<p class="small muted">재계약하지 않은 선수는 FA 시장으로 나갑니다.</p></div></div>
+        <div class="card"><h2>계약 만료 선수</h2>${ex ? `<div class="tablewrap"><table><thead><tr><th class="l">선수</th><th class="l">포지션</th><th>나이</th><th>OVR</th><th class="l">FA</th><th>요구 연봉</th><th></th></tr></thead><tbody>${ex}</tbody></table></div>` : '<p class="muted">계약이 만료된 선수가 없습니다.</p>'}<p class="small muted">FA 자격이 있는 선수를 재계약하지 않으면 FA 시장으로 나가며(등급에 따라 보상 발생), 자격이 없는 선수를 재계약하지 않으면 방출되어 자유계약이 됩니다.</p></div></div>
         <div class="row"><button class="primary big" data-act="toDraft">계약 확정 · 드래프트로</button></div>`;
     }
     if (cur === 'draft') {

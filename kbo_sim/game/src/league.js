@@ -15,7 +15,7 @@
   const PEN_R = { SS: 22, '2B': 26, '3B': 28, CF: 24, LF: 36, RF: 36, '1B': 44, C: 40 }, PEN_E = { SS: 2.2, '2B': 2.2, '3B': 2.2, CF: 1.8, LF: 1.5, RF: 1.5, '1B': 1.2, C: 1.6 };   // 엔진의 낯선 포지션 페널티와 같은 값
   const FAM = 15;   // 소화 가능 기준(해당 포지션 선발 경기 수)
   const POSPEN = { C: 70, SS: 55, CF: 40, '2B': 38, '3B': 32, RF: 20, LF: 16, '1B': 10, DH: 0 };
-  const ACTIVE_MAX = 28, ROSTER_MAX = 130, ROSTER_MIN = 44;
+  const ACTIVE_MAX = 29, ROSTER_MAX = 130, ROSTER_MIN = 44;
   const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
   const rngFor = (...ns) => { let h = 2166136261; for (const n of ns) { h = Math.imul(h ^ (n | 0), 16777619) >>> 0; h = (h ^ (h >>> 13)) >>> 0; } return new PyRandom(h); };
   const gauss = (r, m, s) => r.gauss(m, s);
@@ -48,6 +48,7 @@
       }
       L._calibrateSalaries();   // 2026 연봉 데이터가 있으면 실제 연봉 사용, 없으면 모델 연봉을 실제 규모로 환산
       S.cbt = { over: {}, under: {}, drop: {}, fees: {}, log: [] };
+      if (L._initFARules) L._initFARules();   // FA 자격 연수·등급 기준 연봉·외국인 슬롯 초기화
       if (L._addDraftClass) L._addDraftClass(base.draft2027);   // 2027 신인 드래프트 지명 결과(실제 지명·가상 능력치)
       for (const t of TEAMS) L.initTeam(t);
       S.calib.base = L.talentLevel();
@@ -274,7 +275,7 @@
       return ord.map(x => ({ id: x.id, pos: x.pos }));
     }
     _obpSlg(p) { const q = p.p, obp = q.bb + q.hbp + q.hr + (1 - q.k - q.bb - q.hbp - q.hr) * q.babip * 0.97, slg = obp + 2 * q.hr + q.babip * q.xbh * 0.5; return obp * 2 + slg; }
-    /* 팀 초기 설정: 1군 28명, 라인업/로테이션/불펜 자동 */
+    /* 팀 초기 설정: 1군 29명, 라인업/로테이션/불펜 자동 */
     initTeam(t) {
       const pool = this.reg1Pool(t);
       if (pool.length >= ACTIVE_MAX) { this.autoActive(t, pool); this.autoSettings(t); return; }   // 실제 2026.10 1군 등록 명단이 있으면 그 안에서 28명 선발
@@ -497,6 +498,8 @@
       const R = this.S.rec2, pct = t => (R[t][0] + R[t][1]) ? R[t][0] / (R[t][0] + R[t][1]) : 0;
       return this.farmTeams().sort((x, y) => pct(y) - pct(x) || (R[y][3] - R[y][4]) - (R[x][3] - R[x][4]) || (x < y ? -1 : 1)).map((t, i) => ({ rank: i + 1, team: t, w: R[t][0], l: R[t][1], d: R[t][2], pct: pct(t), rs: R[t][3], ra: R[t][4] }));
     }
+    /* FA 자격 연수: 1군 등록일수 누적(경기일 1일 = 달력 7/6일) */
+    _tickService() { for (const t of TEAMS) for (const p of this.players(t)) if (p.active && p.fa) p.fa.regDays += 7 / 6; }
     /* 군 복무(상무) 선수 복귀: 전역 월이 되면 원소속 구단 2군으로 돌아온다. ym = 연*12+(월-1) */
     returnMilitary(ym) {
       const S = this.S, back = [];
@@ -544,7 +547,7 @@
       });
       this.mergeTracking();
       for (const o of others) this.commit(o.home, o.away, o.rh, o.ra, { spH: o.spH, spA: o.spA });
-      this._decayFatigue(); this.playFutures(d); this.returnMilitary(this.milYM(d));
+      this._decayFatigue(); this._tickService(); this.playFutures(d); this.returnMilitary(this.milYM(d));
       if (!ug) { S.day++; return { status: 'ok', day: d }; }
       if (live) { S.pendingDay = d; return { status: 'userGame', day: d, game: ug.g, idx: ug.i }; }
       const L = this.startUserGame(ug.g, ug.i); L.live.playToEnd(); const res = this.finishUserGame(L);

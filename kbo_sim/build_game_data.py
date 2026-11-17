@@ -223,7 +223,7 @@ def load_salary(players):
         c=by.get((r['선수명'],TM2[r['구단']]),[])
         if not c: miss.append((r['구단'],r['선수명'],int(r['연봉_만원'])));continue
         if len(c)>1 or r['동명이인_팀내']=='Y': skip.append((r['구단'],r['선수명']));continue
-        c[0]['sal']=int(r['연봉_만원'])/10000;c[0]['foreign']=bool(r['외국인구분']);ok+=1
+        c[0]['sal']=int(r['연봉_만원'])/10000;c[0]['foreign']=bool(r['외국인구분']);c[0]['aq']='(AQ)' in r['비고']   # 아시아쿼터 여부(별첨 성명의 (AQ) 표기);ok+=1
     return ok,skip,miss
 SALOK,SALSKIP,SALMISS=load_salary(players)
 
