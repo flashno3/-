@@ -23,3 +23,14 @@ const season=L=>{let g=0;while(L.S.day<L.S.schedule.length&&g++<60){L.advance(10
   for(const tm of Object.keys(S.teams))for(const id of S.teams[tm].ids)ok(S.players[id].team===tm,'소속 일관')}
  ok(made>=1,'트레이드 제안 발생 '+made);}
 console.log('goals tests ok',n);
+// 시상: 신인왕·골든글러브(포지션별 10명)와 실제 수상 데이터
+{const L=mk(7,'Lions'),S=L.S;season(L);L.startOffseason();const A=S.report.awards,gg=A.filter(a=>a.label.startsWith('골든글러브'));
+ const labels=gg.map(a=>a.label.replace('골든글러브 ',''));
+ const ok2=(c,m)=>{if(!c)throw new assert.AssertionError({message:m})};
+ ok2(['투수','포수','1루수','2루수','3루수','유격수','지명타자'].every(p=>labels.includes(p))&&labels.filter(x=>x==='외야수').length===3,'골든글러브 포지션별 '+labels.join(','));
+ ok2(new Set(gg.map(a=>a.id)).size===gg.length,'골든글러브 중복 없음');ok2(A.some(a=>a.label==='신인왕'),'신인왕 선정');
+ const rk=A.find(a=>a.label==='신인왕'),p=S.players[rk.id];ok2(p&&!p.foreign&&p.age<=30,'신인왕은 신인 자격 선수 '+p.ko);
+ ok2(S.awardsHist&&S.awardsHist.length===1,'수상 기록 누적');
+ ok2(S.awardsReal.length===66&&S.awardsReal.filter(x=>x.k==='신인왕').length===6&&S.awardsReal.filter(x=>x.k==='골든글러브'&&x.y===2025).length===10,'실제 수상 데이터 2020~2025 (신인왕 6, 연 GG 10)');
+ ok2(S.awardsReal.find(x=>x.y===2025&&x.k==='신인왕').name==='안현민','2025 신인왕 안현민');n+=6}
+console.log('award tests ok',n);

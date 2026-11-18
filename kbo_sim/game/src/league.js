@@ -48,6 +48,7 @@
       }
       L._calibrateSalaries();   // 2026 연봉 데이터가 있으면 실제 연봉 사용, 없으면 모델 연봉을 실제 규모로 환산
       S.cbt = { over: {}, under: {}, drop: {}, fees: {}, log: [] };
+      S.awardsReal = base.awards || [];   // 실제 KBO 신인왕·골든글러브 2020~2025
       S.schoolHome = base.schoolHome || {};   // 고교 → 연고 구단(구단 충성도의 연고 출신 판정)
       L._f27 = base.foreign2027 || [];
       L._faclass = base.faclass2027 || [];
@@ -61,6 +62,7 @@
       S.calib.base = L.talentLevel(undefined, true);
       L.newSeasonSetup(true);
       if (L._setGoals) L._setGoals();
+      if (L._markRookies) L._markRookies();
       return L;
     }
     /* 계약 연봉을 실제 KBO 규모로 환산: 최저 0.3억은 고정, 초과분만 배율 적용(리그 평균 상위 40명 합계 = 111.05억, 2025 발표 기준) */

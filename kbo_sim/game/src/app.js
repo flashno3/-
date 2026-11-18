@@ -377,6 +377,15 @@
       <div class="grid">${tbl('주요 선수 (OVR 상위)', star)}${tbl('타순', lu, t === U() ? '현재 라인업 기준' : '현재 1군 타자로 구성한 예상 라인업')}${tbl('선발 로테이션', rot)}${tbl('불펜 (마무리·승리조·중간)', pen)}</div>
       ${inj.length ? `<div class="card"><h2>부상자</h2><div class="tablewrap"><table><tbody>${inj.map(p => `<tr class="click" data-act="player" data-a="${p.id}"><td class="l"><b>${esc(p.ko)}</b> <span class="muted small">${pos(p)}</span></td><td class="l small">${esc(p.inj.dx)}</td><td class="n small">~${L.injDateStr(p)}</td></tr>`).join('')}</tbody></table></div></div>` : ''}`;
   }
+  /* 수상 기록: 실제 KBO 신인왕·골든글러브(2020~2025)와 내 게임의 연도별 수상 */
+  function awardsCard() {
+    const S = L.S, real = S.awardsReal || [], mine = S.awardsHist || [];
+    const years = Array.from(new Set(real.map(x => x.y))).sort((a, b) => b - a);
+    const realHtml = years.length ? `<details style="margin-top:6px"><summary><b>실제 KBO 신인왕·골든글러브 (${years[years.length - 1]}~${years[0]})</b> — 2026 시상: 신인왕 11/26 · 골든글러브 12/8 예정</summary>${years.map(y => { const rk = real.find(x => x.y === y && x.k === '신인왕'), gg = real.filter(x => x.y === y && x.k === '골든글러브');
+      return `<div style="margin-top:8px"><b>${y}</b> <span class="small muted">신인왕</span> ${rk ? `<b>${esc(rk.name)}</b> (${esc(rk.team)} ${esc(rk.pos)}) <span class="small muted">${esc(rk.note)}</span>` : '-'}<div class="small" style="margin-top:2px">${gg.map(g => `<span class="chip" title="${esc(g.note)}">${esc(g.pos.replace('수', ''))} ${esc(g.name)}(${esc(g.team)})</span>`).join(' ')}</div></div>`; }).join('')}</details>` : '';
+    const mineHtml = mine.length ? `<div style="margin-top:8px"><b>내 게임 수상 기록</b>${mine.slice().reverse().map(m => `<div class="small" style="margin-top:4px"><b>${m.year}</b> ${m.awards.filter(a => ['MVP', '신인왕', '홈런왕', '타율왕'].includes(a.label)).map(a => `${a.label} ${esc(a.name)}`).join(' · ')}</div>`).join('')}</div>` : '';
+    return `<div class="card"><h2>수상 기록</h2>${mineHtml}${realHtml || '<span class="muted small">기록이 없습니다.</span>'}</div>`;
+  }
   function screenStandings() {
     const S = L.S, st = L.standings(), top = st[0];
     const rows = st.map(x => `<tr class="click ${x.team === U() ? 'me' : ''} ${x.rank === 5 ? 'cut' : ''}" data-act="team" data-a="${x.team}"><td class="l n">${x.rank}</td><td class="l">${teamTag(x.team)}</td><td class="n">${x.w + x.l + x.d}</td><td class="n">${x.w}</td><td class="n">${x.l}</td><td class="n hm">${x.d}</td><td class="n"><b>${pct3(x.pct)}</b></td><td class="n">${x.rank === 1 ? '-' : (((top.w - x.w) + (x.l - top.l)) / 2).toFixed(1)}</td><td class="n hm">${x.rs}</td><td class="n hm">${x.ra}</td><td class="n ${x.rs - x.ra >= 0 ? 'pos' : 'neg'}">${sgn(x.rs - x.ra)}</td></tr>`).join('');
@@ -529,12 +538,12 @@
   }
   function reportCard() {
     const R = L.S.report; if (!R || R.year !== L.S.year) return '';
-    const aw = R.awards.map(a => `<tr class="click" data-act="player" data-a="${a.id}"><td class="l"><b>${a.label}</b></td><td class="l">${esc(a.name)} ${teamTag(a.team in KO ? a.team : U())}</td><td class="l small">${esc(a.txt)}</td></tr>`).join('');
+    const awRow = a => `<tr class="click" data-act="player" data-a="${a.id}"><td class="l"><b>${a.label.replace('골든글러브 ', '')}</b></td><td class="l">${esc(a.name)} ${teamTag(a.team in KO ? a.team : U())}</td><td class="l small">${esc(a.txt)}</td></tr>`, aw = R.awards.filter(a => !a.label.startsWith('골든글러브')).map(awRow).join(''), gg = R.awards.filter(a => a.label.startsWith('골든글러브')).map(awRow).join('');
     const mine = R.mine.map(m => `<tr class="click" data-act="player" data-a="${m.id}"><td class="l"><b>${esc(m.name)}</b></td><td class="l small">${esc(m.txt)}</td></tr>`).join('');
     const gl = R.goals.map(g => `<tr><td class="l">${esc(g.label)}</td><td class="n"><b>${esc(g.got)}</b> ${g.ok ? '<span class="chip in">달성</span>' : '<span class="chip warn">미달</span>'}${g.d ? ` <span class="${g.d >= 0 ? 'pos' : 'neg'}">${g.d > 0 ? '+' : ''}${g.d}</span>` : ''}</td></tr>`).join('');
     return `<div class="card"><h2>${R.year} 시즌 리포트</h2><div class="small muted">${KO[U()]} ${R.rank}위 (${R.w}승 ${R.l}패 ${R.d}무)${R.champion ? ' · 우승 ' + (KO[R.champion] || '') : ''} · 이사회 신뢰도 ${f1(R.trust)} (${R.goalTrust >= 0 ? '+' : ''}${R.goalTrust})</div>
       <div class="grid"><div><h3 style="margin:8px 0 4px">시즌 목표 결과</h3><div class="tablewrap"><table><tbody>${gl}</tbody></table></div><h3 style="margin:10px 0 4px">우리 팀 활약</h3><div class="tablewrap"><table><tbody>${mine}</tbody></table></div></div>
-      <div><h3 style="margin:8px 0 4px">시상</h3><div class="tablewrap"><table><tbody>${aw}</tbody></table></div></div></div></div>`;
+      <div><h3 style="margin:8px 0 4px">시상</h3><div class="tablewrap"><table><tbody>${aw}</tbody></table></div>${gg ? `<details open style="margin-top:8px"><summary><b>골든글러브</b> (포지션별)</summary><div class="tablewrap"><table><tbody>${gg}</tbody></table></div></details>` : ''}</div></div></div>`;
   }
   function screenFA() {
     const S = L.S, mk = !!(S.faMkt && !S.faMkt.closed), tab = ui.faTab || 'dom';
@@ -766,14 +775,23 @@
   }
 
   /* ---------------- 렌더 ---------------- */
+  /* 휴대폰(≤560px)에서 가로로 넘치는 표는 행을 카드처럼 쌓아 보여준다(좌우 스크롤 제거). 열 이름은 셀 앞에 라벨로 붙는다 */
+  function stackTables(root) {
+    if (!window.matchMedia || !window.matchMedia('(max-width: 560px)').matches) return;
+    root.querySelectorAll('.tablewrap').forEach(w => {
+      const t = w.querySelector('table'); if (!t || w.scrollWidth <= w.clientWidth + 2) return;
+      const heads = Array.from(t.querySelectorAll('thead th')).map(th => th.textContent.trim()); t.classList.add('rt');
+      t.querySelectorAll('tbody tr').forEach(tr => Array.from(tr.children).forEach((td, i) => { if (heads[i] && td.tagName === 'TD' && !td.getAttribute('colspan')) td.dataset.l = heads[i]; }));
+    });
+  }
   function render() {
     const root = $('#root'); applyTheme();
     if (!L) { root.innerHTML = renderStart() + toastHtml(); return; }
     const scroll = window.scrollY;
     if (ui.live) { root.innerHTML = screenLive() + toastHtml(); window.scrollTo(0, scroll); return; }
-    const S = ui.screen, f = { home: () => goalCard() + screenHome() + evHistory(), roster: screenRoster, farm: screenFarm, lineup: screenLineup, pitching: screenPitching, schedule: screenSchedule, standings: screenStandings, teams: screenTeams, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
+    const S = ui.screen, f = { home: () => goalCard() + screenHome() + evHistory(), roster: screenRoster, farm: screenFarm, lineup: screenLineup, pitching: screenPitching, schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
     root.innerHTML = shell((S === 'home' || S === 'market' || S === 'offseason' ? eventCards() : evBanner()) + f()) + (ui.modal ? modalPlayer(ui.modal) : '') + sheetHtml() + firedModal() + toastHtml();
-    window.scrollTo(0, scroll);
+    window.scrollTo(0, scroll); stackTables(root);
     const cur = root.querySelector('.side button[aria-current=true]'); if (cur && cur.scrollIntoView) { try { cur.scrollIntoView({ inline: 'center', block: 'nearest' }); } catch (e) { /* 일부 브라우저 */ } }
   }
   const toastHtml = () => (ui.toast ? `<div class="toast" role="status">${esc(ui.toast)}</div>` : '');
