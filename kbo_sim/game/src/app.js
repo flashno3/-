@@ -55,8 +55,9 @@
     return `<div class="start"><header><h1>KBO 감독 모드</h1><p class="muted" style="margin:6px 0 0">구단을 골라 라인업·로테이션·불펜을 짜고, 경기를 직접 지휘하고, 트레이드·FA·드래프트로 팀을 키우세요. 정규시즌 144경기 뒤 포스트시즌이 이어지고, 시즌이 끝나면 다음 시즌으로 계속됩니다.</p></header>
       <div class="teamcards">${cards}</div>
       <div class="card row"><div><h2>${KO[ui.team]}으로 시작</h2><div class="small muted">2027 시즌 · 선수 능력치는 2024~2026 기록을 합산해 평균으로 보정한 값입니다.</div></div><span class="sp"></span>
-        <label class="small muted">시드(선택) <input type="text" id="seedIn" inputmode="numeric" value="${esc(ui.seed)}" style="width:110px" placeholder="무작위"></label>
-        <button class="primary big" data-act="newgame">감독 시작</button>${has ? '<button class="big" data-act="continue">이어하기</button>' : ''}</div></div>`;
+        <button class="primary big" data-act="newgame">감독 시작</button>${has ? '<button class="big" data-act="continue">이어하기</button>' : ''}</div>
+      <details class="card adv" ${ui.seed ? 'open' : ''}><summary class="small">고급 설정</summary><div class="small muted" style="margin:6px 0">시드: 성장·부상·드래프트·경기 결과 등 모든 우연의 출발값입니다. 비워 두면 게임마다 무작위로 정해지고, 같은 숫자와 같은 선택이면 같은 결과가 재현됩니다.</div>
+        <label class="small muted">시드(선택) <input type="text" id="seedIn" inputmode="numeric" value="${esc(ui.seed)}" style="width:110px" placeholder="무작위"></label></details></div>`;
   }
 
   /* ---------------- 공통 셸 ---------------- */
