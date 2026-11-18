@@ -87,7 +87,11 @@ tr.cut td { border-bottom: 2px solid var(--accent); }
 .tabs button[aria-selected=true] { border-bottom-color: var(--accent); color: var(--fg); font-weight: 600; }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(max(20px, env(safe-area-inset-bottom, 0px)) + 96px); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 10px; z-index: 50; max-width: min(92vw, 560px); box-shadow: 0 6px 24px rgba(0,0,0,.25); }
 .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 40; display: flex; align-items: flex-start; justify-content: center; padding: max(24px, env(safe-area-inset-top, 0px)) 12px 24px; overflow-y: auto; }
-.modal { background: var(--surface); border-radius: 12px; padding: 18px; width: min(720px, 100%); display: flex; flex-direction: column; gap: 12px; }
+.modal { background: var(--surface); border-radius: 12px; padding: 0; width: min(720px, 100%); display: flex; flex-direction: column; max-height: calc(100dvh - 24px); overflow: hidden; }
+.modal .mhead { padding: 12px 14px 8px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; flex: none; }
+.modal .mbody { padding: 14px; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 0; }
+.modal-bg { overscroll-behavior: contain; align-items: center !important; }
+body.modal-open { overflow: hidden; }
 .pbars { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 10px; align-items: center; font-size: 13px; }
 .teamcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
 .teamcard { background: var(--surface); border: 2px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 8px; text-align: left; min-height: 0; }
@@ -232,3 +236,7 @@ tr.sel td { background: var(--accent-soft, rgba(37,99,235,.12)) !important; }
 tr.dragover td { box-shadow: inset 0 2px 0 var(--accent); }
 .warncard { border-left: 4px solid var(--warn, #d97706); }
 .chiprow { display: flex; gap: 6px; flex-wrap: wrap; } .recchip { background: var(--accent); color: #fff; min-height: 40px; }
+
+.plist { display: flex; flex-direction: column; margin-top: 8px; }
+.pli { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 10px 2px; border-top: 1px solid var(--line); cursor: pointer; min-height: 56px; }
+.pli .pl-main { min-width: 0; flex: 1; } .pli .pl-r { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; flex: none; }
