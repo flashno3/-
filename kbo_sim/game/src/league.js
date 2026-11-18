@@ -118,6 +118,16 @@
       const m = a => a.reduce((x, y) => x + y, 0) / a.length;
       return { B: m(out.B), P: 0.65 * m(out.SP) + 0.35 * m(out.RP) };
     }
+    /* 컨디션(분위기)·운영 방침: 내 팀 선수의 경기 능력치에 반영(엔진 입력만 바꾸므로 시뮬레이션 규칙은 그대로).
+       mood: 선수 개별(-3~+3, 기한 있음) + 팀 분위기. 1단계 ≈ OVR 0.55 */
+    moodOf(p) { const S = this.S, m = p.mood && S.day < p.mood.until ? p.mood.v : 0, tm = S.teamMood && S.day < S.teamMood.until && p.team === S.userTeam ? S.teamMood.v : 0; return clamp(m + tm, -4, 4); }
+    policy() { const P = this.S.policy || {}; return { pitch: P.pitch || 'normal', run: P.run || 'normal' }; }
+    setPolicy(k, v) { const ok = { pitch: ['save', 'normal', 'push'], run: ['low', 'normal', 'high'] }; if (!ok[k] || !ok[k].includes(v)) return false; this.S.policy = Object.assign({ pitch: 'normal', run: 'normal' }, this.S.policy, { [k]: v }); this.invalidate(); return true; }
+    _modRates(p) {
+      const S = this.S; if (p.team !== S.userTeam) return p.p; const m = this.moodOf(p), pol = this.policy(); let q = m ? this._shifted(p, 0.04 * m) : p.p;
+      if (p.type === 'B' && pol.run !== 'normal') q = Object.assign({}, q, { sba: q.sba * (pol.run === 'high' ? 1.5 : 0.6) });
+      return q;
+    }
     _shifted(p, s) {
       if (!s) return p.p; const sc = this.S.calib.scale[p.type], q = Object.assign({}, p.p), d = s * 0.75;
       if (p.type === 'B') { q.k -= d * sc.k[1]; q.bb += d * sc.bb[1]; q.hr += d * sc.hr[1]; q.babip += d * sc.babip[1]; q.xbh += d * sc.xbh[1]; }
@@ -395,9 +405,9 @@
       const bench = H.filter(p => !starters.has(p.id)).sort((a, b) => this._runsB(b, true) - this._runsB(a, true)), BP = [300, 220, 150, 100, 70, 45];
       bench.forEach((p, i) => { const u = U(p); u.PA = BP[i] || 12; u.G = Math.min(144, Math.round(u.PA / 4.15 * 1.4)); });
       // 투수
-      const spv = p => this._runsP(p) + 0.2 * (p.stamina - 50), spc = P.filter(p => p.role === 'SP' || p.stamina >= 52).sort((a, b) => spv(b) - spv(a)).slice(0, 5);
+      const man = p => !!(p.dev && !p.dev.auto && p.dev.plan === 'SP'), spv = p => this._runsP(p) + 0.2 * (p.stamina - 50) + (farm && man(p) ? 60 : 0), nSP = farm ? 6 : 5, spc = P.filter(p => p.role === 'SP' || p.stamina >= 52 || man(p)).sort((a, b) => spv(b) - spv(a)).slice(0, nSP);   // 직접 정한 선발 육성 투수는 2군 로테이션(6인)에 우선 편성
       if (spc.length < Math.min(5, P.length)) { const have = new Set(spc.map(p => p.id)); spc.push(...P.filter(p => !have.has(p.id)).sort((a, b) => b.stamina - a.stamina).slice(0, Math.min(5, P.length) - spc.length)); }   // 선발감이 모자라면 체력 높은 순으로 메운다
-      const GSs = [30, 29, 29, 28, 26], sid = new Set();
+      const GSs = [30, 29, 29, 28, 26, 22], sid = new Set();
       spc.forEach((p, i) => { const u = U(p); if (!farm) p.role = 'SP'; u.GS = GSs[i]; u.G = u.GS; u.ipgs = clamp(5.3 + (p.stamina - 50) * 0.05, 4.2, 6.8); u.IP = Math.round(u.GS * u.ipgs * 10) / 10; sid.add(p.id); });
       const rps = P.filter(p => !sid.has(p.id)).sort((a, b) => this._runsP(b) - this._runsP(a)), IPs = [66, 66, 64, 62, 60, 56, 52, 46, 40, 30];
       rps.forEach((p, i) => { const u = U(p); if (!farm) p.role = 'RP'; u.GS = 0; u.G = Math.round((IPs[i] || 8) * 1.05); u.IP = IPs[i] || 8; u.ipgs = null; });
@@ -470,13 +480,13 @@
         for (const p of list) {
           const id = p.id, u = farm ? (p.f || (p.f = {})) : p;
           if (p.type === 'B') {
-            batters.push({ id, key: id, name: p.name, team: t, age: p.age, PA: u.PA, G: u.G, p: p.p, hand: p.bats || null });
+            batters.push({ id, key: id, name: p.name, team: t, age: p.age, PA: u.PA, G: u.G, p: farm ? p.p : this._modRates(p), hand: p.bats || null });
             const gsE = farm ? u.aiGs : ((t !== S.userTeam && p.aiGs) || p.gs), d = {}; for (const k in gsE) d[k] = [0, gsE[k]]; defense[id] = d; const fr = {};
             for (const k in (p.fr || {})) if ((p.gs[k] || 0) >= FAM || k === p.pos) fr[k] = p.fr[k];
             for (const k in p.gs) { const g = p.gs[k]; if (g > 0 && g < FAM && k !== p.pos && PEN_R[k]) { const tt = 0.8 * g / FAM; fr[k] = { range: PEN_R[k] + (50 - PEN_R[k]) * tt, err_reg: C.fielding.lg.err[k] * (PEN_E[k] - (PEN_E[k] - 1) * tt) }; } }   // 경험이 조금 있는 포지션은 페널티를 경험만큼 줄인다
             fplayers[id] = fr;
             if (p.cs !== undefined && p.cs !== null) catchers[id] = { cs_reg: p.cs };
-          } else pitchers.push({ id, name: p.name, team: t, age: p.age, GS: u.GS, G: u.G, IP: u.IP, ip_per_start: u.ipgs, p: p.p, stamina: p.stamina, hand: p.throws || null });
+          } else pitchers.push({ id, name: p.name, team: t, age: p.age, GS: u.GS, G: u.G, IP: u.IP, ip_per_start: !farm && t === S.userTeam && u.ipgs ? u.ipgs * ({ save: 0.9, normal: 1, push: 1.1 }[this.policy().pitch]) : u.ipgs, p: farm ? p.p : this._modRates(p), stamina: p.stamina, hand: p.throws || null });
         }
       }
       return { modes: { g: { label: 'game', noStint: true, platoon: true, league_bat: C.lb, team_def: C.team_def, pf: C.pf, batters, pitchers } }, shared: { positions: {}, defense, fielding: { players: fplayers, catchers, team_avg_range: C.fielding.team_avg_range, lg: C.fielding.lg } } };

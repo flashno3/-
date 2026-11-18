@@ -19,6 +19,7 @@
   const news = (L, text) => { const S = L.S; S.news.unshift({ year: S.year, day: S.day, text }); if (S.news.length > 120) S.news.length = 120; };
 
   /* ---------------- 선수 성장 / 노화 ---------------- */
+  const AGING_SCALE = 0.7;
   const BCURVE = { 18: .32, 19: .30, 20: .28, 21: .26, 22: .22, 23: .18, 24: .13, 25: .08, 26: .04, 27: .01, 28: -.02, 29: -.04, 30: -.06, 31: -.08, 32: -.11, 33: -.14, 34: -.18, 35: -.22 };
   const PCURVE = { 18: .30, 19: .28, 20: .26, 21: .22, 22: .18, 23: .14, 24: .10, 25: .06, 26: .03, 27: .0, 28: -.02, 29: -.04, 30: -.06, 31: -.09, 32: -.12, 33: -.16, 34: -.2, 35: -.25 };
   /* 올 시즌 출전 비율(0~1): 1군 기록 + 0.8×2군 기록을 풀타임 기준(타자 450타석, 선발 550·불펜 200타자)과 비교 */
@@ -32,7 +33,8 @@
     const sc = this.S.calib.scale[p.type], lb = this.S.calib.lb, old = this.ovr(p), a = p.age + 1;
     p.age = a;
     const curve = (p.type === 'B' ? BCURVE : PCURVE)[clamp(a, 18, 35)] !== undefined ? (p.type === 'B' ? BCURVE : PCURVE)[clamp(a, 18, 35)] : -.3;
-    let gain = (a > 35 ? -.32 : curve) + gauss(r, 0, 0.12);
+    let gain = (a > 35 ? -.24 : curve) + gauss(r, 0, 0.09);
+    if (gain < 0) gain *= AGING_SCALE;   // 노화 하락 완화(체감 하락폭 조정): 30~32세 약 −0.7, 33~35세 약 −2, 36세+ 약 −3 OVR/년
     if (a >= 33 && gain < 0) gain *= 1 - 0.4 * clamp((old - 55) / 20, 0, 1);   // 상위권 선수는 에이징 하락이 최대 40% 완만(류현진·양의지·최정 등)
     const pf = play === undefined ? 1 : 0.55 + 0.45 * clamp(play, 0, 1);   // 경기에 못 나온 젊은 선수는 성장이 더딘다(최대 -45%)
     if (a <= 26 && gain > 0 && p.peak === undefined) gain *= pf;
@@ -46,7 +48,7 @@
     } else if (a <= 26 && p.pot > 0) { const g2 = Math.min(p.pot, 0.4) * (0.6 + 0.8 * r.random()) * pf; gain = Math.max(gain, g2); p.pot = Math.max(0, p.pot - Math.max(0, g2)); }
     const dv = a <= 28 && this.S.coach ? this._devEffects(p) : null;   // 육성 방향·코치진 효과(28세 이하)
     if (dv && gain > 0) gain *= dv.mul;
-    const shift = f => gain * 0.75 * (dv ? dv.w[f] || 1 : 1) + gauss(r, 0, 0.1);
+    const shift = f => gain * 0.75 * (dv ? dv.w[f] || 1 : 1) + gauss(r, 0, 0.07);
     const set = (f, dir, lo, hi, s) => { p.p[f] = clamp(p.p[f] + dir * s * sc[f][1], lo, hi); };
     if (p.type === 'B') {
       set('k', -1, 0.06, 0.45, shift('k')); set('bb', 1, 0.015, 0.20, shift('bb')); set('hr', 1, 0.002, 0.07, shift('hr')); set('babip', 1, 0.24, 0.39, shift('babip')); set('xbh', 1, 0.10, 0.32, shift('xbh'));
@@ -810,6 +812,7 @@
   proto._eventDay = function (d) {
     const S = this.S, t = S.userTeam, f = S.fin && S.fin.teams[t]; if (!f || S.phase !== 'regular' && S.phase !== 'preseason') return; if (S.phase === 'preseason' && d < 1) return;
     const r = rngFor(S.seed, S.year, d, 8800), E = S.events = S.events || { seq: 0, list: [] };
+    { let ch = S.teamMood && S.teamMood.until === d; for (const p of this.players(t)) if (p.mood && p.mood.until === d) ch = true; if (ch) this.invalidate(); }   // 컨디션 효과 종료일에 엔진 입력 갱신
     // 만료 → 기본 처리
     for (const e of this.eventsOpen()) if (d >= e.exp) this.resolveEvent(e.id, e.def || (e.choices[e.choices.length - 1] || {}).k, true);
     const open = this.eventsOpen().length; if (open >= 3) return;
@@ -828,6 +831,22 @@
       const c = this.players(t).filter(p => !p.active && !this.isInj(p) && !p.foreign && this.ovr(p) >= med + 4 && !rec.has(p.id) && !p.lockUntil).sort((a, b) => this.ovr(b) - this.ovr(a))[0];
       if (c) { this._evAdd({ type: 'grievance', title: `${c.ko} 출전 기회 불만`, ttl: 7, data: { pid: c.id }, text: `2군에 있는 ${c.ko}(OVR ${this.ovr(c)})가 "1군 경기에 뛸 자격이 있다"며 면담을 요청했습니다. (1군 중앙값 OVR ${med})`,
         choices: [{ k: 'promote', label: '1군에 등록한다', hint: '엔트리에 여유가 있어야 합니다. 충성도 +4' }, { k: 'talk', label: '면담으로 설득한다', hint: `성공 ${Math.round(clamp(0.35 + (this.loyalty(c) ? this.loyalty(c).v : 40) / 200, 0.2, 0.85) * 100)}% — 성공 시 충성도 +1, 실패 시 −5` }, { k: 'ignore', label: '무시한다', hint: '충성도 −6' }], def: 'ignore' }); return; }
+    }
+    // 2b) 부진(슬럼프): 최근 경기 성적이 나쁜 1군 선수 — 하루 3%, 같은 선수 30일 간격
+    if (!this._evOpenOf('slump') && r.random() < 0.03) {
+      const rec = new Set((E.list || []).filter(e => e.type === 'slump' && e.day > d - 30).map(e => e.data.pid)), form = p => { const x = S.recent[p.id] || []; if (p.type === 'B') { let ab = 0, h = 0; for (const e of x) { ab += e[1]; h += e[2]; } return ab >= 30 ? { bad: h / ab < 0.17, txt: `최근 ${x.length}경기 타율 ${(h / ab).toFixed(3).slice(1)}`, s: h / ab } : null; } let o = 0, R = 0; for (const e of x) { o += e[1]; R += e[2]; } return o >= 18 ? { bad: R * 27 / o > 8.5, txt: `최근 ${x.length}경기 RA9 ${(R * 27 / o).toFixed(2)}`, s: -R * 27 / o } : null; };
+      const c = this.players(t).filter(p => p.active && !rec.has(p.id)).map(p => ({ p, f: form(p) })).filter(x => x.f && x.f.bad).sort((a, b) => a.f.s - b.f.s)[0];
+      if (c) { const p = c.p, pr = Math.round(clamp(0.45 + 0.15 * (this.coachRating(t, p.type === 'P' ? 'control' : 'contact') - 55) / 20, 0.3, 0.75) * 100);
+        this._evAdd({ type: 'slump', title: `${p.ko} 부진`, ttl: 6, data: { pid: p.id }, text: `${p.ko}(OVR ${this.ovr(p)})가 ${c.f.txt}로 부진합니다. 대응에 따라 컨디션(경기 능력치 ±)이 바뀝니다.`,
+          choices: [{ k: 'coach', label: '코치진 집중 지도 (비용 0.3억)', hint: `성공 ${pr}% → 20일간 컨디션 +2, 실패 → 10일간 −1` }, { k: 'trust', label: '믿고 계속 기용', hint: '40% 회복(14일 +1), 60% 부진 지속(14일 −1)' }, { k: 'farm', label: '2군 재조정 (10경기일 등록 불가)', hint: '2군으로 내리고 복귀 시 25일간 컨디션 +2' }], def: 'trust' }); return; }
+    }
+    // 2c) 연승·연패: 선수단 분위기 — 연승 7·연패 6 이상
+    if (!this._evOpenOf('streak') && !(E.list || []).some(e => e.type === 'streak' && e.day > d - 20)) {
+      const g = (S.results || []).filter(x => x.home === t || x.away === t).slice(-12).map(x => { const my = x.home === t ? x.rh : x.ra, op = x.home === t ? x.ra : x.rh; return my > op ? 1 : my < op ? -1 : 0; }); let n = 0, k = g.length ? g[g.length - 1] : 0; for (let i = g.length - 1; i >= 0 && g[i] === k && k; i--) n++;
+      if (k === 1 && n >= 7) { this._evAdd({ type: 'streak', title: `${n}연승 — 선수단 분위기`, ttl: 5, data: { kind: 'win', n }, text: `팀이 ${n}연승 중입니다. 분위기를 이어갈 방법을 고르세요.`,
+          choices: [{ k: 'bonus', label: '연승 격려금 (0.3억)', hint: '20일간 팀 컨디션 +1' }, { k: 'rest', label: '선수단 휴식 배려', hint: '14일간 부상 위험 −30%' }, { k: 'none', label: '그대로 진행', hint: '변화 없음' }], def: 'none' }); return; }
+      if (k === -1 && n >= 6) { this._evAdd({ type: 'streak', title: `${n}연패 — 선수단 분위기`, ttl: 5, data: { kind: 'lose', n }, text: `팀이 ${n}연패 중입니다. 분위기 반전이 필요합니다.`,
+          choices: [{ k: 'meeting', label: '선수단 면담·미팅', hint: '60% 성공: 15일간 팀 컨디션 +1, 실패: 7일간 −1' }, { k: 'camp', label: '휴식일 부여(훈련 강도 ↓)', hint: '10일간 팀 컨디션 +1, 부상 위험 −20%' }, { k: 'none', label: '정면 돌파(그대로)', hint: '변화 없음' }], def: 'none' }); return; }
     }
     // 3) 스폰서 제안 — 하루 1.2%, 시즌 2회
     if (!this._evOpenOf('sponsor') && this._evCount('sponsor') < 2 && d > 10 && d < 120 && r.random() < 0.012) {
@@ -858,13 +877,25 @@
   proto.resolveEvent = function (id, k, auto) {
     const S = this.S, t = S.userTeam, f = S.fin.teams[t], e = ((S.events || {}).list || []).find(x => x.id === id); if (!e || e.status !== 'open') return { ok: false, msg: '처리할 수 없는 소식입니다.' };
     let res = '';
-    const adj = (p, v) => { p.loyAdj = clamp((p.loyAdj || 0) + v, -15, 15); };
+    const adj = (p, v) => { p.loyAdj = clamp((p.loyAdj || 0) + v, -15, 15); }, mood = (p, v, days) => { p.mood = { v, until: S.day + days }; this.invalidate(); }, tmood = (v, days) => { S.teamMood = { v, until: S.day + days }; this.invalidate(); }, rr = salt => rngFor(S.seed, S.year, S.day, salt).random();
     if (e.type === 'grievance') {
       const p = S.players[e.data.pid];
       if (!p || p.team !== t) res = '선수가 이미 팀을 떠났습니다.';
-      else if (k === 'promote') { const err = this.moveActive(p.id, true); if (err) { if (!auto) return { ok: false, msg: err }; adj(p, -6); res = `${p.ko} 불만을 처리하지 못했습니다(${err}).`; } else { adj(p, 4); res = `${p.ko}을(를) 1군에 등록했습니다. 충성도 +4.`; } }
-      else if (k === 'talk') { const pr = clamp(0.35 + (this.loyalty(p) ? this.loyalty(p).v : 40) / 200, 0.2, 0.85); if (rngFor(S.seed, S.year, S.day, 8810 + parseInt(p.id.slice(1))).random() < pr) { adj(p, 1); res = `면담이 잘 풀렸습니다. ${p.ko} 충성도 +1.`; } else { adj(p, -5); res = `면담이 결렬되었습니다. ${p.ko} 충성도 −5.`; } }
-      else { adj(p, -6); res = `${p.ko} 불만을 방치했습니다. 충성도 −6 (FA·재계약 협상에 영향).`; }
+      else if (k === 'promote') { const err = this.moveActive(p.id, true); if (err) { if (!auto) return { ok: false, msg: err }; adj(p, -6); mood(p, -2, 30); res = `${p.ko} 불만을 처리하지 못했습니다(${err}). 컨디션 −2(30일).`; } else { adj(p, 4); mood(p, 1, 20); res = `${p.ko}을(를) 1군에 등록했습니다. 충성도 +4, 컨디션 +1(20일).`; } }
+      else if (k === 'talk') { const pr = clamp(0.35 + (this.loyalty(p) ? this.loyalty(p).v : 40) / 200, 0.2, 0.85); if (rngFor(S.seed, S.year, S.day, 8810 + parseInt(p.id.slice(1))).random() < pr) { adj(p, 1); mood(p, 1, 15); res = `면담이 잘 풀렸습니다. ${p.ko} 충성도 +1, 컨디션 +1(15일).`; } else { adj(p, -5); mood(p, -2, 20); res = `면담이 결렬되었습니다. ${p.ko} 충성도 −5, 컨디션 −2(20일).`; } }
+      else { adj(p, -6); mood(p, -2, 30); res = `${p.ko} 불만을 방치했습니다. 충성도 −6(FA·재계약 협상), 컨디션 −2(30일).`; }
+    } else if (e.type === 'slump') {
+      const p = S.players[e.data.pid];
+      if (!p || p.team !== t) res = '선수가 팀을 떠났습니다.';
+      else if (k === 'coach') { f.evCost = Math.round(((f.evCost || 0) + 0.3) * 10) / 10; if (rr(8830 + parseInt(p.id.slice(1))) < clamp(0.45 + 0.15 * (this.coachRating(t, p.type === 'P' ? 'control' : 'contact') - 55) / 20, 0.3, 0.75)) { mood(p, 2, 20); res = `${p.ko} 집중 지도 성공: 컨디션 +2(20일).`; } else { mood(p, -1, 10); res = `${p.ko} 집중 지도가 통하지 않았습니다: 컨디션 −1(10일).`; } }
+      else if (k === 'farm') { const err = this.moveActive(p.id, false); if (err) { res = `2군 재조정 불가(${err}).`; } else { mood(p, 2, 25); res = `${p.ko}을(를) 2군에서 재조정합니다. 복귀 후 컨디션 +2(~25일).`; } }
+      else { if (rr(8840 + parseInt(p.id.slice(1))) < 0.4) { mood(p, 1, 14); res = `${p.ko}이(가) 부진을 털었습니다: 컨디션 +1(14일).`; } else { mood(p, -1, 14); res = `${p.ko}의 부진이 이어집니다: 컨디션 −1(14일).`; } }
+    } else if (e.type === 'streak') {
+      if (k === 'bonus') { f.evCost = Math.round(((f.evCost || 0) + 0.3) * 10) / 10; tmood(1, 20); res = '격려금 지급: 팀 컨디션 +1(20일), 비용 0.3억.'; }
+      else if (k === 'rest') { S.restUntil = S.day + 14; res = '휴식 배려: 14일간 부상 위험 −30%.'; }
+      else if (k === 'meeting') { if (rr(8850) < 0.6) { tmood(1, 15); res = '면담 성공: 팀 컨디션 +1(15일).'; } else { tmood(-1, 7); res = '면담이 역효과: 팀 컨디션 −1(7일).'; } }
+      else if (k === 'camp') { S.restUntil = S.day + 10; tmood(1, 10); res = '휴식일 부여: 팀 컨디션 +1(10일), 부상 위험 −20%.'; }
+      else res = '그대로 진행합니다.';
     } else if (e.type === 'sponsor') {
       if (k === 'accept') { f.evRev = Math.round(((f.evRev || 0) + e.data.amt) * 10) / 10; f.attMult = (f.attMult || 1) * 0.985; res = `스폰서 계약 체결: 올 시즌 매출 +${e.data.amt}억, 관중 −1.5%.`; } else res = '제안을 거절했습니다.';
     } else if (e.type === 'promo') {
@@ -910,7 +941,7 @@
     this.invalidate();
   };
   proto.startNewSeason = function () {
-    const S = this.S; S.year += 1; S.off = null; S.faMkt = null; if (S.events) for (const e of (S.events.list || [])) if (e.status === 'open') { e.status = 'done'; e.result = '시즌 종료로 자동 종결'; } S.fa = (S.fa || []);
+    const S = this.S; S.year += 1; S.off = null; S.faMkt = null; S.teamMood = null; S.restUntil = 0; for (const id in S.players) if (S.players[id].mood) delete S.players[id].mood; if (S.events) for (const e of (S.events.list || [])) if (e.status === 'open') { e.status = 'done'; e.result = '시즌 종료로 자동 종결'; } S.fa = (S.fa || []);
     for (const id in S.players) if (S.players[id].retired || S.players[id].team === 'RET') delete S.players[id];   // 은퇴·이탈 선수 정리(저장 용량)
     this.finishFA === undefined; const adj = this.normalizeTalent(); S.lastAdj = adj;
     for (const t of TEAMS) if (t === S.userTeam) this.ensureActive(t);
@@ -1040,7 +1071,7 @@
     }
     for (const t of TEAMS) for (const p of this.players(t)) {
       if (!p.active || this.isInj(p)) continue;
-      const hz = (p.type === 'B' ? 0.0030 : p.role === 'SP' ? 0.0042 : 0.0033) * (p.age >= 33 ? 1.3 : p.age <= 24 ? 0.9 : 1);
+      const pol = t === user ? this.policy() : null, hz = (p.type === 'B' ? 0.0030 : p.role === 'SP' ? 0.0042 : 0.0033) * (p.age >= 33 ? 1.3 : p.age <= 24 ? 0.9 : 1) * (pol ? (p.type === 'P' ? { save: 0.8, normal: 1, push: 1.3 }[pol.pitch] : { low: 0.95, normal: 1, high: 1.1 }[pol.run]) * (S.restUntil && d < S.restUntil ? 0.75 : 1) : 1);   // 운영 방침: 투수 혹사(push)·적극 주루는 부상 위험↑
       if (r.random() >= hz) continue;
       const u = r.random(), days = u < 0.55 ? 7 + Math.floor(r.random() * 8) : u < 0.85 ? 15 + Math.floor(r.random() * 21) : u < 0.97 ? 45 + Math.floor(r.random() * 56) : 150 + Math.floor(r.random() * 181);
       const sev = u < 0.55 ? '' : u < 0.85 ? '' : u < 0.97 ? '(장기)' : '(수술·시즌 아웃급)', part = pickW(r, p.type === 'B' ? INJ_B : INJ_P);
@@ -1156,7 +1187,9 @@
   proto.devPlan = function (p) { return p.dev && p.dev.plan && !p.dev.auto ? p.dev.plan : (p.dev && p.dev.plan) || this._autoPlan(p); };
   proto.setDevPlan = function (id, plan) {
     const p = this.S.players[id]; if (!p || p.team !== this.S.userTeam) return '우리 팀 선수가 아닙니다.'; if (!this.devPlans(p).includes(plan)) return '해당 육성 방향을 선택할 수 없습니다.';
-    p.dev = { plan, auto: false }; return null;
+    p.dev = { plan, auto: false };
+    if (p.type === 'P') { if (plan === 'SP') p.role = 'SP'; else if (p.role === 'SP') p.role = 'RP'; }   // 육성 방향을 정하면 보직(표기)도 바로 바꾼다 — 선발 육성은 2군 로테이션 우선 편성(체력이 낮으면 이닝은 짧음)
+    this._f2dirty = true; this.invalidate(); return null;
   };
   proto._devEffects = function (p) {
     const t = p.team in this.S.coach.teams ? p.team : null; if (!t) return null;
@@ -1172,7 +1205,7 @@
     const rel = plan === 'contact' ? cr('contact') : plan === 'power' ? cr('power') : plan === 'eye' ? cr('eye') : plan === 'defense' ? cr('defense') : plan === 'speed' ? cr('speed') : (cr('contact') + cr('power') + cr('eye')) / 3;
     return { plan, w, mul: clamp(1 + 0.009 * (rel - 62) + mg, 0.75, 1.35), stamina: 0, speed: plan === 'speed' ? 0.06 * cr('speed') / 50 : 0, range: plan === 'defense' ? 1.2 * cr('defense') / 50 : 0 };
   };
-  proto._devRole = function (p, plan) { if (plan === 'SP') { if (p.stamina >= 50 && p.role !== 'SP') p.role = 'SP'; } else if (p.role === 'SP' && plan !== 'SP' && p.dev && !p.dev.auto) p.role = 'RP'; };
+  proto._devRole = function (p, plan) { const manual = p.dev && !p.dev.auto; if (plan === 'SP') { if (manual || (p.stamina >= 50 && p.role !== 'SP')) p.role = 'SP'; } else if (p.role === 'SP' && plan !== 'SP' && manual) p.role = 'RP'; };
   /* 육성 방향별 성장 경로 예측: 같은 선수를 방향마다 3시즌 진행해 평균(12회) */
   proto.devForecast = function (p, years) {
     years = years || 3; const out = {}, base = JSON.parse(JSON.stringify({ p: p.p, stamina: p.stamina, age: p.age, peak: p.peak, pot: p.pot, scout: p.scout, role: p.role, fr: p.fr, gs: p.gs, pos: p.pos, type: p.type, bats: p.bats, throws: p.throws, cs: p.cs, GS: p.GS, G: p.G, IP: p.IP, PA: p.PA, ipgs: p.ipgs, team: p.team, id: p.id, ko: p.ko }));
