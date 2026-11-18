@@ -1014,6 +1014,32 @@
     }
     return null;
   };
+  /* ---------------- 다음 중요 순간까지 진행 ----------------
+     내가 정한 조건 중 하나가 생기면 그날 멈춘다: 새 소식(결정 필요) · 내 1군 선수 부상 · 트레이드 마감 5일 전 · 가을야구 확률 구간 변화 · 시즌 목표(순위) 달성 여부 변화 · 월초 점검(선택). 내 경기 직접 지휘를 켜면 내 경기 직전에도 멈춘다. */
+  proto.stopOpts = function () { return Object.assign({ event: true, injury: true, deadline: true, odds: true, goal: true, month: false }, this.S.stopOpts || {}); };
+  proto.setStop = function (k, v) { if (!['event', 'injury', 'deadline', 'odds', 'goal', 'month'].includes(k)) return false; this.S.stopOpts = Object.assign({}, this.S.stopOpts, { [k]: !!v }); return true; };
+  proto._momState = function () { const S = this.S, t = S.userTeam, gs = this.goalStatus(); return { inj: this.players(t).filter(p => this.isInj(p) && p.inj && p.inj.generated).map(p => p.id), rankOk: gs ? gs.rank.ok : null, band: S._band === undefined ? null : S._band, ev: S.events ? S.events.seq : 0 }; };
+  proto.advanceMoment = function (live) {
+    const S = this.S, o = this.stopOpts(), t = S.userTeam, len = S.schedule.length; if (S.faMkt && this.closeFA) this.closeFA();
+    let n = 0; const band = p => p < 10 ? 0 : p < 40 ? 1 : p < 70 ? 2 : 3, bandTxt = ['가을야구 가능성 희박(10% 미만)', '가을야구 가능성 낮음(10~40%)', '가을야구 경합(40~70%)', '가을야구 유력(70% 이상)'];
+    let st = this._momState(); if (S.day >= 10 && S._band === undefined) { S._band = band(this.playoffOdds(200)[t].top5); st.band = S._band; }
+    while (S.day < len) {
+      const before = st, r = this.playDay(live); n++;
+      if (r.status === 'userGame') return { status: 'userGame', ...r, played: n - 1 };
+      const now = this._momState(), why = [];
+      if (o.event && S.events && S.events.seq > before.ev) { const e = this.eventsOpen()[0]; why.push('새 소식' + (e ? `: ${e.title}` : '')); }
+      if (o.injury) { const nw = now.inj.filter(id => !before.inj.includes(id)); if (nw.length) why.push(`부상: ${nw.map(id => S.players[id].ko).join(', ')}`); }
+      if (o.deadline && S.day === LIM_DEADLINE - 5) why.push('트레이드 마감 5일 전');
+      if (o.month && S.day > 0 && this.dateOf(S.day - 1).getUTCMonth() !== this.dateOf(S.day).getUTCMonth()) why.push(`${this.dateOf(S.day).getUTCMonth() + 1}월 점검`);
+      if (S.day >= 10 && S.day % 7 === 0) {
+        if (o.odds) { const b = band(this.playoffOdds(200)[t].top5), prev = S._band === undefined ? b : S._band; if (b !== prev) why.push(`${b > prev ? '▲' : '▼'} ${bandTxt[b]}`); S._band = b; } else S._band = undefined;
+        if (o.goal && before.rankOk !== null && now.rankOk !== null && before.rankOk !== now.rankOk) why.push(`시즌 목표 순위 ${now.rankOk ? '달성권 진입' : '미달권으로 하락'}`);
+      }
+      st = now; st.band = S._band === undefined ? null : S._band;
+      if (why.length) return { status: 'moment', reason: why.join(' · '), played: n };
+    }
+    S.phase = 'regular_done'; return { status: 'seasonEnd', played: n };
+  };
   /* ---------------- 새 시즌 ---------------- */
   proto.ensureActive = function (t) {   // 1군 28명 유지(부족하면 가치 높은 선수로 채움, 초과하면 낮은 순으로 내림)
     const S = this.S, P = this.players(t);
