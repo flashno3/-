@@ -83,7 +83,7 @@
       ${nav.map(g => `<button data-act="goG" data-a="${g[0]}" ${grp[0] === g[0] ? 'aria-current="true"' : ''}>${g[1]}${g[0] === 'offseason' ? ' ●' : ''}${g[0] === 'home' && evn ? ` <span class="chip warn">${evn}</span>` : ''}</button>`).join('')}</nav>
       <div class="main"><header class="top"><div class="info"><span class="date">${S.year} · ${phaseLabel()}</span><span class="muted">${S.phase === 'offseason' ? '오프시즌' : (my.w + my.l + my.d === 0 ? '개막 전' : `${my.rank}위 · ${my.w}승 ${my.l}패 ${my.d}무`)}</span><span class="muted">${cbtText(U())}</span></div>
       <button class="primary" data-act="${pr.act}" ${pr.a !== undefined ? `data-a="${pr.a}"` : ''}>${pr.label}</button></header><main class="content">${grp[2].length > 1 ? `<div class="tabs sub" role="tablist">${grp[2].map(s => `<button role="tab" aria-selected="${ui.screen === s}" data-act="go" data-a="${s}">${SCR[s]}</button>`).join('')}</div>` : ''}${content}</main>
-      <div class="dock"><div class="dinfo"><b>${phaseLabel()}</b><span class="muted">${S.phase === 'offseason' ? '오프시즌' : (my.w + my.l + my.d === 0 ? '개막 전' : `${my.rank}위 · ${my.w}승 ${my.l}패${my.d ? ' ' + my.d + '무' : ''}`)}</span></div><button class="primary" data-act="${pr.act}" ${pr.a !== undefined ? `data-a="${pr.a}"` : ''}>${pr.label}</button></div></div></div>`;
+      <div class="dock"><button class="sm dk" data-act="undo" title="${L.undoLabel() ? '되돌리기: ' + esc(L.undoLabel()) : '되돌릴 변경 없음'}" aria-label="되돌리기" ${L.undoLabel() ? '' : 'disabled'}>↶</button>${(S.phase === 'regular' || S.phase === 'preseason') && !(S.faMkt && !S.faMkt.closed) ? '<button class="sm dk" data-act="advMoment" title="다음 중요 순간까지" aria-label="다음 중요 순간까지">⏭</button>' : ''}<div class="dinfo"><b>${phaseLabel()}</b><span class="muted">${S.phase === 'offseason' ? '오프시즌' : (my.w + my.l + my.d === 0 ? '개막 전' : `${my.rank}위 · ${my.w}승 ${my.l}패${my.d ? ' ' + my.d + '무' : ''}`)}</span></div><button class="primary" data-act="${pr.act}" ${pr.a !== undefined ? `data-a="${pr.a}"` : ''}>${pr.label}</button></div></div></div>`;
   }
 
   /* ---------------- 대시보드 ---------------- */
@@ -210,7 +210,7 @@
       <div class="row small" style="gap:6px;margin-top:6px"><span style="min-width:112px">접전 직접 지휘</span>${pbtn('hlFrom', [[6, '6회~', ''], [7, '7회~', ''], [8, '8회~', '']])}<span class="muted">'접전만 직접 지휘' 모드에서 2점 차 이내가 되면 직접 지휘로 전환</span></div></div>`;
     return `<div class="card"><div class="row"><h2 style="margin:0">${opt.title}</h2><span class="sp"></span>${opt.items.map(x => `<button class="sm ${x[0] === opt.cur ? 'primary' : ''}" data-act="policy" data-a="${kind}:${x[0]}" title="${esc(x[2])}">${x[1]}</button>`).join('')}</div><div class="small muted" style="margin-top:4px">현재: <b>${sel[1]}</b> — ${sel[2]}. 내 팀 경기 시뮬레이션에 바로 반영됩니다.</div>${planHtml}</div>`;
   }
-  function screenLineup() { return policyCard('run') + screenLineup0(); }
+  function screenLineup() { return policyCard('run') + presetCard() + screenLineup0(); }
   function screenLineup0() {
     const set = L.team(U()).set, H = L.hitters(U(), true), inL = new Set(set.lineup.map(x => x.id)), bench = H.filter(h => !inL.has(h.id));
     const opts = id => H.map(q => `<option value="${q.id}" ${q.id === id ? 'selected' : ''}>${esc(q.ko)} · ${posName[q.pos]} · ${L.ovr(q)}</option>`).join('');
@@ -598,6 +598,18 @@
       <div class="small muted" style="margin-top:4px">성격 분포: ${['clutch', 'model', 'free', 'leader', 'shy'].map(k => `${esc(L.traitName(k))} ${cnt[k] || 0}`).join(' · ')}</div>
       <div class="small muted" style="margin-top:4px">승부사: 포스트시즌 컨디션 +1 · 모범생: 불만 드묾 · 자유분방/소심형: 부진에 취약 · 리더형: 면담·주장 효과 ↑. 선수 요청 트레이드·갈등 이벤트가 성격에 따라 발생합니다.</div></div>`;
   }
+  function quickSheet() {
+    if (!ui.quick || !L) return ''; const p = P(ui.quick); if (!p) return ''; const mine = p.team === U();
+    const btn = (k, lab, cls) => `<button class="${cls || ''}" style="width:100%;min-height:48px;margin-top:8px" data-act="quickAct" data-a="${p.id}|${k}">${lab}</button>`;
+    return `<div class="sheet-bg" data-act="quickClose"><div class="sheet" data-stop="1" role="dialog" aria-label="빠른 메뉴"><div class="grabber"></div><h2>${esc(p.ko)} <span class="muted small">${pos(p)} · ${p.age}세 · OVR ${L.ovr(p)}</span></h2>
+      ${mine ? btn('toggle', p.active ? '2군으로 내림' : L.isInj(p) ? '부상자 명단(등록 불가)' : '1군 등록', p.active ? '' : 'primary') + (p.foreign ? '' : btn('captain', L.S.captain === p.id ? '주장 해임' : '주장 임명')) : ''}${btn('detail', '상세 보기')}<button style="width:100%;min-height:44px;margin-top:8px" data-act="quickClose">닫기</button></div></div>`;
+  }
+  function presetCard() {
+    const pr = L.S.presets || {}, nm = pl => pl && pl.length ? pl.map(x => (P(x.id) || { ko: '?' }).ko).slice(0, 4).join('·') + '…' : '저장 없음';
+    return `<div class="card"><div class="row"><h2 style="margin:0">라인업 프리셋</h2><span class="sp"></span><label class="row small" style="gap:4px"><input type="checkbox" data-act="presetOn" ${pr.on ? 'checked' : ''}>상대 선발에 따라 자동 적용</label></div>
+      <div class="small muted" style="margin:4px 0 8px">현재 라인업을 상대 선발의 투구 손에 맞춰 저장해 두면, 경기 시작 때 상대 선발이 정해진 뒤 자동으로 바꿔 끼웁니다(선수가 부상·2군이면 적용 안 함).</div>
+      ${[['L', '좌투 상대'], ['R', '우투 상대']].map(([h, lab]) => `<div class="row small" style="gap:6px;margin-bottom:6px"><b style="min-width:64px">${lab}</b><span class="muted" style="flex:1">${esc(nm(pr[h]))}</span><button class="sm" data-act="presetSave" data-a="${h}">현재 라인업 저장</button>${pr[h] ? `<button class="sm" data-act="presetClear" data-a="${h}">삭제</button>` : ''}</div>`).join('')}</div>`;
+  }
   function screenFA() {
     const S = L.S, mk = !!(S.faMkt && !S.faMkt.closed), tab = ui.faTab || 'dom';
     const all = L.faList(), cnt = { dom: all.filter(p => !p.foreign).length, for: all.filter(p => p.foreign && !p.aq).length, aq: all.filter(p => p.foreign && p.aq).length };
@@ -843,7 +855,7 @@
     const scroll = window.scrollY;
     if (ui.live) { root.innerHTML = screenLive() + toastHtml(); window.scrollTo(0, scroll); return; }
     const S = ui.screen, f = { home: () => goalCard() + screenHome() + evHistory(), roster: screenRoster, farm: () => trainCard() + screenFarm(), lineup: screenLineup, pitching: screenPitching, schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
-    root.innerHTML = shell((S === 'home' || S === 'market' || S === 'offseason' ? eventCards() : evBanner()) + f()) + (ui.modal ? modalPlayer(ui.modal) : '') + sheetHtml() + firedModal() + toastHtml();
+    root.innerHTML = shell((S === 'home' || S === 'market' || S === 'offseason' ? eventCards() : evBanner()) + f()) + (ui.modal ? modalPlayer(ui.modal) : '') + sheetHtml() + firedModal() + quickSheet() + toastHtml();
     window.scrollTo(0, scroll); stackTables(root);
     const cur = root.querySelector('.side button[aria-current=true]'); if (cur && cur.scrollIntoView) { try { cur.scrollIntoView({ inline: 'center', block: 'nearest' }); } catch (e) { /* 일부 브라우저 */ } }
   }
@@ -915,6 +927,15 @@
     protAuto() { L.S.protect = undefined; render(); },
     protSet(a) { const S = L.S, cur = new Set(S.protect || L.compProtected(U(), 'B')); if (cur.has(a)) cur.delete(a); else { if (cur.size >= 25) { toast('보호선수는 최대 25명입니다.'); render(); return; } cur.add(a); } L.setProtect([...cur]); autosave(); render(); },
     persuadeCancel() { ui.persuade = null; render(); },
+    undo() { const lab = L.undo(); toast(lab ? `되돌림: ${lab}` : '되돌릴 변경이 없습니다.'); if (lab) autosave(); render(); },
+    presetSave(a) { L.pushUndo('라인업 프리셋'); if (L.savePreset(a)) { toast(`현재 라인업을 ${a === 'L' ? '좌투' : '우투'} 상대 프리셋으로 저장했습니다.`); autosave(); } render(); },
+    presetClear(a) { L.pushUndo('라인업 프리셋'); L.clearPreset(a); autosave(); render(); },
+    presetOn(a, el) { L.pushUndo('라인업 프리셋'); L.setPresetOn(el.checked); autosave(); render(); },
+    quickClose() { ui.quick = null; render(); },
+    quickAct(a) { const [id, k] = a.split('|'), p = P(id); ui.quick = null;
+      if (k === 'toggle') { const err = L.moveActive(id, !p.active); if (err) toast(err); else autosave(); }
+      else if (k === 'captain') { const e = L.setCaptain(id); if (e) toast(e); else { toast(L.S.captain === id ? `${p.ko} 주장 임명` : '주장 해임'); autosave(); } }
+      else if (k === 'detail') ui.modal = id; render(); },
     captain(a) { const e = L.setCaptain(a); if (e) toast(e); else { toast(L.S.captain === a ? `${P(a).ko}을(를) 주장으로 임명했습니다.` : '주장을 해임했습니다.'); autosave(); } render(); },
     train(a) { const [k, v] = a.split(':'); if (L.setTrain(k, v)) { autosave(); render(); } },
     team(a) { ui.viewTeam = a; ui.screen = 'teams'; ui.modal = null; render(); window.scrollTo(0, 0); },
@@ -953,7 +974,16 @@
       ui.live = null; autosave(); if (post) openPostSheet([r]); else openResultSheet(before); render(); window.scrollTo(0, 0);
     }
   };
+  const UNDO_LABEL = { toggleActive: '1군/2군 이동', autoLineup: '라인업 자동 설정', autoPitch: '투수진 자동 설정', lmove: '타순 변경', plan: '경기 계획', train: '훈련 방침', policy: '운영 방침', captain: '주장 변경', quickAct: '빠른 메뉴 변경' };
+  Object.keys(UNDO_LABEL).forEach(k => { const f = A[k]; if (f) A[k] = function (...args) { if (L) L.pushUndo(UNDO_LABEL[k]); return f.apply(this, args); }; });
+  /* 길게 누르기(0.45초): 선수 행에서 빠른 메뉴 */
+  let lpT = null, lpX = 0, lpY = 0, lpFired = false;
+  document.addEventListener('pointerdown', e => { lpFired = false; const tr = e.target.closest && e.target.closest('tr[data-act="player"]'); if (!tr || !L || ui.live || e.target.closest('[data-stop]')) return; lpFired = false; lpX = e.clientX; lpY = e.clientY; clearTimeout(lpT); lpT = setTimeout(() => { lpFired = true; ui.quick = tr.dataset.a; render(); if (navigator.vibrate) { try { navigator.vibrate(15); } catch (x) { /* 미지원 */ } } }, 450); });
+  document.addEventListener('pointermove', e => { if (lpT && (Math.abs(e.clientX - lpX) > 10 || Math.abs(e.clientY - lpY) > 10)) { clearTimeout(lpT); lpT = null; } });
+  ['pointerup', 'pointercancel', 'scroll'].forEach(ev => document.addEventListener(ev, () => { clearTimeout(lpT); lpT = null; if (lpFired) setTimeout(() => { lpFired = false; }, 350); }, true));   // 길게 누른 뒤 클릭이 오지 않아도 다음 탭이 막히지 않게
+  document.addEventListener('contextmenu', e => { if (e.target.closest && e.target.closest('tr[data-act="player"]')) e.preventDefault(); });
   document.addEventListener('click', e => {
+    if (lpFired) { lpFired = false; e.stopPropagation(); e.preventDefault(); return; }
     const el = e.target.closest('[data-act]'); if (!el) return;
     if ((el.classList.contains('modal-bg') || el.classList.contains('sheet-bg')) && e.target !== el) return;   // 배경을 눌렀을 때만 닫기
     if (el.tagName === 'INPUT' && el.type === 'checkbox') return;   // 체크박스는 change 에서 처리
@@ -968,6 +998,7 @@
     if (el.id === 'autoBp') { ui.live.ctx.auto = el.checked; return; }
     if (el.type === 'checkbox' && el.dataset.act && A[el.dataset.act]) { A[el.dataset.act](el.dataset.a, el); return; }
     const sel = el.dataset.sel; if (!sel) return;
+    if (['lpl', 'lpos', 'pslot'].includes(sel)) L.pushUndo('편성 변경');
     const set = L.team(U()).set;
     if (sel === 'rsort') { ui.rf.s = el.value; render(); }
     else if (sel === 'ttteam') { ui.trade.team = el.value; ui.trade.get.clear(); render(); }

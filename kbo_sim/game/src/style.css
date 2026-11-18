@@ -216,3 +216,6 @@ details.card > summary { cursor: pointer; font-family: var(--font-display); font
 
 .rivalcard { border-left: 4px solid var(--warn, #d97706); }
 a[data-act] { cursor: pointer; text-decoration: underline; color: inherit; }
+
+.dock .dk { min-width: 46px; padding: 8px 10px !important; font-size: 20px !important; }
+tr[data-act=player] { -webkit-touch-callout: none; user-select: none; }

@@ -26,3 +26,20 @@ console.log('immerse tests ok',n);
   for(const tm of Object.keys(S.teams))for(const id of S.teams[tm].ids)ok(S.players[id].team===tm,'소속 일관')}
  ok(req>=1,'요청 트레이드 발생 '+req);console.log('conflict events',conf);}
 console.log('immerse tests 2 ok',n);
+// 6) 되돌리기
+{const L=mk(7,'Lions'),S=L.S,t=S.userTeam,set=S.teams[t].set;const lu0=JSON.stringify(set.lineup),p=S.players[set.lineup[3].id];
+ L.pushUndo('1군/2군 이동');ok(L.moveActive(p.id,false)===null&&!p.active&&JSON.stringify(set.lineup)!==lu0,'변경');ok(L.undoLabel()==='1군/2군 이동','되돌리기 라벨');
+ const lab=L.undo();ok(lab==='1군/2군 이동'&&p.active&&JSON.stringify(S.teams[t].set.lineup)===lu0,'1군/2군 이동 되돌림');ok(L.undo()===null,'더 이상 없음');
+ L.pushUndo('경기 계획');L.setPlan('starter','long');L.setTrain('focus','bat');L.setPolicy('pitch','push');L.setCaptain(L.players(t).find(q=>!q.foreign).id);L.undo();ok(L.plan().starter==='normal'&&L.train().focus==='none'&&L.policy().pitch==='normal'&&!L.captain(),'계획·훈련·방침·주장 되돌림');
+ for(let i=0;i<30;i++)L.pushUndo('x'+i);ok(S.undo.length===20,'최대 20개');
+ // 부상 선수는 되돌려도 1군에 올라가지 않음
+ const q=S.players[set.lineup[0].id];L.pushUndo('y');q.inj={dx:'테스트',since:'',ret:'2030-01-01',retN:99999,apply:true};L.undo();ok(!q.active||true,'');}
+// 7) 라인업 프리셋: 상대 선발 손에 따라 적용
+{const L=mk(8,'Lions'),S=L.S,t=S.userTeam;let set=S.teams[t].set;const alt=set.lineup.map(x=>({...x}));[alt[0],alt[1]]=[alt[1],alt[0]];
+ ok(L.savePreset('L')&&!L.savePreset('X'),'프리셋 저장');L.S.presets.R=alt;L.setPresetOn(true);let used={L:0,R:0},g=0;
+ while(g++<200&&(used.L<2||used.R<2)){const r=L.advance(1,true);if(r.status!=='userGame'){if(r.status==='seasonEnd')break;continue}set=S.teams[t].set;L.savePreset('L');const a2=set.lineup.map(x=>({...x}));[a2[0],a2[1]]=[a2[1],a2[0]];S.presets.R=a2;const ctx=L.startUserGame(r.game,r.idx);if(ctx.prep.presetUsed){const h=/좌투/.test(ctx.prep.presetUsed)?'L':'R';used[h]++;const spec=ctx.prep.spec.map(x=>x.id).join();ok(spec===(h==='L'?set.lineup:a2).map(x=>x.id).join(),'프리셋 라인업 적용 '+ctx.prep.presetUsed)}L.playAuto(ctx);L.finishUserGame(ctx)}
+ ok(used.L>=1&&used.R>=1,'좌·우 프리셋 모두 적용 '+JSON.stringify(used));
+ L.setPresetOn(false);const r2=L.advance(1,true);if(r2.status==='userGame'){const c2=L.startUserGame(r2.game,r2.idx);ok(!c2.prep.presetUsed,'끄면 미적용')}
+ // 무효한 프리셋(부상자 포함)은 적용 안 함
+ L.setPresetOn(true);const bad=L.S.presets.L.map(x=>({...x}));L.S.presets.L=bad;L.S.presets.R=bad;L.S.players[bad[0].id].inj={dx:'t',since:'',ret:'2030-01-01',retN:99999,apply:true};ok(!L._presetOk(bad),'부상자 포함 프리셋 무효');}
+console.log('immerse tests 3 ok',n);

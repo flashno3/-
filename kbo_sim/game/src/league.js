@@ -693,9 +693,10 @@
     startUserGame(g, idx) {
       const S = this.S, E = this.engine(), t = S.userTeam, home = g[0], away = g[1], userSide = home === t ? 'home' : 'away', oppSide = userSide === 'home' ? 'away' : 'home';
       const prep = this.prepareUserGame(g, idx), r = rngFor(S.seed, S.year, S.day, idx), d = S.day, opp = userSide === 'home' ? away : home;
-      const ul = E.makeLineup(prep.spec), ol = E.lineup(opp, 1 + d, r, false);
+      let ul = E.makeLineup(prep.spec); const ol = E.lineup(opp, 1 + d, r, false);
       const userStaff = new E.StaffState(this.pitchers(t, true).map(p => E.pitById[p.id]), r, E.pitById[prep.sp.id]);
       const oppStaff = new E.StaffState(E.staff(opp, 1 + d), r, null);
+      { const pr = S.presets; if (pr && pr.on && oppStaff.sp) { const hd = oppStaff.sp.hand === 'L' ? 'L' : 'R', pl = pr[hd]; if (this._presetOk(pl)) { prep.spec = pl.map(x => ({ ...x })); ul = E.makeLineup(prep.spec); prep.presetUsed = hd === 'L' ? '좌투 상대' : '우투 상대'; } } }   // 상대 선발 손에 맞춘 프리셋 라인업
       const lineups = {}, staff = {}, penal = {}; lineups[userSide] = ul; lineups[oppSide] = { L: ol[0], assign: ol[1] }; staff[userSide] = userStaff; staff[oppSide] = oppStaff; penal[userSide] = true;
       const ctx = { auto: true, userSide, league: this, prep, g, idx };
       const live = new E.LiveGame({ home, away, lineups, staff, rng: r, maxInn: 11, penal, fatigue: true, hook: { [userSide]: (game, ss) => { ss.o += 3; } } });
@@ -703,6 +704,25 @@
       ctx.live = live; ctx.E = E; return ctx;
     }
     /* 내 팀 자동 불펜 운용: 하프 이닝 시작 전에 호출(ctx.auto 가 꺼져 있으면 건너뜀) */
+    /* 되돌리기: 로스터·라인업·계획 변경 직전 상태를 저장(최대 20개). FA 계약·트레이드·방출 같은 되돌릴 수 없는 거래는 제외 */
+    pushUndo(label) {
+      const S = this.S, t = S.userTeam, act = {}, lock = {}; S.undo = S.undo || [];
+      for (const p of this.players(t)) { act[p.id] = !!p.active; lock[p.id] = p.lockUntil || 0; }
+      const cl = x => x === undefined ? undefined : JSON.parse(JSON.stringify(x));
+      S.undo.push({ label, t, day: S.day, act, lock, set: cl(S.teams[t].set), plan: cl(S.plan), train: cl(S.train), policy: cl(S.policy), captain: S.captain || null, presets: cl(S.presets) }); if (S.undo.length > 20) S.undo.shift();
+    }
+    undoLabel() { const u = this.S.undo; return u && u.length ? u[u.length - 1].label : null; }
+    undo() {
+      const S = this.S, e = S.undo && S.undo.pop(); if (!e) return null; if (e.t !== S.userTeam) { S.undo = []; return null; }
+      for (const p of this.players(e.t)) { if (p.id in e.act) { p.active = e.act[p.id] && !this.isInj(p); p.lockUntil = e.lock[p.id] || 0; } }
+      S.teams[e.t].set = JSON.parse(JSON.stringify(e.set)); S.plan = e.plan; S.train = e.train; S.policy = e.policy; S.captain = e.captain; S.presets = e.presets;
+      this.invalidate(); this.repairSettings(e.t); return e.label;
+    }
+    /* 라인업 프리셋: 상대 선발 좌/우투에 따라 저장해 둔 라인업을 자동 적용 */
+    savePreset(hand) { const S = this.S, set = S.teams[S.userTeam].set; if (!['L', 'R'].includes(hand) || set.lineup.length !== 9) return false; S.presets = Object.assign({ on: false }, S.presets, { [hand]: set.lineup.map(x => ({ id: x.id, pos: x.pos })) }); return true; }
+    clearPreset(hand) { const S = this.S; if (S.presets) delete S.presets[hand]; return true; }
+    setPresetOn(on) { const S = this.S; S.presets = Object.assign({ on: false }, S.presets, { on: !!on }); return true; }
+    _presetOk(pl) { const S = this.S, t = S.userTeam; return !!pl && pl.length === 9 && new Set(pl.map(x => x.id)).size === 9 && pl.every(x => { const p = S.players[x.id]; return p && p.team === t && p.active && p.type === 'B' && !this.isInj(p); }); }
     /* 경기 계획: 자동 진행(내 경기를 직접 지휘하지 않을 때)에도 적용되는 규칙. 기본값은 이전 동작과 같다(전부 끔/기본) */
     plan() { return Object.assign({ starter: 'normal', closer: 'ninth', contact: false, infIn: false, hold: false, careful: false, hlFrom: 7 }, this.S.plan || {}); }
     setPlan(k, v) {

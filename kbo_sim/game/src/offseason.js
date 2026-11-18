@@ -1125,7 +1125,7 @@
     const mine = id => { const p = S.players[id]; return p && p.team === t ? p : null; };
     const bs = Object.entries(trB).map(([id, c]) => ({ p: mine(id), c })).filter(x => x.p && x.p.type === 'B').map(x => { const h = (x.c['1B'] || 0) + (x.c['2B'] || 0) + (x.c['3B'] || 0) + (x.c.HR || 0); return { p: x.p, h, hr: x.c.HR || 0, rbi: x.c.RBI || 0, s: (x.c.HR || 0) * 4 + (x.c.RBI || 0) * 1.5 + h }; }).sort((a, b) => b.s - a.s)[0];
     const sp = ctx.prep && ctx.prep.sp, sc = sp && trP[sp.id];
-    const bits = []; if (bs && bs.s >= 3) bits.push(`${bs.p.ko} ${bs.h}안타${bs.hr ? ' ' + bs.hr + '홈런' : ''}${bs.rbi ? ' ' + bs.rbi + '타점' : ''}`);
+    const bits = []; if (ctx.prep && ctx.prep.presetUsed) bits.push(`프리셋 라인업(${ctx.prep.presetUsed})`); if (bs && bs.s >= 3) bits.push(`${bs.p.ko} ${bs.h}안타${bs.hr ? ' ' + bs.hr + '홈런' : ''}${bs.rbi ? ' ' + bs.rbi + '타점' : ''}`);
     if (sc && sc.outs >= 12) bits.push(`선발 ${sp.ko} ${Math.floor(sc.outs / 3)}${sc.outs % 3 ? '⅓⅔'[sc.outs % 3 - 1] : ''}이닝 ${sc.R}실점${sc.K ? ' ' + sc.K + 'K' : ''}`);
     const g = (S.results || []).filter(r => r.home === t || r.away === t).slice(-15).map(r => (r.home === t ? r.rh : r.ra) - (r.home === t ? r.ra : r.rh)); let n = 0; for (let i = g.length - 1; i >= 0 && !tie && g[i] !== 0 && ((g[i] > 0) === win); i--) n++;
     const text = `${this.isRival(t, opp) ? '[' + this.rivalName(t) + '] ' : ''}${KO0[opp]}전 ${my}:${op} ${tie ? '무승부' : win ? '승' : '패'}${!tie && n >= 3 ? ` (${n}${win ? '연승' : '연패'})` : ''}${bits.length ? ' — ' + bits.join(' · ') : ''}`;
