@@ -5,7 +5,7 @@
 #   ./game/run_tests.sh events fa  이름으로 골라 실행(tests_<이름>.js)
 # 실패하면 종료 코드 1, 실패한 테스트의 로그 끝부분을 출력한다.
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
-LOG=/tmp/kbo_tests; mkdir -p "$LOG"; rm -f "$LOG"/*.log
+LOG=/tmp/kbo_tests; mkdir -p "$LOG"; rm -f "$LOG"/*
 python3 build_game_data.py >/dev/null && python3 build_game.py >/dev/null || { echo "빌드 실패"; exit 1; }
 
 HEAVY="longrun offseason cbt positions"
