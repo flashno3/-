@@ -619,17 +619,18 @@
       });
       this.mergeTracking();
       for (const o of others) this.commit(o.home, o.away, o.rh, o.ra, { spH: o.spH, spA: o.spA });
-      this._decayFatigue(); this._tickService(); if (this._injuryDay) this._injuryDay(d); this.playFutures(d); this.returnMilitary(this.milYM(d));
+      this._decayFatigue(); this._tickService(); if (this._injuryDay) this._injuryDay(d); if (this._eventDay) this._eventDay(d); if (this._finSnapDay) this._finSnapDay(d); this.playFutures(d); this.returnMilitary(this.milYM(d));
       if (!ug) { S.day++; return { status: 'ok', day: d }; }
       if (live) { S.pendingDay = d; return { status: 'userGame', day: d, game: ug.g, idx: ug.i }; }
       const L = this.startUserGame(ug.g, ug.i); L.live.playToEnd(); const res = this.finishUserGame(L);
       return { status: 'ok', day: d, user: res };
     }
     /* N일 또는 시즌 끝까지. live 모드에서는 내 경기에서 멈춘다. */
-    advance(days, live) {
+    advance(days, live, stopOnEvent) {
       if (this.S.faMkt && this.closeFA) this.closeFA();   // 개막과 함께 FA 협상 마감
       let n = 0; const out = [];
-      while (n < days && this.S.day < this.S.schedule.length) { const r = this.playDay(live); out.push(r); n++; if (r.status === 'userGame') return { status: 'userGame', ...r, played: n - 1 }; }
+      const evSeq = this.S.events ? this.S.events.seq : 0;
+      while (n < days && this.S.day < this.S.schedule.length) { const r = this.playDay(live); out.push(r); n++; if (r.status === 'userGame') return { status: 'userGame', ...r, played: n - 1 }; if (stopOnEvent && this.S.events && this.S.events.seq > evSeq) return { status: 'event', played: n, event: this.eventsOpen()[0] || null }; }   // 새 소식(결정 필요)이 생기면 그날 멈춘다
       if (this.S.day >= this.S.schedule.length) { this.S.phase = 'regular_done'; return { status: 'seasonEnd', played: n }; }
       return { status: 'ok', played: n };
     }

@@ -44,7 +44,7 @@ const nofa=L.faList().find(p=>!p.foreign&&!(p.faInfo&&p.faInfo.grade));if(nofa){
  ok(L2.cbtPay('Lions')>cb,'경쟁균형세 증가');
  ok(Math.abs(L2.finPreview('Lions').pay-L2.finPay('Lions'))<0.1,'재정 화면 보수=상각 포함');}
 // 5) 시장 경과: 시즌 중 요구액 하락(하루 0.4%, 최대 30%)
-{const L3=League.create(base,'Lions',5);ok(L3.S.faMkt&&Math.abs(L3._marketDecay()-1)<1e-9,'FA 개시일 하락 없음');L3.S.faMkt.day=50;ok(Math.abs(L3._marketDecay()-0.925)<1e-9,'FA 50일 경과 7.5% 하락');L3.closeFA();L3.S.phase='regular';L3.S.day=50;ok(Math.abs(L3._marketDecay()-(1-0.0015*75)*0.8)<1e-9,'개막 후 50일: FA 기간 하락 위에 20% 추가');L3.S.day=200;ok(Math.abs(L3._marketDecay()-(1-0.0015*75)*0.7)<1e-9,'개막 후 하락 한도 30%');}
+{const L3=League.create(base,'Lions',5);ok(L3.S.faMkt&&Math.abs(L3._marketDecay()-1)<1e-9,'FA 개시일 하락 없음');L3.S.faMkt.day=50;ok(Math.abs(L3._marketDecay()-(1-0.0015*50-0.00004*2500))<1e-9,'FA 50일 경과 17.5% 하락(가속)');L3.closeFA();L3.S.phase='regular';L3.S.day=50;ok(Math.abs(L3._marketDecay()-0.7*(1-0.15))<1e-9,'개막 후 50일: FA 기간 하락(−30%) 위에 15% 추가');L3.S.day=200;ok(Math.abs(L3._marketDecay()-0.7*0.8)<1e-9,'개막 후 추가 하락 한도 20%');}
 // 6) 오프시즌: 재계약은 모두 1년, AI 재계약도 1년, 자동 재계약
 {const L4=League.create(base,'Lions',9),S4=L4.S;L4.advance(300,false);const P=L4.startPostseason();let k=0;while(!P.done&&k++<100){if(L4.userInPost()){const c=L4.startUserPostGame();c.live.playToEnd();L4.finishUserPostGame(c)}else L4.simPostGame()}
  L4.startOffseason();const off=S4.off;ok(off.rep.auto>20&&off.rep.expiring.length<60,'소액·미자격 선수는 자동 재계약 '+off.rep.auto+', 직접 협상 '+off.rep.expiring.length);

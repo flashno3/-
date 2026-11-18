@@ -196,6 +196,7 @@
     if (own) { v += 8; items.push(['입단 구단(' + (dh.y || '') + ' 지명)', 8]); if (dh.one) { v += 5; items.push(['원클럽 이력', 5]); } }
     if (this._hometown(p, t)) { v += 8; items.push(['연고 출신(' + dh.school + ')', 8]); }
     if (own && p.age >= 33) { v += 3; items.push(['베테랑', 3]); }
+    if (p.loyAdj && t === p.team) { v += p.loyAdj; items.push(['최근 대우(면담·출전)', p.loyAdj]); }
     return { team: t, v: clamp(Math.round(v), 0, 100), items };
   };
   proto._hometown = function (p, t) { const h = (this.S.schoolHome || {})[p.dh && p.dh.school]; return !!(h && h.includes(t)); };   // 고교 소재 지역이 해당 구단 연고
@@ -207,7 +208,8 @@
     const mv = faCurve(Math.min(1, rank / Math.max(1, 0.27 * n)));
     return Math.max(base, Math.round(0.8 * mv * ld * 10) / 10);
   };
-  proto._marketDecay = function () { const S = this.S, m = S.faMkt; return m ? 1 - 0.0015 * m.day : S.phase === 'offseason' ? 1 : (1 - 0.0015 * FA_END) * (1 - Math.min(0.3, 0.004 * (S.phase === 'offseason' ? 0 : (S.day || 0)))); };   // FA 기간 하루 -0.15%(개막 시 -11%), 개막 후 -0.4%/일
+  const faDecayAt = d => 1 - Math.min(0.3, 0.0015 * d + 0.00004 * d * d);   // 미계약 기간이 길수록 요구액 하락이 가속: 30일 -8%, 60일 -23%, 75일 -30%(한도)
+  proto._marketDecay = function () { const S = this.S, m = S.faMkt; return m ? faDecayAt(m.day) : S.phase === 'offseason' ? 1 : faDecayAt(FA_END) * (1 - Math.min(0.2, 0.003 * (S.day || 0))); };   // 개막 후에는 추가로 -0.3%/일(최대 -20%)
   proto.faTerms = function (p, t) {
     const S = this.S; t = t || S.userTeam; const info = p.faInfo, graded = !!(info && info.grade) && !p.foreign, decay = this._marketDecay();
     if (!graded) { const ask = Math.round(this.askSalary(p) * decay * 10) / 10; return { graded: false, pref: 1, maxYears: 1, mv: ask, ext: false, comp: 1, req: () => Math.max(0.3, ask) }; }
@@ -709,6 +711,141 @@
     if (S.phase !== 'offseason') S.faMkt = null;
   };
 
+  /* ---------------- 방출 위약금 ----------------
+     방출해도 계약은 남는다: 이번 시즌 잔여 연봉(남은 경기 비율) + 계약금 상각 + 이후 보장 연수의 연봉·계약금 상각이 구단 보수(재정·FA 예산)에 계속 잡힌다.
+     고액 방출은 이사회 신뢰도를 깎고, 오래 뛴 핵심 선수(충성도 70+)는 팬·선수단 반응으로 추가 하락. */
+  proto._finYear = function () { const S = this.S; return S.phase === 'offseason' ? S.year + 1 : S.year; };
+  proto.deadNow = function (t) { const f = this.S.fin && this.S.fin.teams[t]; if (!f || !f.dead) return 0; const y = this._finYear(); return f.dead.filter(x => x.year === y).reduce((a, x) => a + x.amt, 0); };
+  proto.releaseCost = function (id) {
+    const S = this.S, p = S.players[id], c = p.contract, y0 = this._finYear(), len = S.schedule ? S.schedule.length || 144 : 144;
+    const frac = S.phase === 'offseason' || S.phase === 'preseason' ? 1 : clamp(1 - (S.day || 0) / len, 0, 1), am = c.amort && c.years > 0 ? c.amort : 0, rec = [];
+    if (c.years >= 1) { rec.push({ year: y0, amt: Math.round((c.salary * frac + am) * 10) / 10 }); for (let i = 1; i < c.years; i++) rec.push({ year: y0 + i, amt: Math.round((c.salary + am) * 10) / 10 }); }
+    const total = rec.reduce((a, x) => a + x.amt, 0), lo = this.loyalty(p, p.team), core = lo && lo.v >= 70 && (p.tn || 0) >= 5;
+    const trust = total >= 1 ? -Math.min(6, Math.round((0.5 + total / 10) * 10) / 10) - (core ? 2 : 0) : (core ? -2 : 0);
+    return { rec, total: Math.round(total * 10) / 10, thisYear: rec.length ? rec[0].amt : 0, trust, core };
+  };
+  proto.releasePlayer = function (id) {   // 내 팀 선수 방출(위약금·신뢰도 반영)
+    const S = this.S, t = S.userTeam, p = S.players[id]; if (!p || p.team !== t) return { ok: false, msg: '선수를 찾을 수 없습니다.' };
+    if (S.teams[t].ids.length <= 44) return { ok: false, msg: '보유 선수가 최소 44명 필요합니다.' };
+    const cost = this.releaseCost(id), f = S.fin && S.fin.teams[t];
+    if (f) { f.dead = (f.dead || []).concat(cost.rec.map(x => ({ year: x.year, amt: x.amt, who: p.ko }))); f.trust = clamp(Math.round((f.trust + cost.trust) * 10) / 10, 0, 100); }
+    this.release(t, id);
+    news(this, `방출: ${p.ko} — 위약금 ${cost.total}억(이번 시즌 ${cost.thisYear}억)${cost.trust < 0 ? `, 이사회 신뢰도 ${cost.trust}` : ''}${cost.core ? ' · 오랜 핵심 선수 방출로 팬·선수단 반응이 좋지 않습니다' : ''}`);
+    return { ok: true, cost };
+  };
+
+  /* ---------------- 이사회 설득(예산 초과 영입) ----------------
+     FA 예산(여유자금)을 넘는 영입도 이사회를 설득하면 가능. 성공 확률 = 신뢰도·선수 가치·초과 비율에 따름.
+     성공: 초과분만큼 올 시즌 예산 확대(+신뢰도 하락), 실패: 신뢰도 하락. 시즌당 최대 3회, 시도 간 7일 간격. */
+  proto.boardOdds = function (id, offer) {
+    const S = this.S, t = S.userTeam, p = S.players[id], f = S.fin.teams[t], ev = this.faEvaluate(p, offer, t); if (!ev.ok) return { ok: false, msg: ev.msg };
+    const cost = ev.sal + ev.bon / ev.y, room = this.faRoom(t), need = Math.max(0, Math.round((cost - room) * 10) / 10), pers = f.pers || { n: 0, last: -99 };
+    const now = S.faMkt ? S.faMkt.day : (S.day || 0) + 100, left = Math.max(0, 7 - (now - pers.last));
+    const prob = clamp(0.12 + 0.6 * (f.trust / 100) + (this.war(p) >= 2 ? 0.1 : this.war(p) >= 1 ? 0.04 : 0) - 0.5 * need / Math.max(cost, 0.1), 0.05, 0.9);
+    return { ok: true, need, cost, room, prob: Math.round(prob * 100) / 100, tries: pers.n, left, max: 3, ev, now };
+  };
+  proto.persuadeBoard = function (id, offer) {
+    const S = this.S, t = S.userTeam, o = this.boardOdds(id, offer); if (!o.ok) return { ok: false, msg: o.msg };
+    const f = S.fin.teams[t], p = S.players[id]; f.pers = f.pers || { n: 0, last: -99 };
+    if (o.need <= 0) return { ok: false, msg: '예산 안에서 영입할 수 있습니다. 설득이 필요 없습니다.' };
+    if (f.pers.n >= o.max) return { ok: false, msg: `이사회 설득은 시즌당 ${o.max}회까지입니다.` };
+    if (o.left > 0) return { ok: false, msg: `이사회가 재논의를 거부합니다. ${o.left}일 뒤에 다시 요청하세요.` };
+    f.pers.n++; f.pers.last = o.now;
+    const r = rngFor(S.seed, S.year, (S.faMkt ? S.faMkt.day : S.day) * 10 + f.pers.n, 9100);
+    if (r.random() < o.prob) {
+      const drop = clamp(2 + o.need * 0.4, 2, 8); f.boardExtra = Math.round(((f.boardExtra || 0) + o.need * 1.05 + 0.1) * 10) / 10; f.trust = clamp(Math.round((f.trust - drop) * 10) / 10, 0, 100);
+      this._doSign(t, p, o.ev.y, o.ev.sal, o.ev.bon);
+      if (S.faMkt) { delete S.faMkt.pend[id]; delete S.faMkt.bids[id]; }
+      news(this, `이사회 설득 성공: ${p.ko} 영입 승인 (초과 ${o.need}억 추가 예산, 신뢰도 −${drop.toFixed(1)}) — ${o.ev.y}년 총 ${(o.ev.per * o.ev.y).toFixed(1)}억`);
+      return { ok: true, success: true, drop, need: o.need };
+    }
+    f.trust = clamp(Math.round((f.trust - 3) * 10) / 10, 0, 100);
+    news(this, `이사회 설득 실패: ${p.ko} 영입안이 부결되었습니다 (신뢰도 −3). ${o.left <= 0 ? '7일 뒤 재논의 가능' : ''}`);
+    return { ok: true, success: false, msg: '이사회가 영입안을 부결했습니다. 신뢰도가 하락했습니다.' };
+  };
+
+  /* ---------------- 시즌 중 이벤트 ----------------
+     S.events = { seq, list:[{id,type,day,year,title,text,choices:[{k,label,hint}],data,exp,status,result}] }
+     - 선수 불만(출전 기회) · 스폰서 제안 · 팬 이벤트 · 이사회 중간 점검 · 월간 MVP(정보)
+     - 새 이벤트가 생기면 advance()가 그날 멈춘다. 만료되면 기본 선택으로 자동 처리. */
+  proto.eventsOpen = function () { const E = this.S.events; return E ? E.list.filter(e => e.status === 'open') : []; };
+  proto._evAdd = function (e) { const S = this.S, E = S.events = S.events || { seq: 0, list: [] }; e.id = 'E' + (++E.seq); e.day = S.day; e.year = S.year; e.status = 'open'; e.exp = S.day + (e.ttl || 10); E.list.unshift(e); if (E.list.length > 60) E.list.length = 60; return e; };
+  proto._evCount = function (type) { const E = this.S.events; return E ? E.list.filter(e => e.type === type && e.year === this.S.year).length : 0; };
+  proto._evOpenOf = function (type) { return this.eventsOpen().some(e => e.type === type); };
+  proto._eventDay = function (d) {
+    const S = this.S, t = S.userTeam, f = S.fin && S.fin.teams[t]; if (!f || S.phase !== 'regular' && S.phase !== 'preseason') return; if (S.phase === 'preseason' && d < 1) return;
+    const r = rngFor(S.seed, S.year, d, 8800), E = S.events = S.events || { seq: 0, list: [] };
+    // 만료 → 기본 처리
+    for (const e of this.eventsOpen()) if (d >= e.exp) this.resolveEvent(e.id, e.def || (e.choices[e.choices.length - 1] || {}).k, true);
+    const open = this.eventsOpen().length; if (open >= 3) return;
+    // 1) 이사회 중간 점검: 72일·120일차(경기일)
+    if ((d === 72 || d === 120) && !E.list.some(e => e.type === 'board' && e.year === S.year && e.data.at === d)) {
+      const st = this.standings(), me = st.find(x => x.team === t), pays = TEAMS.map(x => [x, this.finPay(x)]).sort((a, b) => b[1] - a[1]), exp = pays.findIndex(x => x[0] === t) + 1, gap = me.rank - exp;   // 기대 순위 = 선수단 보수 순위
+      const v = this.finPreview(t), over = gap <= -2, under = gap >= 2;
+      this._evAdd({ type: 'board', title: `이사회 중간 점검 (${me.w}승 ${me.l}패 · ${me.rank}위)`, ttl: 8, data: { at: d, gap, rank: me.rank, exp, op: Math.round(v.op) },
+        text: over ? `보수 순위(${exp}위)를 웃도는 ${me.rank}위입니다. 이사회가 선전을 평가하며 보강 투자를 제안합니다.` : under ? `보수 순위(${exp}위)에 못 미치는 ${me.rank}위입니다. 이사회가 성적 부진에 우려를 표했습니다. 시즌 예상 손익 ${Math.round(v.op)}억.` : `기대 순위(${exp}위)와 비슷한 ${me.rank}위입니다. 이사회가 시즌 후반 운영 방향을 묻습니다.`,
+        choices: over ? [{ k: 'invest', label: '보강 예산 5억 승인 받기', hint: '신뢰도 변화 없음, 올 시즌 FA 예산 +5억' }, { k: 'thanks', label: '감사 표하고 넘어가기', hint: '신뢰도 +2' }] : under ? [{ k: 'plead', label: '보강 예산 요청', hint: `확률 ${Math.round(clamp(0.2 + 0.5 * f.trust / 100, 0.1, 0.8) * 100)}% 성공 시 +6억, 실패 시 신뢰도 −3`, def: false }, { k: 'accept', label: '책임 인정(조용히 넘어감)', hint: '신뢰도 −1' }] : [{ k: 'hold', label: '현 전력 유지', hint: '변화 없음' }, { k: 'ask', label: '소폭 증액 요청', hint: '신뢰도 −1, 예산 +2억' }], def: over ? 'thanks' : under ? 'accept' : 'hold' });
+      return;
+    }
+    // 2) 선수 불만(출전 기회) — 하루 4%
+    if (!this._evOpenOf('grievance') && r.random() < 0.04) {
+      const act = this.players(t).filter(p => p.active), med = act.map(p => this.ovr(p)).sort((a, b) => a - b)[Math.floor(act.length * 0.5)] || 0, rec = new Set((E.list || []).filter(e => e.type === 'grievance' && e.day > d - 40).map(e => e.data.pid));
+      const c = this.players(t).filter(p => !p.active && !this.isInj(p) && !p.foreign && this.ovr(p) >= med + 4 && !rec.has(p.id) && !p.lockUntil).sort((a, b) => this.ovr(b) - this.ovr(a))[0];
+      if (c) { this._evAdd({ type: 'grievance', title: `${c.ko} 출전 기회 불만`, ttl: 7, data: { pid: c.id }, text: `2군에 있는 ${c.ko}(OVR ${this.ovr(c)})가 "1군 경기에 뛸 자격이 있다"며 면담을 요청했습니다. (1군 중앙값 OVR ${med})`,
+        choices: [{ k: 'promote', label: '1군에 등록한다', hint: '엔트리에 여유가 있어야 합니다. 충성도 +4' }, { k: 'talk', label: '면담으로 설득한다', hint: `성공 ${Math.round(clamp(0.35 + (this.loyalty(c) ? this.loyalty(c).v : 40) / 200, 0.2, 0.85) * 100)}% — 성공 시 충성도 +1, 실패 시 −5` }, { k: 'ignore', label: '무시한다', hint: '충성도 −6' }], def: 'ignore' }); return; }
+    }
+    // 3) 스폰서 제안 — 하루 1.2%, 시즌 2회
+    if (!this._evOpenOf('sponsor') && this._evCount('sponsor') < 2 && d > 10 && d < 120 && r.random() < 0.012) {
+      const amt = Math.round(f.lastRev * (0.004 + 0.004 * r.random()) * 10) / 10;
+      this._evAdd({ type: 'sponsor', title: '구장 광고·스폰서 확대 제안', ttl: 10, data: { amt }, text: `모기업 계열 스폰서가 구장 광고판과 중계 노출 확대를 조건으로 시즌 ${amt}억을 제안했습니다. 다만 광고 확대로 관람 환경이 다소 나빠질 수 있습니다(관중 −1.5%).`,
+        choices: [{ k: 'accept', label: `수락 (+${amt}억)`, hint: '올 시즌 매출 +' + amt + '억, 관중 −1.5%' }, { k: 'decline', label: '거절', hint: '변화 없음' }], def: 'decline' }); return;
+    }
+    // 4) 팬 이벤트 — 하루 1.2%, 시즌 2회
+    if (!this._evOpenOf('promo') && this._evCount('promo') < 2 && d > 5 && d < 130 && !(f.promo && d < f.promo.until) && r.random() < 0.012) {
+      const cost = Math.round(f.lastRev * 0.001 * 10) / 10;
+      this._evAdd({ type: 'promo', title: '팬 감사 이벤트 제안', ttl: 8, data: { cost }, text: `마케팅팀이 팬 사인회·유니폼 증정 이벤트를 제안했습니다. 비용 ${cost}억, 향후 20일 홈 관중 +6% 예상.`,
+        choices: [{ k: 'go', label: `진행 (−${cost}억)`, hint: '운영비 +' + cost + '억, 20일간 관중 +6%' }, { k: 'skip', label: '보류', hint: '변화 없음' }], def: 'skip' }); return;
+    }
+    // 5) 월간 MVP(정보) — 30일마다
+    if (d > 0 && d % 30 === 0) {
+      const bat = Object.entries(S.stats.bat).map(([id, c]) => ({ p: S.players[id], c })).filter(x => x.p && x.p.team === t && x.c.PA >= 40).map(x => { const ab = x.c.PA - x.c.BB - x.c.HBP - x.c.SF, h = x.c['1B'] + x.c['2B'] + x.c['3B'] + x.c.HR; return { p: x.p, s: (ab ? h / ab : 0) + 0.02 * x.c.HR / Math.max(1, x.c.PA / 20), txt: `${x.p.ko} 타율 ${ab ? (h / ab).toFixed(3).slice(1) : '-'} ${x.c.HR}홈런 ${x.c.RBI}타점` }; });
+      const pit = Object.entries(S.stats.pit).map(([id, c]) => ({ p: S.players[id], c })).filter(x => x.p && x.p.team === t && x.c.outs >= 45).map(x => ({ p: x.p, s: 1.2 - x.c.R * 27 / x.c.outs / 10 + x.c.K / 400, txt: `${x.p.ko} ${(x.c.R * 27 / x.c.outs).toFixed(2)} RA9 ${x.c.K}탈삼진` }));
+      const best = bat.concat(pit).sort((a, b) => b.s - a.s)[0]; if (best) news(this, `${S.year} ${Math.floor(d / 30)}개월차 팀 MVP: ${best.txt}`);
+    }
+  };
+  /* 월별 재정 스냅샷(내 팀): 월말 기준 시즌 예상 손익·평균 관중·순위. 매 경기일 갱신해 달이 바뀌면 직전 달 값이 남는다 */
+  proto._finSnapDay = function (d) {
+    const S = this.S; if (!this.finReady() || S.phase !== 'regular' && S.phase !== 'preseason') return; const t = S.userTeam, f = S.fin.teams[t]; if (!f) return;
+    const m = this.dateOf(d).getUTCMonth() + 1, v = this.finPreview(t), me = this.standings().find(x => x.team === t); f.snap = f.snap || [];
+    const row = { m, day: d, op: Math.round(v.op * 10) / 10, att: v.att, price: f.price * f.pm, games: f.games, gate: Math.round(f.gate * 10) / 10, rank: me.rank, w: me.w, l: me.l, pay: v.pay, room: v.room, trust: f.trust };
+    const last = f.snap[f.snap.length - 1]; if (last && last.m === m) f.snap[f.snap.length - 1] = row; else f.snap.push(row);
+  };
+  proto.resolveEvent = function (id, k, auto) {
+    const S = this.S, t = S.userTeam, f = S.fin.teams[t], e = ((S.events || {}).list || []).find(x => x.id === id); if (!e || e.status !== 'open') return { ok: false, msg: '처리할 수 없는 소식입니다.' };
+    let res = '';
+    const adj = (p, v) => { p.loyAdj = clamp((p.loyAdj || 0) + v, -15, 15); };
+    if (e.type === 'grievance') {
+      const p = S.players[e.data.pid];
+      if (!p || p.team !== t) res = '선수가 이미 팀을 떠났습니다.';
+      else if (k === 'promote') { const err = this.moveActive(p.id, true); if (err) { if (!auto) return { ok: false, msg: err }; adj(p, -6); res = `${p.ko} 불만을 처리하지 못했습니다(${err}).`; } else { adj(p, 4); res = `${p.ko}을(를) 1군에 등록했습니다. 충성도 +4.`; } }
+      else if (k === 'talk') { const pr = clamp(0.35 + (this.loyalty(p) ? this.loyalty(p).v : 40) / 200, 0.2, 0.85); if (rngFor(S.seed, S.year, S.day, 8810 + parseInt(p.id.slice(1))).random() < pr) { adj(p, 1); res = `면담이 잘 풀렸습니다. ${p.ko} 충성도 +1.`; } else { adj(p, -5); res = `면담이 결렬되었습니다. ${p.ko} 충성도 −5.`; } }
+      else { adj(p, -6); res = `${p.ko} 불만을 방치했습니다. 충성도 −6 (FA·재계약 협상에 영향).`; }
+    } else if (e.type === 'sponsor') {
+      if (k === 'accept') { f.evRev = Math.round(((f.evRev || 0) + e.data.amt) * 10) / 10; f.attMult = (f.attMult || 1) * 0.985; res = `스폰서 계약 체결: 올 시즌 매출 +${e.data.amt}억, 관중 −1.5%.`; } else res = '제안을 거절했습니다.';
+    } else if (e.type === 'promo') {
+      if (k === 'go') { f.evCost = Math.round(((f.evCost || 0) + e.data.cost) * 10) / 10; f.promo = { until: S.day + 20, mult: 1.06 }; res = `팬 이벤트 진행: 비용 ${e.data.cost}억, 20일간 관중 +6%.`; } else res = '이벤트를 보류했습니다.';
+    } else if (e.type === 'board') {
+      const tr = d => { f.trust = clamp(Math.round((f.trust + d) * 10) / 10, 0, 100); };
+      if (k === 'invest') { f.boardExtra = (f.boardExtra || 0) + 5; res = '이사회가 보강 예산 5억을 승인했습니다.'; }
+      else if (k === 'thanks') { tr(2); res = '이사회 신뢰도 +2.'; }
+      else if (k === 'plead') { if (rngFor(S.seed, S.year, S.day, 8820).random() < clamp(0.2 + 0.5 * f.trust / 100, 0.1, 0.8)) { f.boardExtra = (f.boardExtra || 0) + 6; res = '이사회가 보강 예산 6억을 승인했습니다.'; } else { tr(-3); res = '요청이 거절되었습니다. 신뢰도 −3.'; } }
+      else if (k === 'accept') { tr(-1); res = '책임을 인정했습니다. 신뢰도 −1.'; }
+      else if (k === 'ask') { tr(-1); f.boardExtra = (f.boardExtra || 0) + 2; res = '소폭 증액(+2억), 신뢰도 −1.'; }
+      else res = '현 전력을 유지합니다.';
+    }
+    e.status = 'done'; e.choice = k; e.result = res; e.auto = !!auto; news(this, `${e.title}: ${res}`); this.invalidate();
+    return { ok: true, msg: res };
+  };
   /* ---------------- 새 시즌 ---------------- */
   proto.ensureActive = function (t) {   // 1군 28명 유지(부족하면 가치 높은 선수로 채움, 초과하면 낮은 순으로 내림)
     const S = this.S, P = this.players(t);
@@ -733,7 +870,7 @@
     this.invalidate();
   };
   proto.startNewSeason = function () {
-    const S = this.S; S.year += 1; S.off = null; S.faMkt = null; S.fa = (S.fa || []);
+    const S = this.S; S.year += 1; S.off = null; S.faMkt = null; if (S.events) for (const e of (S.events.list || [])) if (e.status === 'open') { e.status = 'done'; e.result = '시즌 종료로 자동 종결'; } S.fa = (S.fa || []);
     for (const id in S.players) if (S.players[id].retired || S.players[id].team === 'RET') delete S.players[id];   // 은퇴·이탈 선수 정리(저장 용량)
     this.finishFA === undefined; const adj = this.normalizeTalent(); S.lastAdj = adj;
     for (const t of TEAMS) if (t === S.userTeam) this.ensureActive(t);
@@ -805,18 +942,18 @@
   proto.finCap = function (t, year) { const f = this.S.fin.teams[t]; let c = f.cap; for (const [y, v] of f.capchg) if ((year || this.S.year) >= y) c = v; return c; };
   proto.finAtt = function (t) {   // 홈 관중: 기준 관중 × 성적 보정 × 티켓 가격 탄력성, 좌석 수 이내
     const S = this.S, f = S.fin.teams[t], r = S.rec[t], wp = (r[0] + r[1] + r[2]) >= 10 ? r[0] / Math.max(1, r[0] + r[1]) : 0.5;
-    return Math.min(this.finCap(t), Math.round(f.att0 * clamp(1 + 0.8 * (wp - 0.5), 0.8, 1.25) * clamp(1 - ELAST * (f.pm - 1), 0.6, 1.2)));
+    return Math.min(this.finCap(t), Math.round(f.att0 * clamp(1 + 0.8 * (wp - 0.5), 0.8, 1.25) * clamp(1 - ELAST * (f.pm - 1), 0.6, 1.2) * (f.attMult || 1) * (f.promo && S.day < f.promo.until ? f.promo.mult : 1)));   // 이벤트(광고 확대·팬 이벤트) 보정
   };
   proto._finGame = function (home) { if (!this.finReady()) return; const f = this.S.fin.teams[home]; if (!f) return; f.gate += this.finAtt(home) * f.price * f.pm; f.games++; };
   proto.setTicketPolicy = function (t, pm) { if (!this.finReady() || !PRICE_PM.includes(pm)) return false; this.S.fin.teams[t].pm = pm; return true; };
-  proto.finPay = function (t) { return Math.round((this.payroll(t) + this.coachPayDelta(t) + this.S.teams[t].ids.reduce((a, id) => { const c = this.S.players[id].contract; return a + (c.amort && c.years > 0 ? c.amort : 0); }, 0)) * 10) / 10; };   // 선수단 보수 = 연봉 + 신규 FA 계약금 상각
+  proto.finPay = function (t) { return Math.round((this.payroll(t) + this.coachPayDelta(t) + this.deadNow(t) + this.S.teams[t].ids.reduce((a, id) => { const c = this.S.players[id].contract; return a + (c.amort && c.years > 0 ? c.amort : 0); }, 0)) * 10) / 10; };   // 선수단 보수 = 연봉 + 신규 FA 계약금 상각
   proto.finAllowed = function (t) { const f = this.S.fin.teams[t]; return f.lastRev * LOSS * (0.5 + f.trust / 100); };
-  proto.finBudget = function (t) { const f = this.S.fin.teams[t]; return Math.round((f.lastRev - f.opex + this.finAllowed(t)) * 10) / 10; };
+  proto.finBudget = function (t) { const f = this.S.fin.teams[t]; return Math.round((f.lastRev - f.opex + this.finAllowed(t) + (f.boardExtra || 0)) * 10) / 10; };   // 이사회 승인 추가 예산 포함
   proto.faRoom = function (t) { return this.finReady() ? Math.round((this.finBudget(t) - this.finPay(t)) * 10) / 10 : 1e9; };
   proto.finPreview = function (t) {   // 시즌 예상 손익(진행분 + 남은 홈 경기를 현재 관중으로 환산), 포스트시즌 수입 제외
     const S = this.S, f = S.fin.teams[t], rem = Math.max(0, FIN_GAMES - f.games), gate = f.gate + rem * this.finAtt(t) * f.price * f.pm;
-    const pay = this.finPay(t), v = this.cbtPreview(t), cbt = v.fee || 0, bc = this.finBC(), rev = gate + f.parAds + f.other + bc;
-    return { gate, par: f.parAds, other: f.other, bc, parts: f.parts, rev, pay, opex: f.opex, cbt, op: rev - pay - f.opex - cbt, att: this.finAtt(t), cap: this.finCap(t), room: this.faRoom(t), budget: this.finBudget(t), trust: f.trust, allowed: this.finAllowed(t) };
+    const pay = this.finPay(t), v = this.cbtPreview(t), cbt = v.fee || 0, bc = this.finBC(), ev = f.evRev || 0, evc = f.evCost || 0, rev = gate + f.parAds + f.other + bc + ev;
+    return { gate, par: f.parAds, other: f.other, bc, ev, evc, dead: this.deadNow(t), parts: f.parts, rev, pay, opex: f.opex, cbt, op: rev - pay - f.opex - evc - cbt, att: this.finAtt(t), cap: this.finCap(t), room: this.faRoom(t), budget: this.finBudget(t), trust: f.trust, allowed: this.finAllowed(t) };
   };
   proto._psSettle = function () {   // 포스트시즌 입장수입 → 배당 재원 → 팀별 배당
     const P = this.S.post; if (!P || !P.rounds || !P.rounds.length) return null;
@@ -838,7 +975,7 @@
       d += op >= 0 ? 2 : (-op > f.lastRev * LOSS * (0.5 + f.trust / 100) ? -6 : -1);
       const trust = clamp(Math.round(f.trust + d), 0, 100);
       row.teams[t] = { gate: Math.round(v.gate * 10) / 10, par: f.parAds, other: f.other, bc: v.bc, rev: Math.round((v.rev + div + bonus) * 10) / 10, ps: Math.round(div * 10) / 10, bonus: Math.round(bonus * 10) / 10, prize: Math.round(prize * 10) / 10, pay: Math.round(v.pay * 10) / 10, opex: f.opex, cbt: Math.round(v.cbt * 100) / 100, op: Math.round(op * 10) / 10, att: v.att, trust, dTrust: trust - f.trust, rank };
-      f.lastRev = v.rev; f.trust = trust; f.att0 = Math.min(this.finCap(t, S.year + 1), Math.round(f.att0 * clamp(1 + 0.35 * (wp - 0.5) + (champ ? 0.03 : 0), 0.92, 1.1)));   // 성적이 좋으면 다음 해 기준 관중 상승
+      f.lastRev = v.rev - (f.evRev || 0); f.trust = trust; f.evRev = 0; f.evCost = 0; f.attMult = 1; f.promo = null; f.boardExtra = 0; f.pers = null; f.snap = []; f.dead = (f.dead || []).filter(x => x.year > S.year);   // 시즌 한정 이벤트 효과 정리·지난 위약금 소멸 f.att0 = Math.min(this.finCap(t, S.year + 1), Math.round(f.att0 * clamp(1 + 0.35 * (wp - 0.5) + (champ ? 0.03 : 0), 0.92, 1.1)));   // 성적이 좋으면 다음 해 기준 관중 상승
       f.gate = 0; f.games = 0;
     }
     S.fin.hist.push(row); if (S.fin.hist.length > 20) S.fin.hist.shift();
