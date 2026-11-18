@@ -193,7 +193,7 @@
     const mv = faCurve(Math.min(1, rank / Math.max(1, 0.27 * n)));
     return Math.max(base, Math.round(0.8 * mv * 10) / 10);
   };
-  proto._marketDecay = function () { const S = this.S; return 1 - Math.min(0.3, 0.004 * (S.phase === 'offseason' ? 0 : (S.day || 0))); };
+  proto._marketDecay = function () { const S = this.S, m = S.faMkt; return m ? 1 - 0.0015 * m.day : S.phase === 'offseason' ? 1 : (1 - 0.0015 * FA_END) * (1 - Math.min(0.3, 0.004 * (S.phase === 'offseason' ? 0 : (S.day || 0)))); };   // FA 기간 하루 -0.15%(개막 시 -11%), 개막 후 -0.4%/일
   proto.faTerms = function (p, t) {
     const S = this.S; t = t || S.userTeam; const info = p.faInfo, graded = !!(info && info.grade) && !p.foreign, decay = this._marketDecay();
     if (!graded) { const ask = Math.round(this.askSalary(p) * decay * 10) / 10; return { graded: false, pref: 1, maxYears: 1, mv: ask, ext: false, comp: 1, req: () => Math.max(0.3, ask) }; }
@@ -336,7 +336,7 @@
    * 등급(최근 3년 연봉 순위): A(팀 3위 이내 & 리그 30위 이내) / B(팀 10위 이내 & 리그 60위 이내) / C(그 외, 만 35세 이상).
    *   재자격: 직전 A·B였던 두 번째 FA는 B, 세 번째 이상이거나 직전 C는 C. 보상: A 보호 20명 + 전년 연봉 200% 또는 300%, B 25명 + 100% 또는 200%, C 150%(선수 없음).
    * 외부 FA 영입은 구단당 스토브리그 3명. 외국인: 일반 3명(같은 포지션 3명 불가) + 아시아쿼터 1명, 신규 상한 100만$(14억)·AQ 20만$(2.8억). */
-  const FA_REG_DAYS = 145, EXT_LIMIT = 3, FOREIGN_NEW = { gen: 14, aq: 2.8 }, FOREIGN_RAISE = { gen: 7, aq: 1.4 };
+  const FA_END = 75, FA_REG_DAYS = 145, EXT_LIMIT = 3, FOREIGN_NEW = { gen: 14, aq: 2.8 }, FOREIGN_RAISE = { gen: 7, aq: 1.4 };
   const FSUR = ['카르', '로페', '미첼', '스미', '브라', '윌슨', '존슨', '해리', '터너', '로저', '필립', '데이', '콜린', '다니', '레이', '헤이', '모리', '샌더', '프레', '그랜'], FGIV = ['스', '슨', '즈', '트', '드', '로', '닐', '크'];
   /* 새 계약: 비FA는 모두 1년(연봉 계약). FA 다년계약은 계약금(현금, 계약 시 지급)을 포함하며 경쟁균형세 보수는 (계약금 + 연봉 × 연수) ÷ 연수 */
   proto._newContract = function (p, salary, years, bonus) { const c = { salary, years }; if (bonus > 0) { c.bonus = bonus; c.yrs0 = years; c.amort = Math.round(bonus / years * 100) / 100; c.total = Math.round((bonus + salary * years) * 10) / 10; if (!p.foreign) c.cbt = Math.round((bonus + salary * years) / years * 100) / 100; } return c; };
@@ -541,6 +541,12 @@
     const ev = this.faEvaluate(p, offer, t); if (!ev.ok) return ev.msg;
     const cost = ev.sal + ev.bon / ev.y, room = this.faRoom(t);   // 계약금은 계약 기간 동안 균등 상각(선수단 비용)
     if (room < cost) return `예산 부족: 연간 비용(연봉 ${ev.sal.toFixed(1)} + 계약금 상각 ${(ev.bon / ev.y).toFixed(1)} = ${cost.toFixed(1)}억)이 FA 여유자금 ${room.toFixed(1)}억을 넘습니다. 이사회가 승인하지 않습니다.`;
+    const m = S.faMkt, best = m && graded ? this._bestBid(id) : null;
+    if (best) { const us = this._offerScore(p, t, ev.y, ev.sal, ev.bon);
+      if (us + 1e-9 < best.score) { m.pend[id] = { years: ev.y, salary: ev.sal, bonus: ev.bon, day: m.day };
+        const bt = this.faBeat(p, t, ev.y);
+        return `보류(경쟁): ${KO0[best.b.team]}이(가) 연 ${best.b.per.toFixed(2)}억 × ${best.b.y}년(계약금 35%)을 제시 중이라 선수가 아직 수락하지 않습니다. 제시를 보류해 두었고(5일 유효), 이기려면 연 ${bt.per.toFixed(1)}억 이상(계약금 ${bt.bonus.toFixed(1)}억 + 연봉 ${bt.salary.toFixed(1)}억 × ${bt.years}년)이 필요합니다.`; } }
+    if (m) { delete m.pend[id]; delete m.bids[id]; }
     this._doSign(t, p, ev.y, ev.sal, ev.bon);   // 경쟁균형세 상한 초과는 허용(시즌 종료 시 야구발전기금 부과)
     news(this, `FA ${p.ko} 영입 (${graded ? `${graded}등급, ` : ''}${ev.y}년 총 ${(ev.per * ev.y).toFixed(1)}억 = 계약금 ${ev.bon.toFixed(1)} + 연봉 ${ev.sal.toFixed(1)}×${ev.y})`); return null;
   };
@@ -586,6 +592,100 @@
     this.invalidate();
   };
 
+  /* ---------------- FA 협상 기간(1월 1일 개시, 일 단위 진행) · 경쟁 입찰 ----------------
+     - S.faMkt = {day, bids:{id:[{team,per,ceil,y,day}]}, pend:{id:{years,salary,bonus,day}}, closed}
+     - day 0 = 1월 1일, FA_END일(3월 17일)까지 진행 가능. 개막 전에 FA 계약을 모두 마감한다.
+     - AI 구단은 관심 선수에게 입찰(연 보수 = 요구액, 계약금 35%)하고, 매일 상한(요구액 +2~12%)까지 올린다.
+     - 선수 평가 점수 = 연 보수 × (1 + 0.15 × 계약금 비중) × (1 − 1%×|기간−선호 기간|) × (원소속 구단 +2%).
+     - 내 제시 점수가 최고 입찰 이상이면 즉시 계약, 아니면 5일간 보류(매일 재평가). AI 입찰은 1일 이상 경과하면 확률적으로 수락된다. */
+  proto.faDateStr = function (day) { const d = new Date(Date.UTC(2001, 0, 1 + day)); return `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`; };
+  proto.openFAMarket = function () { this.S.faMkt = { day: 0, bids: {}, pend: {}, closed: false }; };
+  proto.faDaysLeft = function () { const m = this.S.faMkt; return m ? FA_END - m.day : 0; };
+  proto._offerScore = function (p, t, y, sal, bon) {
+    const tm = this.faTerms(p, t), tot = bon + sal * y, per = tot / y, share = tot > 0 ? bon / tot : 0, home = p.faInfo && p.faInfo.from === t;
+    return per * (1 + 0.15 * share) * (1 - 0.01 * Math.abs(y - tm.pref)) * (home ? 1.02 : 1);
+  };
+  proto._bidScore = function (p, b) { return this._offerScore(p, b.team, b.y, b.per * b.y * 0.65 / b.y, b.per * b.y * 0.35); };   // AI 입찰: 계약금 35%
+  proto._bestBid = function (id) {
+    const m = this.S.faMkt, bs = m && m.bids[id]; if (!bs || !bs.length) return null; const p = this.S.players[id]; let best = null;
+    for (const b of bs) { const sc = this._bidScore(p, b); if (!best || sc > best.score) best = { b, score: sc }; } return best;
+  };
+  /* 경쟁 입찰을 이기는 최소 제시(계약금 35%, 연봉 올림). 입찰이 없으면 요구 조건 */
+  proto.faBeat = function (p, t, years) {
+    const tm = this.faTerms(p, t), y = clamp(years || tm.pref, 1, tm.maxYears), best = p.id && this._bestBid(p.id), req = tm.req(y);
+    for (let per = req; per < req * 2; per += 0.05) {
+      const tot = per * y, bon = Math.round(tot * BONUS_SHARE * 10) / 10, sal = Math.ceil(((tot - bon) / y) * 10 - 1e-9) / 10;
+      if (!best || this._offerScore(p, t, y, sal, bon) > best.score + 1e-9) return { years: y, salary: sal, bonus: bon, per: (bon + sal * y) / y };
+    }
+    return this.faDefaultOffer(p, t, y);
+  };
+  proto.faBidInfo = function (id) {
+    const m = this.S.faMkt; if (!m) return null; const bs = m.bids[id] || [], best = this._bestBid(id), pe = m.pend[id] || null;
+    return { n: bs.length, best: best ? best.b : null, bestScore: best ? best.score : 0, pend: pe, pendLeft: pe ? Math.max(0, pe.day + 5 - m.day) : 0, bids: bs.map(b => ({ team: b.team, per: b.per, y: b.y })).sort((a, b) => b.per - a.per) };
+  };
+  proto._aiSign = function (t, p, per, y, d) {   // 입찰 금액으로 계약(여유자금·로스터 확인). 성공 여부 반환
+    const S = this.S, bon = Math.round(per * y * BONUS_SHARE * 10) / 10, sal = Math.ceil(((per * y - bon) / y) * 10 - 1e-9) / 10;
+    if (S.teams[t].ids.length >= ROSTER_MAX - 2 || this.faRoom(t) < sal + bon / y) return false;
+    const g = p.faInfo && p.faInfo.grade, from = p.faInfo && p.faInfo.from;
+    this._doSign(t, p, y, sal, bon); this.refreshTeam(t);
+    const text = `FA ${p.ko}(${from ? KO0[from] + ' ' : ''}${g ? g + '등급' : ''}) → ${KO0[t]} (${y}년 총 ${(per * y).toFixed(1)}억, 계약금 ${bon.toFixed(1)})`;
+    (S.faLog = S.faLog || []).unshift({ year: S.year, day: d, text }); if (S.faLog.length > 40) S.faLog.pop(); news(this, text); return true;
+  };
+  proto._postBids = function (d) {
+    const S = this.S, m = S.faMkt, pool = this.faList().filter(p => !p.foreign && this.war(p) >= 1.0).sort((a, b) => this.war(b) - this.war(a)).slice(0, 30); if (!pool.length) return;
+    const pr = 0.02 + 0.3 * Math.exp(-d / 12), r = rngFor(S.seed, S.year, 7000 + d, 5000), teams = TEAMS.filter(t => t !== S.userTeam).sort(() => r.random() - 0.5);
+    for (const t of teams) {
+      if (r.random() > pr) continue;
+      if (this._faCount(t) >= EXT_LIMIT || S.teams[t].ids.length >= ROSTER_MAX - 4) continue;
+      if (pool.filter(p => (m.bids[p.id] || []).some(b => b.team === t)).length >= 2) continue;   // 동시 입찰 2명까지
+      for (const p of pool) {
+        if (p.team !== 'FA' || (m.bids[p.id] || []).some(b => b.team === t)) continue;
+        const g = p.faInfo && p.faInfo.grade; if (g && p.faInfo.from !== t && this._faCount(t) >= EXT_LIMIT) continue;
+        if (!(r.random() < (this.war(p) >= 2 ? 0.7 : 0.45))) continue;
+        const deal = this._aiDeal(t, p); if (!deal) continue;
+        (m.bids[p.id] = m.bids[p.id] || []).push({ team: t, per: Math.round(deal.per * 100) / 100, ceil: Math.round(deal.per * (1.02 + 0.1 * r.random()) * 100) / 100, y: deal.years, day: d }); break;
+      }
+    }
+  };
+  proto._userSignPend = function (p, pe) {   // 보류 제시가 이기면 계약(예산·인원 재확인)
+    const S = this.S, t = S.userTeam, tm = this.faTerms(p, t), per = (pe.bonus + pe.salary * pe.years) / pe.years;
+    if (S.teams[t].ids.length >= ROSTER_MAX || this.faRoom(t) < pe.salary + pe.bonus / pe.years || (tm.ext && this._faCount(t) >= EXT_LIMIT) || per + 1e-9 < tm.req(pe.years)) return false;
+    this._doSign(t, p, pe.years, pe.salary, pe.bonus);
+    news(this, `FA ${p.ko} 영입 — 경쟁 끝에 계약 (${pe.years}년 총 ${(per * pe.years).toFixed(1)}억 = 계약금 ${pe.bonus.toFixed(1)} + 연봉 ${pe.salary.toFixed(1)}×${pe.years})`); return true;
+  };
+  proto._resolveBids = function (d, force) {
+    const S = this.S, m = S.faMkt; if (!m) return; const r = rngFor(S.seed, S.year, 7500 + d, 5001);
+    for (const id of Object.keys(m.bids)) {
+      const p = S.players[id]; if (!p || p.team !== 'FA') { delete m.bids[id]; delete m.pend[id]; continue; }
+      const bs = m.bids[id];
+      for (const b of bs) if (b.per < b.ceil && r.random() < 0.5) b.per = Math.min(b.ceil, Math.round(b.per * 1.03 * 100) / 100);   // 경쟁이 붙으면 상한까지 올린다
+      let best = this._bestBid(id); if (!best) { delete m.bids[id]; continue; }
+      const pe = m.pend[id];
+      if (pe && pe.day + 5 < d) { delete m.pend[id]; news(this, `${p.ko}에 대한 내 제시가 만료되었습니다.`); }
+      else if (pe && this._offerScore(p, S.userTeam, pe.years, pe.salary, pe.bonus) >= best.score - 1e-9 && this._userSignPend(p, pe)) { delete m.bids[id]; delete m.pend[id]; continue; }
+      const age = d - best.b.day; if (age < 1 && !force) continue;
+      if (force || r.random() < Math.min(0.85, this.war(p) >= 2 ? 0.1 + 0.1 * age : 0.25 + 0.2 * age)) {
+        const lost = !!m.pend[id];
+        if (this._aiSign(best.b.team, p, best.b.per, best.b.y, d)) { if (lost) news(this, `${p.ko}은(는) ${KO0[best.b.team]}과 계약했습니다. 내 제시는 경쟁에서 밀렸습니다.`); delete m.bids[id]; delete m.pend[id]; }
+        else m.bids[id] = bs.filter(x => x !== best.b);   // 여유자금·로스터 부족으로 입찰 철회
+        if (m.bids[id] && !m.bids[id].length) delete m.bids[id];
+      }
+    }
+  };
+  /* FA 시장 n일 진행(1월 1일 기준). 반환: 진행한 일수 */
+  proto.faAdvance = function (n) {
+    const m = this.S.faMkt; if (!m || m.closed) return 0; let k = 0;
+    while (k < n && m.day < FA_END) { this._postBids(m.day); this._resolveBids(m.day, false); m.day++; k++; }
+    this.invalidate(); return k;
+  };
+  /* FA 마감(개막 전): 입찰 중인 계약을 확정하고 AI가 남은 FA·로스터를 정리한다 */
+  proto.closeFA = function () {
+    const S = this.S, m = S.faMkt;
+    if (m && !m.closed) { this._resolveBids(m.day, true); this.finishFA(); m.closed = true; for (const id in m.pend) delete m.pend[id]; this.invalidate(); }
+    else if (!m) this.finishFA();
+    if (S.phase !== 'offseason') S.faMkt = null;
+  };
+
   /* ---------------- 새 시즌 ---------------- */
   proto.ensureActive = function (t) {   // 1군 28명 유지(부족하면 가치 높은 선수로 채움, 초과하면 낮은 순으로 내림)
     const S = this.S, P = this.players(t);
@@ -610,7 +710,7 @@
     this.invalidate();
   };
   proto.startNewSeason = function () {
-    const S = this.S; S.year += 1; S.off = null; S.fa = (S.fa || []);
+    const S = this.S; S.year += 1; S.off = null; S.faMkt = null; S.fa = (S.fa || []);
     for (const id in S.players) if (S.players[id].retired || S.players[id].team === 'RET') delete S.players[id];   // 은퇴·이탈 선수 정리(저장 용량)
     this.finishFA === undefined; const adj = this.normalizeTalent(); S.lastAdj = adj;
     for (const t of TEAMS) if (t === S.userTeam) this.ensureActive(t);

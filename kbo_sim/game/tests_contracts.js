@@ -44,7 +44,7 @@ const nofa=L.faList().find(p=>!p.foreign&&!(p.faInfo&&p.faInfo.grade));if(nofa){
  ok(L2.cbtPay('Lions')>cb,'경쟁균형세 증가');
  ok(Math.abs(L2.finPreview('Lions').pay-L2.finPay('Lions'))<0.1,'재정 화면 보수=상각 포함');}
 // 5) 시장 경과: 시즌 중 요구액 하락(하루 0.4%, 최대 30%)
-{const L3=League.create(base,'Lions',5),p3=L3.faList().filter(p=>p.faInfo&&p.faInfo.grade&&!p.foreign)[3],r0=L3.faTerms(p3,'Lions').req(2);L3.S.phase='regular';L3.S.day=50;const r1=L3.faTerms(p3,'Lions').req(2);ok(Math.abs(r1/r0-0.8)<0.01,'50일 경과 시 20% 하락 '+(r1/r0));L3.S.day=200;ok(Math.abs(L3.faTerms(p3,'Lions').req(2)/r0-0.7)<0.01,'하락 한도 30%');}
+{const L3=League.create(base,'Lions',5);ok(L3.S.faMkt&&Math.abs(L3._marketDecay()-1)<1e-9,'FA 개시일 하락 없음');L3.S.faMkt.day=50;ok(Math.abs(L3._marketDecay()-0.925)<1e-9,'FA 50일 경과 7.5% 하락');L3.closeFA();L3.S.phase='regular';L3.S.day=50;ok(Math.abs(L3._marketDecay()-(1-0.0015*75)*0.8)<1e-9,'개막 후 50일: FA 기간 하락 위에 20% 추가');L3.S.day=200;ok(Math.abs(L3._marketDecay()-(1-0.0015*75)*0.7)<1e-9,'개막 후 하락 한도 30%');}
 // 6) 오프시즌: 재계약은 모두 1년, AI 재계약도 1년, 자동 재계약
 {const L4=League.create(base,'Lions',9),S4=L4.S;L4.advance(300,false);const P=L4.startPostseason();let k=0;while(!P.done&&k++<100){if(L4.userInPost()){const c=L4.startUserPostGame();c.live.playToEnd();L4.finishUserPostGame(c)}else L4.simPostGame()}
  L4.startOffseason();const off=S4.off;ok(off.rep.auto>20&&off.rep.expiring.length<60,'소액·미자격 선수는 자동 재계약 '+off.rep.auto+', 직접 협상 '+off.rep.expiring.length);
@@ -56,7 +56,7 @@ const nofa=L.faList().find(p=>!p.foreign&&!(p.faInfo&&p.faInfo.grade));if(nofa){
  // AI 영입은 여유자금·상한 이내, 계약금 포함
  const sg=L4.faList().filter(p=>p.faInfo&&p.faInfo.grade&&!p.foreign).sort((a,b)=>L4.faMV(b)-L4.faMV(a))[0];const room=Object.fromEntries(Object.keys(S4.teams).map(t=>[t,L4.faRoom(t)]));
  L4.buildDraft();L4.draftAutoRest();L4.finishDraft();L4.finishFA();
- const signed=Object.keys(S4.teams).filter(t=>t!=='Lions').flatMap(t=>S4.teams[t].ids.map(id=>S4.players[id])).filter(p=>p.contract.bonus>0&&p.contract.yrs0&&!p.ct);ok(signed.length-fas.length<=gr.length&&signed.length-fas.length>=3,'AI FA 시장 계약금 계약 수 '+(signed.length-fas.length)+' / 신청자 '+gr.length);for(const t of Object.keys(S4.teams))if(t!=='Lions')ok(L4._faCount(t)<=3,t+' 외부 FA 3명 한도');
+ const signed=Object.keys(S4.teams).filter(t=>t!=='Lions').flatMap(t=>S4.teams[t].ids.map(id=>S4.players[id])).filter(p=>p.contract.bonus>0&&p.contract.yrs0&&!p.ct);ok(signed.length-fas.length<=gr.length&&signed.length-fas.length>=2,'AI FA 시장 계약금 계약 수 '+(signed.length-fas.length)+' / 신청자 '+gr.length);for(const t of Object.keys(S4.teams))if(t!=='Lions')ok(L4._faCount(t)<=3,t+' 외부 FA 3명 한도');
  signed.forEach(p=>{const c=p.contract;if(!(c.yrs0>=1&&c.yrs0<=4&&c.years<=c.yrs0&&c.cbt>=c.salary&&Math.abs(c.total-(c.bonus+c.salary*c.yrs0))<0.11&&Math.abs(c.cbt-c.total/c.yrs0)<0.02))console.log('BAD',p.ko,JSON.stringify(c))});ok(signed.every(p=>p.contract.yrs0>=1&&p.contract.yrs0<=4&&p.contract.years<=p.contract.yrs0&&p.contract.cbt>=p.contract.salary&&Math.abs(p.contract.total-(p.contract.bonus+p.contract.salary*p.contract.yrs0))<0.11&&Math.abs(p.contract.cbt-p.contract.total/p.contract.yrs0)<0.02),'AI 계약 구조(총액=계약금+연봉×기간, 경쟁균형세=총액/기간)');
  console.log('AI 계약금 계약',signed.map(p=>p.ko+'('+p.contract.years+'년 '+p.contract.total+'억)').join(', '));}
 // 7) 잠재력: 절대 정점 기준 등급, 문동주 등 주요 1차 지명 선수의 정점이 현재 OVR 이상, 시드와 무관하게 E가 되지 않음

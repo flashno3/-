@@ -49,11 +49,11 @@ const young=dh.filter(p=>p.peak!==undefined&&p.age<=24);ok(young.length>20&&youn
  ok(mk.every(p=>LM.faEligible(p)&&!SM.teams[p.faInfo.from].ids.includes(p.id)),'자격 보유·원소속 명단에서 제외');
  // 사용자(삼성)도 협상 가능: 원태인(원소속) 재영입은 보상 없음, 외부 FA는 3명 한도
  SM.fin.teams.Lions.lastRev+=40;const wt=mk.find(p=>p.ko==='원태인');ok(LM.signFA(wt.id,3)===null&&wt.team==='Lions'&&!(SM.compLog||[]).some(c=>c.id===wt.id),'원소속 재계약은 보상 없음');
- LM.advance(40,false);const left=LM.faList().filter(p=>!p.foreign&&p.faInfo&&p.faInfo.grade).length;ok(left<20&&left>=3,'40경기일 후 AI가 일부 영입 '+left);
+ ok(LM.S.faMkt&&LM.S.faMkt.day===0&&LM.faDateStr(0)==='1월 1일','FA 협상은 1월 1일에 시작');LM.faAdvance(40);ok(LM.S.faMkt.day===40&&LM.S.day===0&&LM.S.phase==='preseason','FA 40일 진행(시즌은 개막 전)');const left=LM.faList().filter(p=>!p.foreign&&p.faInfo&&p.faInfo.grade).length;ok(left<20&&left>=3,'40일 후 AI가 일부 영입 '+left);
  ok((SM.faLog||[]).length>0&&(SM.compLog||[]).length>0,'계약·보상 기록');
  for(const tm of Object.keys(SM.teams)){ok(LM._faCount(tm)<=3,tm+' 외부 FA 3명 한도')}}
 // 2) 시즌 진행 → 1군 등록일수 누적
-L.advance(300,false);const reg=Object.values(S.players).filter(p=>p.active&&p.team in S.teams);const rd=reg.map(p=>p.fa.regDays||0).sort((a,b)=>a-b);ok(reg.length>250&&rd[rd.length>>1]>150&&rd.filter(x=>x>140).length/rd.length>0.55,'1군 풀타임 등록일수 누적(약 168일) 중앙값 '+Math.round(rd[rd.length>>1]));
+L.faAdvance(75);L.advance(300,false);const reg=Object.values(S.players).filter(p=>p.active&&p.team in S.teams);const rd=reg.map(p=>p.fa.regDays||0).sort((a,b)=>a-b);ok(reg.length>250&&rd[rd.length>>1]>150&&rd.filter(x=>x>140).length/rd.length>0.55,'1군 풀타임 등록일수 누적(약 168일) 중앙값 '+Math.round(rd[rd.length>>1]));
 const before=reg.slice(0,40).map(p=>[p,p.fa.svc]);
 const P=L.startPostseason();let g=0;while(!P.done&&g++<100){if(L.userInPost()){const c=L.startUserPostGame();c.live.playToEnd();L.finishUserPostGame(c)}else L.simPostGame()}
 L.startOffseason();ok(before.every(([p,s])=>p.team==='RET'||p.fa.svc>=s+1-1e-9||p.team==='FA'||p.age>0),'시즌 종료 후 자격 연수 +1');

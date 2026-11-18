@@ -55,7 +55,8 @@
       if (L._addDraftClass) L._addDraftClass(base.draft2027);   // 2027 신인 드래프트 지명 결과(실제 지명·가상 능력치)
       for (const t of TEAMS) L.initTeam(t);
       if (L._initFinance) L._initFinance(base.finance);   // 재정: 초기 보수 합계로 운영비를 역산
-      if (L._initCoaches) L._initCoaches(base.coaches || []);   // 코칭스태프(보도 기반 일부 + 가상)
+      if (L._initCoaches) L._initCoaches(base.coaches || []);
+      if (L.openFAMarket) L.openFAMarket();   // 2027 FA 협상 기간: 1월 1일 시작   // 코칭스태프(보도 기반 일부 + 가상)
       S.calib.base = L.talentLevel(undefined, true);
       L.newSeasonSetup(true);
       return L;
@@ -609,7 +610,7 @@
       });
       this.mergeTracking();
       for (const o of others) this.commit(o.home, o.away, o.rh, o.ra, { spH: o.spH, spA: o.spA });
-      this._decayFatigue(); this._tickService(); if (this._faMarketDay) this._faMarketDay(d); if (this._injuryDay) this._injuryDay(d); this.playFutures(d); this.returnMilitary(this.milYM(d));
+      this._decayFatigue(); this._tickService(); if (this._injuryDay) this._injuryDay(d); this.playFutures(d); this.returnMilitary(this.milYM(d));
       if (!ug) { S.day++; return { status: 'ok', day: d }; }
       if (live) { S.pendingDay = d; return { status: 'userGame', day: d, game: ug.g, idx: ug.i }; }
       const L = this.startUserGame(ug.g, ug.i); L.live.playToEnd(); const res = this.finishUserGame(L);
@@ -617,6 +618,7 @@
     }
     /* N일 또는 시즌 끝까지. live 모드에서는 내 경기에서 멈춘다. */
     advance(days, live) {
+      if (this.S.faMkt && this.closeFA) this.closeFA();   // 개막과 함께 FA 협상 마감
       let n = 0; const out = [];
       while (n < days && this.S.day < this.S.schedule.length) { const r = this.playDay(live); out.push(r); n++; if (r.status === 'userGame') return { status: 'userGame', ...r, played: n - 1 }; }
       if (this.S.day >= this.S.schedule.length) { this.S.phase = 'regular_done'; return { status: 'seasonEnd', played: n }; }

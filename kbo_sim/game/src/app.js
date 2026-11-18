@@ -96,7 +96,8 @@
     const live = (S.phase === 'regular' || S.phase === 'preseason');
     const rows = st.map(x => `<tr class="${x.team === U() ? 'me' : ''} ${x.rank === 5 ? 'cut' : ''}"><td class="l n">${x.rank}</td><td class="l">${teamTag(x.team)}</td><td class="n">${x.w}-${x.l}${x.d ? '-' + x.d : ''}</td><td class="n">${pct3(x.pct)}</td><td class="n ${x.rs - x.ra >= 0 ? 'pos' : 'neg'}">${sgn(x.rs - x.ra)}</td></tr>`).join('');
     const news = S.news.slice(0, 8).map(n => `<li><span class="d">${n.year}</span><span>${esc(n.text)}</span></li>`).join('') || '<li class="muted">아직 소식이 없습니다.</li>';
-    const act = live ? `<div class="card"><h2>진행</h2><div class="row"><label class="row" style="gap:6px"><input type="checkbox" id="liveMode" ${ui.liveMode ? 'checked' : ''}>내 경기는 직접 지휘</label><span class="sp"></span>
+    const fam = S.faMkt && !S.faMkt.closed && S.phase === 'preseason';
+    const act = fam ? `<div class="card"><h2>FA 협상 기간 · ${L.faDateStr(S.faMkt.day)}</h2><div class="small muted">시즌 개막 전에 FA 계약을 마무리해야 합니다. 개막 ${L.faDaysLeft()}일 전 — 날짜를 하루씩 진행하며 경쟁 구단의 입찰을 보고 금액을 조정하세요.</div><div class="row" style="margin-top:8px"><button class="primary" data-act="openFAMarket">FA 시장 열기</button></div></div>` : live ? `<div class="card"><h2>진행</h2><div class="row"><label class="row" style="gap:6px"><input type="checkbox" id="liveMode" ${ui.liveMode ? 'checked' : ''}>내 경기는 직접 지휘</label><span class="sp"></span>
       <button data-act="adv" data-a="1">${ui.liveMode ? '경기 시작' : '하루 진행'}</button><button data-act="advAuto" data-a="7">1주 자동</button><button data-act="advAuto" data-a="30">1개월 자동</button><button data-act="advAuto" data-a="999">시즌 끝까지</button></div>
       <p class="small muted" style="margin:8px 0 0">직접 지휘를 켜면 내 경기 직전에 멈춰 타석 단위로 진행합니다. 자동 진행은 설정한 라인업·로테이션·불펜대로 경기를 처리합니다.</p></div>` : '';
     const nxt = ng.length ? `<div class="card"><h2>다음 경기</h2><div class="tablewrap"><table><tbody>${ng.map((g, i) => { const opp = g.home === U() ? g.away : g.home; return `<tr><td class="l">${L.dateStr(g.day)}</td><td class="l">${g.home === U() ? '홈' : '원정'} ${teamTag(opp)}</td><td class="l small muted">${PARK[g.home]}</td>${i === 0 ? `<td class="l small">선발 <b>${esc(nextSp.ko)}</b></td>` : '<td></td>'}</tr>`; }).join('')}</tbody></table></div></div>` : '';
@@ -356,16 +357,30 @@
     return `<div class="card" style="border-left:4px solid var(--warn,#d97706);margin:8px 0"><b>부상자 명단</b> · ${esc(p.inj.dx)}<div class="small">${esc(p.inj.since)} · 복귀 예정 <b>${L.injDateStr(p)}</b> (${L.injLeft(p)}일 남음)</div><div class="small muted">${esc(p.inj.basis || '')}${p.inj.generated ? '' : ' — 복귀 시점은 보도 기반 추정이며, 재활 경과에 따라 달라질 수 있습니다.'}</div></div>${p.prev ? prev : ''}`;
   }
   function injChip(p) { if (!L.isInj(p)) return ''; const n = L.injLeft(p); return ` <span class="chip warn" title="${esc(p.inj.dx)} · ${esc(p.inj.basis || '')} · 복귀 예정 ${L.injDateStr(p)}">부상 ~${L.injDateStr(p).slice(2)} (${n}일)</span>`; }
+  function bidCell(bi) {
+    if (!bi) return '<span class="muted">-</span>';
+    const pe = bi.pend ? `<div class="pos"><b>내 제시 보류 중</b> (연 ${f1((bi.pend.bonus + bi.pend.salary * bi.pend.years) / bi.pend.years)}억 × ${bi.pend.years}년 · ${bi.pendLeft}일 남음)</div>` : '';
+    if (!bi.n) return `<span class="muted">입찰 없음</span>${pe}`;
+    return `<b>${bi.n}개 구단 경쟁</b>${bi.bids.slice(0, 3).map(b => `<div>${KO[b.team]} 연 ${b.per.toFixed(2)}억 × ${b.y}년</div>`).join('')}${pe}`;
+  }
+  function faCalendar() {
+    const S = L.S, m = S.faMkt; if (!m) return '';
+    if (m.closed) return `<div class="card"><b>FA 협상 마감</b> <span class="muted small">— 개막 전 FA 계약이 모두 정리되었습니다. 남은 선수는 시장에서 계속 영입할 수 있습니다.</span></div>`;
+    const left = L.faDaysLeft(), log = (S.faLog || []).filter(x => x.year === S.year).slice(0, 5).map(x => `<li><span class="d">${L.faDateStr(x.day)}</span><span>${esc(x.text)}</span></li>`).join('');
+    return `<div class="card"><div class="row"><h2>FA 협상 기간</h2><b>${L.faDateStr(m.day)}</b><span class="muted small">(1월 1일 개시 · 개막 전 ${left}일 남음 · ${L.faDateStr(75)}까지)</span><span class="sp"></span>
+      <button data-act="faDay" data-a="1" ${left <= 0 ? 'disabled' : ''}>+1일</button><button data-act="faDay" data-a="3" ${left <= 0 ? 'disabled' : ''}>+3일</button><button data-act="faDay" data-a="7" ${left <= 0 ? 'disabled' : ''}>+7일</button><button class="primary" data-act="faClose">FA 마감${S.phase === 'offseason' ? '' : ' · 개막'}</button></div>
+      <div class="small muted" style="margin-top:6px">AI 구단은 관심 선수에게 입찰하고 매일 상한까지 금액을 올립니다. 선수는 <b>연 보수(계약금 비중 선호) · 선호 기간 · 원소속 구단(+2%)</b>을 종합해 점수가 가장 높은 제시를 수락합니다. 내 제시가 경쟁 입찰보다 낮으면 5일간 보류되어 매일 재평가되므로, 금액을 올려 다시 제시하거나 '경쟁 이기는 제시'를 사용하세요. FA 마감 시 입찰 중인 계약이 확정되고 AI가 로스터를 정리합니다.</div>${log ? `<ul class="news" style="margin-top:6px">${log}</ul>` : ''}</div>`;
+  }
   function screenFA() {
-    const S = L.S, list = L.faList().sort((a, b) => ui.faSort === 'ovr' ? L.ovr(b) - L.ovr(a) : ui.faSort === 'age' ? a.age - b.age : L.war(b) - L.war(a)).slice(0, 80);
+    const S = L.S, mk = !!(S.faMkt && !S.faMkt.closed), list = L.faList().sort((a, b) => ui.faSort === 'ovr' ? L.ovr(b) - L.ovr(a) : ui.faSort === 'age' ? a.age - b.age : L.war(b) - L.war(a)).slice(0, 80);
     const rows = list.map(p => {
-      const tm = L.faTerms(p, U()), fr = p.foreign, o = fr ? null : L.faDefaultOffer(p, U()), per = o ? (o.bonus + o.salary * o.years) / o.years : 0;
+      const tm = L.faTerms(p, U()), fr = p.foreign, o = fr ? null : Object.assign(L.faDefaultOffer(p, U()), (ui.faIn || {})[p.id] || {}), per = o ? (o.bonus + o.salary * o.years) / o.years : 0, bi = fr || !tm.graded ? null : L.faBidInfo(p.id);
       const req = fr ? `<td class="n">${money(Math.min(L.askSalary(p), L.foreignCap(p, U())))}</td><td class="small muted">외국인 1년</td>` : tm.graded ? `<td class="n">${f1(tm.req(tm.pref))}<div class="small muted">시장가 ${f1(tm.mv)}${tm.ext ? ' · 이적 +4%' : ''}${tm.comp > 1 ? ' · 경쟁 +' + Math.round((tm.comp - 1) * 1000) / 10 + '%' : ''}</div></td><td class="small muted">${tm.pref}년 선호 · 총 ${f1(tm.req(tm.pref) * tm.pref)}억</td>` : `<td class="n">${f1(tm.req(1))}</td><td class="small muted">1년 계약만 가능(FA 자격 없음)</td>`;
       const offer = fr ? `<button class="sm primary" data-act="signFA" data-a="${p.id}">영입</button>` : `<select data-sel="fayears" data-a="${p.id}" ${tm.graded ? '' : 'disabled'}>${Array.from({ length: tm.maxYears }, (_, i) => i + 1).map(y => `<option value="${y}" ${y === o.years ? 'selected' : ''}>${y}년</option>`).join('')}</select> 연봉 <input class="num" type="number" step="0.1" min="0.3" style="width:64px" data-sel="fasal" data-a="${p.id}" value="${o.salary}"> ${tm.graded ? `계약금 <input class="num" type="number" step="0.1" min="0" style="width:64px" data-sel="fabonus" data-a="${p.id}" value="${o.bonus}">` : ''} <button class="sm primary" data-act="signFA" data-a="${p.id}">제시</button>`;
-      return `<tr><td class="l"><b>${esc(p.ko)}</b></td><td class="l">${pos(p)}</td><td class="n">${p.age}</td><td>${ovrChip(L.ovr(p))}</td><td class="l">${faChip(p)}${p.faInfo && p.faInfo.from ? ` <span class="muted small">${KO[p.faInfo.from] || ''}</span>` : ''}</td><td class="l">${subHtml(p)}</td>${req}<td>${offer}</td></tr>`;
+      return `<tr><td class="l"><b>${esc(p.ko)}</b></td><td class="l">${pos(p)}</td><td class="n">${p.age}</td><td>${ovrChip(L.ovr(p))}</td><td class="l">${faChip(p)}${p.faInfo && p.faInfo.from ? ` <span class="muted small">${KO[p.faInfo.from] || ''}</span>` : ''}</td><td class="l">${subHtml(p)}</td>${req}${mk ? `<td class="l small">${bidCell(bi)}</td>` : ''}<td>${offer}${bi && bi.best ? ` <button class="sm" data-act="faBeat" data-a="${p.id}" title="경쟁 입찰을 넘는 최소 제시를 입력칸에 채웁니다">경쟁 이기는 제시</button>` : ''}</td></tr>`;
     }).join('');
-    return `<div class="card"><div class="row"><h2>FA 시장</h2><span class="muted small">${cbtText(U())} · FA 여유자금 ${L.faRoom(U()).toFixed(1)}억 · 보유 ${S.teams[U()].ids.length}명 · 외부 FA ${L._faCount(U())}/3 · 외국인 일반 ${L.foreignOf(U()).filter(x => !x.aq).length}/3 + AQ ${L.foreignOf(U()).filter(x => x.aq).length}/1</span><span class="sp"></span><select data-sel="fasort"><option value="war" ${ui.faSort === 'war' ? 'selected' : ''}>가치순</option><option value="ovr" ${ui.faSort === 'ovr' ? 'selected' : ''}>능력치순</option><option value="age" ${ui.faSort === 'age' ? 'selected' : ''}>나이순</option></select></div>
-      ${list.length ? `<div class="tablewrap"><table><thead><tr><th class="l">선수</th><th class="l">포지션</th><th>나이</th><th>OVR</th><th class="l">FA 등급·원소속</th><th class="l">세부 능력</th><th>요구 연 보수(억)</th><th class="l">요구 조건</th><th class="l">제시 (연 보수 = 연봉 + 계약금 ÷ 기간)</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="muted">시장에 나온 FA가 없습니다. 오프시즌에 계약이 끝난 선수가 시장에 나옵니다.</p>'}</div>`;
+    return `${faCalendar()}<div class="card"><div class="row"><h2>FA 시장</h2><span class="muted small">${cbtText(U())} · FA 여유자금 ${L.faRoom(U()).toFixed(1)}억 · 보유 ${S.teams[U()].ids.length}명 · 외부 FA ${L._faCount(U())}/3 · 외국인 일반 ${L.foreignOf(U()).filter(x => !x.aq).length}/3 + AQ ${L.foreignOf(U()).filter(x => x.aq).length}/1</span><span class="sp"></span><select data-sel="fasort"><option value="war" ${ui.faSort === 'war' ? 'selected' : ''}>가치순</option><option value="ovr" ${ui.faSort === 'ovr' ? 'selected' : ''}>능력치순</option><option value="age" ${ui.faSort === 'age' ? 'selected' : ''}>나이순</option></select></div>
+      ${list.length ? `<div class="tablewrap"><table><thead><tr><th class="l">선수</th><th class="l">포지션</th><th>나이</th><th>OVR</th><th class="l">FA 등급·원소속</th><th class="l">세부 능력</th><th>요구 연 보수(억)</th><th class="l">요구 조건</th>${mk ? '<th class="l">경쟁 현황</th>' : ''}<th class="l">제시 (연 보수 = 연봉 + 계약금 ÷ 기간)</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="muted">시장에 나온 FA가 없습니다. 오프시즌에 계약이 끝난 선수가 시장에 나옵니다.</p>'}</div>`;
   }
 
   /* ---------------- 오프시즌 ---------------- */
@@ -612,8 +627,8 @@
     setExc() { const el = $('[data-sel="excsel"]'); if (!el) return; const e = L.setCbtExc(el.value); if (e) toast(e); else { toast('예외 선수를 지정했습니다.'); autosave(); } render(); },
     ticket(a) { if (L.setTicketPolicy(U(), +a)) { toast(`티켓 가격 ${+a === 1 ? '유지' : (+a > 1 ? '+' : '') + Math.round((+a - 1) * 100) + '%'}`); autosave(); render(); } },
     go(a) { ui.screen = a; ui.modal = null; render(); window.scrollTo(0, 0); },
-    adv(a) { const live = ui.liveMode && (L.S.phase === 'preseason' || L.S.phase === 'regular'), before = snapshot(), r = L.advance(+a, live); if (r.status === 'userGame') { afterAdvance(r); return; } if (r.status === 'seasonEnd') toast('정규시즌이 끝났습니다.'); openResultSheet(before); autosave(); render(); },
-    advAuto(a) { const before = snapshot(), r = L.advance(+a, false); openResultSheet(before); if (r.status === 'seasonEnd') toast('정규시즌이 끝났습니다.'); autosave(); render(); },
+    adv(a) { if (L.S.faMkt && !L.S.faMkt.closed) { toast('FA 협상 기간입니다. 이적시장 > FA 시장에서 날짜를 진행하거나 FA를 마감하세요.'); ui.screen = 'market'; ui.market = 'fa'; render(); return; } const live = ui.liveMode && (L.S.phase === 'preseason' || L.S.phase === 'regular'), before = snapshot(), r = L.advance(+a, live); if (r.status === 'userGame') { afterAdvance(r); return; } if (r.status === 'seasonEnd') toast('정규시즌이 끝났습니다.'); openResultSheet(before); autosave(); render(); },
+    advAuto(a) { if (L.S.faMkt && !L.S.faMkt.closed) { toast('FA 협상 기간입니다. 이적시장 > FA 시장에서 날짜를 진행하거나 FA를 마감하세요.'); ui.screen = 'market'; ui.market = 'fa'; render(); return; } const before = snapshot(), r = L.advance(+a, false); openResultSheet(before); if (r.status === 'seasonEnd') toast('정규시즌이 끝났습니다.'); autosave(); render(); },
     startPost() { const my = L.standings().find(x => x.team === U()); L.startPostseason(); if (my.rank > 5) { while (!L.S.post.done) L.simPostGame(); } autosave(); render(); },
     postNext() { if (L.userInPost()) { ui.liveMode ? A.postLive() : A.postAuto(); return; } const r = L.simPostGame(); if (r) openPostSheet([r]); autosave(); render(); },
     postAll() { let n = 0; const list = []; while (!L.S.post.done && !L.userInPost() && n++ < 40) { const r = L.simPostGame(); if (r) list.push(r); } if (list.length) openPostSheet(list); autosave(); render(); },
@@ -634,15 +649,19 @@
     tgive(a, el) { ui.trade.give[el.checked ? 'add' : 'delete'](a); render(); }, tget(a, el) { ui.trade.get[el.checked ? 'add' : 'delete'](a); render(); },
     clearTrade() { ui.trade.give.clear(); ui.trade.get.clear(); render(); },
     doTrade() { const T = ui.trade, r = L.executeTrade(T.team, [...T.give], [...T.get]); if (r.ok) { toast('트레이드가 성사되었습니다. 영입한 선수는 2군에 있으니 1군에 등록하세요.'); T.give.clear(); T.get.clear(); autosave(); } else toast(r.why || '트레이드가 거절되었습니다.'); render(); },
-    signFA(a) { const q = k => $(`[data-sel="${k}"][data-a="${a}"]`), y = q('fayears'), sal = q('fasal'), bon = q('fabonus'), e = L.signFA(a, y && sal ? { years: +y.value, salary: +sal.value, bonus: bon ? +bon.value : 0 } : undefined); if (e) toast(e); else { toast(`${P(a).ko} 영입 완료. 2군에 등록되었습니다.`); autosave(); } render(); },
+    openFAMarket() { ui.screen = 'market'; ui.market = 'fa'; render(); window.scrollTo(0, 0); },
+    faDay(a) { const k = L.faAdvance(+a); toast(L.S.faMkt ? `${L.faDateStr(L.S.faMkt.day)}가 되었습니다.` : ''); if (k) autosave(); render(); },
+    faClose() { L.closeFA(); toast('FA 협상을 마감했습니다.'); autosave(); render(); },
+    faBeat(a) { const p = P(a), q = k => $(`[data-sel="${k}"][data-a="${a}"]`), y = q('fayears'), b = L.faBeat(p, U(), y ? +y.value : undefined); (ui.faIn = ui.faIn || {})[a] = { years: b.years, salary: b.salary, bonus: b.bonus }; render(); },
+    signFA(a) { const q = k => $(`[data-sel="${k}"][data-a="${a}"]`), y = q('fayears'), sal = q('fasal'), bon = q('fabonus'), e = L.signFA(a, y && sal ? { years: +y.value, salary: +sal.value, bonus: bon ? +bon.value : 0 } : undefined); (ui.faIn = ui.faIn || {})[a] = y && sal ? { years: +y.value, salary: +sal.value, bonus: bon ? +bon.value : 0 } : undefined; if (e) { toast(e); autosave(); } else { delete ui.faIn[a]; toast(`${P(a).ko} 영입 완료. 2군에 등록되었습니다.`); autosave(); } render(); },
     resignAll() { const n = L.resignAll(); toast(`${n}명 재계약했습니다.`); autosave(); render(); },
     resign(a) { const e = L.resign(a); if (e) toast(e); else autosave(); render(); },
     toDraft() { L.finishContracts(); L.buildDraft(); L.draftAiUntilUser(); L.S.off.step = 'draft'; autosave(); render(); },
     draftPick(a) { const e = L.draftPick(a); if (e) toast(e); else { L.draftAiUntilUser(); autosave(); } render(); },
     draftSim() { L.draftAiUntilUser(); render(); },
     draftAuto() { L.draftAutoRest(); autosave(); render(); },
-    toFA() { L.finishDraft(); L.S.off.step = 'fa'; ui.market = 'fa'; autosave(); render(); },
-    toSeason() { L.finishFA(); L.startNewSeason(); ui.screen = 'home'; autosave(); render(); window.scrollTo(0, 0); },
+    toFA() { L.finishDraft(); L.openFAMarket(); L.S.off.step = 'fa'; ui.market = 'fa'; autosave(); render(); },
+    toSeason() { L.closeFA(); L.startNewSeason(); ui.faIn = {}; ui.screen = 'home'; autosave(); render(); window.scrollTo(0, 0); },
     importHands() { const t = ($('#handsText') || {}).value; if (!t || !t.trim()) return toast('붙여넣은 내용이 없습니다.'); const r = L.importHands(t); autosave(); render(); toast(`투타 ${r.applied}명 적용${r.ambiguous.length ? ' · 동명이인 ' + r.ambiguous.length + '명은 팀 이름이 필요합니다(' + [...new Set(r.ambiguous)].slice(0, 4).join(', ') + ')' : ''}${r.missing.length ? ' · 찾지 못한 이름 ' + r.missing.length + '줄' : ''}`); },
     handTemplate() { const t = L.handTemplate(); ui.handsText = t; try { navigator.clipboard.writeText(t).then(() => toast('입력 양식을 복사했습니다. 이름,팀,구분 뒤에 투타(예: 우투우타)를 적어 붙여넣으세요.'), () => toast('텍스트를 직접 복사하세요.')); } catch (e) { toast('텍스트를 직접 복사하세요.'); } },
     saveNow() { if (store.set(SAVE_KEY, L.save())) toast('저장했습니다.'); else toast('이 환경에서는 저장할 수 없습니다. 백업 텍스트를 사용하세요.'); },
