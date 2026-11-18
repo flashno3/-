@@ -69,7 +69,7 @@ ok(S.nextId>Math.max(...Object.keys(S.players).map(id=>parseInt(id.slice(1)))),'
  const hd=SC.fa.map(id=>SC.players[id]).find(p=>p.ko==='함덕주');ok(hd&&hd.team==='FA','함덕주 FA 시장 진출');
  ok(!SC.teams.Twins.ids.includes(hd.id),'함덕주 LG 명단에서 제외');
  ok(SC.calib.cbtK>0.9&&SC.calib.cbtK<1.2,'계약 구조 반영 후 환산계수가 1에 가까움 '+SC.calib.cbtK.toFixed(2));
- const ah=Object.values(SC.players).find(p=>p.ko==='안치홍'&&p.contract.est);ok(ah&&ah.contract.years===1,'확인필요 계약은 1년·추정 표시');
+ const ah=Object.values(SC.players).find(p=>p.ko==='손아섭'&&p.contract.est);ok(ah&&ah.contract.years===1,'확인필요 계약은 1년·추정 표시');const ac=Object.values(SC.players).find(p=>p.ko==='안치홍'),ig=Object.values(SC.players).find(p=>p.ko==='임기영');ok(ac.team==='Heroes'&&!ac.contract.total&&ig.team==='Lions'&&!ig.contract.total,'계약구단≠2026 소속인 옛 계약(안치홍 한화·임기영 KIA)은 이적·적용하지 않음');
  // 시즌 종료 시 나성범(잔여 1년) 계약 만료 대상
  LC.advance(300,false);const P0=LC.startPostseason();let g0=0;while(!P0.done&&g0++<100){if(LC.userInPost()){const c=LC.startUserPostGame();c.live.playToEnd();LC.finishUserPostGame(c)}else LC.simPostGame()}LC.startOffseason();
  ok(ns.contract.years<=0||ns.team==='FA'||ns.team==='RET'||ns.contract.years===undefined||true,'오프시즌 진입');}

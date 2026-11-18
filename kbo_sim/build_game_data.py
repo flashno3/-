@@ -373,7 +373,9 @@ def load_fa(players):
         if len(c)>1 and hint=='우완': c=[p for p in c if p.get('throws')!='L' and p['age']>=33]
         if len(c)!=1: st['skip'].append((r['선수명'],r['2026소속'],len(c)));continue
         p=c[0]
-        if r['계약구단'] and TM4.get(r['계약구단'])!=TM4[r['2026소속']] and r['계약구단'] in TM4: p['team']=TM4[r['계약구단']];p['moved']=True   # 이적 계약(손아섭 두산→NC)
+        if r['계약구단'] and TM4.get(r['계약구단'])!=TM4[r['2026소속']] and r['계약구단'] in TM4:
+            if r['시작시즌']!='2027': st['skip'].append((r['선수명'],r['2026소속'],'계약구단 '+r['계약구단']+' ≠ 2026 소속(이후 이적·방출, 계약 승계 미확인)'));continue   # 안치홍(한화 계약→2025 방출 후 키움)·임기영: 현 소속 유지, 옛 계약 미적용
+            p['team']=TM4[r['계약구단']];p['moved']=True   # 2027 이적 계약(손아섭 두산→NC)
         if status=='종료':   # 옵트아웃으로 시장에 나온 선수(함덕주)
             p['faStart']=True;st['fa'].append(name);continue
         rem=r['2026말_잔여시즌']
