@@ -333,16 +333,37 @@
       }
     }
     /* 설정이 유효한지 점검하고 깨진 부분은 자동으로 채움 */
+    /* 설정 점검: 내 팀은 **무효가 된 칸만 최소 교체**하고(부상·2군행·방출), 나머지 라인업·타순·로테이션·불펜은 그대로 둔다. 교체가 있으면 소식에 남긴다.
+       빈 칸을 채울 후보가 없을 때만 전체 자동 편성으로 되돌린다. AI 팀은 기존처럼 자동 */
     repairSettings(t) {
-      const T = this.S.teams[t], set = T.set, ids = new Set(T.ids), act = id => ids.has(id) && this.S.players[id].active;
-      if (set.lineup.length !== 9 || set.lineup.some(x => !act(x.id) || this.S.players[x.id].type !== 'B') || new Set(set.lineup.map(x => x.id)).size !== 9) set.lineup = this.bestLineup(this.hitters(t, true));
-      set.rotation = set.rotation.filter(id => act(id)); if (set.rotation.length < 5) this.autoSettings(t, 'rotation');
+      const S = this.S, T = S.teams[t], set = T.set, ids = new Set(T.ids), act = id => ids.has(id) && S.players[id].active && !this.isInj(S.players[id]), user = t === S.userTeam, say = x => { if (user) S.news.unshift({ year: S.year, day: S.day, text: x }); };
+      const nm = id => (S.players[id] ? S.players[id].ko : '선수');
+      // 라인업: 무효 칸만 교체(같은 수비 위치를 소화하는 건강한 1군 타자 중 가치가 가장 높은 선수), 타순 유지
+      const okL = set.lineup.length === 9 && set.lineup.every(x => S.players[x.id] && S.players[x.id].type === 'B') && new Set(set.lineup.map(x => x.id)).size === 9;
+      if (user && okL && set.lineup.some(x => !act(x.id))) {
+        const inL = new Set(set.lineup.map(x => x.id)), bench = this.hitters(t, true).filter(p => !inL.has(p.id) && !this.isInj(p)), fixed = []; let noCand = false;
+        for (const x of set.lineup) { if (act(x.id)) continue; const val = q => this._runsB(q, true) + ((q.gs && q.gs[x.pos]) >= 40 ? 6 : 0) + (q.pos === x.pos ? 3 : 0), el = bench.filter(q => x.pos === 'DH' || (q.gs && q.gs[x.pos] >= 20) || q.pos === x.pos), c = (el.length ? el : bench).sort((a, b) => val(b) - val(a))[0] || null;   // 해당 위치 소화 가능 선수 우선, 없으면 가장 가치 높은 벤치 타자
+          if (!c) { noCand = true; break; } bench.splice(bench.indexOf(c), 1); fixed.push([x, c]); }
+        if (!noCand) { for (const [x, c] of fixed) { say(`라인업 자동 보정: ${nm(x.id)}(${x.pos}) 자리 → ${c.ko}`); x.id = c.id; } } else { set.lineup = this.bestLineup(this.hitters(t, true)); say('라인업을 대체할 선수가 없어 전체를 자동 편성했습니다.'); }
+      } else if (!okL || (!user && set.lineup.some(x => !act(x.id)))) set.lineup = this.bestLineup(this.hitters(t, true));
+      // 로테이션: 무효 선수만 제거하고 빈 칸은 불펜 비주전·남는 투수 중 선발 능력이 가장 높은 선수로 채움(순서·rotIdx 유지)
+      const before = set.rotation.slice();
+      set.rotation = set.rotation.filter(id => act(id));
+      if (set.rotation.length < 5) {
+        if (user) { const b0 = set.bullpen || {}, locked = new Set([b0.closer].concat(b0.setup || [])), inR = new Set(set.rotation), pool = this.pitchers(t, true).filter(p => !inR.has(p.id) && !this.isInj(p) && !locked.has(p.id)).sort((a, b) => (b.role === 'SP') - (a.role === 'SP') || b.stamina - a.stamina || this._runsP(b) - this._runsP(a));
+          while (set.rotation.length < 5 && pool.length) { const c = pool.shift(); set.rotation.push(c.id); }
+          const gone = before.filter(id => !set.rotation.includes(id)); if (gone.length) say(`로테이션 자동 보정: ${gone.map(nm).join(', ')} 제외 → ${set.rotation.filter(id => !before.includes(id)).map(nm).join(', ') || '대체 없음'}`);
+          if (set.rotation.length < 5) this.autoSettings(t, 'rotation'); }
+        else this.autoSettings(t, 'rotation');
+      }
+      if (set.rotIdx >= set.rotation.length) set.rotIdx = 0;
       const b = set.bullpen, used = new Set(set.rotation);
       const clean = a => a.filter(id => act(id) && !used.has(id) && used.add(id));
       const cl = b.closer && act(b.closer) && !used.has(b.closer) ? b.closer : null; if (cl) used.add(cl);
       set.bullpen = { closer: cl, setup: clean(b.setup), middle: clean(b.middle), long: clean(b.long) };
-      const rest = this.pitchers(t, true).filter(p => !used.has(p.id)).sort((a, b) => this._runsP(b) - this._runsP(a));
-      if (!set.bullpen.closer && rest.length) set.bullpen.closer = rest.shift().id;
+      const rest = this.pitchers(t, true).filter(p => !used.has(p.id) && !this.isInj(p)).sort((a, b) => this._runsP(b) - this._runsP(a));
+      if (!set.bullpen.closer && rest.length) { const c = rest.shift(); set.bullpen.closer = c.id; if (user) say(`마무리 자동 지정: ${c.ko}`); }
+      if (!set.bullpen.closer) { const bp = set.bullpen, c = bp.setup.shift() || bp.middle.shift() || bp.long.shift(); if (c) { bp.closer = c; if (user) say(`마무리 자동 지정: ${nm(c)}`); } }   // 불펜이 얇아도 마무리 칸은 비우지 않는다
       while (set.bullpen.setup.length < 2 && rest.length) set.bullpen.setup.push(rest.shift().id);
       for (const p of rest) set.bullpen.middle.push(p.id);
     }

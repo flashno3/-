@@ -861,6 +861,7 @@
     act = P.filter(p => p.active);
     if (act.length < ACTIVE_MAX) fill(() => true, ACTIVE_MAX - act.length);
     act = P.filter(p => p.active); while (act.length > ACTIVE_MAX) { const w = act.filter(p => p.type === 'B').sort((a, b) => this.marketValue(a) - this.marketValue(b))[0]; w.active = false; act = P.filter(p => p.active); }
+    this.invalidate();
   };
   /* 울산 웨일즈(퓨처스 전용): 은퇴로 줄어든 선수를 신인으로 채워 규모(타자 24·투수 22 이상)를 유지 */
   proto.topUpWhales = function () {
@@ -1009,9 +1010,9 @@
       p.active = false; changed.add(t); (out[t] = out[t] || []).push(p);
       if (t === user) news(this, `부상: ${p.ko} — ${p.inj.dx}${sev}, 약 ${days}일 (복귀 예정 ${this.injDateStr(p)})`);
     }
-    {   // 부상으로 1군 타자 12명·투수 12명 아래가 되면 건강한 2군 선수를 자동 등록(경기 진행 불가 방지)
+    {   // 부상으로 1군이 최소 인원(타자 10·투수 8) 아래가 되면 건강한 2군 선수를 자동 등록(경기 진행 불가 방지)
       const a = this.players(user).filter(p => p.active), nb = a.filter(p => p.type === 'B').length, np = a.filter(p => p.type === 'P').length;
-      if (nb < 12 || np < 12) { this.ensureActive(user); news(this, '부상자 때문에 1군 엔트리가 부족해 건강한 2군 선수를 자동 등록했습니다.'); }
+      if (nb < 10 || np < 8) { this.ensureActive(user); this.repairSettings(user); this.invalidate(); news(this, '부상자 때문에 1군 엔트리가 최소 인원(타자 10·투수 8) 아래로 내려가 건강한 2군 선수를 자동 등록했습니다.'); }   // 내가 직접 정한 엔트리는 존중하고 경기 진행에 필요한 최소 인원일 때만 개입
     }
     for (const t of changed) {
       if (t === user) { this.repairSettings(t); this.invalidate(); continue; }
