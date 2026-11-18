@@ -320,6 +320,7 @@ def load_draft():
 DRAFT=load_draft()
 
 # FA 계약 정보(사용자 제공 CSV): 잔여 계약 연수·총액·계약금·옵션 → p['ct']. 상태가 '유효'이거나 연수를 확정할 수 있는 행만 적용.
+SAL27={'노시환':10,'양현종':10,'나성범':10}   # 2026 공시 연봉 유지(2027 연봉 미확정)
 def load_fa(players):
     import csv,re
     f=D+'game/data/fa_contracts_2026.csv'
@@ -349,6 +350,8 @@ def load_fa(players):
         ct={'years':years,'total':total,'bonus':float(r['계약금_억']) if r['계약금_억'] else None,'from':int(r['시작시즌']),'end':int(r['종료시즌_보장']) if r['종료시즌_보장'] else None,'opt':r['옵션구간'] or None,'est':status=='확인필요','nonfa':r['FA연도'].startswith('비FA')}
         if r['시작시즌']=='2027' and r['연봉합계_억']: ct['salary']=round(float(r['연봉합계_억'])/g,2)   # 2027 시즌부터 시작하는 새 계약(양의지·오태곤)은 새 연봉 적용
         if guaranteed and status!='확인필요': ct['cbt']=round(guaranteed/g,2)   # 경쟁균형세 반영 연평균 보수(보장 총액/보장 연수)
+        if '[AAV]' in (r['비고'] or '') and total: ct['cbt']=round(total/sum(int(x) for x in re.findall(r'\d+',r['계약구조'].split('년')[0])),2)   # 연평균 보수(AAV) = 옵션 포함 총액/전체 연수(박민우 5+3년 140억)
+        if name in SAL27: ct['salary']=SAL27[name]   # 2027 연봉은 계약 전이므로 2026 공시 연봉 유지
         p['ct']=ct;st['ok']+=1
     return st
 FAC=load_fa(players)

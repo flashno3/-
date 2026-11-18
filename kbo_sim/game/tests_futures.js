@@ -65,7 +65,7 @@ ok(S.nextId>Math.max(...Object.keys(S.players).map(id=>parseInt(id.slice(1)))),'
  const t1=pk(0.9),t0=pk(0),t11=pk(-0.3),tb=pk(0.9+1.2);console.log('정점 평균: 1R',t1.toFixed(1),'무관',t0.toFixed(1),'11R',t11.toFixed(1),'1R+16억',tb.toFixed(1));ok(tb>t1&&t1>t0&&t0>t11,'기울기가 정점 기대값을 높임');}
 // 2f) FA 계약 반영
 {const LC=League.create(base,'Lions',9),SC=LC.S,f=n=>Object.values(SC.players).find(p=>p.ko===n&&p.contract&&p.contract.total);
- const ns=f('나성범'),yu=f('양의지'),pk=f('박건우');ok(ns.contract.years===1&&ns.contract.cbt===25,'나성범 잔여 1년·연 25억');ok(yu.contract.years===2&&yu.contract.salary===5&&yu.contract.cbt===27.5,'양의지 새 계약(2027~28, 연봉 5, 보수 27.5)');ok(pk.contract.years===1&&Math.abs(pk.contract.cbt-16.67)<0.01,'박건우 잔여 1년');
+ const ns=f('나성범'),yu=f('양의지'),pk=f('박건우');ok(ns.contract.years===1&&ns.contract.cbt===20&&ns.contract.salary===10&&ns.contract.amort===10,'나성범 잔여 1년·AAV 20억(계약금 60 상각 10)');ok(yu.contract.years===2&&yu.contract.salary===5&&yu.contract.cbt===27.5,'양의지 새 계약(2027~28, 연봉 5, 보수 27.5)');ok(pk.contract.years===1&&Math.abs(pk.contract.cbt-16.67)<0.01,'박건우 잔여 1년');
  const hd=SC.fa.map(id=>SC.players[id]).find(p=>p.ko==='함덕주');ok(hd&&hd.team==='FA','함덕주 FA 시장 진출');
  ok(!SC.teams.Twins.ids.includes(hd.id),'함덕주 LG 명단에서 제외');
  ok(SC.calib.cbtK>0.9&&SC.calib.cbtK<1.2,'계약 구조 반영 후 환산계수가 1에 가까움 '+SC.calib.cbtK.toFixed(2));

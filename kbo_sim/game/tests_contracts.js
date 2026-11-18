@@ -5,11 +5,11 @@ const nm=k=>Object.values(S.players).find(p=>p.ko===k&&p.team in S.teams);
 // 1) 계약 기간: FA 계약 CSV(및 노시환 비FA 다년)만 다년, 나머지는 모두 1년
 {const multi=Object.values(S.players).filter(p=>p.team in S.teams&&p.contract.years>1);ok(multi.every(p=>p.ct&&p.ct.years>1),'다년계약은 FA 계약 CSV 선수뿐');
  ok(Object.values(S.players).filter(p=>p.team in S.teams&&!(p.ct&&p.ct.years>1)).every(p=>p.contract.years===1),'그 외 모두 단년');
- const nsh=nm('노시환');ok(nsh.team==='Eagles'&&nsh.contract.years===11&&nsh.contract.end===2037&&nsh.contract.total===307&&Math.abs(nsh.contract.cbt-27.91)<0.01&&Math.abs(nsh.contract.salary-13.95)<0.01,'노시환 11년 307억(2027~2037), 경쟁균형세 연 27.9억');
+ const nsh=nm('노시환');ok(nsh.team==='Eagles'&&nsh.contract.years===11&&nsh.contract.end===2037&&nsh.contract.total===307&&Math.abs(nsh.contract.cbt-27.91)<0.01&&nsh.contract.salary===10,'노시환 11년 307억(2027~2037), 경쟁균형세 연 27.9억');
  ok(Object.values(S.players).filter(p=>p.draft&&p.contract).every(p=>p.contract.years===1),'신인도 1년');}
 // 1b) 비FA 다년계약(보도): 류현진 8년 170억(2024~2031, 잔여 5년·연 21.25억) 등
 {const g=(k,t,ty)=>Object.values(S.players).find(p=>p.ko===k&&p.team===t&&(!ty||p.type===ty));
- const exp=[['류현진','Eagles',5,21.25,170],['구창모','Dinos',2,14.67,132],['고영표','Wiz',2,19,107],['박세웅','Giants',1,14,90],['김광현','Landers',1,15,36],['김재환','Landers',1,8,22],['하영민','Heroes',8,10,80],['박민우','Dinos',1,16,140]];
+ const exp=[['류현진','Eagles',5,21.25,170],['구창모','Dinos',2,14.67,132],['고영표','Wiz',2,19,107],['박세웅','Giants',1,14,90],['김광현','Landers',1,15,36],['김재환','Landers',1,8,22],['하영민','Heroes',8,10,80],['박민우','Dinos',1,17.5,140]];
  for(const [k,t,y,c,tot] of exp){const p=g(k,t);ok(p&&p.contract.years===y&&Math.abs(p.contract.cbt-c)<0.01&&p.contract.total===tot,k+' 잔여 '+y+'년·경쟁균형세 '+c);}
  const ryu=g('류현진','Eagles');ok(ryu.contract.end===2031&&ryu.contract.bonus===0&&ryu.contract.salary===21,'류현진 2024~2031·계약금 없음');
  const hold=Object.values(S.players).filter(p=>p.hold);ok(hold.length===9&&['고영표','나성범','김광현','김재환','박세웅','박건우','박민우','노시환','김재현'].every(k=>hold.some(p=>p.ko===k)),'FA 자격 유보선수 9명');
