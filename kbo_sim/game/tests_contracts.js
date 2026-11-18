@@ -25,7 +25,7 @@ const med=g[Math.floor(g.length/2)].faInfo.mv;ok(med>=7&&med<=13,'중간값 '+me
 ok(g.slice(0,6).every((p,i)=>i===0||p.faInfo.mv<=g[i-1].faInfo.mv),'가치 순위 순 시장가');
 // 3) 제시 평가: 요구 미달 거절, 기본 제시 수락, 계약금 한도·기간 한도
 const star=g[0],tm=L.faTerms(star,U),o=L.faDefaultOffer(star,U);
-ok(tm.graded&&tm.pref===4&&tm.req(4)>=tm.mv&&tm.req(1)>tm.req(4),'선호보다 짧은 계약은 연 보수↑');
+ok(tm.graded&&tm.pref===4&&tm.req(4)>=tm.mv*(1-tm.disc)-1e-6&&tm.req(1)>tm.req(4),'선호보다 짧은 계약은 연 보수↑');
 ok(!L.faEvaluate(star,{years:4,salary:o.salary*0.8,bonus:o.bonus*0.8},U).ok&&/거절/.test(L.faEvaluate(star,{years:4,salary:o.salary*0.8,bonus:o.bonus*0.8},U).msg),'요구 미달 거절');
 ok(L.faEvaluate(star,o,U).ok,'기본 제시 수락 가능');
 ok(!L.faEvaluate(star,{years:5,salary:30,bonus:0},U).ok,'5년 계약 불가');

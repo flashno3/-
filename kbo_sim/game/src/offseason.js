@@ -186,12 +186,24 @@
   proto.faMV = function (p) { if (!p.faInfo || !p.faInfo.grade || p.foreign) return null; if (p.faInfo.mv === undefined) this._priceClass(false); return p.faInfo.mv; };
   /* FA 자격자의 1년 재계약 요구액: 리그 FA 자격자 중 가치 순위 상위 27%가 시장에 나온다고 보고 시장가 곡선에 대입(재계약은 시장가의 80%) */
   /* 1년 재계약 연봉: 현재 연봉에서 시장 요구액(가치)으로 부분 조정 — 오르면 60%, 내리면 40%만 반영(연봉 급등락 완화) */
+  /* ---------------- 구단 충성도(0~100) ----------------
+     근속(해당 구단 등록 시즌 수 `p.tn`), 입단 구단(드래프트 지명 구단 = 현 구단), 연고지 1차 지명(고교 소재 연고지 출신), 원클럽 이력, 베테랑 가산으로 산정.
+     충성도 55 초과분은 원소속 구단과의 계약에서 요구액 할인(최대 12%)으로 반영(재계약 요구액은 절반 적용). 선수 평가 점수에서도 원소속 가산을 키운다. */
+  proto.loyalty = function (p, t) {
+    t = t || p.team; if (p.foreign || !t || t === 'FA' || !(t in this.S.teams)) { if (!(p.faInfo && p.faInfo.from)) return null; t = p.faInfo.from; }
+    const dh = p.dh || {}, tn = p.tnTeam === t ? (p.tn || 0) : 0, own = dh.dt === t, items = [];
+    let v = 40; if (tn > 0) { const a = Math.min(7, tn) * 4 + Math.min(3, Math.max(0, tn - 7)); v += a; items.push(['근속 ' + tn + '년', a]); }
+    if (own) { v += 8; items.push(['입단 구단(' + (dh.y || '') + ' 지명)', 8]); if (dh.first) { v += 8; items.push(['연고지 1차 지명' + (dh.school ? '(' + dh.school + ')' : ''), 8]); } if (dh.one) { v += 5; items.push(['원클럽 이력', 5]); } }
+    if (own && p.age >= 33) { v += 3; items.push(['베테랑', 3]); }
+    return { team: t, v: clamp(Math.round(v), 0, 100), items };
+  };
+  proto.loyDiscount = function (p, t) { const l = this.loyalty(p, t); return !l || l.team !== (t || p.team) ? 0 : Math.max(0, Math.min(0.12, (l.v - 55) * 0.0027)); };
   proto._blendAsk = function (p) { const cur = p.contract.salary, ask = this.askSalary(p); return Math.max(0.3, Math.round((cur + (ask > cur ? 0.6 : 0.4) * (ask - cur)) * 10) / 10); };
   proto.resignAsk = function (p) {
-    const base = this._blendAsk(p); if (p.foreign || !this.faEligible(p)) return base;
+    const ld = 1 - 0.5 * this.loyDiscount(p, p.team), base = Math.max(0.3, Math.round(this._blendAsk(p) * ld * 10) / 10); if (p.foreign || !this.faEligible(p)) return base;
     const sc = this._fvScore(p); let n = 0, rank = 0; for (const t of TEAMS) for (const q of this.players(t)) if (!q.foreign && this.faEligible(q)) { n++; if (this._fvScore(q) > sc) rank++; }
     const mv = faCurve(Math.min(1, rank / Math.max(1, 0.27 * n)));
-    return Math.max(base, Math.round(0.8 * mv * 10) / 10);
+    return Math.max(base, Math.round(0.8 * mv * ld * 10) / 10);
   };
   proto._marketDecay = function () { const S = this.S, m = S.faMkt; return m ? 1 - 0.0015 * m.day : S.phase === 'offseason' ? 1 : (1 - 0.0015 * FA_END) * (1 - Math.min(0.3, 0.004 * (S.phase === 'offseason' ? 0 : (S.day || 0)))); };   // FA 기간 하루 -0.15%(개막 시 -11%), 개막 후 -0.4%/일
   proto.faTerms = function (p, t) {
@@ -199,8 +211,8 @@
     if (!graded) { const ask = Math.round(this.askSalary(p) * decay * 10) / 10; return { graded: false, pref: 1, maxYears: 1, mv: ask, ext: false, comp: 1, req: () => Math.max(0.3, ask) }; }
     const mv = this.faMV(p), pref = this._prefYears(p), ext = info.from !== t;
     let n = 0; for (const x of TEAMS) if (x !== t && x !== S.userTeam && this.faRoom(x) >= mv && this.cbtPay(x, this.S.phase === 'offseason') + mv < this.cbtCap() * 0.97) n++;
-    const comp = info.grade === 'C' ? 1 : 1 + 0.015 * Math.min(4, n), base = mv * decay * (ext ? 1.04 : 1) * comp;
-    return { graded: true, pref, maxYears: 4, mv, ext, comp, req: y => Math.round(base * (1 + 0.04 * Math.max(0, pref - y)) * (1 - 0.02 * Math.max(0, y - pref)) * 100) / 100 };
+    const comp = info.grade === 'C' ? 1 : 1 + 0.015 * Math.min(4, n), disc = ext ? 0 : this.loyDiscount(p, t), base = mv * decay * (ext ? 1.04 : 1 - disc) * comp;
+    return { graded: true, pref, maxYears: 4, mv, ext, comp, disc, req: y => Math.round(base * (1 + 0.04 * Math.max(0, pref - y)) * (1 - 0.02 * Math.max(0, y - pref)) * 100) / 100 };
   };
   /* 요구 조건에 맞춘 기본 제시(계약금 35%): 연봉은 올림해서 요구액을 넘긴다 */
   proto.faDefaultOffer = function (p, t, years) {
@@ -612,7 +624,7 @@
   proto.faDaysLeft = function () { const m = this.S.faMkt; return m ? FA_END - m.day : 0; };
   proto._offerScore = function (p, t, y, sal, bon) {
     const tm = this.faTerms(p, t), tot = bon + sal * y, per = tot / y, share = tot > 0 ? bon / tot : 0, home = p.faInfo && p.faInfo.from === t;
-    return per * (1 + 0.15 * share) * (1 - 0.01 * Math.abs(y - tm.pref)) * (home ? 1.02 : 1);
+    return per * (1 + 0.15 * share) * (1 - 0.01 * Math.abs(y - tm.pref)) * (home ? 1.02 + 0.3 * this.loyDiscount(p, t) : 1);
   };
   proto._bidScore = function (p, b) { return this._offerScore(p, b.team, b.y, b.per * b.y * 0.65 / b.y, b.per * b.y * 0.35); };   // AI 입찰: 계약금 35%
   proto._bestBid = function (id) {
