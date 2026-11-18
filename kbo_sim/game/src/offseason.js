@@ -755,7 +755,7 @@
   };
 
   /* ---------------- 코치진·육성 ----------------
-   * [코치] 팀마다 감독 1명 + 육성 코치(투수 2 · 타격 2 · 수비·주루 1 · 총괄 1 = 6명). 보도로 확인된 코치(coaches_2027.csv: 롯데·키움 일부)는 실명, 나머지는 가상 이름. **능력치는 모두 가상 값**(자료 없음).
+   * [코치] 팀마다 감독 1명 + 코치 약 17~22명(1군 코치 + 퓨처스 감독·코치, 사용자 제공 명단 + 2027 보도 변동). 보직은 선수 시절 포지션으로 추정(투수·타격·수비·주루·총괄). **능력치는 모두 가상 값**(자료 없음).
    *  능력치 20~80(S≥75 · A≥65 · B≥55 · C≥45 · D≥35): 투수 구위·제구·체력 / 타격 컨택·파워·선구 / 수비·주루 / 총괄(육성 관리). 코치당 전문 분야 2개가 높다.
    * [한도] 팀별 육성 코치 정원 = 리그 평균(반올림). 정원을 넘는 팀(롯데 7명)도 불이익 없이 유지하고, 신규 영입만 정원 이내. 영입 비용(연봉)은 팀 예산(FA 여유자금) 안에서만 가능.
    * [효과] 28세 이하 선수의 성장: 육성 방향(가중치)에 따라 능력 구성이 달라지고, 팀 코치 능력(해당 분야 최고 65% + 차순위 35%)이 성장 속도를 −20~+30% 조절. 투수는 체력(선발)·구위(마무리)·제구(추격조) 방향, 타자는 컨택·파워·선구·수비·주력. */
@@ -764,7 +764,7 @@
   const CH_SPEC = { '투수': ['stuff', 'control', 'stamina'], '타격': ['contact', 'power', 'eye'], '수비·주루': ['defense', 'speed'], '총괄': ['mgmt'] };
   const CH_SLOT = { '투수': 2, '타격': 2, '수비·주루': 1, '총괄': 1 };
   const ROLE_MAP = { '투수코치': '투수', '타격코치': '타격', '수비코치': '수비·주루', '배터리코치': '수비·주루', '퓨처스 감독': '총괄', '보직 미상': null };
-  const CH_TARGET = { '투수': 2, '타격': 2, '수비·주루': 1, '총괄': 1 };
+  const CH_TARGET = { '투수': 4, '타격': 4, '수비·주루': 3, '총괄': 1 };
   const SURN2 = ['김', '이', '박', '최', '정', '강', '조', '윤', '장', '임', '한', '오', '서', '신', '권', '황', '안', '송', '류', '전'], GIV2 = ['동수', '성호', '재훈', '병철', '상민', '기태', '영진', '용수', '종범', '정민', '태균', '현준', '승엽', '재원', '창용', '민호', '광수', '진태', '세훈', '대현'];
   const DEV_PITCH = { SP: { k: 0.9, bb: 1.35, hr: 1.0, babip: 0.9 }, SU: { k: 1.15, bb: 1.1, hr: 1.0, babip: 0.9 }, MID: { k: 0.9, bb: 1.3, hr: 1.0, babip: 1.0 }, CL: { k: 1.4, bb: 0.8, hr: 1.25, babip: 0.9 } };
   const DEV_BAT = { balanced: {}, contact: { k: 1.4, babip: 1.2, bb: 0.9, hr: 0.8, xbh: 0.8 }, power: { hr: 1.5, xbh: 1.3, k: 0.8, babip: 0.9, bb: 0.9 }, eye: { bb: 1.5, k: 1.1, hr: 0.8, babip: 0.8, xbh: 0.8 }, defense: { k: 0.9, bb: 0.9, hr: 0.9, babip: 0.9, xbh: 0.9 }, speed: { k: 0.95, bb: 0.95, hr: 0.9, babip: 1.1, xbh: 0.95 } };
@@ -779,9 +779,9 @@
     let name = opts.name; if (!name) name = SURN2[Math.floor(r.random() * SURN2.length)] + GIV2[Math.floor(r.random() * GIV2.length)];
     c.name = name;
     for (const f of CH_FIELDS) c[f] = clamp(Math.round(gauss(r, 44, 6)), 25, 62);
-    c.mgmt = clamp(Math.round(gauss(r, 46, 6)), 25, 62);
+    c.mgmt = clamp(Math.round(gauss(r, 44, 6)), 25, 62);
     const q = opts.star ? 12 : 0, main = role === '총괄' ? ['mgmt'] : spec.slice().sort(() => r.random() - 0.5).slice(0, 2);
-    for (const f of main) c[f] = clamp(Math.round(gauss(r, 66 + q, 7)), 45, 82);
+    for (const f of main) c[f] = clamp(Math.round(gauss(r, 61 + q, 7)), 42, 82);
     c.spec = main; c.salary = this.coachSalary(c); return c;
   };
   proto.coachSalary = function (c) { const m = c.spec && c.spec.length ? c.spec.reduce((a, f) => a + c[f], 0) / c.spec.length : 50; return Math.round(clamp(0.6 + (m - 50) * 0.05, 0.5, 3.2) * 10) / 10; };
@@ -852,16 +852,16 @@
   proto._devEffects = function (p) {
     const t = p.team in this.S.coach.teams ? p.team : null; if (!t) return null;
     let plan = p.dev && !p.dev.auto ? p.dev.plan : this._autoPlan(p); if (!(p.dev && !p.dev.auto)) p.dev = { plan, auto: true };
-    const cr = f => this.coachRating(t, f), mg = (cr('mgmt') - 50) * 0.004;
+    const cr = f => this.coachRating(t, f), mg = (cr('mgmt') - 58) * 0.004;
     if (p.type === 'P') {
       const w0 = DEV_PITCH[plan] || DEV_PITCH.SU, mean = (w0.k + w0.bb + w0.hr + w0.babip) / 4, w = {}; for (const f in w0) w[f] = w0[f] / mean;
       const rel = plan === 'SP' ? (cr('control') + cr('stamina')) / 2 : plan === 'CL' ? cr('stuff') : plan === 'MID' ? cr('control') : (cr('stuff') + cr('control')) / 2;
       const stam = { SP: 2.2 * cr('stamina') / 50, SU: 0, MID: 0.8, CL: -1.5 }[plan];
-      return { plan, w, mul: clamp(1 + 0.009 * (rel - 50) + mg, 0.75, 1.35), stamina: stam, speed: 0, range: 0 };
+      return { plan, w, mul: clamp(1 + 0.009 * (rel - 62) + mg, 0.75, 1.35), stamina: stam, speed: 0, range: 0 };
     }
     const w0 = DEV_BAT[plan] || {}, w = {}; for (const f of ['k', 'bb', 'hr', 'babip', 'xbh']) w[f] = w0[f] || 1;
     const rel = plan === 'contact' ? cr('contact') : plan === 'power' ? cr('power') : plan === 'eye' ? cr('eye') : plan === 'defense' ? cr('defense') : plan === 'speed' ? cr('speed') : (cr('contact') + cr('power') + cr('eye')) / 3;
-    return { plan, w, mul: clamp(1 + 0.009 * (rel - 50) + mg, 0.75, 1.35), stamina: 0, speed: plan === 'speed' ? 0.06 * cr('speed') / 50 : 0, range: plan === 'defense' ? 1.2 * cr('defense') / 50 : 0 };
+    return { plan, w, mul: clamp(1 + 0.009 * (rel - 62) + mg, 0.75, 1.35), stamina: 0, speed: plan === 'speed' ? 0.06 * cr('speed') / 50 : 0, range: plan === 'defense' ? 1.2 * cr('defense') / 50 : 0 };
   };
   proto._devRole = function (p, plan) { if (plan === 'SP') { if (p.stamina >= 50 && p.role !== 'SP') p.role = 'SP'; } else if (p.role === 'SP' && plan !== 'SP' && p.dev && !p.dev.auto) p.role = 'RP'; };
   /* 육성 방향별 성장 경로 예측: 같은 선수를 방향마다 3시즌 진행해 평균(12회) */

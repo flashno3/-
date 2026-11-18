@@ -3,16 +3,16 @@ const base=JSON.parse(fs.readFileSync(__dirname+'/src/gamedata.json'));let n=0;c
 const L=League.create(base,'Lions',5),S=L.S,U='Lions',C=S.coach;
 // 1) 코치진: 팀당 육성 코치(보도 기반 실명 + 가상), 정원=평균, 감독
 const cnt=Object.fromEntries(Object.keys(S.teams).map(t=>[t,L.coachesOf(t).length]));
-ok(Object.values(cnt).every(v=>v>=7)&&cnt.Wiz===10&&L.coachLimit()===8,'팀별 코치 수(퓨처스 명단 기반) '+JSON.stringify(cnt)+' 정원 '+L.coachLimit());
-ok(L.coachesOf('Eagles').some(c=>c.name==='정우람'&&c.role==='투수'&&c.origin==='real'&&c.age===42)&&L.coachesOf('Eagles').some(c=>c.name==='곽정철'&&c.role==='투수')&&L.coachesOf('Wiz').filter(c=>c.origin==='real').length===10,'사용자 제공 퓨처스 명단의 실명 코치(생년월일→나이, 선수 시절 포지션으로 보직 추정)');
-ok(C.mgr.Eagles.name==='류지현'&&C.mgr.Tigers.name==='이범호'&&C.mgr.Wiz.name==='이강철'&&C.mgr.Dinos.name==='이호준'&&Object.values(C.mgr).every(m=>!m.virtual),'감독 10명 모두 실명(보도)');
+ok(Object.values(cnt).every(v=>v>=14)&&cnt.Giants===21&&cnt.Wiz===21&&cnt.Lions===15&&L.coachLimit()===18,'팀별 코치 수(1군+퓨처스 명단 기반) '+JSON.stringify(cnt)+' 정원 '+L.coachLimit());
+ok(L.coachesOf('Eagles').some(c=>c.name==='정우람'&&c.role==='투수'&&c.origin==='real'&&c.age===42)&&L.coachesOf('Eagles').some(c=>c.name==='곽정철'&&c.role==='투수')&&L.coachesOf('Wiz').filter(c=>c.origin==='real').length>=20&&L.coachesOf('Lions').some(c=>c.name==='최일언'&&c.role==='투수')&&L.coachesOf('Giants').some(c=>c.name==='임경완'),'사용자 제공 퓨처스 명단의 실명 코치(생년월일→나이, 선수 시절 포지션으로 보직 추정)');
+ok(C.mgr.Eagles.name==='류지현'&&C.mgr.Giants.name==='이동욱'&&C.mgr.Tigers.name==='이범호'&&C.mgr.Wiz.name==='이강철'&&C.mgr.Dinos.name==='이호준'&&C.mgr.Lions.name==='박진만'&&Object.values(C.mgr).every(m=>!m.virtual),'감독 10명 모두 실명(사용자 제공 + 2027 보도: 한화 류지현·롯데 이동욱)');ok(!L.coachesOf('Eagles').some(c=>['양승관','김재걸','김민호'].includes(c.name))&&!L.coachesOf('Eagles').some(c=>c.name==='박승민'),'한화 재계약 불발 코치 제외');
 ok(L.coachesOf('Landers').some(c=>c.name==='박재상'&&c.role==='총괄')&&!L.coachesOf('Landers').some(c=>c.name==='박정권')&&L.coachesOf('Giants').some(c=>c.name==='박승민'&&c.role==='총괄')&&!L.coachesOf('Giants').some(c=>c.name==='김용희')&&L.coachesOf('Lions').some(c=>c.name==='모리야마'&&c.role==='총괄')&&L.coachesOf('Heroes').some(c=>c.name==='오윤'&&c.role==='총괄')&&L.coachesOf('Tigers').some(c=>c.name==='진갑용')&&L.coachesOf('Eagles').some(c=>c.name==='이대진'),'퓨처스 감독(2027 보도 교체 반영)');
-for(const t of Object.keys(S.teams)){const cs=L.coachesOf(t);ok(['투수','타격','수비·주루','총괄'].every(r=>cs.some(c=>c.role===r)),t+' 보직 구성');for(const c of cs){ok(c.spec.length>=1&&c.spec.every(f=>c[f]>=45)&&['stuff','control','stamina','contact','power','eye','defense','speed','mgmt'].every(f=>c[f]>=25&&c[f]<=82),'능력치 범위 '+c.name);ok(c.salary>=0.5&&c.salary<=3.2,'연봉');}}
+for(const t of Object.keys(S.teams)){const cs=L.coachesOf(t);ok(['투수','타격','수비·주루','총괄'].every(r=>cs.some(c=>c.role===r)),t+' 보직 구성');for(const c of cs){ok(c.spec.length>=1&&c.spec.every(f=>c[f]>=40)&&['stuff','control','stamina','contact','power','eye','defense','speed','mgmt'].every(f=>c[f]>=25&&c[f]<=82),'능력치 범위 '+c.name);ok(c.salary>=0.5&&c.salary<=3.2,'연봉');}}
 ok(['Eagles','Giants','Wiz'].every(t=>L.coachesOf(t).every(c=>c.spec.length&&c.salary>0))&&L.coachMarket().length>=12&&L.coachMarket().every(c=>!c.team&&c.origin==='market'),'코치 시장');
 ok(L.coachGrade(80)==='S'&&L.coachGrade(65)==='A'&&L.coachGrade(55)==='B'&&L.coachGrade(45)==='C'&&L.coachGrade(30)==='E','등급 구간');
 // 2) 영입·해임: 정원, 예산, 비용 반영
 {const mk=L.coachMarket().sort((a,b)=>a.salary-b.salary);let h=0;while(L.coachesOf(U).length<L.coachLimit()){ok(L.hireCoach(L.coachMarket().sort((a,b)=>a.salary-b.salary)[0].id)===null,'정원까지 영입');h++}
- ok(h===L.coachLimit()-7&&/정원/.test(L.hireCoach(L.coachMarket()[0].id)),'정원이 차면 영입 불가');
+ ok(h===L.coachLimit()-15&&/정원/.test(L.hireCoach(L.coachMarket()[0].id)),'정원이 차면 영입 불가');
  const fire=L.coachesOf(U)[0];const pay0=L.finPay(U);const dl0=L.coachPayDelta(U);ok(L.fireCoach(fire.id)===null&&L.coachesOf(U).length===L.coachLimit()-1&&Math.abs(L.coachPayDelta(U)-(dl0-fire.salary))<1e-9,'해임');ok(Math.abs(L.finPay(U)-(pay0-fire.salary))<0.11,'해임 시 비용 감소');
  ok(S.coach.market.includes(fire.id),'해임 코치는 시장으로');
  const hire=L.coachMarket().sort((a,b)=>b.salary-a.salary)[0];
@@ -40,7 +40,7 @@ ok(L.coachGrade(80)==='S'&&L.coachGrade(65)==='A'&&L.coachGrade(55)==='B'&&L.coa
  const t0='Dinos';const fired=L4.coachesOf(t0).slice(0,2);S4.coach.teams[t0]=S4.coach.teams[t0].filter(id=>!fired.some(c=>c.id===id));fired.forEach(c=>{c.team=null;S4.coach.market.push(c.id)});
  L4.resignAll();L4.finishContracts();L4.buildDraft();L4.draftAutoRest();L4.finishDraft();L4.finishFA();
  ok(L4.coachesOf(t0).length>L4.coachLimit()-2&&L4.coachesOf(t0).length<=L4.coachLimit(),'AI 팀 코치 보충(정원 이내) '+L4.coachesOf(t0).length);
- for(const t of Object.keys(S4.teams))if(t!=='Lions')ok(L4.coachesOf(t).length<=Math.max(L4.coachLimit(),t==='Wiz'?10:0),t+' 정원 초과 없음');
+ for(const t of Object.keys(S4.teams))if(t!=='Lions')ok(L4.coachesOf(t).length<=Math.max(L4.coachLimit(),cnt[t]),t+' 정원 초과 없음');
  L4.startNewSeason();ok(Object.values(S4.players).filter(p=>p.team in S4.teams&&p.age<=28&&p.dev).length>100,'육성 방향이 AI 선수에도 자동 부여');
  const L5=League.fromJSON(JSON.parse(L4.save()));ok(L5.coachesOf('Giants').length===L4.coachesOf('Giants').length&&L5.coachLimit()===L4.coachLimit()&&L5.S.coach.mgr.Eagles.name==='류지현','저장·불러오기 후 코치진 유지');}
 // 5) 한화 동명이인 박준영: 어린 쪽(24세)=2022 1라운드 전체 1순위, 다른 쪽=2026 육성선수
