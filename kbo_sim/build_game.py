@@ -3,7 +3,7 @@ import os
 D=os.path.dirname(os.path.abspath(__file__))+'/';S=D+'game/src/'
 rd=lambda p:open(p,encoding='utf8').read()
 t=rd(S+'template.html')
-parts={'/*__STYLE__*/':rd(S+'style.css'),'/*__DATA__*/':'const KBO_BASE='+rd(S+'gamedata.json')+';','/*__LOGOS__*/':'const KBO_LOGOS='+rd(S+'logos.json')+';','/*__ENGINE__*/':rd(D+'web/src/engine.js'),'/*__LEAGUE__*/':rd(S+'league.js'),'/*__OFFSEASON__*/':rd(S+'offseason.js'),'/*__APP__*/':rd(S+'app.js')}
+parts={'/*__STYLE__*/':rd(S+'style.css'),'/*__DATA__*/':'const KBO_BASE='+rd(S+'gamedata.json')+';','/*__LOGOS__*/':'const KBO_LOGOS='+rd(S+'logos.json')+';','/*__ENGINE__*/':rd(D+'web/src/engine.js'),'/*__LEAGUE__*/':rd(S+'league.js'),'/*__OFFSEASON__*/':rd(S+'offseason.js'),'/*__NEGOTIATE__*/':rd(S+'negotiate.js'),'/*__APP__*/':rd(S+'app.js')}
 for k,v in parts.items():
     assert k in t,k
     t=t.replace(k,v)

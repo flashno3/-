@@ -2,7 +2,7 @@
  * 성장·노화·은퇴 → 계약 만료/재계약 → 신인 드래프트 → FA 시장 → 새 시즌. 트레이드는 시즌 중(마감 전)과 오프시즌에 가능.
  */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) factory(require('./league.js'), require('../../web/src/engine.js'));
+  if (typeof module === 'object' && module.exports) { factory(require('./league.js'), require('../../web/src/engine.js')); require('./negotiate.js'); }
   else factory(root.KBOLeague, root.KBOEngine);
 })(typeof self !== 'undefined' ? self : this, function (LG, Engine) {
   'use strict';
@@ -16,7 +16,7 @@
   const LIM_DEADLINE = 110;   // 트레이드 마감(일차)
 
   const proto = League.prototype;
-  const news = (L, text) => { const S = L.S; S.news.unshift({ year: S.year, day: S.day, text }); if (S.news.length > 120) S.news.length = 120; };
+  const news = (L, text) => { const S = L.S; S.news.unshift({ year: S.year, day: S.day, text }); if (S.news.length > 120) S.news.length = 120; if (L._storyFromNews) L._storyFromNews(text); };
 
   /* ---------------- 선수 성장 / 노화 ---------------- */
   const AGING_SCALE = 0.7;
@@ -213,8 +213,8 @@
   };
   const faDecayAt = d => 1 - Math.min(0.3, 0.0015 * d + 0.00004 * d * d);   // 미계약 기간이 길수록 요구액 하락이 가속: 30일 -8%, 60일 -23%, 75일 -30%(한도)
   proto._marketDecay = function () { const S = this.S, m = S.faMkt; return m ? faDecayAt(m.day) : S.phase === 'offseason' ? 1 : faDecayAt(FA_END) * (1 - Math.min(0.2, 0.003 * (S.day || 0))); };   // 개막 후에는 추가로 -0.3%/일(최대 -20%)
-  proto.faTerms = function (p, t) {
-    const S = this.S; t = t || S.userTeam; const info = p.faInfo, graded = !!(info && info.grade) && !p.foreign, decay = this._marketDecay();
+  proto.faTerms = function (p, t, noAdj) {
+    const S = this.S; t = t || S.userTeam; const info = p.faInfo, graded = !!(info && info.grade) && !p.foreign, decay = this._marketDecay() * (noAdj || !this._negAdj ? 1 : this._negAdj(p, t));   // 협상 중 호감도 보정(±7%)
     if (!graded) { const ask = Math.round(this.askSalary(p) * decay * 10) / 10; return { graded: false, pref: 1, maxYears: 1, mv: ask, ext: false, comp: 1, req: () => Math.max(0.3, ask) }; }
     const mv = this.faMV(p), pref = this._prefYears(p), ext = info.from !== t;
     let n = 0; for (const x of TEAMS) if (x !== t && x !== S.userTeam && this.faRoom(x) >= mv && this.cbtPay(x, this.S.phase === 'offseason') + mv < this.cbtCap() * 0.97) n++;
@@ -425,7 +425,7 @@
   /* 외국인 슬롯: 팀당 일반 3명(같은 포지션 3명 불가) + 아시아쿼터 1명. 넘치는 선수는 시장(자유계약)으로 */
   proto.foreignOf = function (t) { return this.players(t).filter(p => p.foreign); };
   proto.foreignOK = function (t, p) {
-    const f = this.foreignOf(t); if (p.aq) return f.filter(x => x.aq).length < 1;
+    const f = this.foreignOf(t).filter(x => x.id !== this._replacing); if (p.aq) return f.filter(x => x.aq).length < 1;   // _replacing: 교체 영입 시 내보낼 선수는 제외하고 계산
     const g = f.filter(x => !x.aq); if (g.length >= 3) return false; return !(g.length === 2 && g.every(x => x.type === p.type));
   };
   /* 2027 시작 상태: 뉴스로 계약이 확정된 외국인만 반영하고(foreign_2027.csv), 나머지 선수는 시장으로 보낸 뒤
@@ -491,6 +491,9 @@
     if (graded && p.fa) { p.fa.used += 1; p.fa.last = graded; p.fa.svc = 0; p.fa.rem = 0; }
     if (comp) { this._faCount(t, 1); this._compensate(t, p, info); }
     p.faInfo = undefined; this.invalidate();
+  };
+  proto._foreignJoin = function (p) {   // 외국인은 영입 즉시 1군 엔트리에 등록한다(자리가 없으면 2군 대기)
+    const S = this.S, t = S.userTeam; p.reg1 = true; p.lockUntil = 0; if (this.players(t).filter(x => x.active).length < ACTIVE_MAX) p.active = true; if (this.repairSettings) this.repairSettings(t); this.invalidate();
   };
   proto._faCount = function (t, d) { const S = this.S, k = S.off ? S.off.year : S.year; S.faSign = S.faSign && S.faSign.k === k ? S.faSign : { k, c: {} }; if (d) S.faSign.c[t] = (S.faSign.c[t] || 0) + d; return S.faSign.c[t] || 0; };
   /* 보상: 보호선수(A 20명·B 25명)를 뺀 가장 가치 높은 선수 또는 보상금. 원소속 구단이 선수가 쓸 만하면 선수, 아니면 보상금(옵션2) */
@@ -601,7 +604,10 @@
     if (ext && this._faCount(t) >= EXT_LIMIT) return `외부 FA는 한 시즌에 ${EXT_LIMIT}명까지만 영입할 수 있습니다.`;
     if (p.foreign) {
       if (!this.foreignOK(t, p)) return p.aq ? '아시아쿼터는 구단당 1명입니다.' : '일반 외국인은 3명까지이며 같은 포지션 3명은 안 됩니다.';
-      const ask = Math.min(this.askSalary(p), this.foreignCap(p, t)); this._doSign(t, p, 1, ask, 0);
+      let ask;
+      if (offer && typeof offer === 'object') { const ev = this._negEval(p, Object.assign({ years: 1, bonus: 0 }, offer), 'foreign'); if (!ev.ok) return ev.msg; ask = ev.sal; }   // 협상 테이블: 호감도로 낮춘 요구액 이상·상한 이하
+      else ask = Math.min(this.askSalary(p), this.foreignCap(p, t));
+      this._doSign(t, p, 1, ask, 0); this._foreignJoin(p);
       news(this, `FA ${p.ko} 영입 (${ask}억, 1년)`); return null;
     }
     if (typeof offer !== 'object' || offer === null) offer = this.faDefaultOffer(p, t, typeof offer === 'number' ? offer : undefined);   // 숫자만 주면 요구 조건에 맞춘 기본 제시
@@ -818,6 +824,7 @@
     const S = this.S, t = S.userTeam, f = S.fin && S.fin.teams[t]; if (!f || S.phase !== 'regular' && S.phase !== 'preseason') return; if (S.phase === 'preseason' && d < 1) return;
     const r = rngFor(S.seed, S.year, d, 8800), E = S.events = S.events || { seq: 0, list: [] };
     { let ch = S.teamMood && S.teamMood.until === d; for (const p of this.players(t)) if (p.mood && p.mood.until === d) ch = true; if (ch) this.invalidate(); }   // 컨디션 효과 종료일에 엔진 입력 갱신
+    if (this._promiseTick) this._promiseTick(d);
     // 만료 → 기본 처리
     for (const e of this.eventsOpen()) if (d >= e.exp) this.resolveEvent(e.id, e.def || (e.choices[e.choices.length - 1] || {}).k, true);
     const open = this.eventsOpen().length; if (open >= 3) return;
@@ -901,7 +908,7 @@
     const row = { m, day: d, op: Math.round(v.op * 10) / 10, att: v.att, price: f.price * f.pm, games: f.games, gate: Math.round(f.gate * 10) / 10, rank: me.rank, w: me.w, l: me.l, pay: v.pay, room: v.room, trust: f.trust };
     const last = f.snap[f.snap.length - 1]; if (last && last.m === m) f.snap[f.snap.length - 1] = row; else f.snap.push(row);
   };
-  proto.resolveEvent = function (id, k, auto) {
+  proto.resolveEvent = function (id, k, auto, opts) {
     const S = this.S, t = S.userTeam, f = S.fin.teams[t], e = ((S.events || {}).list || []).find(x => x.id === id); if (!e || e.status !== 'open') return { ok: false, msg: '처리할 수 없는 소식입니다.' };
     let res = '';
     const adj = (p, v) => { p.loyAdj = clamp((p.loyAdj || 0) + v, -15, 15); }, mood = (p, v, days) => { p.mood = { v, until: S.day + days }; this.invalidate(); }, tmood = (v, days) => { S.teamMood = { v, until: S.day + days }; this.invalidate(); }, rr = salt => rngFor(S.seed, S.year, S.day, salt).random();
@@ -909,7 +916,7 @@
       const p = S.players[e.data.pid];
       if (!p || p.team !== t) res = '선수가 이미 팀을 떠났습니다.';
       else if (k === 'promote') { const err = this.moveActive(p.id, true); if (err) { if (!auto) return { ok: false, msg: err }; adj(p, -6); mood(p, -2, 30); res = `${p.ko} 불만을 처리하지 못했습니다(${err}). 컨디션 −2(30일).`; } else { adj(p, 4); mood(p, 1, 20); res = `${p.ko}을(를) 1군에 등록했습니다. 충성도 +4, 컨디션 +1(20일).`; } }
-      else if (k === 'talk') { const pr = clamp(0.35 + (this.loyalty(p) ? this.loyalty(p).v : 40) / 200, 0.2, 0.85); if (rngFor(S.seed, S.year, S.day, 8810 + parseInt(p.id.slice(1))).random() < pr) { adj(p, 1); mood(p, 1, 15); res = `면담이 잘 풀렸습니다. ${p.ko} 충성도 +1, 컨디션 +1(15일).`; } else { adj(p, -5); mood(p, -2, 20); res = `면담이 결렬되었습니다. ${p.ko} 충성도 −5, 컨디션 −2(20일).`; } }
+      else if (k === 'talk') { const pr = clamp(0.35 + (this.loyalty(p) ? this.loyalty(p).v : 40) / 200, 0.2, 0.85); if (opts && opts.talk !== undefined ? opts.talk : rngFor(S.seed, S.year, S.day, 8810 + parseInt(p.id.slice(1))).random() < pr) { adj(p, 1); mood(p, 1, 15); res = `면담이 잘 풀렸습니다. ${p.ko} 충성도 +1, 컨디션 +1(15일).`; } else { adj(p, -5); mood(p, -2, 20); res = `면담이 결렬되었습니다. ${p.ko} 충성도 −5, 컨디션 −2(20일).`; } }
       else { const hv = this.traitOf(p) === 'clutch' ? 3 : this.traitOf(p) === 'model' ? 1 : 2; adj(p, -6); mood(p, -hv, 30); res = `${p.ko}(${TRAITS[this.traitOf(p)]}) 불만을 방치했습니다. 충성도 −6(FA·재계약 협상), 컨디션 −${hv}(30일).`; }
     } else if (e.type === 'slump') {
       const p = S.players[e.data.pid];
@@ -931,7 +938,7 @@
       const D = e.data, p = S.players[D.pid];
       if (!p || p.team !== t) res = '선수가 이미 팀을 떠났습니다.';
       else if (k === 'trade') { const ev = this.executeTrade(D.t, [D.pid], [D.get]); res = ev.ok ? `요청을 수락해 트레이드했습니다: ${S.players[D.get].ko} 영입(2군 등록), ${p.ko} 이적.` : `트레이드가 성사되지 않았습니다(${ev.why || '조건 변경'}).`; }
-      else if (k === 'talk') { const cap = this.captain(), pr = clamp(0.3 + (cap ? 0.15 * (this.traitOf(cap) === 'leader' ? 1.5 : 1) : 0) + (this.loyalty(p) ? this.loyalty(p).v : 40) / 250 + (this.traitOf(p) === 'leader' ? 0.1 : this.traitOf(p) === 'free' ? -0.1 : 0), 0.1, 0.85); if (rr(8860 + parseInt(p.id.slice(1))) < pr) { adj(p, 5); mood(p, 1, 15); res = `면담이 통했습니다. ${p.ko} 잔류 — 충성도 +5, 컨디션 +1(15일).`; } else { mood(p, -2, 20); res = `설득에 실패했습니다. ${p.ko} 컨디션 −2(20일).`; } }
+      else if (k === 'talk') { const cap = this.captain(), pr = clamp(0.3 + (cap ? 0.15 * (this.traitOf(cap) === 'leader' ? 1.5 : 1) : 0) + (this.loyalty(p) ? this.loyalty(p).v : 40) / 250 + (this.traitOf(p) === 'leader' ? 0.1 : this.traitOf(p) === 'free' ? -0.1 : 0), 0.1, 0.85); if (opts && opts.talk !== undefined ? opts.talk : rr(8860 + parseInt(p.id.slice(1))) < pr) { adj(p, 5); mood(p, 1, 15); res = `면담이 통했습니다. ${p.ko} 잔류 — 충성도 +5, 컨디션 +1(15일).`; } else { mood(p, -2, 20); res = `설득에 실패했습니다. ${p.ko} 컨디션 −2(20일).`; } }
       else { adj(p, -4); mood(p, -2, 30); res = `요청을 거절했습니다. ${p.ko} 충성도 −4, 컨디션 −2(30일).`; }
     } else if (e.type === 'conflict') {
       const cap = this.captain(), pm = clamp(cap ? 0.6 + (this.traitOf(cap) === 'leader' ? 0.2 : 0) : 0.25, 0.1, 0.9);
