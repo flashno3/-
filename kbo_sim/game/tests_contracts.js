@@ -18,7 +18,7 @@ const nm=k=>Object.values(S.players).find(p=>p.ko===k&&p.team in S.teams);
 {const q=Object.values(S.players).find(p=>p.ko==='양석환');const c=q.contract;ok(c.bonus===20&&c.amort===5&&c.yrs0===4,'양석환 계약금 20억 ÷ 4년 = 5억/년 상각');
  const T=Object.keys(S.teams);ok(T.every(t=>L.finPay(t)>=L.payroll(t)),'finPay ≥ 연봉합');}
 // 1d) 최지훈 SSG 4년 67억 잔류(구성 미공개: AAV 16.75, 연봉은 2026 공시 유지)
-{const q=Object.values(S.players).find(p=>p.ko==='최지훈');ok(q.team==='Landers'&&q.contract.years===4&&q.contract.total===67&&q.contract.end===2030&&Math.abs(q.contract.cbt-16.75)<0.01&&!q.contract.bonus,'최지훈 SSG 4년 67억');}
+{const q=Object.values(S.players).find(p=>p.ko==='최지훈');ok(q.team==='Landers'&&q.contract.years===4&&q.contract.total===67&&q.contract.end===2030&&Math.abs(q.contract.cbt-16.75)<0.01&&Math.abs(q.contract.salary-16.75)<0.01&&!q.contract.bonus,'최지훈 SSG 4년 67억 AAV(연봉·경쟁균형세 16.75)');}
 // 2) FA 시장가: 실제 FA 분포(1위권 25~30억, 하위 2~3억)
 const g=L.faList().filter(p=>p.faInfo&&p.faInfo.grade&&!p.foreign).sort((a,b)=>L.faMV(b)-L.faMV(a));
 ok(g.length>=15&&g[0].faInfo.mv>=25&&g[0].faInfo.mv<=30&&g[g.length-1].faInfo.mv>=2.4&&g[g.length-1].faInfo.mv<=4,'시장가 범위 '+g[0].faInfo.mv+'~'+g[g.length-1].faInfo.mv);

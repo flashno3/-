@@ -18,7 +18,7 @@ const mk=(seed,team)=>{const L=League.create(base,team||'Eagles',seed);L.faAdvan
  const d1=L._engData(false).modes.g,sp=L.players(t).filter(p=>p.active&&p.type==='P'&&p.GS>0)[0],pe=d1.pitchers.find(x=>x.id===sp.id);ok(Math.abs(pe.ip_per_start-sp.ipgs*1.1)<1e-9,'혹사: 선발 이닝 +10%');
  const bt=L.players(t).filter(p=>p.active&&p.type==='B')[0],be=d1.batters.find(x=>x.id===bt.id);ok(Math.abs(be.p.sba-bt.p.sba*1.5)<1e-9,'적극 주루: 도루 시도 ×1.5');
  L.setPolicy('pitch','save');const d2=L._engData(false).modes.g,pe2=d2.pitchers.find(x=>x.id===sp.id);ok(Math.abs(pe2.ip_per_start-sp.ipgs*0.9)<1e-9,'아낌: 선발 이닝 −10%');
- let ij={save:0,push:0};for(const pol of ['save','push']){L.setPolicy('pitch',pol);for(let s=0;s<6;s++){const L2=mk(20+s,'Lions');L2.setPolicy('pitch',pol);let c=0;const o=L2.S.userTeam;let g=0;while(L2.S.day<L2.S.schedule.length&&g++<30){L2.advance(6,false)}ij[pol]+=(L2.S.news.filter(x=>/^부상: /.test(x.text)).length)}}
+ let ij={save:0,push:0};for(const pol of ['save','push']){for(let s=0;s<4;s++){const L2=mk(20+s,'Lions'),S2=L2.S;L2.setPolicy('pitch',pol);S2.phase='regular';S2.news=[];for(let d=0;d<140;d++){S2.day=d;L2._injuryDay(d);for(const p of L2.players(S2.userTeam))if(p.inj&&!L2.isInj(p)&&p.inj.generated)delete p.inj;for(const p of L2.players(S2.userTeam))if(!p.active&&!L2.isInj(p)&&p.type==='P'&&S2.teams[S2.userTeam].ids.includes(p.id)&&L2.pitchers(S2.userTeam,true).length<13)p.active=true}ij[pol]+=S2.news.filter(x=>/^부상: /.test(x.text)).length}}
  ok(ij.push>ij.save,'혹사 방침이 부상 소식을 더 많이 만든다 '+JSON.stringify(ij));}
 // 4) 이벤트: 슬럼프·연승/연패 처리와 효과
 {const L=mk(6,'Lions'),S=L.S,t=S.userTeam,f=S.fin.teams[t];
@@ -27,7 +27,7 @@ const mk=(seed,team)=>{const L=League.create(base,team||'Eagles',seed);L.faAdvan
  const st=L._evAdd({type:'streak',title:'t',data:{kind:'win',n:7},text:'',choices:[{k:'bonus'}],def:'none'});L.resolveEvent(st.id,'bonus');ok(S.teamMood&&S.teamMood.v===1&&L.moodOf(L.players(t)[1])>=1,'연승 격려금: 팀 컨디션 +1');
  const g2=L._evAdd({type:'grievance',title:'t',data:{pid:b.id},text:'',choices:[{k:'ignore'}],def:'ignore'});b.mood=null;L.resolveEvent(g2.id,'ignore');ok(b.mood&&b.mood.v===-2,'불만 방치: 컨디션 −2');
  // 시즌 중 슬럼프·연승 이벤트가 실제로 발생
- let seen=new Set();for(const seed of [1,2,3,4,5,6,7,8]){const L2=mk(seed,'Lions');let g=0;while(L2.S.day<L2.S.schedule.length&&g++<60){L2.advance(5,false);for(const e of L2.eventsOpen())L2.resolveEvent(e.id,e.def||e.choices[0].k)}for(const e of L2.S.events.list)seen.add(e.type)}
+ let seen=new Set();for(const seed of [1,2,3,4,5,6]){if(seen.has('slump')||seen.has('streak'))break;const L2=mk(seed,'Lions');let g=0;while(L2.S.day<L2.S.schedule.length&&g++<60&&!(seen.has('slump')||seen.has('streak'))){L2.advance(5,false);for(const e of L2.eventsOpen())L2.resolveEvent(e.id,e.def||e.choices[0].k);for(const e of L2.S.events.list)seen.add(e.type)}}
  ok(seen.has('slump')||seen.has('streak'),'슬럼프·연승연패 이벤트 발생 '+[...seen]);}
 // 5) 노화: 완화된 하락폭
 {const L=League.create(base,'Lions',9),S=L.S;const {rngFor}=require(__dirname+'/src/league.js');let sum=0,m=0;

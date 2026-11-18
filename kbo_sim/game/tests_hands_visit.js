@@ -4,11 +4,11 @@ const fail=m=>{console.log('실패:',m);process.exitCode=1};
 const L=League.create(base,'Lions',2027);const S=L.S;
 // 1) 투타 불러오기: KBO 등록 현황 표 형식 + 간단한 형식 + 동명이인
 const text=[
- '번호\t선수명\t투타\t생년월일','27\t원태인\t우투우타\t2000-04-06','51\t디아즈\t우투좌타\t1996-01-01','구자욱,삼성,우투좌타','김도영 KIA 우투우타','2\t이승현\t좌투좌타\t2002-01-01','이름없는선수,좌투좌타'].join('\n');
+ '번호\t선수명\t투타\t생년월일','27\t김지찬\t우투우타\t2000-04-06','51\t디아즈\t우투좌타\t1996-01-01','강민호,삼성,우투좌타','김도영 KIA 우투우타','2\t이승현\t좌투좌타\t2002-01-01','이름없는선수,좌투좌타'].join('\n');
 const r=L.importHands(text);console.log('적용',r.applied,'| 동명이인',r.ambiguous,'| 못 찾음',r.missing.length);
 const pick=n=>Object.values(S.players).find(p=>p.ko===n&&p.team in S.teams);
 if(r.applied<3)fail('적용 수');if(!r.ambiguous.includes('이승현'))fail('동명이인 보고');
-console.log('원태인',L.handLabel(pick('원태인')),'디아즈',L.handLabel(pick('디아즈')),'구자욱',L.handLabel(pick('구자욱')),'김도영',L.handLabel(pick('김도영')));
+console.log('김지찬',L.handLabel(pick('김지찬')),'디아즈',L.handLabel(pick('디아즈')),'강민호',L.handLabel(pick('강민호')),'김도영',L.handLabel(pick('김도영')));
 if(L.handLabel(pick('디아즈'))!=='좌타')fail('좌타 인식');
 console.log('양식 줄 수(입력 안 된 선수):',L.handTemplate().split('\n').length);
 // 2) 전 선수에 임의 투타를 부여하고 엔진에서 좌우 상성이 작동하는지
