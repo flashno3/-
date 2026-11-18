@@ -185,3 +185,13 @@ details.card > summary { cursor: pointer; font-family: var(--font-display); font
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .card { padding: 12px; }
 }
+
+/* 로스터 */
+.rost tr.dim td { opacity: .62; }
+.pot { display: inline-block; min-width: 20px; text-align: center; border-radius: 5px; padding: 1px 5px; font-weight: 700; font-size: 12px; background: var(--bg); border: 1px solid var(--line); }
+.pot[data-l=A] { background: #7c3aed; color: #fff; border-color: #7c3aed; } .pot[data-l=B] { background: #2563eb; color: #fff; border-color: #2563eb; } .pot[data-l=C] { background: #0d9488; color: #fff; border-color: #0d9488; }
+
+.vm { display: none; }
+@media (max-width: 560px) { .vm { display: block; } .kpi .v { font-size: 17px; } .rost td, .rost th { padding-left: 5px; padding-right: 5px; } }
+
+@media (max-width: 560px) { .rost td:first-child { white-space: normal; max-width: 150px; } .rost .chip { font-size: 10.5px; padding: 1px 5px; } .rost td.n { white-space: nowrap; } }

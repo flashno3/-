@@ -131,16 +131,28 @@
 
   /* ---------------- 로스터 ---------------- */
   function screenRoster() {
-    const f = ui.rf.f, S = L.S;
-    let rows = L.players(U());
-    const fl = { all: () => true, B: p => p.type === 'B', P: p => p.type === 'P', act: p => p.active, res: p => !p.active };
-    rows = rows.filter(fl[f]).sort((a, b) => ui.rf.s === 'age' ? a.age - b.age : ui.rf.s === 'sal' ? b.contract.salary - a.contract.salary : L.ovr(b) - L.ovr(a));
-    const n1 = L.players(U()).filter(p => p.active).length;
-    const tr = rows.map(p => `<tr class="click" data-act="player" data-a="${p.id}"><td class="l"><b>${esc(p.ko)}</b> ${p.active ? '<span class="chip in">1군</span>' : '<span class="chip">2군</span>'}${injChip(p)}${L.handLabel(p) ? ` <span class="chip">${L.handLabel(p)}</span>` : ''}</td><td class="l">${pos(p)}</td><td class="n">${p.age}</td><td>${ovrChip(L.ovr(p))}</td><td class="l">${subHtml(p)}</td><td class="n">${salCell(p)} · ${p.contract.years}년</td><td class="l small">${statLine(p)}</td></tr>`).join('');
-    const tabs = [['all', '전체'], ['B', '타자'], ['P', '투수'], ['act', '1군'], ['res', '2군']];
-    return `<div class="card"><div class="row"><h2>로스터</h2><span class="muted small">총 ${L.players(U()).length}명 · 1군 ${n1}/${ACTIVE_MAX} · ${cbtText(U())}</span><span class="sp"></span><select data-sel="rsort"><option value="ovr" ${ui.rf.s === 'ovr' ? 'selected' : ''}>능력치순</option><option value="age" ${ui.rf.s === 'age' ? 'selected' : ''}>나이순</option><option value="sal" ${ui.rf.s === 'sal' ? 'selected' : ''}>연봉순</option></select></div>
-      <div class="tabs" role="tablist">${tabs.map(t => `<button role="tab" aria-selected="${f === t[0]}" data-act="rfilter" data-a="${t[0]}">${t[1]}</button>`).join('')}</div>
-      <div class="tablewrap"><table><thead><tr><th class="l">선수</th><th class="l">포지션</th><th>나이</th><th>OVR</th><th class="l">세부 능력</th><th>연봉·계약</th><th class="l">올 시즌</th></tr></thead><tbody>${tr}</tbody></table></div></div>`;
+    const S = L.S, t = U(), all = L.players(t), f = ui.rf.f, v = ui.rf.v || 'pos', sk = ui.rf.s;
+    const potv = p => (p.peak !== undefined && p.scout ? Math.max(L.ovr(p), p.scout.ceil) : L.ovr(p));
+    const hasPot = p => p.peak !== undefined && p.scout && !p.foreign;
+    const flt = { all: () => true, act: p => p.active, res: p => !p.active, inj: p => L.isInj(p), exp: p => p.contract.years <= 1 && !p.foreign, frn: p => p.foreign, young: p => p.age <= 25 && hasPot(p) && 'ABC'.includes(L.potLetter(p)) };
+    const key = { ovr: (a, b) => L.ovr(b) - L.ovr(a), age: (a, b) => a.age - b.age, sal: (a, b) => b.contract.salary - a.contract.salary, pot: (a, b) => potv(b) - potv(a) };
+    const cmp = (a, b) => (v === 'pos' ? (b.active - a.active) : 0) || key[sk](a, b) || L.ovr(b) - L.ovr(a);
+    const rows = all.filter(flt[f] || flt.all).sort(cmp);
+    const n1 = all.filter(p => p.active), avg = (arr, fn) => arr.length ? arr.reduce((s, p) => s + fn(p), 0) / arr.length : 0;
+    const rowOf = p => { const c = p.contract, lk = hasPot(p) && p.age <= 25 ? `<span class="pot" data-l="${L.potLetter(p)}" title="잠재력 ${L.potLetter(p)} · ${L.tierLabel(potv(p))}">${L.potLetter(p)}</span>` : '<span class="muted">-</span>';
+      return `<tr class="click${p.active ? '' : ' dim'}" data-act="player" data-a="${p.id}"><td class="l"><b>${esc(p.ko)}</b> ${p.active ? '' : '<span class="chip" title="2군">2군</span>'}${p.foreign ? ` <span class="chip">${p.aq ? 'AQ' : '외'}</span>` : ''}${injChip(p)}${L.handLabel(p) ? ` <span class="chip hm">${L.handLabel(p)}</span>` : ''}<div class="small muted vm">${pos(p)} · ${p.age}세</div></td><td class="l hm">${pos(p)}</td><td class="n hm">${p.age}</td><td>${ovrChip(L.ovr(p))}</td><td>${lk}</td><td class="n">${salCell(p)}<div class="small muted">${c.years}년${c.end ? ' <span class="hm">(~' + c.end + ')</span>' : ''}</div></td><td class="l hm">${subHtml(p)}</td><td class="l small hm">${statLine(p)}</td></tr>`; };
+    const head = '<thead><tr><th class="l">선수</th><th class="l hm">포지션</th><th class="hm">나이</th><th>OVR</th><th title="스카우트 추정 성장 상한(25세 이하)">잠재</th><th>연봉·계약</th><th class="l hm">세부 능력</th><th class="l hm">올 시즌</th></tr></thead>';
+    const groups = [['선발투수', p => p.type === 'P' && p.role === 'SP'], ['구원투수', p => p.type === 'P' && p.role !== 'SP'], ['포수', p => p.pos === 'C'], ['내야수', p => ['1B', '2B', '3B', 'SS'].includes(p.pos)], ['외야수', p => ['LF', 'CF', 'RF'].includes(p.pos)], ['지명타자', p => p.type === 'B' && p.pos === 'DH']];
+    const body = v === 'pos' ? groups.map(([nm, g]) => { const r = rows.filter(g); if (!r.length) return ''; const a1 = r.filter(p => p.active);
+      return `<div class="card"><div class="row"><h2 style="margin:0">${nm}</h2><span class="muted small">${r.length}명 · 1군 ${a1.length} · 평균 OVR ${avg(r, p => L.ovr(p)).toFixed(1)} · 평균 ${avg(r, p => p.age).toFixed(1)}세</span></div><div class="tablewrap"><table class="rost">${head}<tbody>${r.map(rowOf).join('')}</tbody></table></div></div>`; }).join('')
+      : `<div class="card"><div class="tablewrap"><table class="rost">${head}<tbody>${rows.map(rowOf).join('')}</tbody></table></div></div>`;
+    const flab = [['all', '전체'], ['act', '1군'], ['res', '2군'], ['inj', '부상'], ['exp', '계약 1년 이하'], ['frn', '외국인'], ['young', '유망주(25세↓ 잠재 C+)']];
+    const sortName = { ovr: '능력치(OVR) 높은 순', age: '나이 어린 순', sal: '연봉 높은 순', pot: '잠재력 높은 순' }[sk];
+    return `<div class="card"><div class="row"><h2 style="margin:0">로스터</h2><span class="muted small">${all.length}명 · 1군 ${n1.length}/${ACTIVE_MAX}</span><span class="sp"></span><select data-sel="rsort" aria-label="정렬 기준"><option value="ovr" ${sk === 'ovr' ? 'selected' : ''}>능력치순</option><option value="pot" ${sk === 'pot' ? 'selected' : ''}>잠재력순</option><option value="age" ${sk === 'age' ? 'selected' : ''}>나이순</option><option value="sal" ${sk === 'sal' ? 'selected' : ''}>연봉순</option></select></div>
+      <div class="kpis" style="margin-top:10px"><div class="kpi"><div class="l">1군 평균 OVR</div><div class="v">${avg(n1, p => L.ovr(p)).toFixed(1)}</div><div class="small muted">1군 평균 ${avg(n1, p => p.age).toFixed(1)}세</div></div><div class="kpi"><div class="l">구성</div><div class="v">투수 ${all.filter(p => p.type === 'P').length} · 타자 ${all.filter(p => p.type === 'B').length}</div><div class="small muted">부상 ${all.filter(p => L.isInj(p)).length} · 외국인 ${all.filter(p => p.foreign).length}</div></div><div class="kpi"><div class="l">연봉(상위 40)</div><div class="v">${L.cbtPay(t)}</div><div class="small muted">상한 ${L.cbtCap().toFixed(1)}억 · 계약 1년 이하 ${all.filter(flt.exp).length}명</div></div></div></div>
+      <div class="tabs" role="tablist"><button role="tab" aria-selected="${v === 'pos'}" data-act="rview" data-a="pos">포지션별</button><button role="tab" aria-selected="${v === 'list'}" data-act="rview" data-a="list">전체 목록</button></div>
+      <div class="chips">${flab.map(x => `<button class="sm" aria-pressed="${f === x[0]}" data-act="rfilter" data-a="${x[0]}">${x[1]}</button>`).join('')}</div>
+      <div class="small muted">정렬: ${v === 'pos' ? '포지션 그룹 안에서 <b>1군 → 2군</b>, 각각 ' : ''}<b>${sortName}</b> · 행을 누르면 상세(능력·잠재력·계약·성장 경로)가 열립니다. 2군은 흐리게 표시됩니다.</div>${body || '<div class="card muted">조건에 맞는 선수가 없습니다.</div>'}`;
   }
   function modalPlayer(id) {
     const p = P(id), mine = p.team === U(), s = L.sub(p);
@@ -676,6 +688,7 @@
     postAuto() { const c = L.startUserPostGame(); c.live.playToEnd(); const r = L.finishUserPostGame(c); openPostSheet([r]); autosave(); render(); },
     toOff() { L.startOffseason(); ui.screen = 'offseason'; autosave(); render(); },
     rfilter(a) { ui.rf.f = a; render(); },
+    rview(a) { ui.rf.v = a; render(); },
     player(a) { ui.modal = a; ui.confirm = null; render(); },
     closeModal() { ui.modal = null; ui.confirm = null; render(); },
     toggleActive(a) { const p = P(a), err = L.moveActive(a, !p.active); if (err) toast(err); else { autosave(); } render(); },
