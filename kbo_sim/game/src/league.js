@@ -60,6 +60,7 @@
       if (L.openFAMarket) L.openFAMarket();   // 2027 FA 협상 기간: 1월 1일 시작   // 코칭스태프(보도 기반 일부 + 가상)
       S.calib.base = L.talentLevel(undefined, true);
       L.newSeasonSetup(true);
+      if (L._setGoals) L._setGoals();
       return L;
     }
     /* 계약 연봉을 실제 KBO 규모로 환산: 최저 0.3억은 고정, 초과분만 배율 적용(리그 평균 상위 40명 합계 = 111.05억, 2025 발표 기준) */

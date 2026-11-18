@@ -509,6 +509,33 @@
     const done = ((L.S.events || {}).list || []).filter(e => e.status === 'done').slice(0, 6); if (!done.length) return '';
     return `<div class="card"><h2>최근 소식 처리</h2><ul class="news">${done.map(e => `<li><span class="d">${L.dateStr(e.day)}</span><span><b>${esc(e.title)}</b> — ${esc(e.result || '')}${e.auto ? ' (자동)' : ''}</span></li>`).join('')}</ul></div>`;
   }
+  /* ---------------- 시즌 목표 · 가을야구 확률 · 해임 · 결산 리포트 ---------------- */
+  function goalCard() {
+    const S = L.S, gs = S.phase === 'offseason' ? null : L.goalStatus(); if (!gs) return '';
+    const f = S.fin.teams[U()], reg = S.phase === 'regular' || S.phase === 'preseason', odds = reg && gs.played >= 10 ? L.playoffOdds(400) : null, o = odds ? odds[U()] : null;
+    const row = (l, cur, ok, note) => `<tr><td class="l">${l}</td><td class="n"><b>${cur}</b></td><td>${ok === null ? '<span class="chip">시즌 전</span>' : ok ? '<span class="chip in">달성 중</span>' : '<span class="chip warn">미달</span>'}</td><td class="l small muted hm">${note}</td></tr>`;
+    const risk = f.trust <= 25 ? `<div class="small neg" style="margin-top:6px">⚠ 이사회 신뢰도 ${f1(f.trust)} — 12 이하로 떨어지면 해임됩니다. 시즌 목표 달성과 흑자 운영으로 회복하세요.</div>` : '';
+    return `<div class="card"><div class="row"><h2 style="margin:0">${S.year} 시즌 목표</h2><span class="muted small">이사회 신뢰도 ${f1(f.trust)}</span></div>
+      <div class="tablewrap"><table><tbody>${row(`순위 ${gs.rank.goal}위 이내`, gs.played ? gs.rank.cur + '위' : '-', gs.rank.ok, `보수 ${gs.g.payRank}위 구단 기대`)}${row(`손익 ${f1(gs.profit.goal)}억 이상`, (gs.profit.cur >= 0 ? '+' : '') + f1(gs.profit.cur) + '억', gs.profit.ok, '예상 손익 기준(허용 적자 이내)')}${row(`25세 이하 ${gs.youth.goal}명 출전`, gs.youth.cur + '명', gs.youth.ok, '100타석 또는 50이닝 이상')}</tbody></table></div>
+      ${o ? `<div class="kpis" style="margin-top:8px"><div class="kpi"><div class="l">가을야구(5위 이내) 확률</div><div class="v">${o.top5}%</div></div><div class="kpi"><div class="l">정규시즌 1위 확률</div><div class="v">${o.top1}%</div></div><div class="kpi"><div class="l">예상 최종 승수</div><div class="v">${o.exp}</div></div></div>` : ''}
+      <div class="small muted" style="margin-top:6px">달성 시 신뢰도: 순위 목표 +3(2계단 이상 초과 +5), 육성 +2 / 순위 3계단 이상 미달 −3. 시즌 말 재정 결산과 함께 반영됩니다.</div>${risk}</div>`;
+  }
+  function firedModal() {
+    const S = L.S, fr = S.fired; if (!fr || fr.done) return '';
+    const st = L.standings(), opts = st.filter(x => x.team !== U());
+    return `<div class="modal-bg"><div class="modal" data-stop="1"><h2>감독 해임</h2><p>이사회 신뢰도 ${f1(fr.trust)} — ${KO[U()]} 구단이 감독 계약을 해지했습니다. 다른 구단을 맡아 커리어를 이어가세요.</p>
+      <div class="tablewrap" style="max-height:360px;overflow-y:auto"><table><thead><tr><th class="l">구단</th><th>올 시즌</th><th>선수단 보수</th><th></th></tr></thead><tbody>${opts.map(x => `<tr><td class="l">${teamTag(x.team)}</td><td class="n">${x.rank}위 ${x.w}-${x.l}</td><td class="n">${f1(L.finPay(x.team))}억</td><td><button class="sm primary" data-act="takeOver" data-a="${x.team}">부임</button></td></tr>`).join('')}</tbody></table></div>
+      <div class="small muted" style="margin-top:6px">새 구단의 라인업·로테이션은 자동 편성되고 이사회 신뢰도는 55에서 시작합니다. 지금까지의 기록·소식은 유지됩니다.</div></div></div>`;
+  }
+  function reportCard() {
+    const R = L.S.report; if (!R || R.year !== L.S.year) return '';
+    const aw = R.awards.map(a => `<tr class="click" data-act="player" data-a="${a.id}"><td class="l"><b>${a.label}</b></td><td class="l">${esc(a.name)} ${teamTag(a.team in KO ? a.team : U())}</td><td class="l small">${esc(a.txt)}</td></tr>`).join('');
+    const mine = R.mine.map(m => `<tr class="click" data-act="player" data-a="${m.id}"><td class="l"><b>${esc(m.name)}</b></td><td class="l small">${esc(m.txt)}</td></tr>`).join('');
+    const gl = R.goals.map(g => `<tr><td class="l">${esc(g.label)}</td><td class="n"><b>${esc(g.got)}</b> ${g.ok ? '<span class="chip in">달성</span>' : '<span class="chip warn">미달</span>'}${g.d ? ` <span class="${g.d >= 0 ? 'pos' : 'neg'}">${g.d > 0 ? '+' : ''}${g.d}</span>` : ''}</td></tr>`).join('');
+    return `<div class="card"><h2>${R.year} 시즌 리포트</h2><div class="small muted">${KO[U()]} ${R.rank}위 (${R.w}승 ${R.l}패 ${R.d}무)${R.champion ? ' · 우승 ' + (KO[R.champion] || '') : ''} · 이사회 신뢰도 ${f1(R.trust)} (${R.goalTrust >= 0 ? '+' : ''}${R.goalTrust})</div>
+      <div class="grid"><div><h3 style="margin:8px 0 4px">시즌 목표 결과</h3><div class="tablewrap"><table><tbody>${gl}</tbody></table></div><h3 style="margin:10px 0 4px">우리 팀 활약</h3><div class="tablewrap"><table><tbody>${mine}</tbody></table></div></div>
+      <div><h3 style="margin:8px 0 4px">시상</h3><div class="tablewrap"><table><tbody>${aw}</tbody></table></div></div></div></div>`;
+  }
   function screenFA() {
     const S = L.S, mk = !!(S.faMkt && !S.faMkt.closed), tab = ui.faTab || 'dom';
     const all = L.faList(), cnt = { dom: all.filter(p => !p.foreign).length, for: all.filter(p => p.foreign && !p.aq).length, aq: all.filter(p => p.foreign && p.aq).length };
@@ -534,7 +561,7 @@
       const h = S.history[S.history.length - 1], prog = off.rep.prog.slice().sort((a, b) => b.d - a.d);
       const pr = prog.map(x => `<tr class="click" data-act="player" data-a="${x.id}"><td class="l">${esc(P(x.id).ko)}</td><td class="n">${P(x.id).age}</td><td>${ovrChip(L.ovr(P(x.id)))}</td><td class="n ${x.d > 0 ? 'pos' : x.d < 0 ? 'neg' : ''}">${x.d > 0 ? '▲' : x.d < 0 ? '▼' : ''}${Math.abs(x.d)}</td></tr>`).join('');
       const ex = off.rep.expiring.map(id => { const p = P(id), ask = L.resignAsk(p); return `<tr><td class="l"><b>${esc(p.ko)}</b></td><td class="l">${pos(p)}</td><td class="n">${p.age}</td><td>${ovrChip(L.ovr(p))}</td><td class="l">${faStatus(p) || '<span class="muted small">외국인(1년 계약)</span>'}</td><td class="n">${money(ask)}${L.loyDiscount(p, p.team) > 0 ? `<div class="small pos">충성 할인 −${Math.round(L.loyDiscount(p, p.team) * 500) / 10}%</div>` : ''}</td><td><span class="muted small">1년</span> <button class="sm primary" data-act="resign" data-a="${id}">재계약</button></td></tr>`; }).join('');
-      return `${bar}<div class="card"><h2>${S.year} 시즌 결산</h2><p style="margin:0">${S.year}년 최종 ${h.userRank}위 (${h.userRec.w}승 ${h.userRec.l}패 ${h.userRec.d}무) · 우승 ${h.champion ? teamTag(h.champion) : '-'}</p>${off.rep.retired.length ? `<p class="small muted">은퇴: ${off.rep.retired.map(id => esc(P(id).ko)).join(', ')}</p>` : ''}</div>
+      return `${bar}${reportCard()}<div class="card"><h2>${S.year} 시즌 결산</h2><p style="margin:0">${S.year}년 최종 ${h.userRank}위 (${h.userRec.w}승 ${h.userRec.l}패 ${h.userRec.d}무) · 우승 ${h.champion ? teamTag(h.champion) : '-'}</p>${off.rep.retired.length ? `<p class="small muted">은퇴: ${off.rep.retired.map(id => esc(P(id).ko)).join(', ')}</p>` : ''}</div>
         <div class="grid"><div class="card"><h2>선수 성장·노화 (내 팀)</h2><div class="tablewrap" style="max-height:360px;overflow-y:auto"><table><thead><tr><th class="l">선수</th><th>나이</th><th>OVR</th><th>변화</th></tr></thead><tbody>${pr}</tbody></table></div></div>
         <div class="card"><h2>계약 만료 선수</h2>${off.rep.auto ? `<p class="small muted" style="margin:0 0 6px">연봉 2억 미만·35세 미만의 FA 자격 없는 선수 ${off.rep.auto}명은 시장 요구액으로 자동 재계약되었습니다.</p>` : ''}${ex ? '<div class="row" style="margin-bottom:6px"><button class="sm" data-act="resignAll">외국인 제외 전원 재계약(1년)</button></div>' : ''}${ex ? `<div class="tablewrap"><table><thead><tr><th class="l">선수</th><th class="l">포지션</th><th>나이</th><th>OVR</th><th class="l">FA</th><th>1년 연봉</th><th></th></tr></thead><tbody>${ex}</tbody></table></div>` : '<p class="muted">계약이 만료된 선수가 없습니다.</p>'}<p class="small muted">재계약은 모두 1년(연봉 계약)입니다. 여러 해 계약은 FA 시장에서 계약금을 포함해 협상합니다. FA 자격이 있는 선수를 재계약하지 않으면 FA 시장으로 나가며(등급에 따라 보상 발생), 자격이 없는 선수는 방출되어 자유계약이 됩니다.</p></div></div>
         <div class="row"><button class="primary big" data-act="toDraft">계약 확정 · 드래프트로</button></div>`;
@@ -744,8 +771,8 @@
     if (!L) { root.innerHTML = renderStart() + toastHtml(); return; }
     const scroll = window.scrollY;
     if (ui.live) { root.innerHTML = screenLive() + toastHtml(); window.scrollTo(0, scroll); return; }
-    const S = ui.screen, f = { home: () => screenHome() + evHistory(), roster: screenRoster, farm: screenFarm, lineup: screenLineup, pitching: screenPitching, schedule: screenSchedule, standings: screenStandings, teams: screenTeams, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
-    root.innerHTML = shell((S === 'home' || S === 'market' || S === 'offseason' ? eventCards() : evBanner()) + f()) + (ui.modal ? modalPlayer(ui.modal) : '') + sheetHtml() + toastHtml();
+    const S = ui.screen, f = { home: () => goalCard() + screenHome() + evHistory(), roster: screenRoster, farm: screenFarm, lineup: screenLineup, pitching: screenPitching, schedule: screenSchedule, standings: screenStandings, teams: screenTeams, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
+    root.innerHTML = shell((S === 'home' || S === 'market' || S === 'offseason' ? eventCards() : evBanner()) + f()) + (ui.modal ? modalPlayer(ui.modal) : '') + sheetHtml() + firedModal() + toastHtml();
     window.scrollTo(0, scroll);
     const cur = root.querySelector('.side button[aria-current=true]'); if (cur && cur.scrollIntoView) { try { cur.scrollIntoView({ inline: 'center', block: 'nearest' }); } catch (e) { /* 일부 브라우저 */ } }
   }
@@ -795,6 +822,7 @@
     clearTrade() { ui.trade.give.clear(); ui.trade.get.clear(); render(); },
     doTrade() { const T = ui.trade, r = L.executeTrade(T.team, [...T.give], [...T.get]); if (r.ok) { toast('트레이드가 성사되었습니다. 영입한 선수는 2군에 있으니 1군에 등록하세요.'); T.give.clear(); T.get.clear(); autosave(); } else toast(r.why || '트레이드가 거절되었습니다.'); render(); },
     openFAMarket() { ui.screen = 'market'; ui.market = 'fa'; render(); window.scrollTo(0, 0); },
+    takeOver(a) { if (L.takeOverTeam(a)) { toast(`${KO[a]} 감독으로 취임했습니다.`); ui.screen = 'home'; ui.viewTeam = null; autosave(); } render(); window.scrollTo(0, 0); },
     policy(a) { const [k, v] = a.split(':'); if (L.setPolicy(k, v)) { autosave(); render(); } },
     evChoice(a) { const [id, k] = a.split('|'), r = L.resolveEvent(id, k); toast(r.msg || ''); if (r.ok) autosave(); render(); },
     persuade(a) { const pr = ui.persuade; if (!pr || pr.id !== a) return; const r = L.persuadeBoard(a, pr.offer); if (!r.ok) { toast(r.msg); } else { toast(r.success ? `이사회가 승인했습니다. ${P(a).ko} 영입 완료 (신뢰도 −${r.drop.toFixed(1)})` : r.msg); ui.persuade = null; autosave(); } render(); },

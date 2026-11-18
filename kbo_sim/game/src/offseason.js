@@ -260,7 +260,9 @@
       if (my.kind === 'over') news(this, `경쟁균형세: 연봉 ${my.pay}억이 상한 ${my.cap}억을 초과(${my.n}회 연속) → 야구발전기금 ${my.fee}억 납부${my.drop ? ', 다음 드래프트 1라운드 지명 9단계 하락' : ''}`);
       else if (my.kind === 'under') news(this, `경쟁균형세: 연봉 ${my.pay}억이 하한 ${my.fl}억에 미달(${my.n}회 연속) → 유소년 발전기금 ${my.fee}억 납부`);
     }
+    const gs0 = this.goalStatus(); if (gs0) this._lastOp = gs0.profit.cur;   // 결산 직전 시즌 손익(목표 평가용)
     this.settleFinance();   // 시즌 재정 결산(CBT 정산과 같은 시점의 보수 기준)
+    this._seasonReport();   // 시상·목표 평가·해임 판정
     if (S.coach) this.refreshCoachMarket();   // 코치 시장 일부 교체
     // 1) 성장·노화
     for (const id in S.players) {
@@ -850,6 +852,13 @@
       if (k === -1 && n >= 6) { this._evAdd({ type: 'streak', title: `${n}연패 — 선수단 분위기`, ttl: 5, data: { kind: 'lose', n }, text: `팀이 ${n}연패 중입니다. 분위기 반전이 필요합니다.`,
           choices: [{ k: 'meeting', label: '선수단 면담·미팅', hint: '60% 성공: 15일간 팀 컨디션 +1, 실패: 7일간 −1' }, { k: 'camp', label: '휴식일 부여(훈련 강도 ↓)', hint: '10일간 팀 컨디션 +1, 부상 위험 −20%' }, { k: 'none', label: '정면 돌파(그대로)', hint: '변화 없음' }], def: 'none' }); return; }
     }
+    // 2d) AI 트레이드 제안 — 하루 1.5%, 시즌 3회, 마감 전
+    if (!this._evOpenOf('trade') && this._evCount('trade') < 3 && d > 8 && d < LIM_DEADLINE - 5 && r.random() < 0.015) {
+      const o = this._tradeOffer(r);
+      if (o) { const d1 = (p, tt) => `${p.ko} (${p.type === 'P' ? (p.role === 'SP' ? '선발' : '구원') : p.pos} · OVR ${this.ovr(p)} · ${p.age}세 · 연봉 ${p.contract.salary}억 · ${p.contract.years}년)`;
+        this._evAdd({ type: 'trade', title: `${KO0[o.t]} 트레이드 제안`, ttl: 6, data: { t: o.t, give: o.mine.id, get: o.y.id }, text: `${KO0[o.t]}가 ${o.mine.ko}를 원합니다. 대가로 ${o.y.ko}를 제시했습니다. 수락하면 즉시 이동하며 2군에 등록됩니다.`,
+          choices: [{ k: 'accept', label: `수락: ${o.mine.ko} ↔ ${o.y.ko}`, hint: `내줌: ${d1(o.mine)} / 받음: ${d1(o.y)}` }, { k: 'decline', label: '거절', hint: '변화 없음' }], def: 'decline' }); return; }
+    }
     // 3) 스폰서 제안 — 하루 1.2%, 시즌 2회
     if (!this._evOpenOf('sponsor') && this._evCount('sponsor') < 2 && d > 10 && d < 120 && r.random() < 0.012) {
       const amt = Math.round(f.lastRev * (0.004 + 0.004 * r.random()) * 10) / 10;
@@ -902,6 +911,10 @@
       if (k === 'accept') { f.evRev = Math.round(((f.evRev || 0) + e.data.amt) * 10) / 10; f.attMult = (f.attMult || 1) * 0.985; res = `스폰서 계약 체결: 올 시즌 매출 +${e.data.amt}억, 관중 −1.5%.`; } else res = '제안을 거절했습니다.';
     } else if (e.type === 'promo') {
       if (k === 'go') { f.evCost = Math.round(((f.evCost || 0) + e.data.cost) * 10) / 10; f.promo = { until: S.day + 20, mult: 1.06 }; res = `팬 이벤트 진행: 비용 ${e.data.cost}억, 20일간 관중 +6%.`; } else res = '이벤트를 보류했습니다.';
+    } else if (e.type === 'trade') {
+      const D = e.data;
+      if (k !== 'accept') res = '제안을 거절했습니다.';
+      else { const ev = this.executeTrade(D.t, [D.give], [D.get]); res = ev.ok ? `트레이드 성사: ${S.players[D.get].ko} 영입(2군 등록), ${S.players[D.give].ko} 이적.` : `성사되지 않았습니다(${ev.why || ev.msg || '조건 변경'}).`; }
     } else if (e.type === 'comp') {
       const D = e.data, fa = S.players[D.fa], pid = k && k.startsWith('p:') ? k.slice(2) : null, pl = pid ? S.players[pid] : null, valid = pl && pl.team === D.signer;
       for (const id of D.cands || []) if (S.players[id]) delete S.players[id].compHold;
@@ -918,6 +931,73 @@
     }
     e.status = 'done'; e.choice = k; e.result = res; e.auto = !!auto; news(this, `${e.title}: ${res}`); this.invalidate();
     return { ok: true, msg: res };
+  };
+  /* ---------------- 시즌 목표 · 평가 · 해임 압박 ----------------
+     시즌 시작 시 이사회가 목표를 제시한다: ① 순위(선수단 보수 순위를 기대 순위로 환산) ② 재정(손익이 허용 적자 이내) ③ 육성(25세 이하 3명이 1군에서 100타석·50이닝 이상).
+     시즌 종료 시 달성 여부가 이사회 신뢰도를 바꾸고, 신뢰도가 12 이하로 떨어지면 해임 → 다른 구단을 맡는다. */
+  const RANK_GOAL = [3, 3, 3, 5, 5, 5, 7, 7, 8, 8];   // 보수 순위 1~10 → 목표 순위(이내)
+  proto._payRank = function (t) { const pays = TEAMS.map(x => [x, this.finPay(x)]).sort((a, b) => b[1] - a[1]); return pays.findIndex(x => x[0] === t) + 1; };
+  proto._setGoals = function () {
+    const S = this.S, t = S.userTeam; if (!this.finReady()) return; const pr = this._payRank(t), f = S.fin.teams[t];
+    S.goals = { year: S.year, team: t, payRank: pr, rank: RANK_GOAL[pr - 1], profit: -Math.round(this.finAllowed(t) * 10) / 10, youth: 3 };
+  };
+  proto.goalStatus = function () {
+    const S = this.S, g = S.goals; if (!g || g.team !== S.userTeam) return null; const t = S.userTeam, st = this.standings(), me = st.find(x => x.team === t), played = me.w + me.l + me.d;
+    const v = this.finPreview(t), y = this.players(t).filter(p => !p.foreign && p.age <= 25).filter(p => { if (p.type === 'B') return (((S.stats.bat[p.id] || {}).PA) || 0) >= 100; return (((S.stats.pit[p.id] || {}).outs) || 0) >= 150; }).length;
+    return { g, rank: { cur: me.rank, goal: g.rank, ok: played ? me.rank <= g.rank : null }, profit: { cur: Math.round(v.op * 10) / 10, goal: g.profit, ok: v.op >= g.profit }, youth: { cur: y, goal: g.youth, ok: y >= g.youth }, played };
+  };
+  /* 가을야구(5위 이내)·1위 확률: 남은 경기를 현재 성적·득실 마진(피타고리안)으로 몬테카를로 */
+  proto.playoffOdds = function (n) {
+    const S = this.S, st = this.standings(), N = n || 400, r = rngFor(S.seed, S.year, S.day, 9700), len = S.schedule ? S.schedule.length || 144 : 144;
+    const rem = Object.fromEntries(st.map(x => [x.team, Math.max(0, len - (x.w + x.l + x.d))]));
+    const pw = Object.fromEntries(st.map(x => { const g = x.w + x.l + x.d, rs = x.rs + 80, ra = x.ra + 80, pyth = Math.pow(rs, 1.83) / (Math.pow(rs, 1.83) + Math.pow(ra, 1.83)), wp = g ? (x.w + 0.5 * x.d) / g : 0.5; return [x.team, clamp(0.5 + (pyth - 0.5) * 0.6 + (wp - 0.5) * 0.25 * Math.min(1, g / 60), 0.32, 0.68)]; }));
+    const out = {}; for (const x of st) out[x.team] = { top5: 0, top1: 0, exp: 0 };
+    for (let k = 0; k < N; k++) {
+      const w = st.map(x => { let wins = x.w + 0.5 * x.d; const p = pw[x.team]; for (let i = 0; i < rem[x.team]; i++) if (r.random() < p) wins++; return { t: x.team, wins: wins + r.random() * 0.01 }; }).sort((a, b) => b.wins - a.wins);
+      w.forEach((x, i) => { if (i < 5) out[x.t].top5++; if (i === 0) out[x.t].top1++; out[x.t].exp += x.wins; });
+    }
+    for (const t in out) { out[t].top5 = Math.round(out[t].top5 / N * 100); out[t].top1 = Math.round(out[t].top1 / N * 100); out[t].exp = Math.round(out[t].exp / N * 10) / 10; }
+    return out;
+  };
+  proto._seasonReport = function () {   // startOffseason 직후: 시상·팀 하이라이트·목표 평가·해임 판정
+    const S = this.S, t = S.userTeam, st = this.standings(), me = st.find(x => x.team === t), games = me.w + me.l + me.d, aw = [];
+    const bat = Object.entries(S.stats.bat).map(([id, c]) => { const p = S.players[id]; if (!p || !c.PA) return null; const ab = c.PA - c.BB - c.HBP - c.SF, h = c['1B'] + c['2B'] + c['3B'] + c.HR, tb = c['1B'] + 2 * c['2B'] + 3 * c['3B'] + 4 * c.HR, obp = (h + c.BB + c.HBP) / Math.max(1, c.PA), slg = ab ? tb / ab : 0; return { p, c, PA: c.PA, avg: ab ? h / ab : 0, H: h, HR: c.HR, RBI: c.RBI, SB: c.SB || 0, ops: obp + slg, val: (obp + slg - 0.72) * c.PA / 9 }; }).filter(Boolean);
+    const pit = Object.entries(S.stats.pit).map(([id, c]) => { const p = S.players[id]; if (!p || c.outs < 3) return null; const ra9 = c.R * 27 / c.outs; return { p, c, outs: c.outs, ra9, K: c.K, val: (4.8 - ra9) * c.outs / 27 * 1.1 }; }).filter(Boolean);
+    const qB = bat.filter(x => x.PA >= 3.1 * games), qP = pit.filter(x => x.outs >= games * 3 * 0.9), nm = x => ({ id: x.p.id, name: x.p.ko, team: x.p.team });
+    const top = (arr, f, label, txt) => { const x = arr.slice().sort((a, b) => f(b) - f(a))[0]; if (x) aw.push(Object.assign(nm(x), { label, txt: txt(x) })); };
+    const mv = bat.map(x => ({ x, v: x.val })).concat(pit.map(x => ({ x, v: x.val }))).sort((a, b) => b.v - a.v)[0];
+    if (mv) aw.push(Object.assign(nm(mv.x), { label: 'MVP', txt: mv.x.ops !== undefined ? `OPS ${mv.x.ops.toFixed(3)} ${mv.x.HR}홈런 ${mv.x.RBI}타점` : `RA9 ${mv.x.ra9.toFixed(2)} ${Math.floor(mv.x.outs / 3)}이닝 ${mv.x.K}K` }));
+    top(qB, x => x.avg, '타율왕', x => `타율 ${x.avg.toFixed(3).slice(1)}`); top(bat, x => x.HR, '홈런왕', x => `${x.HR}홈런`); top(bat, x => x.RBI, '타점왕', x => `${x.RBI}타점`); top(bat, x => x.SB, '도루왕', x => `${x.SB}도루`);
+    top(qP, x => -x.ra9, '최저 RA9', x => `RA9 ${x.ra9.toFixed(2)}`); top(pit, x => x.K, '탈삼진왕', x => `${x.K}탈삼진`);
+    const mine = bat.filter(x => x.p.team === t).map(x => ({ id: x.p.id, name: x.p.ko, v: x.val, txt: `타율 ${x.avg.toFixed(3).slice(1)} ${x.HR}홈런 ${x.RBI}타점` })).concat(pit.filter(x => x.p.team === t).map(x => ({ id: x.p.id, name: x.p.ko, v: x.val, txt: `RA9 ${x.ra9.toFixed(2)} ${Math.floor(x.outs / 3)}이닝 ${x.K}K` }))).sort((a, b) => b.v - a.v).slice(0, 3);
+    // 목표 평가 → 신뢰도 반영
+    const gs = this.goalStatus(), f = S.fin.teams[t], res = []; let d = 0;
+    if (gs) {
+      const r = gs.rank; const rd = r.goal - r.cur; let dr = rd >= 2 ? 5 : rd >= 0 ? 3 : rd <= -3 ? -3 : 0; res.push({ k: 'rank', label: `순위 목표 ${r.goal}위 이내`, got: `${r.cur}위`, ok: rd >= 0, d: dr }); d += dr;
+      const pr = this._lastOp !== undefined ? this._lastOp : gs.profit.cur; const okp = pr >= gs.profit.goal; res.push({ k: 'profit', label: `손익 ${gs.profit.goal.toFixed(1)}억 이상`, got: `${pr >= 0 ? '+' : ''}${pr.toFixed(1)}억`, ok: okp, d: 0 });
+      const dy = gs.youth.ok ? 2 : 0; res.push({ k: 'youth', label: `25세 이하 ${gs.youth.goal}명 이상 출전(100타석·50이닝)`, got: `${gs.youth.cur}명`, ok: gs.youth.ok, d: dy }); d += dy;
+      f.trust = clamp(Math.round((f.trust + d) * 10) / 10, 0, 100);
+    }
+    S.report = { year: S.year, rank: me.rank, w: me.w, l: me.l, d: me.d, champion: S.post ? S.post.champion : null, awards: aw, mine, goals: res, goalTrust: d, trust: f.trust };
+    if (res.length) news(this, `시즌 목표 평가: ${res.map(x => `${x.label} ${x.ok ? '달성' : '미달'}`).join(' · ')} → 이사회 신뢰도 ${d >= 0 ? '+' : ''}${d} (현재 ${f.trust})`);
+    if (f.trust <= 12) { S.fired = { year: S.year, trust: f.trust, done: false }; news(this, `이사회가 감독 해임을 결정했습니다 (신뢰도 ${f.trust}).`); }
+  };
+  proto.takeOverTeam = function (t) {   // 해임 후 다른 구단 지휘: 라인업·로테이션 자동 편성, 신뢰도 55로 시작
+    const S = this.S; if (!(t in S.teams) || t === S.userTeam) return false; const old = S.userTeam;
+    S.userTeam = t; this.autoSettings(t); this.repairSettings(t); const f = S.fin.teams[t]; f.trust = 55;
+    S.protect = undefined; S.policy = { pitch: 'normal', run: 'normal' }; S.teamMood = null; if (S.events) for (const e of S.events.list) if (e.status === 'open') { e.status = 'done'; e.result = '감독 교체로 종결'; }
+    for (const id in S.players) if (S.players[id].mood) delete S.players[id].mood;
+    if (S.fired) S.fired.done = true; this._setGoals(); this.invalidate(); news(this, `${KO0[old]} 감독 해임 → ${KO0[t]} 감독 취임`); return true;
+  };
+  /* AI 트레이드 제안: 내 선수 1명을 원하는 구단이 동등 가치의 선수 1명을 제시(트레이드 평가 규칙을 통과하는 안만) */
+  proto._tradeOffer = function (r) {
+    const S = this.S, me = S.userTeam, cands = this.players(me).filter(p => !p.foreign && p.rookie !== S.year && this.marketValue(p) >= 1.5 && !this.isInj(p)).sort((a, b) => this.marketValue(b) - this.marketValue(a)).slice(3, 18); if (!cands.length) return null;
+    const mine = cands[Math.floor(r.random() * cands.length)], ai = TEAMS.filter(t => t !== me).sort(() => r.random() - 0.5);
+    for (const t of ai) {
+      const vGive = this.tradeValue(mine, t), opts = this.players(t).filter(p => !p.foreign && p.type === mine.type && p.rookie !== S.year && this.tradeValue(p, t) * 1.12 + 0.1 <= vGive).sort((a, b) => this.ovr(b) - this.ovr(a));
+      for (const y of opts.slice(0, 4)) { if (this.ovr(y) < this.ovr(mine) - 8) continue; const ev = this.evaluateTrade(t, [mine.id], [y.id]); if (ev.ok) return { t, mine, y }; }
+    }
+    return null;
   };
   /* ---------------- 새 시즌 ---------------- */
   proto.ensureActive = function (t) {   // 1군 28명 유지(부족하면 가치 높은 선수로 채움, 초과하면 낮은 순으로 내림)
@@ -952,6 +1032,7 @@
     this.returnMilitary(S.year * 12 + 2);   // 새 시즌 개막(3월) 전까지 전역한 선수 복귀
     this.newSeasonSetup(false); this.repairSettings(S.userTeam);
     const cap = S.calib.cap; S.calib.cap = cap;
+    this._setGoals(); S.report = S.report;
     news(this, `${S.year} 시즌 개막 준비`);
   };
 
