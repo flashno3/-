@@ -507,7 +507,7 @@
   };
   /* 보상선수 가치(억 환산): 현재 시장가치 ×2 + 26세 이하 성장 여력(스카우트 정점 − 현재 OVR) × 0.04 — 보호선수 밖 선수는 대부분 저연봉 유망주라 현재 가치만 보면 항상 보상금이 유리해진다 */
   proto.compValue = function (q) { return this.marketValue(q) * 2 + (q.scout && q.age <= 26 ? Math.max(0, q.scout.ceil - this.ovr(q)) * 0.04 : 0); };
-  proto.compCandidates = function (t, p, g) { const prot = new Set(this.compProtected(t, g)); return this._compEligible(t, p).filter(x => !prot.has(x.id)).sort((a, b) => this.compValue(b) - this.compValue(a)); };
+  proto.compCandidates = function (t, p, g) { const prot = new Set(this.compProtected(t, g)); return this._compEligible(t, p).filter(x => !prot.has(x.id) && !x.compHold).sort((a, b) => this.compValue(b) - this.compValue(a)); };   // 다른 보상 결정에 제시 중인 선수는 제외
   proto.setProtect = function (ids) { this.S.protect = Array.from(new Set(ids)).slice(0, 25); };   // 내 팀 보호선수(최대 25명, A등급은 그중 가치 상위 20명)
   proto._compPay = function (signer, old, amt, label) {
     const S = this.S; amt = Math.round(amt * 10) / 10; if (!amt || !S.fin) return;
@@ -531,7 +531,7 @@
     const cands = this.compCandidates(t, p, g);
     if (old === S.userTeam) {   // 내 선수가 떠남: 후보를 보고 선수/보상금 선택
       if (!cands.length) { this._compApply(t, old, p, g, prev, null); return; }
-      const top = cands.slice(0, 4);
+      const top = cands.slice(0, 4); for (const x of top) x.compHold = true;   // 결정 전까지 보호(방출·정리 대상 제외)
       this._evAdd({ type: 'comp', title: `FA 보상 선택: ${p.ko}(${g}등급) → ${KO0[t]}`, ttl: 30, data: { signer: t, fa: p.id, grade: g, prev, cands: top.map(x => x.id) }, def: 'money',
         text: `${KO0[t]}가 ${p.ko}를 영입했습니다. 보상은 (보상선수 1명 + 전년 연봉 ${sc[0] * 100}%) 또는 (보상금만 ${sc[1] * 100}%) 중 선택합니다. 전년 연봉 ${prev.toFixed(1)}억 기준 — 선수 선택 시 ${(prev * sc[0]).toFixed(1)}억, 보상금만 ${(prev * sc[1]).toFixed(1)}억.`,
         choices: top.map(x => ({ k: 'p:' + x.id, label: `${x.ko} (${x.type === 'P' ? (x.role === 'SP' ? '선발' : '구원') : x.pos})`, hint: `OVR ${this.ovr(x)} · ${x.age}세 · 시장가치 ${this.marketValue(x).toFixed(1)}억` })).concat([{ k: 'money', label: `보상금만 ${(prev * sc[1]).toFixed(1)}억`, hint: '선수 지명 없이 보상금 정산' }]) });
@@ -643,7 +643,7 @@
         const p = this.faList().filter(x => x.type === kind && !x.foreign && !(x.faInfo && x.faInfo.grade && x.faInfo.from !== t)).sort((a, b) => this.war(b) - this.war(a))[0] || this.makeRookie(r, kind);
         if (p.team === 'FA') S.fa = S.fa.filter(x => x !== p.id); p.team = t; p.contract = { salary: Math.max(0.3, Math.min(this.askSalary(p), 0.6)), years: 1 }; S.teams[t].ids.push(p.id);
       }
-      while (S.teams[t].ids.length > ROSTER_MAX) { const w = this.players(t).sort((a, b) => this.marketValue(a) - this.marketValue(b))[0]; this._retireOrRelease(t, w.id); }
+      while (S.teams[t].ids.length > ROSTER_MAX) { const w = this.players(t).filter(x => !x.compHold).sort((a, b) => this.marketValue(a) - this.marketValue(b))[0]; if (!w) break; this._retireOrRelease(t, w.id); }   // 보상 후보로 제시된 선수는 결정 전까지 방출 대상에서 제외
     }
     this._aiCoachHire();   // AI 구단 코치 영입(정원·예산 이내)
     // 시장에 남은 선수: 나이 많고 가치 낮으면 은퇴
@@ -904,6 +904,7 @@
       if (k === 'go') { f.evCost = Math.round(((f.evCost || 0) + e.data.cost) * 10) / 10; f.promo = { until: S.day + 20, mult: 1.06 }; res = `팬 이벤트 진행: 비용 ${e.data.cost}억, 20일간 관중 +6%.`; } else res = '이벤트를 보류했습니다.';
     } else if (e.type === 'comp') {
       const D = e.data, fa = S.players[D.fa], pid = k && k.startsWith('p:') ? k.slice(2) : null, pl = pid ? S.players[pid] : null, valid = pl && pl.team === D.signer;
+      for (const id of D.cands || []) if (S.players[id]) delete S.players[id].compHold;
       const lg = (S.compLog || []).find(c => c.pending && c.id === D.fa); if (lg) { const i = S.compLog.indexOf(lg); S.compLog.splice(i, 1); }
       res = this._compApply(D.signer, t, fa, D.grade, D.prev, valid ? pid : null);
     } else if (e.type === 'board') {
