@@ -5,7 +5,8 @@ const L=League.create(base,'Lions',5),S=L.S,U='Lions',C=S.coach;
 const cnt=Object.fromEntries(Object.keys(S.teams).map(t=>[t,L.coachesOf(t).length]));
 ok(Object.values(cnt).every(v=>v>=6)&&cnt.Giants===7&&L.coachLimit()===6,'팀별 코치 수 '+JSON.stringify(cnt)+' 정원 '+L.coachLimit());
 ok(L.coachesOf('Giants').some(c=>c.name==='임경완'&&c.role==='투수'&&c.origin==='real')&&L.coachesOf('Heroes').some(c=>c.name==='이성열'&&c.role==='타격'),'롯데·키움 실명 코치(보도)');
-ok(C.mgr.Eagles.name==='류지현'&&C.mgr.Tigers.name==='이범호'&&C.mgr.Wiz.virtual,'감독(KT·NC 미확인은 가상)');
+ok(C.mgr.Eagles.name==='류지현'&&C.mgr.Tigers.name==='이범호'&&C.mgr.Wiz.name==='이강철'&&C.mgr.Dinos.name==='이호준'&&Object.values(C.mgr).every(m=>!m.virtual),'감독 10명 모두 실명(보도)');
+ok(L.coachesOf('Twins').some(c=>c.name==='손혁'&&c.role==='투수')&&L.coachesOf('Landers').some(c=>c.name==='박재상'&&c.role==='총괄')&&L.coachesOf('Lions').some(c=>c.name==='모리야마 료지'&&c.role==='총괄')&&L.coachesOf('Eagles').some(c=>c.name==='안영명')&&L.coachesOf('Wiz').some(c=>c.name==='이종범'&&c.role==='수비·주루')&&L.coachesOf('Tigers').some(c=>c.name==='진갑용'),'팀별 실명 코치(보도 기반)');
 for(const t of Object.keys(S.teams)){const cs=L.coachesOf(t);ok(['투수','타격','수비·주루','총괄'].every(r=>cs.some(c=>c.role===r)),t+' 보직 구성');for(const c of cs){ok(c.spec.length>=1&&c.spec.every(f=>c[f]>=45)&&['stuff','control','stamina','contact','power','eye','defense','speed','mgmt'].every(f=>c[f]>=25&&c[f]<=82),'능력치 범위 '+c.name);ok(c.salary>=0.5&&c.salary<=3.2,'연봉');}}
 ok(L.coachMarket().length>=12&&L.coachMarket().every(c=>!c.team&&c.origin==='market'),'코치 시장');
 ok(L.coachGrade(80)==='S'&&L.coachGrade(65)==='A'&&L.coachGrade(55)==='B'&&L.coachGrade(45)==='C'&&L.coachGrade(30)==='E','등급 구간');
