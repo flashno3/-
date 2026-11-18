@@ -101,7 +101,7 @@
     const rows = st.map(x => `<tr class="click ${x.team === U() ? 'me' : ''} ${x.rank === 5 ? 'cut' : ''}" data-act="team" data-a="${x.team}"><td class="l n">${x.rank}</td><td class="l">${teamTag(x.team)}</td><td class="n">${x.w}-${x.l}${x.d ? '-' + x.d : ''}</td><td class="n">${pct3(x.pct)}</td><td class="n ${x.rs - x.ra >= 0 ? 'pos' : 'neg'}">${sgn(x.rs - x.ra)}</td></tr>`).join('');
     const news = S.news.slice(0, 8).map(n => `<li><span class="d">${n.year}</span><span>${esc(n.text)}</span></li>`).join('') || '<li class="muted">아직 소식이 없습니다.</li>';
     const fam = S.faMkt && !S.faMkt.closed && S.phase === 'preseason';
-    const act = fam ? `<div class="card"><h2>FA 협상 기간 · ${L.faDateStr(S.faMkt.day)}</h2><div class="small muted">시즌 개막 전에 FA 계약을 마무리해야 합니다. 개막 ${L.faDaysLeft()}일 전 — 날짜를 하루씩 진행하며 경쟁 구단의 입찰을 보고 금액을 조정하세요.</div><div class="row" style="margin-top:8px"><button class="primary" data-act="openFAMarket">FA 시장 열기</button></div></div>` : live ? `<div class="card"><h2>진행</h2><div class="row"><label class="row" style="gap:6px"><input type="checkbox" id="liveMode" ${ui.liveMode ? 'checked' : ''}>내 경기는 직접 지휘</label><span class="sp"></span>
+    const act = fam ? `<div class="card"><h2>FA 협상 기간 · ${L.faDateStr(S.faMkt.day)}</h2><div class="small muted">시즌 개막 전에 FA 계약을 마무리해야 합니다. 개막 ${L.faDaysLeft()}일 전 — 날짜를 하루씩 진행하며 경쟁 구단의 입찰을 보고 금액을 조정하세요.</div><div class="row" style="margin-top:8px"><button class="primary" data-act="openFAMarket">FA 시장 열기</button></div></div>` : live ? `<div class="card"><h2>진행</h2><div class="row"><label class="row small" style="gap:6px">내 경기 <select id="playMode"><option value="auto" ${!ui.liveMode ? 'selected' : ''}>자동 진행</option><option value="highlight" ${ui.liveMode && ui.hl ? 'selected' : ''}>접전만 직접 지휘</option><option value="full" ${ui.liveMode && !ui.hl ? 'selected' : ''}>처음부터 직접 지휘</option></select></label><span class="sp"></span>
       <button class="primary" data-act="advMoment" title="새 소식·부상·트레이드 마감·확률 변화 같은 중요한 순간까지 자동으로 진행합니다">다음 중요 순간까지</button><button data-act="adv" data-a="1">${ui.liveMode ? '경기 시작' : '하루 진행'}</button><button data-act="advAuto" data-a="7">1주 자동</button><button data-act="advAuto" data-a="30">1개월 자동</button><button data-act="advAuto" data-a="999">시즌 끝까지</button></div>
       ${ui.lastStop ? `<div class="small" style="margin-top:8px"><b>멈춘 이유</b> · ${esc(ui.lastStop)}</div>` : ''}
       <details style="margin-top:6px"><summary class="small">멈춤 조건 설정</summary><div class="row" style="margin-top:6px;gap:8px 14px">${[['event', '새 소식'], ['injury', '내 선수 부상'], ['deadline', '트레이드 마감 5일 전'], ['odds', '가을야구 확률 구간 변화'], ['goal', '시즌 목표 달성 여부 변화'], ['month', '월초 점검']].map(([k, l]) => `<label class="row small" style="gap:4px"><input type="checkbox" data-act="stopSet" data-a="${k}" ${L.stopOpts()[k] ? 'checked' : ''}>${l}</label>`).join('')}</div></details>
@@ -198,7 +198,13 @@
       pitch: { title: '투수 운용 방침', cur: pol.pitch, items: [['save', '아끼기', '선발 이닝 −10% · 투수 부상 위험 −20% (불펜 부담↑)'], ['normal', '보통', '기본'], ['push', '밀어붙이기', '선발 이닝 +10% · 투수 부상 위험 +30%']] },
       run: { title: '주루 방침', cur: pol.run, items: [['low', '소극적', '도루 시도 −40% · 부상 위험 −5%'], ['normal', '보통', '기본'], ['high', '적극적', '도루 시도 +50% · 타자 부상 위험 +10%']] }
     }[kind], sel = opt.items.find(x => x[0] === opt.cur);
-    return `<div class="card"><div class="row"><h2 style="margin:0">${opt.title}</h2><span class="sp"></span>${opt.items.map(x => `<button class="sm ${x[0] === opt.cur ? 'primary' : ''}" data-act="policy" data-a="${kind}:${x[0]}" title="${esc(x[2])}">${x[1]}</button>`).join('')}</div><div class="small muted" style="margin-top:4px">현재: <b>${sel[1]}</b> — ${sel[2]}. 내 팀 경기 시뮬레이션에 바로 반영됩니다.</div></div>`;
+    const PL = L.plan(), pbtn = (k, items) => items.map(([v, lab, tip]) => `<button class="sm ${PL[k] === v ? 'primary' : ''}" data-act="plan" data-a="${k}:${v}" title="${esc(tip || '')}">${lab}</button>`).join(''), onoff = (k, lab, tip) => `<div class="row small" style="gap:6px;margin-top:6px"><span style="min-width:112px">${lab}</span>${pbtn(k, [[true, '켬', tip], [false, '끔', '']])}</div>`;
+    const planHtml = kind === 'pitch' ? `<div style="margin-top:8px;border-top:1px solid var(--line);padding-top:6px"><b class="small">경기 계획 (자동 진행에 적용)</b>
+      <div class="row small" style="gap:6px;margin-top:6px"><span style="min-width:112px">선발 교체 시점</span>${pbtn('starter', [['quick', '빠르게', '4실점·피로 2 또는 예정 이닝 −1이닝'], ['normal', '기본', '6실점·피로 3'], ['long', '오래', '8실점·피로 4 또는 예정 +1이닝']])}</div>
+      <div class="row small" style="gap:6px;margin-top:6px"><span style="min-width:112px">마무리 투입</span>${pbtn('closer', [['ninth', '9회 세이브만', '9회 1~3점 차'], ['flex', '8회 위기부터', '8회 1~2점 차 리드에서도 마무리 투입']])}</div>
+      ${onoff('infIn', '전진 수비', '7회 이후 0~2점 차, 3루 주자·2사 미만이면 전진 수비')}${onoff('hold', '주자 견제', '1루에 발 빠른 주자(주력 58+)가 있으면 견제')}${onoff('careful', '접전 신중한 승부', '8회 이후 1~2점 차 리드·주자 있을 때 신중한 승부')}</div>` : `<div style="margin-top:8px;border-top:1px solid var(--line);padding-top:6px"><b class="small">경기 계획 (자동 진행에 적용)</b>${onoff('contact', '득점권 컨택 접근', '3루 주자·2사 미만·2점 차 이내: 삼진을 줄이고 땅볼·플라이로도 득점')}
+      <div class="row small" style="gap:6px;margin-top:6px"><span style="min-width:112px">접전 직접 지휘</span>${pbtn('hlFrom', [[6, '6회~', ''], [7, '7회~', ''], [8, '8회~', '']])}<span class="muted">'접전만 직접 지휘' 모드에서 2점 차 이내가 되면 직접 지휘로 전환</span></div></div>`;
+    return `<div class="card"><div class="row"><h2 style="margin:0">${opt.title}</h2><span class="sp"></span>${opt.items.map(x => `<button class="sm ${x[0] === opt.cur ? 'primary' : ''}" data-act="policy" data-a="${kind}:${x[0]}" title="${esc(x[2])}">${x[1]}</button>`).join('')}</div><div class="small muted" style="margin-top:4px">현재: <b>${sel[1]}</b> — ${sel[2]}. 내 팀 경기 시뮬레이션에 바로 반영됩니다.</div>${planHtml}</div>`;
   }
   function screenLineup() { return policyCard('run') + screenLineup0(); }
   function screenLineup0() {
@@ -801,8 +807,16 @@
 
   /* ---------------- 액션 ---------------- */
   function afterAdvance(r) {
-    if (r.status === 'userGame') { openLive(r.game, r.idx, false); return; }
+    if (r.status === 'userGame') { if (ui.hl) openLiveHL(r.game, r.idx); else openLive(r.game, r.idx, false); return; }
     autosave(); render();
+  }
+  /* 하이라이트 개입: 설정한 이닝 이후 접전이 되기 전까지는 경기 계획대로 자동 진행하고, 그 시점부터 직접 지휘 */
+  function openLiveHL(g, idx) {
+    L.mergeTracking(); const ctx = L.startUserGame(g, idx), us = ctx.userSide, done = L.playAuto(ctx, gm => L.isHighlight(gm, us)), gm = ctx.live;
+    ui.live = { ctx, feed: [], lbl: '', pick: null, sheet: null, post: false, before: snapshot() };
+    ui.live.feed.unshift({ w: '', t: done ? `경기 계획대로 자동 진행 — 접전 구간 없이 종료 (${KO[gm.away]} ${gm.score.away} : ${gm.score.home} ${KO[gm.home]})` : `하이라이트 — ${gm.inning}회 ${gm.top ? '초' : '말'} ${KO[gm.away]} ${gm.score.away} : ${gm.score.home} ${KO[gm.home]} 접전, 여기서부터 직접 지휘합니다`, sys: true });
+    if (done) { A.liveFinish(); return; }
+    render(); window.scrollTo(0, 0);
   }
   function openLive(g, idx, post) {
     L.mergeTracking(); const ctx = post ? L.startUserPostGame() : L.startUserGame(g, idx);
@@ -827,7 +841,7 @@
     postNext() { if (L.userInPost()) { ui.liveMode ? A.postLive() : A.postAuto(); return; } const r = L.simPostGame(); if (r) openPostSheet([r]); autosave(); render(); },
     postAll() { let n = 0; const list = []; while (!L.S.post.done && !L.userInPost() && n++ < 40) { const r = L.simPostGame(); if (r) list.push(r); } if (list.length) openPostSheet(list); autosave(); render(); },
     postLive() { openLive(null, 0, true); },
-    postAuto() { const c = L.startUserPostGame(); c.live.playToEnd(); const r = L.finishUserPostGame(c); openPostSheet([r]); autosave(); render(); },
+    postAuto() { const c = L.startUserPostGame(); L.playAuto(c); const r = L.finishUserPostGame(c); openPostSheet([r]); autosave(); render(); },
     toOff() { L.startOffseason(); ui.screen = 'offseason'; autosave(); render(); },
     rfilter(a) { ui.rf.f = a; render(); },
     rview(a) { ui.rf.v = a; render(); },
@@ -846,6 +860,7 @@
     doTrade() { const T = ui.trade, r = L.executeTrade(T.team, [...T.give], [...T.get]); if (r.ok) { toast('트레이드가 성사되었습니다. 영입한 선수는 2군에 있으니 1군에 등록하세요.'); T.give.clear(); T.get.clear(); autosave(); } else toast(r.why || '트레이드가 거절되었습니다.'); render(); },
     openFAMarket() { ui.screen = 'market'; ui.market = 'fa'; render(); window.scrollTo(0, 0); },
     takeOver(a) { if (L.takeOverTeam(a)) { toast(`${KO[a]} 감독으로 취임했습니다.`); ui.screen = 'home'; ui.viewTeam = null; autosave(); } render(); window.scrollTo(0, 0); },
+    plan(a) { const [k, v] = a.split(':'), val = v === 'true' ? true : v === 'false' ? false : /^\d+$/.test(v) ? +v : v; if (L.setPlan(k, val)) { autosave(); render(); } },
     policy(a) { const [k, v] = a.split(':'); if (L.setPolicy(k, v)) { autosave(); render(); } },
     evChoice(a) { const [id, k] = a.split('|'), r = L.resolveEvent(id, k); toast(r.msg || ''); if (r.ok) autosave(); render(); },
     persuade(a) { const pr = ui.persuade; if (!pr || pr.id !== a) return; const r = L.persuadeBoard(a, pr.offer); if (!r.ok) { toast(r.msg); } else { toast(r.success ? `이사회가 승인했습니다. ${P(a).ko} 영입 완료 (신뢰도 −${r.drop.toFixed(1)})` : r.msg); ui.persuade = null; autosave(); } render(); },
@@ -883,7 +898,7 @@
     liveAdv(a) { const lv = ui.live, us = lv.ctx.userSide; if (a === 'pcOpen' || a === 'phOpen' || a === 'prOpen') A.liveTac(a); else if (a === 'ibb' || a === 'bunt' || a === 'har' || a === 'mv') liveTactic(a); else if (a === 'inf' || a === 'hold') { lv.ctx.live.setTactic(us, a, true); render(); } else { lv.ctx.live.setTactic(us, 'bat', a); render(); } },
     livePickClose() { ui.live.pick = null; render(); },
     liveDo(a, b) { liveTactic(a, b); },
-    liveAbort() { const lv = ui.live; lv.ctx.auto = true; const g = lv.ctx.live; g.playToEnd(); lv.feed.unshift({ w: '', t: `경기 종료 ${KO[g.away]} ${g.score.away} : ${g.score.home} ${KO[g.home]}`, sys: true }); lv.sheet = null; lv.pick = null; render(); },
+    liveAbort() { const lv = ui.live; lv.ctx.auto = true; const g = lv.ctx.live; L.playAuto(lv.ctx); lv.feed.unshift({ w: '', t: `경기 종료 ${KO[g.away]} ${g.score.away} : ${g.score.home} ${KO[g.home]}`, sys: true }); lv.sheet = null; lv.pick = null; render(); },
     liveFinish() {
       const lv = ui.live, post = lv.post, before = lv.before, r = post ? L.finishUserPostGame(lv.ctx) : L.finishUserGame(lv.ctx);
       ui.live = null; autosave(); if (post) openPostSheet([r]); else openResultSheet(before); render(); window.scrollTo(0, 0);
@@ -900,6 +915,7 @@
     const el = e.target; if (!L && el.id !== 'seedIn') return;
     if (el.id === 'seedIn') { ui.seed = el.value; return; }
     if (el.id === 'liveMode') { ui.liveMode = el.checked; render(); return; }
+    if (el.id === 'playMode') { ui.liveMode = el.value !== 'auto'; ui.hl = el.value === 'highlight'; render(); return; }
     if (el.id === 'autoBp') { ui.live.ctx.auto = el.checked; return; }
     if (el.type === 'checkbox' && el.dataset.act && A[el.dataset.act]) { A[el.dataset.act](el.dataset.a, el); return; }
     const sel = el.dataset.sel; if (!sel) return;

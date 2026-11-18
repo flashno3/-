@@ -656,7 +656,7 @@
       this._decayFatigue(); this._tickService(); if (this._injuryDay) this._injuryDay(d); if (this._eventDay) this._eventDay(d); if (this._finSnapDay) this._finSnapDay(d); this.playFutures(d); this.returnMilitary(this.milYM(d));
       if (!ug) { S.day++; return { status: 'ok', day: d }; }
       if (live) { S.pendingDay = d; return { status: 'userGame', day: d, game: ug.g, idx: ug.i }; }
-      const L = this.startUserGame(ug.g, ug.i); L.live.playToEnd(); const res = this.finishUserGame(L);
+      const L = this.startUserGame(ug.g, ug.i); this.playAuto(L); const res = this.finishUserGame(L);
       return { status: 'ok', day: d, user: res };
     }
     /* N일 또는 시즌 끝까지. live 모드에서는 내 경기에서 멈춘다. */
@@ -703,17 +703,40 @@
       ctx.live = live; ctx.E = E; return ctx;
     }
     /* 내 팀 자동 불펜 운용: 하프 이닝 시작 전에 호출(ctx.auto 가 꺼져 있으면 건너뜀) */
+    /* 경기 계획: 자동 진행(내 경기를 직접 지휘하지 않을 때)에도 적용되는 규칙. 기본값은 이전 동작과 같다(전부 끔/기본) */
+    plan() { return Object.assign({ starter: 'normal', closer: 'ninth', contact: false, infIn: false, hold: false, careful: false, hlFrom: 7 }, this.S.plan || {}); }
+    setPlan(k, v) {
+      const ok = { starter: ['quick', 'normal', 'long'], closer: ['ninth', 'flex'], contact: [true, false], infIn: [true, false], hold: [true, false], careful: [true, false], hlFrom: [6, 7, 8] };
+      if (!ok[k] || !ok[k].includes(v)) return false; this.S.plan = Object.assign({}, this.S.plan, { [k]: v }); return true;
+    }
+    _applyPlan(g, us) {   // 타석마다 상황 규칙으로 작전(타격 접근·전진 수비·견제·투구 접근)을 정한다
+      const P = this.plan(), opp = us === 'home' ? 'away' : 'home', diff = g.score[us] - g.score[opp], b = g.h.bases, outs = g.h.outs, inn = g.inning;
+      if (g.batSide === us) { g.setTactic(us, 'bat', P.contact && b[2] && outs < 2 && Math.abs(diff) <= 2 ? 'contact' : 'normal'); }
+      else {
+        g.setTactic(us, 'inf', !!(P.infIn && b[2] && outs < 2 && inn >= 7 && diff >= 0 && diff <= 2));
+        const rn = b[0] && !b[1] ? this.S.players[b[0].id] : null; g.setTactic(us, 'hold', !!(P.hold && rn && this.sub(rn).주력 >= 58));
+        g.setTactic(us, 'pit', P.careful && inn >= 8 && diff > 0 && diff <= 2 && (b[0] || b[1] || b[2]) ? 'careful' : 'normal');
+      }
+    }
+    /* 내 경기 자동 진행(경기 계획 적용). until(g) 이 참이 되면 그 상태에서 멈추고 false 반환(하이라이트 개입), 끝까지 가면 true */
+    playAuto(ctx, until) {
+      const g = ctx.live, us = ctx.userSide;
+      while (!g.finished) { if (until && until(g)) return false; this._applyPlan(g, us); g.step(); }
+      return true;
+    }
+    /* 하이라이트: 설정한 이닝 이후 2점 차 이내 접전 */
+    isHighlight(g, us) { const P = this.plan(), opp = us === 'home' ? 'away' : 'home'; return g.inning >= P.hlFrom && Math.abs(g.score[us] - g.score[opp]) <= 2; }
     _autoBullpen(game, ss, side, ctx) {
       if (!ctx.auto) return;
       const S = this.S, E = ctx.E, set = S.teams[S.userTeam].set, bp = set.bullpen, opp = side === 'home' ? 'away' : 'home';
       const cur = ss.cur, sp = ss.sp; let change = false;
-      const fat = game.pitchFatigue(side); if (cur === sp) { if (ss.o >= ss.sp_outs || ss.runs >= 6 || fat.over >= 3) change = true; } else change = true;
+      const PL = this.plan(), hk = { quick: [-3, 4, 2], normal: [0, 6, 3], long: [3, 8, 4] }[PL.starter], fat = game.pitchFatigue(side); if (cur === sp) { if (ss.o >= ss.sp_outs + hk[0] || ss.runs >= hk[1] || fat.over >= hk[2]) change = true; } else change = true;
       if (!change) return;
       const inn = game.inning, lead = game.score[side] - game.score[opp], used = ss.used;
       const roster = id => { const p = S.players[id]; return p && p.active ? E.pitById[id] : null; };
       const avail = id => { const b = roster(id); return b && !used.has(b.name) && this._fatigueOk(S.players[id]) ? b : null; };
       let order;
-      const close = inn >= 9 && ((lead > 0 && lead <= 3) || (lead === 0 && side === 'home')), setup = (inn === 8 && lead > 0 && lead <= 3) || (inn === 7 && lead > 0 && lead <= 2), mop = lead <= -4 || (cur === sp && inn <= 5);
+      const close = (inn >= 9 && ((lead > 0 && lead <= 3) || (lead === 0 && side === 'home'))) || (PL.closer === 'flex' && inn === 8 && lead > 0 && lead <= 2), setup = (inn === 8 && lead > 0 && lead <= 3) || (inn === 7 && lead > 0 && lead <= 2), mop = lead <= -4 || (cur === sp && inn <= 5);
       if (close) order = [bp.closer, ...bp.setup, ...bp.middle, ...bp.long];
       else if (setup) order = [...bp.setup, ...bp.middle, bp.closer, ...bp.long];
       else if (mop) order = [...bp.long, ...bp.middle, ...bp.setup];
