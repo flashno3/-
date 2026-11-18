@@ -7,7 +7,8 @@ R=J('ratings_forward_pk.json');F=J('fielding.json');DEF=J('defense_parsed.json')
 POSMAP={'포수':'C','1루수':'1B','2루수':'2B','유격수':'SS','3루수':'3B','좌익수':'LF','중견수':'CF','우익수':'RF'}
 LAST={'Matt Davidson 데이비슨':'Heroes','Ju-suk Ha 하주석':'Tigers','Ah-seop Son 손아섭':'Bears','Seung Min Ryu 류승민':'Bears','Jeong-bum Lee 이정범':'Wiz','Hyeong-beom Lee 이형범':'Eagles'}
 TEAMS=['Bears','Dinos','Eagles','Giants','Heroes','Landers','Lions','Tigers','Twins','Wiz']
-kor=lambda n:n.split()[-1]
+KOFIX={'Ariel Jurado':'후라도'}   # 영문 표기 → 한글 표기 보정
+kor=lambda n:KOFIX.get(n,n.split()[-1])
 NOAGE=[]
 def age27(x):
     try: return int(x['age'])+1

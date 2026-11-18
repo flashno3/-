@@ -424,7 +424,16 @@
     }
     for (const t of TEAMS) for (const p of this.foreignOf(t)) if (!keep.has(p.id)) { S.teams[t].ids = S.teams[t].ids.filter(x => x !== p.id); p.team = 'FA'; p.active = false; p.faInfo = { from: t, grade: null, prev: p.contract.salary }; (S.fa = S.fa || []).push(p.id); }
     for (const t of TEAMS) this._fillForeign(t, r, true);
+    this._aqPool(r);
     for (const t of TEAMS) for (const p of this.foreignOf(t)) p.reg1 = true;   // 외국인은 시작 1군 엔트리 후보(실제 1군 등록 명단 취급)
+  };
+  /* 아시아쿼터 시장: 작년(2026) 아시아쿼터 선수 중 2027 계약이 확정되지 않은 선수는 시장에 나오고(위 비확정 처리),
+   * 여기에 가상 명단(일본·대만·호주 등 가상 인물)을 더해 구단별 선택지를 만든다. 미계약 슬롯은 FA 마감 때 AI가 원소속 우선으로 보충 */
+  const AQ_NAMES = ['이와타', '코마츠', '나카야마', '하시모토', '마에다', '스즈키', '오가와', '후지이', '천유', '린즈하오', '장젠', '맥도널', '켈리', '산토스'];
+  proto._aqPool = function (r) {
+    const S = this.S, used = new Set(Object.values(S.players).map(p => p.ko)); let n = 0;
+    for (const nm of AQ_NAMES) { if (n >= 9) break; if (used.has(nm)) continue;
+      const p = this.makeForeign(r, r.random() < 0.7 ? 'P' : 'B', true, { name: nm }); p.team = 'FA'; p.active = false; p.pool27 = true; (S.fa = S.fa || []).push(p.id); n++; }
   };
   proto.foreignCap = function (p, t) {
     const k = p.aq ? 'aq' : 'gen', base = FOREIGN_NEW[k];
@@ -443,14 +452,14 @@
   /* AI 구단의 외국인 슬롯 보충: 시장의 외국인 → 없으면 새로 영입 */
   proto._fillForeign = function (t, r, initial) {
     const S = this.S;
-    for (const aq of [false, true]) for (let k = 0; k < 4; k++) {
+    for (const aq of initial ? [false] : [false, true]) for (let k = 0; k < 4; k++) {   // 최초 상태에서는 아시아쿼터 슬롯을 비워 시장 경쟁(FA 협상 기간)에 맡긴다
       const have = this.foreignOf(t).filter(x => !!x.aq === aq).length; if (have >= (aq ? 1 : 3)) break;
       const pool = this.faList().filter(x => x.foreign && !!x.aq === aq && this.foreignOK(t, x)).sort((a, b) => ((b.faInfo && b.faInfo.from === t) ? 1000 : 0) + this.war(b) - (((a.faInfo && a.faInfo.from === t) ? 1000 : 0) + this.war(a)));
       let cand = pool[0];
       if (!cand) { const tp = aq ? (r.random() < 0.7 ? 'P' : 'B') : (this.foreignOf(t).filter(x => !x.aq && x.type === 'P').length >= 2 ? 'B' : (this.foreignOf(t).filter(x => !x.aq && x.type === 'B').length >= 1 ? 'P' : (r.random() < 0.75 ? 'P' : 'B'))); cand = this.makeForeign(r, tp, aq); cand.team = 'FA'; (S.fa = S.fa || []).push(cand.id); }
       if (!this.foreignOK(t, cand)) break;
       const cap = this.foreignCap(cand, t), ask = Math.min(cap, Math.max(this.askSalary(cand), aq ? 2 : 6));
-      this._doSign(t, cand, 1, ask); if (initial) cand.assumed = true;
+      this._doSign(t, cand, 1, ask); if (initial || (S.year === 2027 && S.phase === 'preseason')) cand.assumed = true;
     }
   };
   /* 공통 영입 처리: 팀 이동·계약·FA 행사(재취득 연수 리셋)·보상 */
@@ -681,7 +690,7 @@
   /* FA 마감(개막 전): 입찰 중인 계약을 확정하고 AI가 남은 FA·로스터를 정리한다 */
   proto.closeFA = function () {
     const S = this.S, m = S.faMkt;
-    if (m && !m.closed) { this._resolveBids(m.day, true); this.finishFA(); m.closed = true; for (const id in m.pend) delete m.pend[id]; this.invalidate(); }
+    if (m && !m.closed) { this._resolveBids(m.day, true); this.finishFA(); for (const t of TEAMS) if (t !== S.userTeam && S.phase !== 'offseason' && this.players(t).filter(p => p.active).length !== ACTIVE_MAX) this.ensureActive(t); m.closed = true; for (const id in m.pend) delete m.pend[id]; this.invalidate(); }
     else if (!m) this.finishFA();
     if (S.phase !== 'offseason') S.faMkt = null;
   };

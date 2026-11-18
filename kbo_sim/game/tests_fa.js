@@ -36,7 +36,7 @@ const young=dh.filter(p=>p.peak!==undefined&&p.age<=24);ok(young.length>20&&youn
  const au=fp('오스틴'),be=fp('벡'),wa=fp('왓슨'),av=fp('아빌라'),ri=fp('리차드슨'),ta=fp('타카다'),wy=fp('왕옌청');
  ok(au.team==='Twins'&&au.f27&&Math.abs(au.contract.salary-26.7)<0.05,'오스틴 LG 200만$(26.7억)');ok(be.team==='Twins'&&be.virtual&&be.f27,'벡 LG 신규(가상 능력치)');ok(wa.team==='Eagles'&&wa.virtual,'왓슨 한화 신규');
  ok(av.team==='Landers'&&av.contract.years===1&&av.f27.total===3100000&&/2년/.test(av.f27.term),'아빌라 SSG 최대 2년 310만$(계약은 1년 단위)');ok(ri.team==='Landers'&&ri.virtual,'리차드슨 SSG 신규');ok(ta.team==='Bears'&&ta.aq&&ta.f27,'타카다 두산 AQ 재계약');ok(wy.team==='Eagles'&&wy.aq&&wy.f27,'왕옌청 한화 AQ 재계약');
- for(const t of Object.keys(SF.teams)){const fo=LF.foreignOf(t),gen=fo.filter(p=>!p.aq),aq=fo.filter(p=>p.aq);ok(gen.length===3&&aq.length===1&&!gen.every(p=>p.type===gen[0].type),t+' 3+1 구성');}
+ ok(LF.faList().filter(p=>p.aq).length>=15,'아시아쿼터 시장: 작년 풀 + 가상 명단 '+LF.faList().filter(p=>p.aq).length);LF.faAdvance(75);LF.closeFA();for(const t of Object.keys(SF.teams)){if(t===SF.userTeam)continue;const fo=LF.foreignOf(t),gen=fo.filter(p=>!p.aq),aq=fo.filter(p=>p.aq);ok(gen.length===3&&aq.length===1&&!gen.every(p=>p.type===gen[0].type),t+' 3+1 구성');}
  const conf=Object.values(SF.players).filter(p=>p.foreign&&p.f27);ok(conf.length===7,'확정 계약 7건 '+conf.length);
  ok(Object.values(SF.players).filter(p=>p.foreign&&p.team in SF.teams&&!p.f27).every(p=>p.assumed),'나머지는 가정 표시');
  const vf=Object.values(SF.players).filter(p=>p.foreign&&p.virtual);console.log('가상 외국인',vf.length);}
