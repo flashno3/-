@@ -582,7 +582,7 @@
       const sign = n.state === 'signed' || n.state === 'done';
       panel = `<div class="neg-result ${n.state === 'broke' ? 'bad' : 'good'}"><b>${n.state === 'signed' ? '계약 체결' : n.state === 'done' ? '면담 종료' : '협상 종료'}</b><div class="small">${meet ? esc(n.msg || '') : n.state === 'signed' ? `${n.final.years}년 · 연봉 ${n.final.salary}억${n.final.bonus ? ' + 계약금 ' + n.final.bonus + '억' : ''}` : '선수는 시장에 남아 있습니다. 며칠 뒤 다시 협상할 수 있습니다.'}${n.evMsg ? '<br>' + esc(n.evMsg) : ''}</div></div><div class="row"><button class="primary" data-act="negDone">닫기</button></div>`;
     }
-    return `<div class="neg-bg"><div class="negwin" role="dialog" aria-label="협상 테이블" data-stop="1"><div class="neg-head"><div class="row" style="flex-wrap:nowrap"><button class="sm" data-act="negExit" aria-label="나가기">← 나가기</button><b style="flex:1;text-align:center;min-width:0">${esc(p.ko)}</b><span class="chip in">${NEG_KIND[n.kind]}</span></div>
+    return `<div class="neg-bg"><div class="negwin" role="dialog" aria-label="협상 테이블" data-stop="1"><div class="neg-head"><div class="row" style="flex-wrap:nowrap"><button class="sm" data-act="negExit" aria-label="목록으로 돌아가기">← 돌아가기</button><b style="flex:1;text-align:center;min-width:0">${esc(p.ko)}</b><span class="chip in">${NEG_KIND[n.kind]}</span></div>
       <div class="row" style="justify-content:center;gap:6px"><span class="chip">${pos(p)}</span><span class="chip">${p.age}세</span>${ovrChip(L.ovr(p))}${moodChip(p)}${traitChip(p)}</div>
       <div class="row" style="justify-content:space-between">${negMoodBar(n.mood, n.mood0)}<span class="small muted">${meet ? TOPIC_KO[n.topic] || '면담' : `${open ? `라운드 ${Math.min(n.round + 1, n.max)}/${n.max}` : '종료'}`} ${dots}</span></div>${pr}${fac}</div>
       <div class="neg-chat" aria-live="polite">${chat}</div><div class="neg-panel">${panel}</div></div></div>`;
@@ -593,6 +593,8 @@
     const rows = mine.map(x => { L._replacing = x.id; const okRep = L.foreignOK(U(), p); L._replacing = null; const rc = L.releaseCost(x.id); return `<button data-act="fslotPick" data-a="${p.id}|${x.id}" ${okRep ? '' : 'disabled'} style="width:100%;display:flex;gap:8px;align-items:center;text-align:left;min-height:52px;margin-top:6px"><span style="flex:1"><b>${esc(x.ko)}</b> <span class="muted small">${pos(x)} · ${x.age}세 · 연봉 ${money(x.contract.salary)}</span><div class="small muted">${okRep ? `방출 위약금 약 ${rc.total}억` : '이 선수를 내보내도 포지션 규정상 영입할 수 없습니다'}</div></span>${ovrChip(L.ovr(x))}</button>`; }).join('');
     return `<div class="sheet-bg" data-act="fslotClose"><div class="sheet" data-stop="1" role="dialog" aria-label="외국인 교체"><div class="grabber"></div><h2>${esc(p.ko)} 영입 — 누구를 내보낼까요?</h2><div class="small muted">${p.aq ? '아시아쿼터는 1명뿐입니다.' : '일반 외국인은 3명(같은 포지션 3명 불가)까지입니다.'} 계약이 성사되면 선택한 선수를 방출하고 위약금을 지급합니다. 협상이 결렬되면 아무도 방출되지 않습니다.</div>${rows || '<p class="muted">교체할 수 있는 선수가 없습니다.</p>'}<button style="width:100%;min-height:44px;margin-top:8px" data-act="fslotClose">취소</button></div></div>`;
   }
+  function negSync() { const n = L.S.neg; if (n && n.offer && (n.kind === 'fa') && P(n.id).team === 'FA') (ui.faIn = ui.faIn || {})[n.id] = Object.assign({}, n.offer); }   // 협상에서 마지막으로 제시한 조건을 제시 화면 입력칸에 이어 둔다
+  function negBackTo() { const bk = ui.negBack; ui.negBack = null; if (bk) { ui.screen = bk.screen; ui.market = bk.market; ui.faTab = bk.faTab; if (bk.modal && P(bk.modal)) ui.modal = bk.modal; } render(); if (bk) window.scrollTo(0, bk.scroll); }
   const TOPIC_KO = { grievance: '출전 기회 불만', request: '이적 요청', slump: '부진 상담', checkin: '일반 면담' };
   const storyTopCard = () => { const S = L.S; if (S.phase !== 'offseason') return ''; const y = S.off ? S.off.year || S.year : S.year, top = L.storyTop(y, 5); if (!top.length) return ''; return `<div class="card"><div class="row"><h2 style="margin:0">${y} 올해의 이야기</h2><span class="sp"></span><button class="sm" data-act="go" data-a="story">전체 보기</button></div>${top.map(e => `<div class="stl"><span class="d">${e.ph === 'offseason' ? '오프시즌' : L.dateStr(e.d)}</span><span>${esc(e.text)}</span></div>`).join('')}</div>`; };
   const pressCard = () => { const pr = (L.S.press || []).slice(0, 3); if (!pr.length) return storyTopCard(); return `<div class="card"><div class="row"><h2 style="margin:0">언론·팬 반응</h2><span class="sp"></span><button class="sm" data-act="go" data-a="story">스토리</button></div>${pr.map(x => `<div class="press"><b>${esc(x.head)}</b>${x.fan ? `<div class="small muted">${esc(x.fan)}</div>` : ''}</div>`).join('')}</div>${storyTopCard()}`; };
@@ -1003,11 +1005,11 @@
   }
   const A = {
     pickteam(a) { ui.team = a; render(); },
-    newgame() { const seed = parseInt(($('#seedIn') || {}).value, 10); ui.seed = ($('#seedIn') || {}).value || ''; L = League.create(KBO_BASE, ui.team, Number.isFinite(seed) ? seed : 1 + Math.floor(Math.random() * 99999)); ui.screen = 'home'; autosave(); render(); },
-    continue() { const s = store.get(SAVE_KEY); if (s) { try { L = League.load(s); ui.screen = 'home'; render(); } catch (e) { toast('저장 데이터를 읽을 수 없습니다.'); } } },
-    negOpen(a) { const [id, kind, topic, evId, rep] = a.split('|'), n = L.S.neg; if (n && n.id === id && n.kind === kind && n.state === 'open' && (!rep || n.replace === rep)) { ui.negOpen = true; ui.modal = null; render(); return; } if (n) L.negClose();
+    newgame() { const seed = parseInt(($('#seedIn') || {}).value, 10); ui.seed = ($('#seedIn') || {}).value || ''; L = League.create(KBO_BASE, ui.team, Number.isFinite(seed) ? seed : 1 + Math.floor(Math.random() * 99999)); ui.screen = 'home'; window.scrollTo(0, 0); autosave(); render(); },
+    continue() { const s = store.get(SAVE_KEY); if (s) { try { L = League.load(s); ui.screen = 'home'; window.scrollTo(0, 0); render(); } catch (e) { toast('저장 데이터를 읽을 수 없습니다.'); } } },
+    negOpen(a) { const [id, kind, topic, evId, rep] = a.split('|'), n = L.S.neg; if (n && n.id === id && n.kind === kind && n.state === 'open' && (!rep || n.replace === rep)) { if (!ui.negBack) ui.negBack = { scroll: window.scrollY, screen: ui.screen, market: ui.market, faTab: ui.faTab, modal: ui.modal }; ui.negOpen = true; ui.modal = null; render(); return; } if (n) L.negClose();
       if (kind === 'meeting' && !evId) { const b = L.meetBlock(id); if (b) { toast(b); return; } }
-      const r = L.negStart(id, kind, { topic: topic || undefined, evId: evId || undefined, replace: rep || undefined }); if (!r.ok) { toast(r.msg); return; } ui.negOpen = true; ui.negTab = kind === 'meeting' ? 'cards' : 'offer'; ui.negIn = kind === 'meeting' ? null : L.negBest(id); ui.negRole = null; ui.modal = null; autosave(); render(); },
+      const r = L.negStart(id, kind, { topic: topic || undefined, evId: evId || undefined, replace: rep || undefined }); if (!r.ok) { toast(r.msg); return; } if (!ui.negBack) ui.negBack = { scroll: window.scrollY, screen: ui.screen, market: ui.market, faTab: ui.faTab, modal: ui.modal }; ui.negOpen = true; ui.negTab = kind === 'meeting' ? 'cards' : 'offer'; ui.negIn = kind === 'meeting' ? null : L.negBest(id); ui.negRole = null; ui.modal = null; autosave(); render(); },
     negBoard() { const r = L.negBoard(); if (!r.ok && r.msg) toast(r.msg); autosave(); render(); },
     fslotPick(a) { const [cid, rid] = a.split('|'); ui.fslot = null; A.negOpen(`${cid}|foreign|||${rid}`); },
     negTab(a) { ui.negTab = a; render(); },
@@ -1018,8 +1020,8 @@
     meetCard(a) { const r = L.meetCard(a, ui.negRole || undefined); if (!r.ok && r.msg) toast(r.msg); autosave(); render(); },
     meetEnd() { const n = L.S.neg; if (n && n.kind === 'meeting') L._meetFinish(n); autosave(); render(); },
     negLeave() { L.negLeave(); autosave(); render(); },
-    negExit() { const n = L.S.neg; if (n && n.kind === 'meeting' && n.state === 'open' && n.round === 0) { L.S.neg = null; ui.negOpen = false; render(); return; } ui.negOpen = false; if (n && n.state !== 'open') L.negClose(); else if (n && n.kind === 'meeting') L.negClose(); autosave(); render(); },
-    negDone() { L.negClose(); ui.negOpen = false; ui.negIn = null; autosave(); render(); },
+    negExit() { const n = L.S.neg; negSync(); if (n && n.kind === 'meeting' && n.state === 'open' && n.round === 0) { L.S.neg = null; } else if (n && (n.state !== 'open' || n.kind === 'meeting')) L.negClose(); ui.negOpen = false; negBackTo(); autosave(); },
+    negDone() { negSync(); L.negClose(); ui.negOpen = false; ui.negIn = null; negBackTo(); autosave(); },
     storyTab(a) { ui.storyTab = a; render(); },
     devPlan(a) { const [id, pl] = a.split('|'), e = L.setDevPlan(id, pl); if (e) toast(e); else { toast(`${P(id).ko}: 육성 방향 ${L.planName(pl)}`); autosave(); } render(); },
     hireCoach(a) { const e = L.hireCoach(a); if (e) toast(e); else { toast('코치를 영입했습니다.'); autosave(); } render(); },
