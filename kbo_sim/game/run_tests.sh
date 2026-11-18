@@ -13,6 +13,7 @@ node game/tests_fa.js | tail -3
 node game/tests_finance.js | tail -2
 node game/tests_contracts.js | tail -2
 node game/tests_injury.js | tail -2
+node game/tests_dev.js | tail -2
 node game/tests_schedule.js | tail -2
 node game/tests_offseason.js | tail -3
 node game/tests_longrun.js 10 11 | tail -2

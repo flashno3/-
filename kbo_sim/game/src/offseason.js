@@ -44,16 +44,20 @@
         p.scout.ceil = clamp(0.6 * p.scout.ceil + 0.4 * (p.peak + gauss(r, 0, 3)), 25, 85);   // 스카우트 평가가 시간이 지나며 정확해진다
       } else { delete p.peak; delete p.pot; }
     } else if (a <= 26 && p.pot > 0) { const g2 = Math.min(p.pot, 0.4) * (0.6 + 0.8 * r.random()) * pf; gain = Math.max(gain, g2); p.pot = Math.max(0, p.pot - Math.max(0, g2)); }
-    const shift = f => gain * 0.75 + gauss(r, 0, 0.1);
+    const dv = a <= 28 && this.S.coach ? this._devEffects(p) : null;   // 육성 방향·코치진 효과(28세 이하)
+    if (dv && gain > 0) gain *= dv.mul;
+    const shift = f => gain * 0.75 * (dv ? dv.w[f] || 1 : 1) + gauss(r, 0, 0.1);
     const set = (f, dir, lo, hi, s) => { p.p[f] = clamp(p.p[f] + dir * s * sc[f][1], lo, hi); };
     if (p.type === 'B') {
-      set('k', -1, 0.06, 0.45, shift()); set('bb', 1, 0.015, 0.20, shift()); set('hr', 1, 0.002, 0.07, shift()); set('babip', 1, 0.24, 0.39, shift()); set('xbh', 1, 0.10, 0.32, shift());
-      const sp = (a <= 24 ? 0.04 : a <= 28 ? -0.05 : -0.2) + gauss(r, 0, 0.08); set('sba', 1, 0.005, 0.25, sp); p.p.tri = clamp(p.p.tri * (1 + sp * 0.25), 0.01, 0.2);
+      set('k', -1, 0.06, 0.45, shift('k')); set('bb', 1, 0.015, 0.20, shift('bb')); set('hr', 1, 0.002, 0.07, shift('hr')); set('babip', 1, 0.24, 0.39, shift('babip')); set('xbh', 1, 0.10, 0.32, shift('xbh'));
+      const sp = (a <= 24 ? 0.04 : a <= 28 ? -0.05 : -0.2) + (dv ? dv.speed : 0) + gauss(r, 0, 0.08); set('sba', 1, 0.005, 0.25, sp); p.p.tri = clamp(p.p.tri * (1 + sp * 0.25), 0.01, 0.2);
       if (a >= 31) for (const pos in p.fr) p.fr[pos].range = clamp(p.fr[pos].range - 1.1 * r.random() * 1.6, 25, 80);
-      else if (a <= 24) for (const pos in p.fr) p.fr[pos].range = clamp(p.fr[pos].range + 0.8 * r.random() * 1.6, 25, 80);
+      else if (a <= 24) for (const pos in p.fr) p.fr[pos].range = clamp(p.fr[pos].range + 0.8 * r.random() * 1.6 + (dv ? dv.range : 0), 25, 80);
+      if (a > 24 && a < 31 && dv && dv.range) for (const pos in p.fr) p.fr[pos].range = clamp(p.fr[pos].range + dv.range, 25, 80);
     } else {
-      set('k', 1, 0.08, 0.40, shift()); set('bb', -1, 0.02, 0.18, shift()); set('hr', -1, 0.004, 0.06, shift()); set('babip', -1, 0.25, 0.37, shift());
-      p.stamina = clamp(p.stamina + (a <= 25 ? 1.2 : a >= 33 ? -1.5 : 0) + gauss(r, 0, 1.2), 25, 75);
+      set('k', 1, 0.08, 0.40, shift('k')); set('bb', -1, 0.02, 0.18, shift('bb')); set('hr', -1, 0.004, 0.06, shift('hr')); set('babip', -1, 0.25, 0.37, shift('babip'));
+      p.stamina = clamp(p.stamina + (a <= 25 ? 1.2 : a >= 33 ? -1.5 : 0) + (dv ? dv.stamina : 0) + gauss(r, 0, 1.2), 25, 75);
+      if (dv) this._devRole(p, dv.plan);
     }
     if (p.peak !== undefined) p.pot = clamp((p.peak - this.ovr(p)) / 30, 0, 1.4);
     return this.ovr(p) - old;
@@ -89,9 +93,9 @@
   };
   const GROW = age => age <= 19 ? 17 : age === 20 ? 15 : age === 21 ? 12 : age === 22 ? 9 : age === 23 ? 6 : age === 24 ? 3.5 : age === 25 ? 1.5 : 0.5;   // 정점까지 남은 기대 성장(엔진 성장 곡선 기준 OVR)
   /* 현재 OVR·나이를 증거로 갱신한 정점 분포에서 표본 추출: 사전분포(슬롯) × 관측 가능도 N(현재 OVR; 정점 − 남은 성장, σ=5.5) */
-  proto._posteriorPeak = function (r, ov, age, prior) {
-    const g = GROW(age), w = []; let tot = 0;
-    for (let pk = 28; pk <= 80; pk++) { const ti = TIERS.findIndex(t => pk >= t[2] && pk <= t[3] + 0.99), den = prior[ti < 0 ? 4 : ti] / (TIERS[ti < 0 ? 4 : ti][3] - TIERS[ti < 0 ? 4 : ti][2] + 1), z = (ov - (pk - g)) / 5.5, wt = pk >= ov ? den * Math.exp(-0.5 * z * z) : 0; w.push(wt); tot += wt; }
+  proto._posteriorPeak = function (r, ov, age, prior, n) {   // n: 표본 크기(투수 이닝·타자 타석 환산 0~1) — 표본이 작을수록 현재 OVR의 증거 가치가 낮다(σ 5.5 → 최대 13)
+    const g = GROW(age), w = [], sd = 5.5 + 7.5 * Math.exp(-(n === undefined ? 1 : n)); let tot = 0;
+    for (let pk = 28; pk <= 80; pk++) { const ti = TIERS.findIndex(t => pk >= t[2] && pk <= t[3] + 0.99), den = prior[ti < 0 ? 4 : ti] / (TIERS[ti < 0 ? 4 : ti][3] - TIERS[ti < 0 ? 4 : ti][2] + 1), z = (ov - (pk - g)) / sd, wt = pk >= ov ? den * Math.exp(-0.5 * z * z) : 0; w.push(wt); tot += wt; }
     if (!(tot > 0)) return clamp(ov + g, 25, 85);
     let x = r.random() * tot; for (let i = 0; i < w.length; i++) { if ((x -= w[i]) < 0) return 28 + i + r.random() * 0.99; }
     return clamp(ov + g, 25, 85);
@@ -239,6 +243,7 @@
       else if (my.kind === 'under') news(this, `경쟁균형세: 연봉 ${my.pay}억이 하한 ${my.fl}억에 미달(${my.n}회 연속) → 유소년 발전기금 ${my.fee}억 납부`);
     }
     this.settleFinance();   // 시즌 재정 결산(CBT 정산과 같은 시점의 보수 기준)
+    if (S.coach) this.refreshCoachMarket();   // 코치 시장 일부 교체
     // 1) 성장·노화
     for (const id in S.players) {
       const p = S.players[id]; if (p.retired || p.team === 'DRAFT') continue;
@@ -385,7 +390,7 @@
       }
       p.salHist = [p.contract.salary, p.contract.salary, p.contract.salary];   // 최근 3년 연봉(자료는 2026년뿐이라 같은 값으로 가정)
       if (p.age <= 25 && p.peak === undefined && !p.draft && !p.foreign && p.team !== 'MIL') {   // 젊은 선수(2군 포함): 지명 슬롯 실제 분포 × 현재 OVR(나이 대비) 증거로 갱신한 정점
-        const rr = this._pkRng || (this._pkRng = rngFor(S.seed, 2027, 77)), ov = this.ovr(p), pk = clamp(this._posteriorPeak(rr, ov, p.age, slotPrior(dh)), 25, 85), ss = dh ? dh.ss || 0 : 0;
+        const rr = this._pkRng || (this._pkRng = rngFor(S.seed, 2027, 77)), ov = this.ovr(p), smp = p.type === 'P' ? (p.IP || 0) / 80 : (p.PA || 0) / 350, pk = clamp(this._posteriorPeak(rr, ov, p.age, slotPrior(dh), smp), 25, 85), ss = dh ? dh.ss || 0 : 0;
         p.peak = pk; p.scout = { o: ov, ceil: clamp(pk + gauss(rr, 0, 3 + 9 * Math.exp(-ss / 2)), 25, 85) }; p.pot = clamp((pk - ov) / 30, 0, 1.4);   // 프로 경험이 길수록 스카우트 평가 오차가 줄어든다
       }
       if (p.foreign) p.contract.years = 1;
@@ -565,6 +570,7 @@
       }
       while (S.teams[t].ids.length > ROSTER_MAX) { const w = this.players(t).sort((a, b) => this.marketValue(a) - this.marketValue(b))[0]; this._retireOrRelease(t, w.id); }
     }
+    this._aiCoachHire();   // AI 구단 코치 영입(정원·예산 이내)
     // 시장에 남은 선수: 나이 많고 가치 낮으면 은퇴
     for (const p of this.faList()) if (p.age >= 33 && this.war(p) < 0.6) { p.retired = true; p.team = 'RET'; S.fa = S.fa.filter(x => x !== p.id); }
     // FA 풀 정리: 가치 순 상위 70명만 남기고 나머지는 시장을 떠난다
@@ -675,7 +681,7 @@
   };
   proto._finGame = function (home) { if (!this.finReady()) return; const f = this.S.fin.teams[home]; if (!f) return; f.gate += this.finAtt(home) * f.price * f.pm; f.games++; };
   proto.setTicketPolicy = function (t, pm) { if (!this.finReady() || !PRICE_PM.includes(pm)) return false; this.S.fin.teams[t].pm = pm; return true; };
-  proto.finPay = function (t) { return Math.round((this.payroll(t) + this.S.teams[t].ids.reduce((a, id) => { const c = this.S.players[id].contract; return a + (c.amort && c.years > 0 ? c.amort : 0); }, 0)) * 10) / 10; };   // 선수단 보수 = 연봉 + 신규 FA 계약금 상각
+  proto.finPay = function (t) { return Math.round((this.payroll(t) + this.coachPayDelta(t) + this.S.teams[t].ids.reduce((a, id) => { const c = this.S.players[id].contract; return a + (c.amort && c.years > 0 ? c.amort : 0); }, 0)) * 10) / 10; };   // 선수단 보수 = 연봉 + 신규 FA 계약금 상각
   proto.finAllowed = function (t) { const f = this.S.fin.teams[t]; return f.lastRev * LOSS * (0.5 + f.trust / 100); };
   proto.finBudget = function (t) { const f = this.S.fin.teams[t]; return Math.round((f.lastRev - f.opex + this.finAllowed(t)) * 10) / 10; };
   proto.faRoom = function (t) { return this.finReady() ? Math.round((this.finBudget(t) - this.finPay(t)) * 10) / 10 : 1e9; };
@@ -743,5 +749,127 @@
       if (nb < 12 || np < 12) { this.ensureActive(user); news(this, '부상자 때문에 1군 엔트리가 부족해 건강한 2군 선수를 자동 등록했습니다.'); }
     }
     for (const t of changed) { if (t === user) { this.repairSettings(t); this.invalidate(); } else this.refreshTeam(t); }
+  };
+
+  /* ---------------- 코치진·육성 ----------------
+   * [코치] 팀마다 감독 1명 + 육성 코치(투수 2 · 타격 2 · 수비·주루 1 · 총괄 1 = 6명). 보도로 확인된 코치(coaches_2027.csv: 롯데·키움 일부)는 실명, 나머지는 가상 이름. **능력치는 모두 가상 값**(자료 없음).
+   *  능력치 20~80(S≥75 · A≥65 · B≥55 · C≥45 · D≥35): 투수 구위·제구·체력 / 타격 컨택·파워·선구 / 수비·주루 / 총괄(육성 관리). 코치당 전문 분야 2개가 높다.
+   * [한도] 팀별 육성 코치 정원 = 리그 평균(반올림). 정원을 넘는 팀(롯데 7명)도 불이익 없이 유지하고, 신규 영입만 정원 이내. 영입 비용(연봉)은 팀 예산(FA 여유자금) 안에서만 가능.
+   * [효과] 28세 이하 선수의 성장: 육성 방향(가중치)에 따라 능력 구성이 달라지고, 팀 코치 능력(해당 분야 최고 65% + 차순위 35%)이 성장 속도를 −20~+30% 조절. 투수는 체력(선발)·구위(마무리)·제구(추격조) 방향, 타자는 컨택·파워·선구·수비·주력. */
+  const CH_FIELDS = ['stuff', 'control', 'stamina', 'contact', 'power', 'eye', 'defense', 'speed'];
+  const CH_NAME = { stuff: '구위', control: '제구', stamina: '체력', contact: '컨택', power: '파워', eye: '선구', defense: '수비', speed: '주루', mgmt: '육성관리' };
+  const CH_SPEC = { '투수': ['stuff', 'control', 'stamina'], '타격': ['contact', 'power', 'eye'], '수비·주루': ['defense', 'speed'], '총괄': ['mgmt'] };
+  const CH_SLOT = { '투수': 2, '타격': 2, '수비·주루': 1, '총괄': 1 };
+  const ROLE_MAP = { '투수코치': '투수', '타격코치': '타격', '수비코치': '수비·주루', '배터리코치': '수비·주루', '퓨처스 감독': '총괄' };
+  const SURN2 = ['김', '이', '박', '최', '정', '강', '조', '윤', '장', '임', '한', '오', '서', '신', '권', '황', '안', '송', '류', '전'], GIV2 = ['동수', '성호', '재훈', '병철', '상민', '기태', '영진', '용수', '종범', '정민', '태균', '현준', '승엽', '재원', '창용', '민호', '광수', '진태', '세훈', '대현'];
+  const DEV_PITCH = { SP: { k: 0.9, bb: 1.35, hr: 1.0, babip: 0.9 }, SU: { k: 1.15, bb: 1.1, hr: 1.0, babip: 0.9 }, MID: { k: 0.9, bb: 1.3, hr: 1.0, babip: 1.0 }, CL: { k: 1.4, bb: 0.8, hr: 1.25, babip: 0.9 } };
+  const DEV_BAT = { balanced: {}, contact: { k: 1.4, babip: 1.2, bb: 0.9, hr: 0.8, xbh: 0.8 }, power: { hr: 1.5, xbh: 1.3, k: 0.8, babip: 0.9, bb: 0.9 }, eye: { bb: 1.5, k: 1.1, hr: 0.8, babip: 0.8, xbh: 0.8 }, defense: { k: 0.9, bb: 0.9, hr: 0.9, babip: 0.9, xbh: 0.9 }, speed: { k: 0.95, bb: 0.95, hr: 0.9, babip: 1.1, xbh: 0.95 } };
+  const PLAN_NAME = { SP: '선발', SU: '승리조', MID: '추격·롱릴리프', CL: '마무리', balanced: '균형', contact: '컨택', power: '파워', eye: '선구', defense: '수비', speed: '주력' };
+  proto.devPlans = function (p) { return p.type === 'P' ? ['SP', 'SU', 'MID', 'CL'] : ['balanced', 'contact', 'power', 'eye', 'defense', 'speed']; };
+  proto.planName = function (pl) { return PLAN_NAME[pl] || pl; };
+  proto.coachGrade = function (v) { return v >= 75 ? 'S' : v >= 65 ? 'A' : v >= 55 ? 'B' : v >= 45 ? 'C' : v >= 35 ? 'D' : 'E'; };
+  proto.coachFieldName = function (f) { return CH_NAME[f] || f; };
+  proto.coachSpec = function (c) { return CH_SPEC[c.role]; };
+  proto._mkCoach = function (r, role, opts) {
+    opts = opts || {}; const S = this.S, C = S.coach, id = 'C' + (C.nextId++), spec = CH_SPEC[role], c = { id, role, team: opts.team || null, age: opts.age || 38 + Math.floor(r.random() * 25), origin: opts.origin || 'virtual', src: opts.src || '', lv: opts.lv || '' };
+    let name = opts.name; if (!name) name = SURN2[Math.floor(r.random() * SURN2.length)] + GIV2[Math.floor(r.random() * GIV2.length)];
+    c.name = name;
+    for (const f of CH_FIELDS) c[f] = clamp(Math.round(gauss(r, 44, 6)), 25, 62);
+    c.mgmt = clamp(Math.round(gauss(r, 46, 6)), 25, 62);
+    const q = opts.star ? 12 : 0, main = role === '총괄' ? ['mgmt'] : spec.slice().sort(() => r.random() - 0.5).slice(0, 2);
+    for (const f of main) c[f] = clamp(Math.round(gauss(r, 66 + q, 7)), 45, 82);
+    c.spec = main; c.salary = this.coachSalary(c); return c;
+  };
+  proto.coachSalary = function (c) { const m = c.spec && c.spec.length ? c.spec.reduce((a, f) => a + c[f], 0) / c.spec.length : 50; return Math.round(clamp(0.6 + (m - 50) * 0.05, 0.5, 3.2) * 10) / 10; };
+  proto._initCoaches = function (list) {
+    const S = this.S, r = rngFor(S.seed, 2027, 91); S.coach = { nextId: 1, list: {}, teams: {}, mgr: {}, market: [], delta: {}, year: S.year };
+    for (const t of TEAMS) { S.coach.teams[t] = []; S.coach.delta[t] = 0; }
+    const real = (list || []).filter(x => x.role !== '감독');
+    for (const m of (list || []).filter(x => x.role === '감독')) S.coach.mgr[m.team] = { name: m.name === '(미확인)' ? SURN2[Math.floor(r.random() * SURN2.length)] + GIV2[Math.floor(r.random() * GIV2.length)] : m.name, src: m.src, virtual: m.name === '(미확인)' };
+    for (const t of TEAMS) {
+      const cnt = { '투수': 0, '타격': 0, '수비·주루': 0, '총괄': 0 };
+      for (const x of real.filter(y => y.team === t)) { const role = ROLE_MAP[x.role]; if (!role) continue; const c = this._mkCoach(r, role, { team: t, name: x.name, origin: 'real', src: x.src, lv: x.level }); S.coach.list[c.id] = c; S.coach.teams[t].push(c.id); cnt[role]++; }
+      for (const role of Object.keys(CH_SLOT)) while (cnt[role] < CH_SLOT[role]) { const c = this._mkCoach(r, role, { team: t }); S.coach.list[c.id] = c; S.coach.teams[t].push(c.id); cnt[role]++; }
+      if (!S.coach.mgr[t]) S.coach.mgr[t] = { name: SURN2[Math.floor(r.random() * SURN2.length)] + GIV2[Math.floor(r.random() * GIV2.length)], src: '', virtual: true };
+    }
+    this.refreshCoachMarket(true);
+  };
+  proto._ensureCoach = function () { if (!this.S.coach) this._initCoaches([]); };
+  proto.coachLimit = function () { const C = this.S.coach; if (!C.limit) C.limit = Math.round(TEAMS.reduce((a, t) => a + C.teams[t].length, 0) / TEAMS.length); return C.limit; };   // 리그 평균(초기 편성 기준)
+  proto.coachesOf = function (t) { const C = this.S.coach; return C.teams[t].map(id => C.list[id]); };
+  proto.coachMarket = function () { const C = this.S.coach; return C.market.map(id => C.list[id]); };
+  proto.coachRating = function (t, f) {
+    if (!this.S.coach) return 45; const v = this.coachesOf(t).map(c => c[f]).sort((a, b) => b - a); if (!v.length) return 40;
+    return 0.65 * v[0] + 0.35 * (v.length > 1 ? v[1] : 40);
+  };
+  proto.coachPayDelta = function (t) { return this.S.coach ? Math.round((this.S.coach.delta[t] || 0) * 10) / 10 : 0; };
+  proto.refreshCoachMarket = function (first) {   // 시장 코치(가상 인물): 오프시즌마다 일부 교체
+    const S = this.S, C = S.coach, r = rngFor(S.seed, S.year, 92 + (first ? 1 : 0));
+    if (!first) { C.market = C.market.filter(() => r.random() < 0.6); for (const id of Object.keys(C.list)) if (!C.market.includes(id) && !C.list[id].team) delete C.list[id]; }
+    const roles = ['투수', '투수', '투수', '타격', '타격', '타격', '수비·주루', '수비·주루', '총괄'];
+    while (C.market.length < 12) { const role = roles[Math.floor(r.random() * roles.length)], c = this._mkCoach(r, role, { origin: 'market', star: r.random() < 0.18 }); C.list[c.id] = c; C.market.push(c.id); }
+  };
+  proto.hireCoach = function (id) {
+    const S = this.S, C = S.coach, t = S.userTeam, c = C.list[id]; if (!c || !C.market.includes(id)) return '시장에 없는 코치입니다.';
+    if (C.teams[t].length >= this.coachLimit()) return `육성 코치 정원(${this.coachLimit()}명)이 찼습니다. 기존 코치를 해임한 뒤 영입하세요.`;
+    const room = this.faRoom(t); if (room < c.salary) return `예산 부족: 연봉 ${c.salary}억이 FA 여유자금 ${room.toFixed(1)}억을 넘습니다. 팀 예산 안에서만 영입할 수 있습니다.`;
+    C.market = C.market.filter(x => x !== id); c.team = t; c.origin = c.origin === 'market' ? 'market' : c.origin; C.teams[t].push(id); C.delta[t] = (C.delta[t] || 0) + c.salary;
+    news(this, `코치 영입: ${c.name}(${c.role}) 연봉 ${c.salary}억`); return null;
+  };
+  proto.fireCoach = function (id) {
+    const S = this.S, C = S.coach, t = S.userTeam, c = C.list[id]; if (!c || c.team !== t) return '우리 팀 코치가 아닙니다.';
+    C.teams[t] = C.teams[t].filter(x => x !== id); C.delta[t] = (C.delta[t] || 0) - c.salary; c.team = null; c.origin = 'market'; C.market.push(id);
+    news(this, `코치 해임: ${c.name}(${c.role})`); return null;
+  };
+  proto._aiCoachHire = function () {   // AI 구단: 정원이 비고 예산이 있으면 가장 약한 분야를 메우는 시장 코치를 영입
+    const S = this.S, C = S.coach; if (!C) return;
+    for (const t of TEAMS) {
+      if (t === S.userTeam || C.teams[t].length >= this.coachLimit() || !C.market.length) continue;
+      const cand = this.coachMarket().filter(c => this.faRoom(t) >= c.salary).sort((a, b) => Math.max(...a.spec.map(f => a[f] - this.coachRating(t, f))) - Math.max(...b.spec.map(f => b[f] - this.coachRating(t, f)))).reverse()[0];
+      if (cand) { C.market = C.market.filter(x => x !== cand.id); cand.team = t; C.teams[t].push(cand.id); C.delta[t] = (C.delta[t] || 0) + cand.salary; }
+    }
+  };
+  /* ---- 육성 방향 ---- */
+  proto._autoPlan = function (p) {
+    if (p.type === 'B') return 'balanced';
+    if (p.role === 'SP') return 'SP';
+    const o = this.ovr(p); return p.age <= 23 && o < 45 ? 'MID' : o >= 58 ? 'CL' : 'SU';
+  };
+  proto.devPlan = function (p) { return p.dev && p.dev.plan && !p.dev.auto ? p.dev.plan : (p.dev && p.dev.plan) || this._autoPlan(p); };
+  proto.setDevPlan = function (id, plan) {
+    const p = this.S.players[id]; if (!p || p.team !== this.S.userTeam) return '우리 팀 선수가 아닙니다.'; if (!this.devPlans(p).includes(plan)) return '해당 육성 방향을 선택할 수 없습니다.';
+    p.dev = { plan, auto: false }; return null;
+  };
+  proto._devEffects = function (p) {
+    const t = p.team in this.S.coach.teams ? p.team : null; if (!t) return null;
+    let plan = p.dev && !p.dev.auto ? p.dev.plan : this._autoPlan(p); if (!(p.dev && !p.dev.auto)) p.dev = { plan, auto: true };
+    const cr = f => this.coachRating(t, f), mg = (cr('mgmt') - 50) * 0.004;
+    if (p.type === 'P') {
+      const w0 = DEV_PITCH[plan] || DEV_PITCH.SU, mean = (w0.k + w0.bb + w0.hr + w0.babip) / 4, w = {}; for (const f in w0) w[f] = w0[f] / mean;
+      const rel = plan === 'SP' ? (cr('control') + cr('stamina')) / 2 : plan === 'CL' ? cr('stuff') : plan === 'MID' ? cr('control') : (cr('stuff') + cr('control')) / 2;
+      const stam = { SP: 2.2 * cr('stamina') / 50, SU: 0, MID: 0.8, CL: -1.5 }[plan];
+      return { plan, w, mul: clamp(1 + 0.009 * (rel - 50) + mg, 0.75, 1.35), stamina: stam, speed: 0, range: 0 };
+    }
+    const w0 = DEV_BAT[plan] || {}, w = {}; for (const f of ['k', 'bb', 'hr', 'babip', 'xbh']) w[f] = w0[f] || 1;
+    const rel = plan === 'contact' ? cr('contact') : plan === 'power' ? cr('power') : plan === 'eye' ? cr('eye') : plan === 'defense' ? cr('defense') : plan === 'speed' ? cr('speed') : (cr('contact') + cr('power') + cr('eye')) / 3;
+    return { plan, w, mul: clamp(1 + 0.009 * (rel - 50) + mg, 0.75, 1.35), stamina: 0, speed: plan === 'speed' ? 0.06 * cr('speed') / 50 : 0, range: plan === 'defense' ? 1.2 * cr('defense') / 50 : 0 };
+  };
+  proto._devRole = function (p, plan) { if (plan === 'SP') { if (p.stamina >= 50 && p.role !== 'SP') p.role = 'SP'; } else if (p.role === 'SP' && plan !== 'SP' && p.dev && !p.dev.auto) p.role = 'RP'; };
+  /* 육성 방향별 성장 경로 예측: 같은 선수를 방향마다 3시즌 진행해 평균(12회) */
+  proto.devForecast = function (p, years) {
+    years = years || 3; const out = {}, base = JSON.parse(JSON.stringify({ p: p.p, stamina: p.stamina, age: p.age, peak: p.peak, pot: p.pot, scout: p.scout, role: p.role, fr: p.fr, gs: p.gs, pos: p.pos, type: p.type, bats: p.bats, throws: p.throws, cs: p.cs, GS: p.GS, G: p.G, IP: p.IP, PA: p.PA, ipgs: p.ipgs, team: p.team, id: p.id, ko: p.ko }));
+    for (const plan of this.devPlans(p)) {
+      const acc = Array.from({ length: years + 1 }, () => ({ ovr: 0, st: 0, sub: {} })), N = 12;
+      for (let k = 0; k < N; k++) {
+        const q = JSON.parse(JSON.stringify(base)); q.dev = { plan, auto: false }; const r = rngFor(this.S.seed, 5555, k);
+        for (let y = 0; y <= years; y++) { if (y > 0) this.progress(q, r, 1); const o = this.ovr(q); acc[y].ovr += o / N; if (q.type === 'P') acc[y].st += q.stamina / N; const sb = this.sub(q); for (const f in sb) acc[y].sub[f] = (acc[y].sub[f] || 0) + sb[f] / N; }
+      }
+      out[plan] = acc.map(a => {
+        const sb = Object.fromEntries(Object.entries(a.sub).map(([f, v]) => [f, Math.round(v)])), o = a.ovr;   // 보직 적합도: 해당 보직에서 가치 있는 능력(선발=체력, 마무리=구위·피홈런, 승리조=구위·제구, 추격=제구)을 반영한 지표
+        let fit = o; if (p.type === 'P') fit = plan === 'SP' ? o + (a.st >= 50 ? 0.06 * (a.st - 50) : -6) : plan === 'CL' ? o + 0.12 * ((sb['구위'] || 50) - 50) + 0.06 * ((sb['피홈런'] || 50) - 50) : plan === 'SU' ? o + 0.06 * ((sb['구위'] || 50) + (sb['제구'] || 50) - 100) : o + 0.08 * ((sb['제구'] || 50) - 50);
+        return { ovr: Math.round(o * 10) / 10, st: Math.round(a.st), sub: sb, fit: Math.round(fit * 10) / 10 };
+      });
+    }
+    return out;
   };
 });

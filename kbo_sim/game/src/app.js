@@ -60,7 +60,7 @@
   }
 
   /* ---------------- 공통 셸 ---------------- */
-  const NAV = [['home', '대시보드'], ['roster', '로스터'], ['farm', '2군'], ['lineup', '라인업'], ['pitching', '투수진'], ['schedule', '일정·결과'], ['standings', '순위·기록'], ['finance', '재정'], ['market', '이적시장'], ['offseason', '오프시즌'], ['save', '저장·설정']];
+  const NAV = [['home', '대시보드'], ['roster', '로스터'], ['farm', '2군'], ['lineup', '라인업'], ['pitching', '투수진'], ['schedule', '일정·결과'], ['standings', '순위·기록'], ['finance', '재정'], ['coach', '코치진'], ['market', '이적시장'], ['offseason', '오프시즌'], ['save', '저장·설정']];
   function primary() {
     const S = L.S, st = L.standings(), my = st.find(x => x.team === U());
     if (S.phase === 'offseason') return { label: '오프시즌 진행', act: 'go', a: 'offseason' };
@@ -156,7 +156,7 @@
     const acts = mine ? `<div class="row"><button data-act="toggleActive" data-a="${p.id}" ${L.isInj(p) ? 'disabled title="부상자 명단"' : ''}>${p.active ? '2군으로 내림' : L.isInj(p) ? '부상자 명단' : '1군 등록'}</button><button class="warn" data-act="releaseAsk" data-a="${p.id}">${ui.confirm === p.id ? '정말 방출(되돌릴 수 없음)' : '방출'}</button></div>` : '';
     return `<div class="modal-bg" data-act="closeModal"><div class="modal" data-stop="1"><div class="row"><h2>${esc(p.name === p.ko ? p.ko : p.name)}</h2><span class="chip">${pos(p)}</span><span class="chip">${p.age}세</span>${pot}${dhChip}${draftChip}${birthChip}${fChip}${faStatus(p)}${src}${milChip}<span class="sp"></span><button class="sm" data-act="closeModal">닫기</button></div>
       <div class="row"><div>종합 ${ovrChip(L.ovr(p))}</div><div class="small muted">${teamTag(p.team in KO ? p.team : U())} · 연봉 ${money(p.contract.salary)} · 계약 ${p.contract.years}년 남음${p.contract.total ? ` · FA 계약 총 ${p.contract.total}억${p.contract.bonus ? '(계약금 ' + p.contract.bonus + '억)' : ''}${p.contract.end ? ' ~' + p.contract.end : ''}${p.contract.opt ? ' · 옵션 ' + esc(p.contract.opt) : ''}${p.contract.est ? ' · 기간 추정' : ''}` : ''} · 시장 가치 ${money(L.marketValue(p))}</div></div>
-      ${injBlock(p)}<div class="pbars">${bars}</div>${fits}<div class="small">올 시즌 1군 기록: ${statLine(p)}</div>${(L.S.stats2.bat[p.id] || L.S.stats2.pit[p.id]) ? `<div class="small">올 시즌 2군 기록: ${p.type === 'B' ? batLine(p.id, true) : pitLine(p.id, true)}</div>` : ''}${p.lockUntil > L.S.day && p.team === U() && !p.active ? `<div class="small muted">1군 재등록 잠금: ${L.lockLeft(p)}경기일 남음</div>` : ''}${acts}</div></div>`;
+      ${injBlock(p)}<div class="pbars">${bars}</div>${fits}${devBlock(p)}<div class="small">올 시즌 1군 기록: ${statLine(p)}</div>${(L.S.stats2.bat[p.id] || L.S.stats2.pit[p.id]) ? `<div class="small">올 시즌 2군 기록: ${p.type === 'B' ? batLine(p.id, true) : pitLine(p.id, true)}</div>` : ''}${p.lockUntil > L.S.day && p.team === U() && !p.active ? `<div class="small muted">1군 재등록 잠금: ${L.lockLeft(p)}경기일 남음</div>` : ''}${acts}</div></div>`;
   }
 
   /* ---------------- 라인업 ---------------- */
@@ -239,7 +239,7 @@
     const S = L.S, me = U(), all = L.players(me), farm = all.filter(p => !p.active).sort((a, b) => L.ovr(b) - L.ovr(a)), act = all.filter(p => p.active);
     const full = act.length >= ACTIVE_MAX, st2 = L.standings2(), my2 = st2.find(x => x.team === me), recs = farmRecs();
     const line = p => p.type === 'B' ? batLine(p.id, true) : pitLine(p.id, true);
-    const frow = p => { const lk = L.lockLeft(p), f = formOf(p); return `<tr class="click" data-act="player" data-a="${p.id}"><td class="l"><b>${esc(p.ko)}</b>${injChip(p)}${p.age <= 25 ? ` <span class="chip" title="예상 정점 기준: A 슈퍼스타급(68+) · B 확실한 주전급(57+) · C 준주전급(48+) · D 후보급(38+) · E 육성급. 스카우트 추정이며 시즌을 거치며 정확해집니다.">잠재력 ${L.potLetter(p)}</span>` : ''}</td><td class="l">${pos(p)}</td><td class="n">${p.age}</td><td>${ovrChip(L.ovr(p))}</td><td class="l small">${line(p)}</td><td class="l small">${f ? f.txt : '<span class="muted">-</span>'}</td><td data-stop="1">${L.isInj(p) ? `<span class="chip warn">부상자 명단</span>` : lk ? `<span class="chip">잠금 ${lk}일</span>` : `<button class="sm" data-act="toggleActive" data-a="${p.id}" ${full ? 'disabled' : ''}>1군 등록</button>`}</td></tr>`; };
+    const frow = p => { const lk = L.lockLeft(p), f = formOf(p); return `<tr class="click" data-act="player" data-a="${p.id}"><td class="l"><b>${esc(p.ko)}</b>${injChip(p)}${p.age <= 28 && L.S.coach ? ` <span class="chip" title="육성 방향">${L.planName(L.devPlan(p))}</span>` : ''}${p.age <= 25 ? ` <span class="chip" title="예상 정점 기준: A 슈퍼스타급(68+) · B 확실한 주전급(57+) · C 준주전급(48+) · D 후보급(38+) · E 육성급. 스카우트 추정이며 시즌을 거치며 정확해집니다.">잠재력 ${L.potLetter(p)}</span>` : ''}</td><td class="l">${pos(p)}</td><td class="n">${p.age}</td><td>${ovrChip(L.ovr(p))}</td><td class="l small">${line(p)}</td><td class="l small">${f ? f.txt : '<span class="muted">-</span>'}</td><td data-stop="1">${L.isInj(p) ? `<span class="chip warn">부상자 명단</span>` : lk ? `<span class="chip">잠금 ${lk}일</span>` : `<button class="sm" data-act="toggleActive" data-a="${p.id}" ${full ? 'disabled' : ''}>1군 등록</button>`}</td></tr>`; };
     const arow = p => `<tr class="click" data-act="player" data-a="${p.id}"><td class="l"><b>${esc(p.ko)}</b></td><td class="l">${pos(p)}</td><td class="n">${p.age}</td><td>${ovrChip(L.ovr(p))}</td><td class="l small">${statLine(p)}</td><td data-stop="1"><button class="sm" data-act="toggleActive" data-a="${p.id}">2군으로</button></td></tr>`;
     const rec = recs.length ? recs.map(r => `<div class="row small"><span>↑ <b>${esc(r.up.p.ko)}</b> (OVR ${L.ovr(r.up.p)}${r.up.f ? ' · 최근 ' + r.up.f.txt : ''}) ↔ ↓ <b>${esc(r.down.ko)}</b> (OVR ${L.ovr(r.down)})</span><span class="sp"></span><button class="sm" data-act="swapFarm" data-a="${r.up.p.id}|${r.down.id}">교체</button></div>`).join('') : '<div class="small muted">지금 1군 후보보다 확실히 나은 2군 선수가 없습니다.</div>';
     const th = '<thead><tr><th class="l">선수</th><th class="l">포지션</th><th>나이</th><th>OVR</th><th class="l">2군 기록</th><th class="l">최근 10경기</th><th></th></tr></thead>';
@@ -317,6 +317,32 @@
       <div class="card"><h2>${KO[T.team]} 선수 (영입)</h2><div class="tablewrap" style="max-height:480px;overflow-y:auto"><table>${th}<tbody>${theirs.map(p => playerRow(p, T.get.has(p.id), 'tget')).join('')}</tbody></table></div></div></div>`;
   }
   const f1 = x => (Math.round(x * 10) / 10).toFixed(1);
+  /* ---- 육성 방향 ---- */
+  function devBlock(p) {
+    if (p.team !== U() || p.age > 29 || !L.S.coach) return '';
+    const plans = L.devPlans(p), cur = L.devPlan(p), auto = !(p.dev && !p.dev.auto), fc = L.devForecast(p, 3), isP = p.type === 'P';
+    const sel = plans.map(pl => `<button class="sm ${pl === cur ? 'primary' : ''}" data-act="devPlan" data-a="${p.id}|${pl}">${L.planName(pl)}${pl === cur && auto ? ' (자동)' : ''}</button>`).join(' ');
+    const row = pl => { const f = fc[pl]; return `<tr class="${pl === cur ? 'me' : ''}"><td class="l"><b>${L.planName(pl)}</b></td>${f.map(x => `<td class="n">${x.ovr}</td>`).join('')}${isP ? `<td class="n">${f[0].st} → ${f[3].st}</td><td class="n">${f[0].sub['구위']} → ${f[3].sub['구위']}</td><td class="n">${f[0].sub['제구']} → ${f[3].sub['제구']}</td><td class="n"><b>${f[3].fit}</b></td>` : `<td class="n">${f[3].fit}</td>`}</tr>`; };
+    return `<div class="card" style="margin:8px 0"><b>육성 방향</b> <span class="small muted">${isP ? '선발·승리조·추격조(롱릴리프)·마무리 중 성장 방향을 정합니다. 코치진 능력에 따라 성장 속도가 달라집니다.' : '강화할 능력을 정합니다.'}</span><div class="row" style="gap:6px;margin:6px 0">${sel}</div>
+      <div class="tablewrap"><table><thead><tr><th class="l">방향</th><th>현재</th><th>+1년</th><th>+2년</th><th>+3년</th>${isP ? '<th>체력</th><th>구위</th><th>제구</th><th>보직 적합도(3년 후)</th>' : '<th>3년 후 적합도</th>'}</tr></thead><tbody>${plans.map(row).join('')}</tbody></table></div>
+      <div class="small muted">3년 성장 경로 예측(OVR 평균, 같은 선수를 12번 시뮬레이션). 코치진 보정 포함: 투수 ${esc(L.coachGrade(L.coachRating(U(), 'stuff')))}·${esc(L.coachGrade(L.coachRating(U(), 'control')))}·${esc(L.coachGrade(L.coachRating(U(), 'stamina')))}(구위·제구·체력), 타격 ${esc(L.coachGrade(L.coachRating(U(), 'contact')))}. 선발 방향은 체력이 50 이상이 되면 선발 투수로 전환됩니다.</div></div>`;
+  }
+  /* ---- 코치진 ---- */
+  function coachRow(c, act) {
+    const sp = new Set(c.spec || []);
+    return `<tr><td class="l"><b>${esc(c.name)}</b>${c.origin === 'real' ? ' <span class="chip in" title="' + esc(c.src) + '">실명(보도)</span>' : c.origin === 'market' ? ' <span class="chip">시장</span>' : ' <span class="chip" title="가상 인물">가상</span>'}${c.lv ? ` <span class="muted small">${esc(c.lv)}</span>` : ''}</td><td class="l">${esc(c.role)}</td>${['stuff', 'control', 'stamina', 'contact', 'power', 'eye', 'defense', 'speed', 'mgmt'].map(f => { const v = c[f]; return `<td class="n ${sp.has(f) ? 'pos' : 'muted'}" title="${L.coachFieldName(f)} ${v}">${sp.has(f) || v >= 55 ? '<b>' + L.coachGrade(v) + '</b>' : L.coachGrade(v)}<span class="muted small"> ${v}</span></td>`; }).join('')}<td class="n">${c.salary.toFixed(1)}억</td><td>${act}</td></tr>`;
+  }
+  function screenCoach() {
+    const S = L.S; if (!S.coach) return '<div class="card"><p class="muted">코치 정보가 없습니다.</p></div>';
+    const C = S.coach, t = U(), mine = L.coachesOf(t), mk = L.coachMarket().sort((a, b) => b.salary - a.salary), lim = L.coachLimit(), room = L.faRoom(t), head = '<th class="l">코치</th><th class="l">보직</th><th>구위</th><th>제구</th><th>체력</th><th>컨택</th><th>파워</th><th>선구</th><th>수비</th><th>주루</th><th>관리</th><th>연봉</th><th></th>';
+    const lg = TEAMS.map(x => ({ x, n: L.coachesOf(x).length, m: C.mgr[x] })).sort((a, b) => (L.coachRating(b.x, 'stuff') + L.coachRating(b.x, 'control') + L.coachRating(b.x, 'stamina')) - (L.coachRating(a.x, 'stuff') + L.coachRating(a.x, 'control') + L.coachRating(a.x, 'stamina')));
+    return `<div class="kpis"><div class="kpi"><div class="l">육성 코치 / 정원</div><div class="v">${mine.length} / ${lim}</div></div><div class="kpi"><div class="l">감독</div><div class="v" style="font-size:18px">${esc(C.mgr[t].name)}</div></div><div class="kpi"><div class="l">코치 변동 비용</div><div class="v">${L.coachPayDelta(t) >= 0 ? '+' : ''}${L.coachPayDelta(t).toFixed(1)}억</div></div><div class="kpi"><div class="l">FA 여유자금</div><div class="v ${room < 0 ? 'neg' : ''}">${room.toFixed(1)}억</div></div></div>
+      <div class="card"><h2>우리 팀 육성 코치진</h2><div class="small muted">능력치 등급 S≥75 · A≥65 · B≥55 · C≥45 · D≥35 (숫자는 20~80). 굵은 등급이 전문 분야. 정원은 리그 평균(${lim}명)이며 정원을 넘어도 불이익은 없고 신규 영입만 정원 이내입니다. <b>능력치는 모두 가상 값</b>(자료 없음), 실명은 보도(롯데·키움 2027 코칭스태프 발표) 기준 일부.</div>
+        <div class="tablewrap"><table><thead><tr>${head}</tr></thead><tbody>${mine.map(c => coachRow(c, `<button class="sm" data-act="fireCoach" data-a="${c.id}">해임</button>`)).join('')}</tbody></table></div></div>
+      <div class="card"><h2>코치 시장 (${mk.length}명)</h2><div class="small muted">영입 연봉은 팀 예산(FA 여유자금 ${room.toFixed(1)}억) 안에서만 가능하고 코치 변동 비용으로 재정에 반영됩니다. 시장 코치는 가상 인물이며 오프시즌마다 일부 교체됩니다. ${mine.length >= lim ? '<b>정원이 찼습니다. 해임 후 영입하세요.</b>' : ''}</div>
+        <div class="tablewrap"><table><thead><tr>${head}</tr></thead><tbody>${mk.map(c => coachRow(c, `<button class="sm primary" data-act="hireCoach" data-a="${c.id}" ${mine.length >= lim || room < c.salary ? 'disabled' : ''}>영입</button>`)).join('')}</tbody></table></div></div>
+      <div class="card"><h2>리그 코칭 수준 (투수 육성 순)</h2><div class="tablewrap"><table><thead><tr><th class="l">팀</th><th class="l">감독</th><th>코치 수</th><th>투수(구위·제구·체력)</th><th>타격(컨택·파워·선구)</th><th>수비·주루</th><th>육성관리</th></tr></thead><tbody>${lg.map(r => { const g = (...f) => f.map(k => L.coachGrade(L.coachRating(r.x, k))).join('·'); return `<tr class="${r.x === t ? 'me' : ''}"><td class="l">${teamTag(r.x)}</td><td class="l">${esc(r.m.name)}${r.m.virtual ? ' <span class="chip" title="' + esc(r.m.src || '가상') + '">가상</span>' : ''}</td><td class="n">${r.n}</td><td class="n">${g('stuff', 'control', 'stamina')}</td><td class="n">${g('contact', 'power', 'eye')}</td><td class="n">${g('defense', 'speed')}</td><td class="n">${g('mgmt')}</td></tr>`; }).join('')}</tbody></table></div></div>`;
+  }
   function injBlock(p) {
     if (p.prev) var prev = `<div class="small muted">2026 시즌 기록이 없어(장기 부상) 2025·2024 기록으로 능력치를 산정했습니다.</div>`;
     if (!p.inj || p.inj.apply === false && !p.inj.generated) return (p.prev ? prev : '') + (p.inj && p.inj.apply === false ? `<div class="small muted">2026 부상: ${esc(p.inj.dx)} (${esc(p.inj.since)}) — 복귀 예정 ${esc(p.inj.ret)}</div>` : '');
@@ -555,7 +581,7 @@
     if (!L) { root.innerHTML = renderStart() + toastHtml(); return; }
     const scroll = window.scrollY;
     if (ui.live) { root.innerHTML = screenLive() + toastHtml(); window.scrollTo(0, scroll); return; }
-    const S = ui.screen, f = { home: screenHome, roster: screenRoster, farm: screenFarm, lineup: screenLineup, pitching: screenPitching, schedule: screenSchedule, standings: screenStandings, finance: screenFinance, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
+    const S = ui.screen, f = { home: screenHome, roster: screenRoster, farm: screenFarm, lineup: screenLineup, pitching: screenPitching, schedule: screenSchedule, standings: screenStandings, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
     root.innerHTML = shell(f()) + (ui.modal ? modalPlayer(ui.modal) : '') + sheetHtml() + toastHtml();
     window.scrollTo(0, scroll);
   }
@@ -574,6 +600,9 @@
     pickteam(a) { ui.team = a; render(); },
     newgame() { const seed = parseInt(($('#seedIn') || {}).value, 10); ui.seed = ($('#seedIn') || {}).value || ''; L = League.create(KBO_BASE, ui.team, Number.isFinite(seed) ? seed : 1 + Math.floor(Math.random() * 99999)); ui.screen = 'home'; autosave(); render(); },
     continue() { const s = store.get(SAVE_KEY); if (s) { try { L = League.load(s); ui.screen = 'home'; render(); } catch (e) { toast('저장 데이터를 읽을 수 없습니다.'); } } },
+    devPlan(a) { const [id, pl] = a.split('|'), e = L.setDevPlan(id, pl); if (e) toast(e); else { toast(`${P(id).ko}: 육성 방향 ${L.planName(pl)}`); autosave(); } render(); },
+    hireCoach(a) { const e = L.hireCoach(a); if (e) toast(e); else { toast('코치를 영입했습니다.'); autosave(); } render(); },
+    fireCoach(a) { const e = L.fireCoach(a); if (e) toast(e); else autosave(); render(); },
     ticket(a) { if (L.setTicketPolicy(U(), +a)) { toast(`티켓 가격 ${+a === 1 ? '유지' : (+a > 1 ? '+' : '') + Math.round((+a - 1) * 100) + '%'}`); autosave(); render(); } },
     go(a) { ui.screen = a; ui.modal = null; render(); window.scrollTo(0, 0); },
     adv(a) { const live = ui.liveMode && (L.S.phase === 'preseason' || L.S.phase === 'regular'), before = snapshot(), r = L.advance(+a, live); if (r.status === 'userGame') { afterAdvance(r); return; } if (r.status === 'seasonEnd') toast('정규시즌이 끝났습니다.'); openResultSheet(before); autosave(); render(); },

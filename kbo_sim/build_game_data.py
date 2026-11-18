@@ -342,6 +342,7 @@ RETIRED=[('황재균','Wiz')]   # 2026 시즌 후 은퇴(사용자 확인) → �
 players[:]=[p for p in players if (p['ko'],p['team']) not in RETIRED]
 
 # 2002~2027 신인 드래프트 정리 파일(사용자 제공): 입단 연도·고졸/대졸·지명 순번·1군 데뷔·통산 출전 → p['dh']
+MANUAL_DH={('박준영','Eagles',24):'1라운드',('박준영','Eagles',25):'육성선수'}
 def load_drafthist(players):
     import csv,re
     f=D+'game/data/draft_2002_2027.csv'
@@ -370,7 +371,11 @@ def load_drafthist(players):
         c=[r for r in c if abs(birth(r)-cur)<=tol and int(r['연도'])<=2027]
         if len(c)>1:
             c.sort(key=lambda r:abs(birth(r)-cur))
-            if abs(birth(c[0])-cur)==abs(birth(c[1])-cur): st['amb'].append(p['ko']);continue
+            if abs(birth(c[0])-cur)==abs(birth(c[1])-cur):
+                man=MANUAL_DH.get((p['ko'],p.get('team'),p['age']))   # 동명이인 수동 확정(사용자 지정): 한화 박준영 — 어린 쪽(24세)=2022 1라운드 전체 1순위, 다른 쪽=2026 육성선수
+                cm=[r for r in c if man and r['갈래']==man]
+                if len(cm)==1: c=cm
+                else: st['amb'].append(p['ko']);continue
         if len(c)!=1: st['miss']+=1;continue
         r=c[0];toks=r['_toks']
         univ=any(re.search(r'대$',t) and t not in ALI for t in toks) and not any('중퇴' in t for t in toks)
@@ -447,6 +452,14 @@ def load_finance():
         for r in csv.DictReader(open(fc,encoding='utf-8-sig')): cst[TMC[r['팀']]]=dict(team=fl(r['선수단운영비_억']),staff=fl(r['직원급여_억']),game=fl(r['경기진행_억']),biz=fl(r['사업·구장원가_억']),unsplit=fl(r['선수단+사업 미분리_억']),other=fl(r['기타(감가·수수료·협회비 등)_억']),total=fl(r['영업비용_억']),note=r['분류 근거'])
     return {TMC[r['팀']]:dict(costs=cst.get(TMC[r['팀']]),audit=aud.get(TMC[r['팀']],[]),rev=fl(r['매출_억']),cost=fl(r['영업비용_억']),op=fl(r['영업이익_억']),gate=fl(r['입장수입_억']),md=fl(r['사업(MD)수입_억']),att=int(r['2026평균관중']),att25=int(r['2025평균관중']),g26=int(r['2026홈경기수']),tot26=int(r['2026총관중']),gate26=fl(r['2026입장수입_억']),tot25=int(r['2025총관중']),park=r['구장'],cap=int(r['수용인원']),capsrc=r['수용인원_근거'],par=fl(r['모기업의존도_%']),parsrc=r['의존도_근거'],capchg=[[int(x.split(':')[0]),int(x.split(':')[1])] for x in r['수용인원_변경'].split(';') if x],chgsrc=r['변경_근거'],note=r['비고']) for r in csv.DictReader(open(f,encoding='utf-8-sig'))}
 FINANCE=load_finance()
+# 코칭스태프(보도 기반 일부 + 나머지는 게임에서 가상 생성). 능력치는 자료가 없어 모두 가상 값(게임에서 생성)
+def load_coaches():
+    import csv
+    f=D+'game/data/coaches_2027.csv'
+    if not os.path.exists(f): return []
+    TMC={'한화':'Eagles','LG':'Twins','SSG':'Landers','두산':'Bears','키움':'Heroes','KT':'Wiz','NC':'Dinos','롯데':'Giants','삼성':'Lions','KIA':'Tigers'}
+    return [dict(team=TMC[r['팀']],name=r['이름'],role=r['보직'],level=r['구분'],src=r['근거']) for r in csv.DictReader(open(f,encoding='utf-8-sig'))]
+COACHES=load_coaches()
 # 능력치 척도(20-80): ratings.py 와 같은 방식(규정 타자 PA≥300 / 규정 투수 TBF≥200 가중 평균·표준편차)
 def scale(rows,fields,w):
     out={}
@@ -454,7 +467,7 @@ def scale(rows,fields,w):
         v=[r['p'][f] for r in rows];t=[w(r) for r in rows];mu=sum(a*b for a,b in zip(v,t))/sum(t);sd=math.sqrt(sum(b*(a-mu)**2 for a,b in zip(v,t))/sum(t));out[f]=[mu,sd]
     return out
 regB=[b for b in R['batters'] if b['PA']>=300];regP=[p for p in R['pitchers'] if p['TBF']>=200]
-out={'finance':FINANCE,'faclass2027':FACLASS,'foreign2027':FOREIGN27,'draft2027':DRAFT,'teams':TEAMS,'players':players,'league_bat':R['league_bat'],'team_def':R['team_def'],'pf':PK['pf_by_team'],
+out={'coaches':COACHES,'finance':FINANCE,'faclass2027':FACLASS,'foreign2027':FOREIGN27,'draft2027':DRAFT,'teams':TEAMS,'players':players,'league_bat':R['league_bat'],'team_def':R['team_def'],'pf':PK['pf_by_team'],
  'fielding':{'lg':F['lg'],'team_avg_range':F['team_avg_range']},
  'scale':{'B':scale(regB,['k','bb','hr','babip','xbh','sba'],lambda r:r['PA']),'P':scale(regP,['k','bb','hr','babip'],lambda r:r['TBF'])}}
 os.makedirs(D+'game/src',exist_ok=True)
