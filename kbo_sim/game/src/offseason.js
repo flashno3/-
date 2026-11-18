@@ -194,7 +194,7 @@
     const S = this.S; t = t || S.userTeam; const info = p.faInfo, graded = !!(info && info.grade) && !p.foreign, decay = this._marketDecay();
     if (!graded) { const ask = Math.round(this.askSalary(p) * decay * 10) / 10; return { graded: false, pref: 1, maxYears: 1, mv: ask, ext: false, comp: 1, req: () => Math.max(0.3, ask) }; }
     const mv = this.faMV(p), pref = this._prefYears(p), ext = info.from !== t;
-    let n = 0; for (const x of TEAMS) if (x !== t && x !== S.userTeam && this.faRoom(x) >= mv && this.cbtPay(x) + mv < this.cbtCap() * 0.97) n++;
+    let n = 0; for (const x of TEAMS) if (x !== t && x !== S.userTeam && this.faRoom(x) >= mv && this.cbtPay(x, this.S.phase === 'offseason') + mv < this.cbtCap() * 0.97) n++;
     const comp = info.grade === 'C' ? 1 : 1 + 0.015 * Math.min(4, n), base = mv * decay * (ext ? 1.04 : 1) * comp;
     return { graded: true, pref, maxYears: 4, mv, ext, comp, req: y => Math.round(base * (1 + 0.04 * Math.max(0, pref - y)) * (1 - 0.02 * Math.max(0, y - pref)) * 100) / 100 };
   };
@@ -217,7 +217,7 @@
   };
   proto._aiDeal = function (t, p) {   // AI 구단의 영입 조건(선호 기간, 요구액 그대로, 계약금 35%) — 여유자금·상한 안이면 계약
     const tm = this.faTerms(p, t), o = this.faDefaultOffer(p, t, tm.pref), per = (o.bonus + o.salary * o.years) / o.years;
-    if (this.cbtPay(t) + per * (this.S.calib.cbtK || 1) > this.cbtCap() * 0.97) return null;
+    if (this.cbtPay(t, this.S.phase === 'offseason') + per * (this.S.calib.cbtK || 1) > this.cbtCap() * 0.97) return null;
     if (this.faRoom(t) < o.salary + o.bonus / o.years) return null;
     return Object.assign({ per, tm }, o);
   };
@@ -266,7 +266,7 @@
       const decl = elig ? clamp(0.12 + 0.07 * Math.max(0, this.war(p)) - (p.age >= 36 ? 0.05 : 0), 0.08, 0.5) : 0, keepBase = p.foreign ? clamp(0.25 + (o - 40) * 0.025 - (p.age >= 34 ? 0.25 : 0), 0.08, 0.72) : (elig ? 1 : 0.9);
       const keep = r.random() >= decl && r.random() < keepBase;
       let ask = p.foreign ? this.askSalary(p) : this.resignAsk(p); if (p.foreign) ask = Math.min(ask, p.faInfo ? 1e9 : Math.max(FOREIGN_NEW[p.aq ? 'aq' : 'gen'], p.contract.salary + FOREIGN_RAISE[p.aq ? 'aq' : 'gen']));
-      const inc = Math.max(0, ask - this.cbtVal(p) * (S.calib.cbtK || 1)), over = inc > 0.05 && this.cbtPay(t) + inc > this.cbtCap() * 0.97;   // AI 구단은 상한을 넘기게 되는 증액 재계약은 하지 않는다(증액이 없으면 재계약)
+      const inc = Math.max(0, ask - this.cbtVal(p) * (S.calib.cbtK || 1)), over = inc > 0.05 && this.cbtPay(t, true) + inc > this.cbtCap() * 0.97;   // AI 구단은 상한을 넘기게 되는 증액 재계약은 하지 않는다(증액이 없으면 재계약)
       if (keep && over && !elig && !p.foreign) ask = p.contract.salary;   // 상한 때문에 증액할 수 없으면 현 연봉으로 재계약
       if (keep && (!over || (!elig && !p.foreign))) { p.contract = this._newContract(p, ask, 1); p.salHist = (p.salHist || []).slice(-2).concat([ask]); } else { this.release(t, id, true); }
     }
@@ -582,7 +582,7 @@
     let act = P.filter(p => p.active);
     const need = () => ({ B: act.filter(p => p.type === 'B').length, P: act.filter(p => p.type === 'P').length, C: act.filter(p => p.pos === 'C').length });
     while (act.length > ACTIVE_MAX) { const w = act.sort((a, b) => this.marketValue(a) - this.marketValue(b))[0]; w.active = false; act = P.filter(p => p.active); }
-    const fill = (pred, count) => { const c = P.filter(p => !p.active && pred(p)).sort((a, b) => this.marketValue(b) - this.marketValue(a)).slice(0, count); c.forEach(p => { p.active = true; }); act = P.filter(p => p.active); };
+    const fill = (pred, count) => { const c = P.filter(p => !p.active && !this.isInj(p) && pred(p)).sort((a, b) => this.marketValue(b) - this.marketValue(a)).slice(0, count); c.forEach(p => { p.active = true; }); act = P.filter(p => p.active); };
     let n = need();
     if (n.B < 13) fill(p => p.type === 'B', 13 - n.B); n = need();
     if (n.C < 2) fill(p => p.pos === 'C', 2 - n.C);
@@ -709,5 +709,39 @@
     }
     S.fin.hist.push(row); if (S.fin.hist.length > 20) S.fin.hist.shift();
     const my = row.teams[S.userTeam]; news(this, `재정 결산 ${S.year}: 매출 ${my.rev}억 · 선수단 ${my.pay}억 · 영업이익 ${my.op >= 0 ? '+' : ''}${my.op}억${my.ps ? ` (포스트시즌 배당 ${my.ps}억${my.bonus ? ` + 모기업 보너스 ${my.bonus}억, 선수단 포상 ${my.prize}억` : ''})` : ''} · 이사회 신뢰도 ${my.trust}(${my.dTrust >= 0 ? '+' : ''}${my.dTrust})`);
+  };
+
+  /* ---------------- 부상 ----------------
+   * [초기 장기 부상자] 뉴스 기반(data/injuries_2026.csv): 문동주·엄상백·윤영철·박진·이호성·신민혁·김영규·양재훈 등은 복귀 예정일까지 부상자 명단(1군 등록 불가).
+   * [시즌 중 부상] 1군 선수가 경기일마다 확률적으로 부상(타자 0.30%·선발 0.42%·불펜 0.33%/일, 33세 이상 ×1.3, 24세 이하 ×0.9).
+   *   경상 55%(7~14일) · 중등도 30%(15~35일) · 장기 12%(45~100일) · 시즌 아웃급 3%(150~330일, 수술). 달력 기준으로 회복하며, 회복하면 2군에서 대기(내 팀은 직접 등록, AI는 자동). */
+  const INJ_B = [['햄스트링 염좌', 3], ['허리 통증', 2], ['손목 통증', 2], ['어깨 통증', 2], ['무릎 통증', 2], ['발목 염좌', 2], ['옆구리(복사근) 통증', 2], ['손가락 골절', 1], ['종아리 근육통', 2], ['사구 타박상', 2]];
+  const INJ_P = [['팔꿈치 통증', 4], ['어깨 통증', 3], ['팔 피로 누적', 3], ['손가락 물집', 2], ['내전근 통증', 1], ['옆구리(복사근) 통증', 2], ['허리 통증', 1], ['햄스트링 염좌', 1]];
+  const pickW = (r, list) => { let x = r.random() * list.reduce((a, b) => a + b[1], 0); for (const [n, w] of list) { if ((x -= w) < 0) return n; } return list[0][0]; };
+  proto._injFix = function () { for (const p of Object.values(this.S.players)) if (p.inj && !this.isInj(p) && p.inj.generated) delete p.inj; };
+  proto._injuryDay = function (d) {
+    const S = this.S, now = this.todayN(), r = rngFor(S.seed, S.year, d, 7000), changed = new Set(), user = S.userTeam;
+    for (const t of TEAMS) for (const p of this.players(t)) {
+      if (p.inj && p.inj.apply !== false && !this.isInj(p)) {   // 복귀
+        if (t === user) news(this, `부상 복귀: ${p.ko} (${p.inj.dx}) — 2군에서 대기 중, 1군에 등록하세요`);
+        if (p.inj.generated) delete p.inj; else p.inj.apply = false; changed.add(t);
+      }
+    }
+    for (const t of TEAMS) for (const p of this.players(t)) {
+      if (!p.active || this.isInj(p)) continue;
+      const hz = (p.type === 'B' ? 0.0030 : p.role === 'SP' ? 0.0042 : 0.0033) * (p.age >= 33 ? 1.3 : p.age <= 24 ? 0.9 : 1);
+      if (r.random() >= hz) continue;
+      const u = r.random(), days = u < 0.55 ? 7 + Math.floor(r.random() * 8) : u < 0.85 ? 15 + Math.floor(r.random() * 21) : u < 0.97 ? 45 + Math.floor(r.random() * 56) : 150 + Math.floor(r.random() * 181);
+      const sev = u < 0.55 ? '' : u < 0.85 ? '' : u < 0.97 ? '(장기)' : '(수술·시즌 아웃급)', part = pickW(r, p.type === 'B' ? INJ_B : INJ_P);
+      const retN = now + days, rd = new Date(retN * 864e5);
+      p.inj = { dx: u >= 0.97 ? part.replace('통증', '손상 → 수술') : part, since: `${S.year}-${String(new Date(now * 864e5).getUTCMonth() + 1).padStart(2, '0')}-${String(new Date(now * 864e5).getUTCDate()).padStart(2, '0')} 발생`, ret: rd.toISOString().slice(0, 10), retN, basis: '시즌 중 발생한 부상(확률 모델)', apply: true, generated: true };
+      p.active = false; changed.add(t);
+      if (t === user) news(this, `부상: ${p.ko} — ${p.inj.dx}${sev}, 약 ${days}일 (복귀 예정 ${this.injDateStr(p)})`);
+    }
+    {   // 부상으로 1군 타자 12명·투수 12명 아래가 되면 건강한 2군 선수를 자동 등록(경기 진행 불가 방지)
+      const a = this.players(user).filter(p => p.active), nb = a.filter(p => p.type === 'B').length, np = a.filter(p => p.type === 'P').length;
+      if (nb < 12 || np < 12) { this.ensureActive(user); news(this, '부상자 때문에 1군 엔트리가 부족해 건강한 2군 선수를 자동 등록했습니다.'); }
+    }
+    for (const t of changed) { if (t === user) { this.repairSettings(t); this.invalidate(); } else this.refreshTeam(t); }
   };
 });

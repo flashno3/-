@@ -211,6 +211,49 @@ if FUTP:
 
 # 2026 연봉·외국인 구분(사용자 제공 CSV): 이름+소속팀(군 복무 선수는 원소속)으로 유일하게 매칭되는 선수에만 반영.
 # 팀 내 동명이인(Y)이거나 같은 이름·팀 선수가 2명 이상이면 구분할 수 없어 건너뛴다(추정 연봉 유지).
+# 2026 기록이 없는 선수(장기 부상으로 전 시즌 결장 등): 2026 연봉표에는 있고 위 명단에는 없으며 2025·2024 기록이 있으면 그 기록(ratings_prev25.json)으로 추가
+def add_prev_season():
+    import csv
+    f=D+'game/data/salary_2026.csv'
+    if not os.path.exists(f) or not os.path.exists(D+'ratings_prev25.json'): return []
+    TM4={'한화':'Eagles','LG':'Twins','SSG':'Landers','두산':'Bears','키움':'Heroes','KT':'Wiz','NC':'Dinos','롯데':'Giants','삼성':'Lions','KIA':'Tigers'}
+    have={(p['ko'],p['team']) for p in players}
+    sal={}
+    for r in csv.DictReader(open(f,encoding='utf-8-sig')):
+        if r['구단'] in TM4: sal[(r['선수명'],TM4[r['구단']])]=r
+    inj=set()
+    fi=D+'game/data/injuries_2026.csv'
+    if os.path.exists(fi):
+        for r in csv.DictReader(open(fi,encoding='utf-8-sig')):
+            if r['반영']!='미반영': inj.add((r['선수명'],TM4[r['팀']]))
+    PR=J('ratings_prev25.json');out=[]
+    for x in PR['pitchers']:
+        ko=kor(x['name'])
+        for (n,t),r in sal.items():
+            if n!=ko or (ko,t) in have or (ko,t) not in inj or x['team']!=t or x['IP']<20 or r.get('외국인구분'): continue
+            try: age=int(x['age'])+2
+            except ValueError: continue
+            players.append({'id':'P%d'%(len(players)+1),'type':'P','name':x['name'],'ko':ko,'team':t,'age':age,'p':x['p'],'GS':x['GS'],'G':x['G'],'IP':x['IP'],'ipgs':x['ip_per_start'],'role':x['role'],'stamina':x['r'].get('stamina',40),'prev':2025})
+            out.append((ko,t,x['IP']));have.add((ko,t))
+    return out
+PREVADD=add_prev_season()
+print('2026 기록 없음 → 2025·2024 기록으로 추가',PREVADD)
+def load_injuries(players):
+    import csv
+    f=D+'game/data/injuries_2026.csv'
+    if not os.path.exists(f): return {'ok':0,'skip':[]}
+    TM4={'한화':'Eagles','LG':'Twins','SSG':'Landers','두산':'Bears','키움':'Heroes','KT':'Wiz','NC':'Dinos','롯데':'Giants','삼성':'Lions','KIA':'Tigers'}
+    st={'ok':0,'skip':[]}
+    for r in csv.DictReader(open(f,encoding='utf-8-sig')):
+        if r['반영']=='미반영': st['skip'].append(r['선수명']);continue
+        ty='P' if r['포지션']=='투수' else 'B'
+        c=[p for p in players if p['ko']==r['선수명'] and p['team']==TM4[r['팀']] and p['type']==ty]
+        if len(c)!=1: st['skip'].append((r['선수명'],len(c)));continue
+        c[0]['inj']={'dx':r['진단'],'since':r['발생·수술일'],'ret':r['복귀예상일'],'basis':r['근거(보도/추정)'],'apply':r['반영']=='적용'};st['ok']+=1
+    return st
+INJ=load_injuries(players)
+print('부상 반영',INJ)
+
 def load_salary(players):
     import csv
     f=D+'game/data/salary_2026.csv'

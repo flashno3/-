@@ -164,6 +164,7 @@
     marketValue(p) {
       let v = this.price(p); const a = p.age;
       if (a <= 24) v *= 1 + 0.18 * (25 - a) / 3 + 0.35 * (p.pot || 0); else if (a >= 33) v *= Math.max(0.35, 1 - 0.12 * (a - 32));
+      if (this.isInj(p)) v *= Math.max(0.35, 1 - this.injLeft(p) / 400);   // 장기 부상자는 가치 할인(복귀까지 400일이면 최대 65%)
       return Math.max(0.2, Math.round(v * 10) / 10);
     }
     /* ---- 경쟁균형세(샐러리캡): KBO 규정 ----
@@ -174,7 +175,7 @@
     cbtFloor(y) { y = y === undefined ? this.S.year : y; return y < 2027 ? null : Math.round(60.6538 * Math.pow(1.05, clamp(y - 2027, 0, 1)) * 10000) / 10000; }
     /* 경쟁균형세 산정 보수: FA 다년계약은 (보장 총액/보장 연수), 그 외는 연봉 */
     cbtVal(p) { return p.contract.cbt !== undefined ? p.contract.cbt : p.contract.salary; }
-    cbtPay(t) { const y = this.S.year; return Math.round(this.players(t).filter(p => p.rookie !== y && !p.foreign).map(p => this.cbtVal(p)).sort((a, b) => b - a).slice(0, 40).reduce((a, b) => a + b, 0) * (this.S.calib.cbtK || 1) * 100) / 100; }
+    cbtPay(t, next) { const y = this.S.year + (next ? 1 : 0); return Math.round(this.players(t).filter(p => p.rookie !== y && !p.foreign).map(p => this.cbtVal(p)).sort((a, b) => b - a).slice(0, 40).reduce((a, b) => a + b, 0) * (this.S.calib.cbtK || 1) * 100) / 100; }
     cbtRate(n) { return [0.3, 0.5, 1][clamp(n, 1, 3) - 1]; }
     /* 지금 시즌 종료 시점으로 가정한 정산(미리보기) */
     cbtPreview(t) {
@@ -323,6 +324,7 @@
     }
     setActive(t, id, on) {
       const p = this.S.players[id]; if (!p || p.team !== t) return '선수를 찾을 수 없습니다.';
+      if (on && this.isInj(p)) return `${p.ko}은(는) 부상자 명단입니다.`;
       if (on && this.players(t).filter(x => x.active).length >= ACTIVE_MAX) return `1군 엔트리는 ${ACTIVE_MAX}명까지입니다.`;
       p.active = !!on; this._engDirty = true; if (t === this.S.userTeam) this.repairSettings(t); return null;
     }
@@ -330,7 +332,7 @@
     /* ------------------------------------------------------------ AI 팀 사용량(출전·등판) */
     /* 2군 풀: 1군 엔트리에 없는 선수. 타자 9명/투수 8명에 못 미치면 1군 후보 중 가치가 낮은 선수로 메운다(드문 경우) */
     farmPool(t) {
-      let H = this.hitters(t).filter(p => !p.active), P = this.pitchers(t).filter(p => !p.active);
+      let H = this.hitters(t).filter(p => !p.active && !this.isInj(p)), P = this.pitchers(t).filter(p => !p.active && !this.isInj(p));
       if (H.length < 9) H = H.concat(this.hitters(t, true).sort((a, b) => this._runsB(a, true) - this._runsB(b, true)).slice(0, 9 - H.length));
       if (P.length < 8) P = P.concat(this.pitchers(t, true).sort((a, b) => this._runsP(a) - this._runsP(b)).slice(0, 8 - P.length));
       return { H, P };
@@ -357,7 +359,7 @@
     }
     /* AI 팀의 1군 28명 자동 편성: 주전 9 + 백업 5(포수 2명 이상) + 선발 5 + 불펜 9 */
     autoActive(t, pool) {
-      const S = this.S, inPool = p => !pool || pool.includes(p), H = this.hitters(t).filter(inPool), P = this.pitchers(t).filter(inPool), act = new Set();
+      const S = this.S, inPool = p => (!pool || pool.includes(p)) && !this.isInj(p), H = this.hitters(t).filter(inPool), P = this.pitchers(t).filter(inPool), act = new Set();
       const lineup = this.bestLineup(H); lineup.forEach(x => act.add(x.id));
       const bench = H.filter(p => !act.has(p.id)).sort((a, b) => this._runsB(b, true) - this._runsB(a, true)); let nb = 0;
       const needC = 2 - H.filter(p => act.has(p.id) && p.pos === 'C').length;
@@ -368,7 +370,7 @@
       spc.forEach(p => act.add(p.id));
       const rps = P.filter(p => !act.has(p.id)).sort((a, b) => this._runsP(b) - this._runsP(a)).slice(0, Math.max(0, ACTIVE_MAX - act.size)); rps.forEach(p => act.add(p.id));
       if (act.size < ACTIVE_MAX) {   // 명단 풀이 모자라면 팀의 나머지 선수 중 가치가 높은 순으로 28명까지 채운다(투수 최소 13명)
-        const rest = this.players(t).filter(p => !act.has(p.id)).sort((a, b) => this.marketValue(b) - this.marketValue(a));
+        const rest = this.players(t).filter(p => !act.has(p.id) && !this.isInj(p)).sort((a, b) => this.marketValue(b) - this.marketValue(a));
         while (act.size < ACTIVE_MAX && rest.length) { const needP = [...act].filter(id => S.players[id].type === 'P').length < 13; const i = rest.findIndex(p => needP ? p.type === 'P' : true); const p = rest.splice(i < 0 ? 0 : i, 1)[0]; act.add(p.id); }
       }
       for (const p of this.players(t)) p.active = act.has(p.id);
@@ -382,6 +384,7 @@
       if (!!on === !!p.active) return null;
       const locking = S.day < S.schedule.length;
       if (on) {
+        if (this.isInj(p)) return `${p.ko}은(는) 부상자 명단입니다(${p.inj.dx}, 복귀 예정 ${this.injDateStr(p)}).`;
         if (A.length >= ACTIVE_MAX) return `1군 엔트리는 ${ACTIVE_MAX}명까지입니다. 먼저 한 명을 2군으로 내리세요.`;
         if (locking && S.day < (p.lockUntil || 0)) return `${p.ko}은(는) 2군 말소 후 10경기일이 지나야 1군에 등록할 수 있습니다. (${p.lockUntil - S.day}일 남음)`;
         p.active = true;
@@ -456,7 +459,7 @@
 
     /* ------------------------------------------------------------ 시즌 시작 */
     newSeasonSetup(first) {
-      const S = this.S;
+      const S = this.S; S.day = 0; S.phase = 'preseason';   // 부상 판정(달력)이 새 시즌 개막일 기준이 되도록 먼저 설정
       for (const p of Object.values(S.players)) p.lockUntil = 0;
       for (const t of TEAMS) { if (t !== S.userTeam) { const rp = first ? this.reg1Pool(t) : []; this.autoActive(t, rp.length >= ACTIVE_MAX ? rp : null); this.assignUsage(t); } }
       this.repairSettings(S.userTeam);
@@ -520,6 +523,12 @@
     }
     FIRST_HALF_DAYS() { return 89; }
     dateOf(day) { const d = new Date(Date.UTC(this.S.year, 2, 28)), off = (6 - d.getUTCDay() + 7) % 7; d.setUTCDate(d.getUTCDate() + (off > 3 ? off - 7 : off)); /* 개막: 3월 28일에 가장 가까운 토요일 */ let k = 0, br = false; while (k < day) { if (k === 88 && !br) { br = true; d.setUTCDate(d.getUTCDate() + 6); } d.setUTCDate(d.getUTCDate() + 1); if (d.getUTCDay() !== 1) k++; } return d; }   // 월요일 휴식, 89경기일 뒤 올스타 휴식기(6일)
+    /* ---- 부상 ---- 부상자는 1군 등록 불가(부상자 명단), 복귀 예정일(달력)이 지나면 복귀. */
+    todayN() { const S = this.S, ms = d => Math.floor(d.getTime() / 864e5); if (S.phase === 'offseason') return Math.floor(Date.UTC(S.year, 10, 20) / 864e5); return ms(this.dateOf(Math.min(S.day || 0, (S.schedule || []).length))); }
+    injRet(p) { if (!p.inj || !p.inj.ret) return null; if (p.inj.retN === undefined) { const t = Date.parse(p.inj.ret); p.inj.retN = isNaN(t) ? null : Math.floor(t / 864e5); } return p.inj.retN; }
+    isInj(p) { if (!p.inj || p.inj.apply === false) return false; const r = this.injRet(p); return r !== null && r > this.todayN(); }
+    injLeft(p) { return this.isInj(p) ? this.injRet(p) - this.todayN() : 0; }
+    injDateStr(p) { const r = this.injRet(p); if (r === null) return ''; const d = new Date(r * 864e5); return `${d.getUTCFullYear()}.${d.getUTCMonth() + 1}.${d.getUTCDate()}`; }
     dateStr(day) { const d = this.dateOf(day); return `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`; }
 
     /* ------------------------------------------------------------ 순위 */
@@ -586,7 +595,7 @@
       });
       this.mergeTracking();
       for (const o of others) this.commit(o.home, o.away, o.rh, o.ra, { spH: o.spH, spA: o.spA });
-      this._decayFatigue(); this._tickService(); if (this._faMarketDay) this._faMarketDay(d); this.playFutures(d); this.returnMilitary(this.milYM(d));
+      this._decayFatigue(); this._tickService(); if (this._faMarketDay) this._faMarketDay(d); if (this._injuryDay) this._injuryDay(d); this.playFutures(d); this.returnMilitary(this.milYM(d));
       if (!ug) { S.day++; return { status: 'ok', day: d }; }
       if (live) { S.pendingDay = d; return { status: 'userGame', day: d, game: ug.g, idx: ug.i }; }
       const L = this.startUserGame(ug.g, ug.i); L.live.playToEnd(); const res = this.finishUserGame(L);
