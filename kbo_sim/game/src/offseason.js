@@ -390,7 +390,10 @@
       }
       p.salHist = [p.contract.salary, p.contract.salary, p.contract.salary];   // 최근 3년 연봉(자료는 2026년뿐이라 같은 값으로 가정)
       if (p.age <= 25 && p.peak === undefined && !p.draft && !p.foreign && p.team !== 'MIL') {   // 젊은 선수(2군 포함): 지명 슬롯 실제 분포 × 현재 OVR(나이 대비) 증거로 갱신한 정점
-        const rr = this._pkRng || (this._pkRng = rngFor(S.seed, 2027, 77)), ov = this.ovr(p), smp = p.type === 'P' ? (p.IP || 0) / 80 : (p.PA || 0) / 350, pk = clamp(this._posteriorPeak(rr, ov, p.age, slotPrior(dh), smp), 25, 85), ss = dh ? dh.ss || 0 : 0;
+        const rr = this._pkRng || (this._pkRng = rngFor(S.seed, 2027, 77)), ov = this.ovr(p), smp = p.type === 'P' ? (p.IP || 0) / 80 : (p.PA || 0) / 350, pri = slotPrior(dh), ss = dh ? dh.ss || 0 : 0;
+        if (p.eval && p.eval.floor) { const fl = { A: 0, B: 1, C: 2, D: 3, E: 4 }[p.eval.floor]; for (let i = fl + 1; i < pri.length; i++) pri[i] = 0; }   // 제공된 평가(보도·스카우트)가 있으면 그 하한 아래 등급은 배제
+        const pk = clamp(this._posteriorPeak(rr, ov, p.age, pri, smp), 25, 85);
+        if (p.eval) { if (p.eval.role === 'SP') p.role = 'SP'; if (p.eval.plan) p.dev = { plan: p.eval.plan, auto: false }; }
         p.peak = pk; p.scout = { o: ov, ceil: clamp(pk + gauss(rr, 0, 3 + 9 * Math.exp(-ss / 2)), 25, 85) }; p.pot = clamp((pk - ov) / 30, 0, 1.4);   // 프로 경험이 길수록 스카우트 평가 오차가 줄어든다
       }
       if (p.foreign) p.contract.years = 1;
@@ -760,7 +763,8 @@
   const CH_NAME = { stuff: '구위', control: '제구', stamina: '체력', contact: '컨택', power: '파워', eye: '선구', defense: '수비', speed: '주루', mgmt: '육성관리' };
   const CH_SPEC = { '투수': ['stuff', 'control', 'stamina'], '타격': ['contact', 'power', 'eye'], '수비·주루': ['defense', 'speed'], '총괄': ['mgmt'] };
   const CH_SLOT = { '투수': 2, '타격': 2, '수비·주루': 1, '총괄': 1 };
-  const ROLE_MAP = { '투수코치': '투수', '타격코치': '타격', '수비코치': '수비·주루', '배터리코치': '수비·주루', '퓨처스 감독': '총괄' };
+  const ROLE_MAP = { '투수코치': '투수', '타격코치': '타격', '수비코치': '수비·주루', '배터리코치': '수비·주루', '퓨처스 감독': '총괄', '보직 미상': null };
+  const CH_TARGET = { '투수': 2, '타격': 2, '수비·주루': 1, '총괄': 1 };
   const SURN2 = ['김', '이', '박', '최', '정', '강', '조', '윤', '장', '임', '한', '오', '서', '신', '권', '황', '안', '송', '류', '전'], GIV2 = ['동수', '성호', '재훈', '병철', '상민', '기태', '영진', '용수', '종범', '정민', '태균', '현준', '승엽', '재원', '창용', '민호', '광수', '진태', '세훈', '대현'];
   const DEV_PITCH = { SP: { k: 0.9, bb: 1.35, hr: 1.0, babip: 0.9 }, SU: { k: 1.15, bb: 1.1, hr: 1.0, babip: 0.9 }, MID: { k: 0.9, bb: 1.3, hr: 1.0, babip: 1.0 }, CL: { k: 1.4, bb: 0.8, hr: 1.25, babip: 0.9 } };
   const DEV_BAT = { balanced: {}, contact: { k: 1.4, babip: 1.2, bb: 0.9, hr: 0.8, xbh: 0.8 }, power: { hr: 1.5, xbh: 1.3, k: 0.8, babip: 0.9, bb: 0.9 }, eye: { bb: 1.5, k: 1.1, hr: 0.8, babip: 0.8, xbh: 0.8 }, defense: { k: 0.9, bb: 0.9, hr: 0.9, babip: 0.9, xbh: 0.9 }, speed: { k: 0.95, bb: 0.95, hr: 0.9, babip: 1.1, xbh: 0.95 } };
@@ -784,12 +788,17 @@
   proto._initCoaches = function (list) {
     const S = this.S, r = rngFor(S.seed, 2027, 91); S.coach = { nextId: 1, list: {}, teams: {}, mgr: {}, market: [], delta: {}, year: S.year };
     for (const t of TEAMS) { S.coach.teams[t] = []; S.coach.delta[t] = 0; }
-    const real = (list || []).filter(x => x.role !== '감독');
+    const real = (list || []).filter(x => x.role !== '감독' && x.role !== '1군');
     for (const m of (list || []).filter(x => x.role === '감독')) S.coach.mgr[m.team] = { name: m.name === '(미확인)' ? SURN2[Math.floor(r.random() * SURN2.length)] + GIV2[Math.floor(r.random() * GIV2.length)] : m.name, src: m.src, virtual: m.name === '(미확인)' };
     for (const t of TEAMS) {
-      const cnt = { '투수': 0, '타격': 0, '수비·주루': 0, '총괄': 0 };
-      for (const x of real.filter(y => y.team === t)) { const role = ROLE_MAP[x.role]; if (!role) continue; const c = this._mkCoach(r, role, { team: t, name: x.name, origin: 'real', src: x.src, lv: x.level }); S.coach.list[c.id] = c; S.coach.teams[t].push(c.id); cnt[role]++; }
-      for (const role of Object.keys(CH_SLOT)) while (cnt[role] < CH_SLOT[role]) { const c = this._mkCoach(r, role, { team: t }); S.coach.list[c.id] = c; S.coach.teams[t].push(c.id); cnt[role]++; }
+      const cnt = { '투수': 0, '타격': 0, '수비·주루': 0, '총괄': 0 }, mine = real.filter(y => y.team === t), unk = [];
+      for (const x of mine) { const role = ROLE_MAP[x.role]; if (role === null || role === undefined) unk.push(x); else { const c = this._mkCoach(r, role, { team: t, name: x.name, origin: 'real', src: x.src, lv: x.level, age: x.birth ? 2027 - parseInt(x.birth) : undefined }); S.coach.list[c.id] = c; S.coach.teams[t].push(c.id); cnt[role]++; } }
+      // 보직을 알 수 없는 코치(해외·옛 선수 등)는 부족한 보직부터 배정(추정), 다 차면 투수·타격·수비를 번갈아
+      let rr = 0; for (const x of unk) {
+        const need = ['투수', '타격', '수비·주루'].filter(k => cnt[k] < CH_TARGET[k]).sort((p, q) => (CH_TARGET[q] - cnt[q]) - (CH_TARGET[p] - cnt[p]))[0], role = need || ['타격', '투수', '수비·주루'][rr++ % 3];
+        const c = this._mkCoach(r, role, { team: t, name: x.name, origin: 'real', src: (x.src || '') + ' · 보직 미상 → ' + role + ' 추정', lv: x.level, age: x.birth ? 2027 - parseInt(x.birth) : undefined }); S.coach.list[c.id] = c; S.coach.teams[t].push(c.id); cnt[role]++;
+      }
+      for (const role of Object.keys(CH_TARGET)) while (cnt[role] < CH_TARGET[role]) { const c = this._mkCoach(r, role, { team: t }); S.coach.list[c.id] = c; S.coach.teams[t].push(c.id); cnt[role]++; }
       if (!S.coach.mgr[t]) S.coach.mgr[t] = { name: SURN2[Math.floor(r.random() * SURN2.length)] + GIV2[Math.floor(r.random() * GIV2.length)], src: '', virtual: true };
     }
     this.refreshCoachMarket(true);

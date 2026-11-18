@@ -248,10 +248,24 @@ def load_injuries(players):
         if r['반영']=='미반영': st['skip'].append(r['선수명']);continue
         ty='P' if r['포지션']=='투수' else 'B'
         c=[p for p in players if p['ko']==r['선수명'] and p['team']==TM4[r['팀']] and p['type']==ty]
+        if r.get('나이(2027)'): c=[p for p in c if p['age']==int(r['나이(2027)'])]
         if len(c)!=1: st['skip'].append((r['선수명'],len(c)));continue
         c[0]['inj']={'dx':r['진단'],'since':r['발생·수술일'],'ret':r['복귀예상일'],'basis':r['근거(보도/추정)'],'apply':r['반영']=='적용'};st['ok']+=1
     return st
 INJ=load_injuries(players)
+def load_evals(players):
+    import csv
+    f=D+'game/data/player_evals.csv'
+    if not os.path.exists(f): return 0
+    TM4={'한화':'Eagles','LG':'Twins','SSG':'Landers','두산':'Bears','키움':'Heroes','KT':'Wiz','NC':'Dinos','롯데':'Giants','삼성':'Lions','KIA':'Tigers'}
+    n=0
+    for r in csv.DictReader(open(f,encoding='utf-8-sig')):
+        c=[p for p in players if p['ko']==r['선수명'] and p['team']==TM4[r['팀']] and p['type']=='P' and p['age']==int(r['나이(2027)'])]
+        assert len(c)==1,(r['선수명'],len(c))
+        c[0]['eval']={'text':r['평가'],'role':r['보직'],'floor':r['잠재력하한'],'plan':r['육성방향'],'src':r['근거']};n+=1
+    return n
+EVN=load_evals(players)
+print('선수 평가 반영',EVN)
 print('부상 반영',INJ)
 
 def load_salary(players):
@@ -452,13 +466,58 @@ def load_finance():
         for r in csv.DictReader(open(fc,encoding='utf-8-sig')): cst[TMC[r['팀']]]=dict(team=fl(r['선수단운영비_억']),staff=fl(r['직원급여_억']),game=fl(r['경기진행_억']),biz=fl(r['사업·구장원가_억']),unsplit=fl(r['선수단+사업 미분리_억']),other=fl(r['기타(감가·수수료·협회비 등)_억']),total=fl(r['영업비용_억']),note=r['분류 근거'])
     return {TMC[r['팀']]:dict(costs=cst.get(TMC[r['팀']]),audit=aud.get(TMC[r['팀']],[]),rev=fl(r['매출_억']),cost=fl(r['영업비용_억']),op=fl(r['영업이익_억']),gate=fl(r['입장수입_억']),md=fl(r['사업(MD)수입_억']),att=int(r['2026평균관중']),att25=int(r['2025평균관중']),g26=int(r['2026홈경기수']),tot26=int(r['2026총관중']),gate26=fl(r['2026입장수입_억']),tot25=int(r['2025총관중']),park=r['구장'],cap=int(r['수용인원']),capsrc=r['수용인원_근거'],par=fl(r['모기업의존도_%']),parsrc=r['의존도_근거'],capchg=[[int(x.split(':')[0]),int(x.split(':')[1])] for x in r['수용인원_변경'].split(';') if x],chgsrc=r['변경_근거'],note=r['비고']) for r in csv.DictReader(open(f,encoding='utf-8-sig'))}
 FINANCE=load_finance()
-# 코칭스태프(보도 기반 일부 + 나머지는 게임에서 가상 생성). 능력치는 자료가 없어 모두 가상 값(게임에서 생성)
+# 코칭스태프: ① 사용자 제공 퓨처스 선수등록 명단(coaches_futures_2026.csv: 퓨처스 감독·코치, 2026 기준)이 기본 ② 1군 감독·2027 코치진 변동은 보도(coaches_2027.csv) ③ 부족한 보직은 게임에서 가상 생성.
+# 코치 보직은 명단에 없어 선수 시절 포지션(드래프트 자료)으로 추정: 투수→투수코치, 포수→수비·주루(배터리), 내야수·외야수→타격/수비·주루를 번갈아 배정, 자료 없음(해외·옛 선수)→부족한 보직. 능력치는 모두 가상.
 def load_coaches():
-    import csv
-    f=D+'game/data/coaches_2027.csv'
-    if not os.path.exists(f): return []
+    import csv,re
     TMC={'한화':'Eagles','LG':'Twins','SSG':'Landers','두산':'Bears','키움':'Heroes','KT':'Wiz','NC':'Dinos','롯데':'Giants','삼성':'Lions','KIA':'Tigers'}
-    return [dict(team=TMC[r['팀']],name=r['이름'],role=r['보직'],level=r['구분'],src=r['근거']) for r in csv.DictReader(open(f,encoding='utf-8-sig'))]
+    out=[]
+    f=D+'game/data/coaches_2027.csv'
+    news=list(csv.DictReader(open(f,encoding='utf-8-sig'))) if os.path.exists(f) else []
+    for r in news:
+        if r['보직']=='감독': out.append(dict(team=TMC[r['팀']],name=r['이름'],role='감독',level=r['구분'],src=r['근거']))
+    ff=D+'game/data/coaches_futures_2026.csv'
+    if not os.path.exists(ff): return out
+    ALI={'SK':'Landers','SSG':'Landers','넥센':'Heroes','키움':'Heroes','히어로즈':'Heroes','우리':'Heroes','두산':'Bears','OB':'Bears','LG':'Twins','MBC':'Twins','KT':'Wiz','kt':'Wiz','NC':'Dinos','롯데':'Giants','삼성':'Lions','KIA':'Tigers','해태':'Tigers','한화':'Eagles','빙그레':'Eagles','현대':'Heroes','쌍방울':'Landers'}
+    TWO=re.compile(r'과학|전문|영동|산업|관광|디지털|사이버|국제대')
+    dr=[]
+    fd=D+'game/data/draft_2002_2027.csv'
+    for r in csv.DictReader(open(fd,encoding='utf-8-sig')):
+        toks=r['이력'].split('-');univ=any(re.search(r'대$',t) and t not in ALI for t in toks)
+        by=int(r['연도'])-(21 if any(TWO.search(t) for t in toks) else 23) if univ else int(r['연도'])-19
+        dr.append((re.sub(r'\s*\(.*\)','',r['선수']),by,r['포지션'],[ALI[t] for t in toks if t in ALI]))
+    rows=list(csv.DictReader(open(ff,encoding='utf-8-sig')))
+    # 2027 보도 변동: 롯데·SSG 퓨처스 감독 교체
+    SWAP={('롯데','김용희'):('박승민','롯데 2027 코칭스태프 발표(2026-11-11): 퓨처스팀 박승민 감독'),('SSG','박정권'):('박재상','SSG 발표(2026-11-13): 신임 퓨처스 감독 박재상(박정권 결별)')}
+    byt={}
+    for r in rows:
+        if r['팀'] not in TMC: continue
+        byt.setdefault(r['팀'],[]).append(r)
+    inf={}
+    for tm,lst in byt.items():
+        alt=0
+        for r in lst:
+            if r['구분']=='감독': continue
+            b=int(r['생년월일'][:4]);c=[x for x in dr if x[0]==r['이름'] and abs(x[1]-b)<=3]
+            c.sort(key=lambda x:(TMC[tm] not in x[3],abs(x[1]-b)))
+            pos=c[0][2] if c else None
+            role=None
+            if pos:
+                if '투수' in pos and pos!='투수,내야수': role='투수'
+                elif pos=='포수': role='수비·주루'
+                else: role=['타격','수비·주루'][alt%2]; alt+=1
+            inf[(tm,r['이름'])]=role
+    for tm,lst in byt.items():
+        for r in lst:
+            nm=r['이름'];src='사용자 제공 퓨처스 선수등록 명단(2026 기준)';role=None
+            if r['구분']=='감독':
+                role='퓨처스 감독'
+                if (tm,nm) in SWAP: nm,src=SWAP[(tm,nm)]
+            else:
+                role={'투수':'투수코치','타격':'타격코치','수비·주루':'수비코치'}.get(inf.get((tm,nm)))
+                if role is None: role='보직 미상'
+            out.append(dict(team=TMC[tm],name=nm,role=role,level='퓨처스',src=src,birth=r['생년월일'] if (tm,r['이름'])==(tm,nm) else None,hand=r['투타유형']))
+    return out
 COACHES=load_coaches()
 # 능력치 척도(20-80): ratings.py 와 같은 방식(규정 타자 PA≥300 / 규정 투수 TBF≥200 가중 평균·표준편차)
 def scale(rows,fields,w):
