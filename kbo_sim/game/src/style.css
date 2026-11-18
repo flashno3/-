@@ -262,3 +262,11 @@ tr.dragover td { box-shadow: inset 0 2px 0 var(--accent); }
 .press { padding: 8px 0; border-top: 1px solid var(--line); } .press:first-of-type { border-top: 0; }
 .stl { display: flex; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); align-items: baseline; } .stl .d { flex: none; min-width: 56px; color: var(--muted); font-size: 12px; } .stl span:nth-child(2) { flex: 1; }
 @media (min-width: 700px) { .neg-bg { align-items: center; } .negwin { border-radius: 16px; } }
+
+/* 몰입 요소 */
+.rivalbox { margin: 6px 0; padding: 8px 10px; border-left: 3px solid var(--warn); background: var(--warn-soft); border-radius: 6px; }
+.momentcard { border-left: 4px solid var(--accent); } .momentcard .mline { font-weight: 600; margin: 4px 0; line-height: 1.4; }
+.rvrow { display: flex; gap: 8px; padding: 5px 0; border-top: 1px solid var(--line); font-size: 13px; } .rvrow .rvmark { flex: none; width: 16px; } .rvrow.good .rvmark { color: var(--pos); } .rvrow.bad .rvmark { color: var(--neg); }
+.chal { padding: 8px 0; border-top: 1px solid var(--line); } .chal.done b { color: var(--pos); } .chal .gbar { width: 100%; }
+.feeditem { padding: 3px 0; } .feeditem.mine { background: var(--accent-soft); border-radius: 6px; padding: 3px 6px; }
+.draftstage { padding: 14px; margin-bottom: 12px; border-radius: 12px; background: var(--accent-soft); text-align: center; } .draftstage .dname { font-size: 22px; font-weight: 700; margin: 4px 0; font-family: var(--font-display); }

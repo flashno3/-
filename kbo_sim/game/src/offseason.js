@@ -2,7 +2,7 @@
  * 성장·노화·은퇴 → 계약 만료/재계약 → 신인 드래프트 → FA 시장 → 새 시즌. 트레이드는 시즌 중(마감 전)과 오프시즌에 가능.
  */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) { factory(require('./league.js'), require('../../web/src/engine.js')); require('./negotiate.js'); }
+  if (typeof module === 'object' && module.exports) { factory(require('./league.js'), require('../../web/src/engine.js')); require('./negotiate.js'); require('./world.js'); }
   else factory(root.KBOLeague, root.KBOEngine);
 })(typeof self !== 'undefined' ? self : this, function (LG, Engine) {
   'use strict';
@@ -255,7 +255,7 @@
   proto.startOffseason = function () {
     const S = this.S, r = rngFor(S.seed, S.year, 31), user = S.userTeam, rep = { prog: [], retired: [], expiring: [] };
     const st = this.standings(); S.history.push({ year: S.year, champion: S.post ? S.post.champion : null, runnerUp: S.post ? S.post.runnerUp : null, userRank: st.find(x => x.team === user).rank, userRec: st.find(x => x.team === user), top: st.slice(0, 5).map(x => x.team) });
-    this.mergeTracking();
+    this.mergeTracking(); if (this._careerSnapshot) this._careerSnapshot();
     // 0) 경쟁균형세 정산(시즌 종료 시점 연봉 기준)
     { const log = this.settleCBT(), my = log.find(x => x.team === user);
       if (my.kind === 'over') news(this, `경쟁균형세: 연봉 ${my.pay}억이 상한 ${my.cap}억을 초과(${my.n}회 연속) → 야구발전기금 ${my.fee}억 납부${my.drop ? ', 다음 드래프트 1라운드 지명 9단계 하락' : ''}`);
@@ -264,6 +264,7 @@
     const gs0 = this.goalStatus(); if (gs0) this._lastOp = gs0.profit.cur;   // 결산 직전 시즌 손익(목표 평가용)
     this.settleFinance();   // 시즌 재정 결산(CBT 정산과 같은 시점의 보수 기준)
     this._seasonReport();   // 시상·목표 평가·해임 판정
+    if (this._challengeEval) { this._rivalSeason(); this._challengeEval(); }
     if (S.coach) this.refreshCoachMarket();   // 코치 시장 일부 교체
     // 1) 성장·노화
     for (const id in S.players) {
@@ -276,7 +277,7 @@
       const p = S.players[id]; if (p.retired || p.team === 'DRAFT') continue;
       if (rngFor(S.seed, S.year, 33, parseInt(id.slice(1))).random() < this.retireChance(p)) {
         p.retired = true; if (p.team !== 'FA') this.removeFromTeam(p.team, id); else S.fa = (S.fa || []).filter(x => x !== id);
-        if (p.team === user) { rep.retired.push(id); news(this, `${p.ko}(${p.age}세) 은퇴`); } p.team = 'RET'; p.active = false;
+        if (p.team === user) { rep.retired.push(id); news(this, `${p.ko}(${p.age}세) 은퇴`); if (this._hofCheck) this._hofCheck(p); } p.team = 'RET'; p.active = false;
       }
     }
     this._closeSeason();   // 1군 등록일수 → FA 자격 연수, 연봉 이력
@@ -328,14 +329,8 @@
     if (S.teams[t].ids.length > ROSTER_MAX) { const worst = S.teams[t].ids.map(x => S.players[x]).filter(x => x.id !== id && !x.active).sort((a, b) => this.marketValue(a) - this.marketValue(b))[0]; if (worst) { if (t === S.userTeam) { /* 사용자 팀은 직접 정리 */ } else this._retireOrRelease(t, worst.id); } }
   };
   proto._retireOrRelease = function (t, id) { const p = this.S.players[id]; this.removeFromTeam(t, id); p.retired = true; p.team = 'RET'; p.active = false; };
-  proto.draftAiUntilUser = function () {
-    const S = this.S, d = S.off.draft, r = rngFor(S.seed, S.year, 42);
-    while (d.pick < d.order.length) {
-      const t = d.order[d.pick]; if (t === S.userTeam) return true;
-      const best = d.pool.map(id => { const p = S.players[id]; return { id, s: this.scoutScore(p) + gauss(r, 0, 2) }; }).sort((a, b) => b.s - a.s)[0];
-      this._draftTake(t, best.id);
-    }
-    return false;
+  proto.draftAiUntilUser = function () {   // 한 픽씩 진행(draftAiStep)과 같은 규칙·같은 난수라서 '건너뛰기'와 '발표 보기' 결과가 같다
+    const S = this.S, d = S.off.draft; for (let g = 0; g < 2000; g++) { const r = this.draftAiStep(); if (r.userTurn) return true; if (r.done) return false; } return false;
   };
   proto.draftPick = function (id) {
     const S = this.S, d = S.off.draft; if (this.draftOnClock() !== S.userTeam) return '아직 내 순서가 아닙니다.';
@@ -488,6 +483,7 @@
     const S = this.S, info = p.faInfo, graded = info && info.grade, comp = graded && info.from !== t ? graded : null;
     S.fa = (S.fa || []).filter(x => x !== p.id); p.team = t; p.active = false; S.teams[t].ids.push(p.id); if (t === S.userTeam) p.myFrom = { y: S.year, how: p.foreign ? '외국인 영입' : 'FA 영입' };
     ask = Math.round(ask * 10) / 10; bonus = Math.round((bonus || 0) * 10) / 10; p.contract = this._newContract(p, ask, p.foreign || !graded ? 1 : years, p.foreign || !graded ? 0 : bonus); p.salHist = (p.salHist || []).slice(-2).concat([Math.round(((p.contract.bonus || 0) / p.contract.years + ask) * 10) / 10]);
+    if (t === S.userTeam && this._contractNote) this._contractNote(p, p.foreign ? '외국인' : graded ? 'FA' : '재계약');
     if (graded && p.fa) { p.fa.used += 1; p.fa.last = graded; p.fa.svc = 0; p.fa.rem = 0; }
     if (comp) { this._faCount(t, 1); this._compensate(t, p, info); }
     p.faInfo = undefined; this.invalidate();
@@ -702,6 +698,7 @@
     const g = p.faInfo && p.faInfo.grade, from = p.faInfo && p.faInfo.from;
     this._doSign(t, p, y, sal, bon); this.refreshTeam(t);
     const text = `FA ${p.ko}(${from ? KO0[from] + ' ' : ''}${g ? g + '등급' : ''}) → ${KO0[t]} (${y}년 총 ${(per * y).toFixed(1)}억, 계약금 ${bon.toFixed(1)})`;
+    if (this._faFeedAdd) this._faFeedAdd('sign', text, p.id);
     (S.faLog = S.faLog || []).unshift({ year: S.year, day: d, text }); if (S.faLog.length > 40) S.faLog.pop(); news(this, text); return true;
   };
   proto._postBids = function (d) {
@@ -716,7 +713,7 @@
         const g = p.faInfo && p.faInfo.grade; if (g && p.faInfo.from !== t && this._faCount(t) >= EXT_LIMIT) continue;
         if (!(r.random() < (this.war(p) >= 2 ? 0.7 : 0.45))) continue;
         const deal = this._aiDeal(t, p); if (!deal) continue;
-        (m.bids[p.id] = m.bids[p.id] || []).push({ team: t, per: Math.round(deal.per * 100) / 100, ceil: Math.round(deal.per * (1.02 + 0.1 * r.random()) * 100) / 100, y: deal.years, day: d }); break;
+        (m.bids[p.id] = m.bids[p.id] || []).push({ team: t, per: Math.round(deal.per * 100) / 100, ceil: Math.round(deal.per * (1.02 + 0.1 * r.random()) * 100) / 100, y: deal.years, day: d }); if (this._faFeedAdd) this._faFeedAdd('bid', `${KO0[t]}이(가) ${p.ko}에게 ${deal.years}년 연 ${deal.per.toFixed(1)}억을 제시했습니다.`, p.id); break;
       }
     }
   };
@@ -775,9 +772,9 @@
   proto.releasePlayer = function (id) {   // 내 팀 선수 방출(위약금·신뢰도 반영)
     const S = this.S, t = S.userTeam, p = S.players[id]; if (!p || p.team !== t) return { ok: false, msg: '선수를 찾을 수 없습니다.' };
     if (S.teams[t].ids.length <= 44) return { ok: false, msg: '보유 선수가 최소 44명 필요합니다.' };
-    const cost = this.releaseCost(id), f = S.fin && S.fin.teams[t];
+    const cost = this.releaseCost(id), f = S.fin && S.fin.teams[t]; const bl0 = this.bonds ? this.bonds(p) : [];
     if (f) { f.dead = (f.dead || []).concat(cost.rec.map(x => ({ year: x.year, amt: x.amt, who: p.ko }))); f.trust = clamp(Math.round((f.trust + cost.trust) * 10) / 10, 0, 100); }
-    this.release(t, id);
+    this.release(t, id); if (this._bondShift && (p.tn >= 3 || this.ovr(p) >= 50)) this._bondShift(p, -1, '방출', bl0);
     news(this, `방출: ${p.ko} — 위약금 ${cost.total}억(이번 시즌 ${cost.thisYear}억)${cost.trust < 0 ? `, 이사회 신뢰도 ${cost.trust}` : ''}${cost.core ? ' · 오랜 핵심 선수 방출로 팬·선수단 반응이 좋지 않습니다' : ''}`);
     return { ok: true, cost };
   };
@@ -1246,11 +1243,13 @@
   };
   proto.executeTrade = function (aiTeam, give, get) {
     const S = this.S, ev = this.evaluateTrade(aiTeam, give, get); if (!ev.ok) return ev; const me = S.userTeam;
+    const gb = give.map(id => ({ id, bl: this.bonds ? this.bonds(S.players[id]) : [] }));
     for (const id of give) { this.removeFromTeam(me, id); S.players[id].team = aiTeam; S.players[id].active = false; S.teams[aiTeam].ids.push(id); }
     for (const id of get) delete S.players[id].aiGs;
     for (const id of get) { this.removeFromTeam(aiTeam, id); S.players[id].team = me; S.players[id].active = false; S.teams[me].ids.push(id); }
     for (const id of get) S.players[id].myFrom = { y: S.year, how: `트레이드(${KO0[aiTeam]})` };
     news(this, `트레이드: ${give.map(i => S.players[i].ko).join(', ')} ↔ ${get.map(i => S.players[i].ko).join(', ')} (${aiTeam})`);
+    if (this._bondShift) for (const x of gb) this._bondShift(S.players[x.id], -1, '트레이드', x.bl);
     this.refreshTeam(aiTeam); this.repairSettings(me); this.invalidate(); return ev;
   };
 

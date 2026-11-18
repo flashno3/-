@@ -118,7 +118,7 @@
   proto._nSys = function (neg, text, kind) { neg.log.push({ who: 'sys', text, k: kind || '', r: neg.round }); };
 
   /* ---------------- 협상 조건 ---------------- */
-  proto._negStamp = function () { const S = this.S; return S.faMkt ? 'm' + S.faMkt.day : 'd' + S.day; };
+  proto._negStamp = function () { return String(this._negClock()); };
   proto._negLive = function (p, t) { const S = this.S, n = S.neg; return !!(n && n.id === p.id && (n.state === 'open') && n.stamp === this._negStamp() && t === S.userTeam && n.kind !== 'meeting'); };
   proto._negAdj = function (p, t) { return this._negLive(p, t) ? 1 - clamp((this.S.neg.mood - 50) / 50, -1, 1) * 0.07 : 1; };   // 호감도 100 → 요구액 −7%, 0 → +7%
   proto._extPref = function (p) { return p.age <= 26 ? 4 : p.age <= 30 ? 3 : p.age <= 33 ? 2 : 1; };
@@ -173,6 +173,8 @@
     const last = (S.history || []).slice(-1)[0]; if (last) add('팀 성적(지난 시즌 ' + last.userRank + '위)', clamp((5.5 - last.userRank) * 1.2, -5, 5));
     if (p.brokenP) add('깨진 약속', -8 * Math.min(2, p.brokenP)); if (p.keptP) add('지킨 약속', 3 * Math.min(3, p.keptP));
     if (S.captain === p.id) add('주장 예우', 2);
+    { const rp = this.reputation ? this.reputation() : null; if (rp) add('감독 평판(' + rp.tag + ')', clamp((rp.score - 50) / 8, -5, 5)); }
+    { const bl = this.bonds ? this.bonds(p) : []; const hp = bl.map(b => S.players[b.id]).filter(Boolean).reduce((a, q) => a + (q.loyAdj || 0), 0); if (bl.length) add('친한 동료들의 분위기', clamp(hp / 6, -3, 3)); }
     if ((kind === 'fa' || kind === 'foreign') && p.faInfo && p.faInfo.from === t) add('원소속 구단', 3);
     add('에이전트 성향(' + ({ hard: '강경', fair: '합리', warm: '온건' })[agent] + ')', agent === 'hard' ? -3 : agent === 'warm' ? 3 : 0);
     return { v: clamp(Math.round(v), 15, 80), factors: f };
@@ -194,7 +196,7 @@
     if (kind === 'meeting' && p.team !== t) return '우리 팀 선수만 면담할 수 있습니다.';
     return null;
   };
-  proto._negClock = function () { const S = this.S; return S.faMkt ? S.faMkt.day : (S.day || 0); };
+  proto._negClock = function () { const S = this.S, m = S.faMkt && !S.faMkt.closed ? S.faMkt.day : null; return S.year * 1000 + (S.phase === 'offseason' ? 500 + (m || 0) : m !== null ? m : 100 + (S.day || 0)); };   // 연도·국면을 포함한 절대 시각(FA 시장 일수와 시즌 일수가 섞이지 않게)
   proto.negStart = function (id, kind, opts) {
     const S = this.S, p = S.players[id], t = S.userTeam; opts = opts || {};
     const bl = this.negBlock(id, kind, opts.replace); if (bl) return { ok: false, msg: bl };
@@ -235,6 +237,7 @@
     const S = this.S, p = S.players[neg.id], t = S.userTeam; neg.state = 'broke';
     const pool = why === 'walk' ? BREAK.walk : why === 'leave' ? BREAK.leave : (neg.agent === 'hard' ? BREAK.hard : BREAK.timeout);
     this._nP(neg, 'break' + why, pool); this._nSys(neg, `${p.ko}과(와)의 협상이 결렬되었습니다.${neg.kind === 'fa' || neg.kind === 'foreign' ? ' 선수는 시장에 남아 있으며 며칠 뒤 다시 협상할 수 있습니다.' : ''}`, 'bad');
+    this._repBump('negBroke'); this.note(p, `${({ fa: 'FA', foreign: '외국인', resign: '재계약', extend: '비FA 다년계약' })[neg.kind]} 협상 결렬`);
     p.negLock = { until: this._negClock() + (neg.kind === 'fa' || neg.kind === 'foreign' ? 3 : 10), team: t };
     if (neg.kind !== 'foreign' && p.team === t) p.loyAdj = clamp((p.loyAdj || 0) - (why === 'walk' ? 3 : 1), -15, 15);
     this.story('neg', `${p.ko}과(와) ${({ fa: 'FA', foreign: '외국인', resign: '재계약', extend: '비FA 다년계약' })[neg.kind]} 협상 결렬`, 2);
@@ -287,7 +290,8 @@
   };
   proto._negSigned = function (neg, p, offer) {
     const S = this.S, t = S.userTeam, tot = r1(offer.bonus + offer.salary * offer.years);
-    if (neg.kind !== 'foreign') p.loyAdj = clamp((p.loyAdj || 0) + clamp(Math.round((neg.mood - 50) / 12), -1, 3), -15, 15);
+    this._repBump('negOk'); if (neg.kind === 'extend') this._repBump('ext'); if (neg.kind !== 'foreign') p.loyAdj = clamp((p.loyAdj || 0) + clamp(Math.round((neg.mood - 50) / 12), -1, 3), -15, 15);
+    this.note(p, `${({ fa: 'FA 영입', foreign: '외국인 영입', resign: '재계약', extend: '비FA 다년계약' })[neg.kind]}: ${offer.years}년 총 ${tot}억(호감도 ${Math.round(neg.mood)})`);
     if (neg.promises && neg.promises.length) p.promise = neg.promises[neg.promises.length - 1];
     { const txt = `${p.ko} ${({ fa: 'FA 영입', foreign: '외국인 영입', resign: '재계약', extend: '비FA 다년계약' })[neg.kind]} — ${offer.years}년 총 ${tot}억`, imp = offer.years >= 3 || tot >= 30 ? 3 : 2, top = (S.story || [])[0];
       if (top && top.kind === 'deal' && top.d === S.day && top.text.includes(p.ko)) { top.text = txt; top.imp = Math.max(top.imp, imp); } else this.story('deal', txt, imp); }   // 같은 계약의 뉴스 기반 항목이 있으면 합친다
@@ -356,13 +360,13 @@
     const ev = this._negEval(p, offer, 'resign'); if (!ev.ok) return ev.msg;
     if (ev.y >= 2) { const b = this._dealBudget(p, { salary: ev.sal, bonus: ev.bon, years: ev.y }, false); if (b) return b; }
     p.contract = this._newContract(p, ev.sal, ev.y, ev.bon); p.salHist = (p.salHist || []).slice(-2).concat([r2(ev.per)]); off.rep.expiring = off.rep.expiring.filter(x => x !== id);
-    p.myExt = { y: S.year, how: '재계약' }; this._news(`${p.ko} 재계약 (${ev.y}년 총 ${r1(ev.per * ev.y)}억${ev.bon ? ' = 계약금 ' + ev.bon + ' + 연봉 ' + ev.sal + '×' + ev.y : ''})`); this.invalidate(); return null;
+    p.myExt = { y: S.year, how: '재계약' }; this._contractNote(p, '재계약'); this._news(`${p.ko} 재계약 (${ev.y}년 총 ${r1(ev.per * ev.y)}억${ev.bon ? ' = 계약금 ' + ev.bon + ' + 연봉 ' + ev.sal + '×' + ev.y : ''})`); this.invalidate(); return null;
   };
   proto.extendDeal = function (id, offer) {
     const S = this.S, p = S.players[id]; const bl = this.negBlock(id, 'extend'); if (bl && !/방금 협상/.test(bl)) return bl;
     const ev = this._negEval(p, offer, 'extend'); if (!ev.ok) return ev.msg;
     const b = this._dealBudget(p, { salary: ev.sal, bonus: ev.bon, years: ev.y }, true); if (b) return b;
-    p.contract = this._newContract(p, ev.sal, ev.y, ev.bon); p.salHist = (p.salHist || []).slice(-2).concat([r2(ev.per)]); p.extAt = { y: S.year, day: S.day };
+    p.contract = this._newContract(p, ev.sal, ev.y, ev.bon); p.salHist = (p.salHist || []).slice(-2).concat([r2(ev.per)]); p.extAt = { y: S.year, day: S.day }; this._contractNote(p, '비FA 다년');
     this._news(`${p.ko} 비FA 다년계약 (${ev.y}년 총 ${r1(ev.per * ev.y)}억${ev.bon ? ' = 계약금 ' + ev.bon + ' + 연봉 ' + ev.sal + '×' + ev.y : ''})`); this.invalidate(); return null;
   };
   proto._news = function (text) { const S = this.S; S.news.unshift({ year: S.year, day: S.day, text }); if (S.news.length > 120) S.news.length = 120; this._storyFromNews(text); };
@@ -371,11 +375,11 @@
   proto._promiseTick = function (d) {
     const S = this.S, t = S.userTeam; if (d % 5 !== 0) return;
     for (const p of this.players(t)) {
-      const pr = p.promise; if (!pr) continue; if (pr.y < S.year - 1 || (pr.y === S.year - 1 && S.phase === 'regular' && d > 60)) { p.promise = undefined; p.keptP = (p.keptP || 0) + 1; p.loyAdj = clamp((p.loyAdj || 0) + 2, -15, 15); this.story('promise', `${p.ko}에게 한 ${pr.label} 약속을 지켰습니다`, 2); continue; }
+      const pr = p.promise; if (!pr) continue; if (pr.y < S.year - 1 || (pr.y === S.year - 1 && S.phase === 'regular' && d > 60)) { p.promise = undefined; this._repBump('kept'); this.note(p, `${pr.label} 약속을 지킴`); p.keptP = (p.keptP || 0) + 1; p.loyAdj = clamp((p.loyAdj || 0) + 2, -15, 15); this.story('promise', `${p.ko}에게 한 ${pr.label} 약속을 지켰습니다`, 2); continue; }
       if (S.phase !== 'regular' || d - (pr.y === S.year ? pr.day : 0) < 25 || this.isInj(p)) continue;
       const set = S.teams[t].set; let kept = true;
       if (pr.kind === 'starter') kept = p.active && set.lineup.some(x => x.id === p.id); else if (pr.kind === 'rotation') kept = set.rotation.includes(p.id); else if (pr.kind === 'closer') kept = set.bullpen.closer === p.id; else if (pr.kind === 'setup') kept = (set.bullpen.setup || []).includes(p.id) || set.bullpen.closer === p.id;
-      if (!kept) { p.brokenP = (p.brokenP || 0) + 1; p.loyAdj = clamp((p.loyAdj || 0) - 6, -15, 15); p.mood = { v: -2, until: S.day + 20 }; p.promise = undefined; this.invalidate();
+      if (!kept) { this._repBump('broken'); this._bondShift(p, -1, '약속 불이행'); this.note(p, `${pr.label} 약속이 지켜지지 않음`); p.brokenP = (p.brokenP || 0) + 1; p.loyAdj = clamp((p.loyAdj || 0) - 6, -15, 15); p.mood = { v: -2, until: S.day + 20 }; p.promise = undefined; this.invalidate();
         this.story('promise', `${p.ko}에게 한 ${pr.label} 약속이 깨졌습니다 — 신뢰 하락`, 3); this._news(`약속 불이행: ${p.ko} (${pr.label}) — 충성도 −6, 컨디션 −2(20일)`); }
     }
   };
@@ -426,7 +430,8 @@
     if (neg.promises && neg.promises.length && out !== 'bad') p.promise = neg.promises[neg.promises.length - 1];
     neg.msg = { ok: `면담이 잘 풀렸습니다. ${p.ko} 충성도 ${neg.topic === 'request' ? '+5' : '+2'}, 컨디션 +1(15일).`, mid: `면담이 끝났습니다. 뚜렷한 변화는 없지만 대화가 이어졌습니다.`, bad: `면담이 좋지 않게 끝났습니다. ${p.ko} 충성도 ${neg.topic === 'request' ? '−2' : '−4'}, 컨디션 −2(20일).` }[out];
     this._nSys(neg, neg.msg, out === 'ok' ? 'good' : out === 'bad' ? 'bad' : 'info');
-    p.meetAt = S.day; this.story('meet', `${p.ko}과(와) ${TOPIC_KO[neg.topic]} — ${out === 'ok' ? '마음을 풀었습니다' : out === 'bad' ? '앙금이 남았습니다' : '대화를 이어갔습니다'}`, out === 'ok' ? 2 : 1);
+    p.meetAt = S.day; this._repBump(out === 'ok' ? 'meetOk' : out === 'bad' ? 'meetBad' : 'meetMid'); this.note(p, `면담(${TOPIC_KO[neg.topic] || '면담'}): ${out === 'ok' ? '마음을 풀었음' : out === 'bad' ? '앙금이 남음' : '대화를 이어감'}`); if (out !== 'mid') this._bondShift(p, out === 'ok' ? 1 : -1, '면담');
+    this.story('meet', `${p.ko}과(와) ${TOPIC_KO[neg.topic]} — ${out === 'ok' ? '마음을 풀었습니다' : out === 'bad' ? '앙금이 남았습니다' : '대화를 이어갔습니다'}`, out === 'ok' ? 2 : 1);
     if (neg.evId) { const e = ((S.events || {}).list || []).find(x => x.id === neg.evId); if (e && e.status === 'open') { const r = this.resolveEvent(neg.evId, 'talk', true, { talk: out === 'ok' ? true : out === 'bad' ? false : v >= 50 }); neg.evMsg = r.msg; } }
     this.invalidate(); return out;
   };
@@ -438,8 +443,9 @@
     S.story.unshift({ y: S.year, d: S.day, ph: S.phase, kind, text, imp: imp || 1 }); if (S.story.length > 400) S.story.length = 400;
   };
   proto._storyFromNews = function (text) {
-    const rules = [[/^FA .+영입/, 'deal', 3], [/재계약|비FA 다년/, 'deal', 2], [/^트레이드/, 'trade', 3], [/^방출/, 'release', 2], [/^부상:/, 'injury', 2], [/^부상 복귀/, 'return', 1], [/연승|연패/, 'streak', 2], [/^기록 달성/, 'record', 3], [/주장 임명|주장 해임/, 'captain', 2], [/은퇴/, 'retire', 2], [/드래프트/, 'draft', 1], [/감독 해임|감독 취임/, 'coach', 3], [/팀 MVP/, 'mvp', 2], [/시즌 목표 평가/, 'goal', 3], [/코치 영입|코치 해임/, 'staff', 1], [/약속 불이행/, 'promise', 0], [/이사회/, 'board', 2], [/전역/, 'mil', 1]];
-    for (const [re, k, imp] of rules) if (re.test(text)) { if (imp > 0) { let v = imp; if (/^부상:/.test(text)) { const m = text.match(/약 (\d+)일/); if (m && +m[1] >= 30) v = 3; } this.story(k, text, v); } if (k === 'trade' || k === 'release') this._press(k, { text }); return; }
+    const rules = [[/^FA .+영입/, 'deal', 3], [/^\S+ 재계약 \(|^\S+ 비FA 다년계약 \(/, 'deal', 2], [/^트레이드/, 'trade', 3], [/^방출/, 'release', 2], [/^부상:/, 'injury', 2], [/^부상 복귀/, 'return', 1], [/연승|연패/, 'streak', 2], [/^기록 달성/, 'record', 1], [/주장 임명|주장 해임/, 'captain', 2], [/은퇴/, 'retire', 2], [/드래프트/, 'draft', 1], [/감독 해임|감독 취임/, 'coach', 3], [/팀 MVP/, 'mvp', 2], [/시즌 목표 평가/, 'goal', 3], [/코치 영입|코치 해임/, 'staff', 1], [/약속 불이행/, 'promise', 0], [/이사회/, 'board', 2], [/전역/, 'mil', 1]];
+    { const sm = text.match(/\((\d+)(연승|연패)\)/); if (sm) { const c = +sm[1]; if (![5, 8, 10, 12, 15, 20].includes(c)) return; } }   // 연승·연패는 굵직한 단계만 기록
+    for (const [re, k, imp] of rules) if (re.test(text)) { if (imp > 0) { let v = imp; if (k === 'record') { const m = text.match(/시즌 (\d+)(홈런|타점|도루|탈삼진)/); if (m) { const x = +m[1], u = m[2]; if ((u === '홈런' && x >= 30) || (u === '타점' && x >= 100) || (u === '도루' && x >= 40) || (u === '탈삼진' && x >= 150)) v = 2; if ((u === '홈런' && x >= 40) || (u === '타점' && x >= 120) || (u === '탈삼진' && x >= 200)) v = 3; } } if (/^부상:/.test(text)) { const m = text.match(/약 (\d+)일/); if (m && +m[1] >= 30) v = 3; } this.story(k, text, v); } if (k === 'trade' || k === 'release') this._press(k, { text }); return; }
   };
   proto.storyYear = function (y) { const S = this.S; return (S.story || []).filter(e => e.y === y).slice().reverse(); };
   proto.storyTop = function (y, n) { const l = this.storyYear(y), top = l.slice().sort((a, b) => b.imp - a.imp || a.d - b.d).slice(0, n || 6); return top.sort((a, b) => (a.ph === 'offseason' ? 0 : 1) - (b.ph === 'offseason' ? 0 : 1) || a.d - b.d); };

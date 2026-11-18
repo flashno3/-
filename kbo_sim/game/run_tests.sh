@@ -2,14 +2,16 @@
 # 감독 모드 검증 (병렬 실행)
 #   ./game/run_tests.sh            빠른 검증: 기능 테스트 전부, 4병렬 (무거운 밸런스·장기 테스트 제외, 약 1분)
 #   ./game/run_tests.sh full       전체: 빠른 검증 + 엔진 일치(파이썬/라이브) + 장기 밸런스(약 2~3분)
+#   ./game/run_tests.sh e2e        브라우저 종합 점검(Playwright, 모바일·데스크톱 전 화면·협상·라이브·오프시즌)
 #   ./game/run_tests.sh events fa  이름으로 골라 실행(tests_<이름>.js)
 # 실패하면 종료 코드 1, 실패한 테스트의 로그 끝부분을 출력한다.
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
 LOG=/tmp/kbo_tests; mkdir -p "$LOG"; rm -f "$LOG"/*
 python3 build_game_data.py >/dev/null && python3 build_game.py >/dev/null || { echo "빌드 실패"; exit 1; }
 
-HEAVY="longrun offseason cbt positions"
+HEAVY="longrun offseason cbt positions soak"
 MODE="${1:-fast}"; shift || true
+if [ "$MODE" = e2e ]; then rc=0; for f in game/e2e/e2e_full.js game/e2e/e2e_offseason.js; do node "$f" || rc=1; done; exit $rc; fi
 all=$(ls game/tests_*.js | sed 's#game/tests_##; s#\.js##')
 case "$MODE" in
   fast) list=$(for t in $all; do case " $HEAVY " in *" $t "*) ;; *) echo $t;; esac; done) ;;
