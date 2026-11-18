@@ -396,6 +396,7 @@ def load_drafthist(players):
         rnd=re.match(r'(\d+)라운드',r['갈래']);pick=re.search(r'(\d+)',r['자리'] or '')
         p['dh']={'y':int(r['연도']),'univ':univ,'two':any(TWO.search(t) for t in toks),'deb':int(r['데뷔']) if r['데뷔'] else None,'ss':int(r['시즌']) if r['시즌'] else 0,
                  'g':int(r['통산 경기']) if r['통산 경기'] else 0,'pa':int(r['타석']) if r['타석'] else 0,'ip':float(r['이닝'].split('.')[0]) if r['이닝'] else 0,
+                 'one':bool(team) and bool(r['_teams']) and set(r['_teams'])=={team},
                  'kind':r['갈래'],'round':int(rnd.group(1)) if rnd else None,'pick':int(pick.group(1)) if pick else None,'school':toks[0]}
         if p.get('ageEst'):   # 생년월일을 모르는 선수는 입단 연도·학력으로 나이를 다시 추정
             p['age']=2027-birth(r);p['ageEstDraft']=True

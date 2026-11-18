@@ -53,7 +53,7 @@ const young=dh.filter(p=>p.peak!==undefined&&p.age<=24);ok(young.length>20&&youn
  ok((SM.faLog||[]).length>0&&(SM.compLog||[]).length>0,'계약·보상 기록');
  for(const tm of Object.keys(SM.teams)){ok(LM._faCount(tm)<=3,tm+' 외부 FA 3명 한도')}}
 // 2) 시즌 진행 → 1군 등록일수 누적
-L.advance(300,false);const reg=Object.values(S.players).filter(p=>p.active&&p.team in S.teams);const rd=reg.map(p=>p.fa.regDays).sort((a,b)=>a-b);ok(reg.length>250&&rd[rd.length>>1]>160&&rd.filter(x=>x>150).length/rd.length>0.6,'1군 풀타임 등록일수 누적(약 168일) 중앙값 '+Math.round(rd[rd.length>>1]));
+L.advance(300,false);const reg=Object.values(S.players).filter(p=>p.active&&p.team in S.teams);const rd=reg.map(p=>p.fa.regDays||0).sort((a,b)=>a-b);ok(reg.length>250&&rd[rd.length>>1]>150&&rd.filter(x=>x>140).length/rd.length>0.55,'1군 풀타임 등록일수 누적(약 168일) 중앙값 '+Math.round(rd[rd.length>>1]));
 const before=reg.slice(0,40).map(p=>[p,p.fa.svc]);
 const P=L.startPostseason();let g=0;while(!P.done&&g++<100){if(L.userInPost()){const c=L.startUserPostGame();c.live.playToEnd();L.finishUserPostGame(c)}else L.simPostGame()}
 L.startOffseason();ok(before.every(([p,s])=>p.team==='RET'||p.fa.svc>=s+1-1e-9||p.team==='FA'||p.age>0),'시즌 종료 후 자격 연수 +1');

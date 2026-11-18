@@ -380,6 +380,7 @@
       if (p.rookie === S.year || p.draft) svc = 0;
       if (p.team === 'MIL') svc = Math.max(0, svc - 1.5);
       p.fa = { svc: Math.round(svc * 10) / 10, used: 0, last: null, regDays: 0, rem: 0, univ: p.dh ? p.dh.univ : !!(p.draft && /대/.test(p.draft.school.replace('메이저리그', ''))), est: !dh };
+      p.tnTeam = p.team; p.tn = p.dh && p.dh.one ? p.dh.ss || 0 : (p.ct && p.ct.from && p.ct.from <= 2026 ? Math.max(0, 2026 - p.ct.from + 1) : 0);   // 소속 구단 연속 시즌: 한 구단만 거친 선수는 프로 시즌 수, FA·이적 선수는 계약 시작 이후
       if (p.ct && p.ct.from && p.ct.from <= 2026) { p.fa.used = p.age >= 37 ? 2 : 1; p.fa.svc = Math.max(0, 2026 - p.ct.from + 1); p.fa.last = p.ct.total >= 60 ? 'A' : p.ct.total >= 30 ? 'B' : 'C'; }
       else if (p.ct && p.ct.from === 2027 && !p.ct.nonfa) { p.fa.used = 1; p.fa.svc = 0; p.fa.last = p.ct.total >= 60 ? 'A' : 'B'; }
       if (p.fah) {   // FA 이력 CSV: 행사(승인)한 선수는 횟수·등급, 미신청 자격자는 자격 유지
@@ -481,6 +482,7 @@
     for (const p of Object.values(this.S.players)) {
       if (!p.fa || p.retired) continue;
       if (p.fa.regDays >= FA_REG_DAYS) p.fa.svc += 1; else { p.fa.rem += p.fa.regDays; while (p.fa.rem >= FA_REG_DAYS) { p.fa.svc += 1; p.fa.rem -= FA_REG_DAYS; } }
+      if (p.team in this.S.teams) { if (p.tnTeam !== p.team) { p.tnTeam = p.team; p.tn = 0; } if (p.fa.regDays >= 30) p.tn = (p.tn || 0) + 1; }   // 한 구단 소속(등록) 시즌 수(예외 선수 자격 7시즌)
       p.fa.regDays = 0; p.fa.est = false;
       if (p.team in this.S.teams || p.team === 'MIL') p.salHist = (p.salHist || []).slice(-2).concat([p.contract.salary]);
     }
@@ -729,11 +731,11 @@
   const pickW = (r, list) => { let x = r.random() * list.reduce((a, b) => a + b[1], 0); for (const [n, w] of list) { if ((x -= w) < 0) return n; } return list[0][0]; };
   proto._injFix = function () { for (const p of Object.values(this.S.players)) if (p.inj && !this.isInj(p) && p.inj.generated) delete p.inj; };
   proto._injuryDay = function (d) {
-    const S = this.S, now = this.todayN(), r = rngFor(S.seed, S.year, d, 7000), changed = new Set(), user = S.userTeam;
+    const S = this.S, now = this.todayN(), r = rngFor(S.seed, S.year, d, 7000), changed = new Set(), user = S.userTeam, back = {}, out = {};
     for (const t of TEAMS) for (const p of this.players(t)) {
       if (p.inj && p.inj.apply !== false && !this.isInj(p)) {   // 복귀
         if (t === user) news(this, `부상 복귀: ${p.ko} (${p.inj.dx}) — 2군에서 대기 중, 1군에 등록하세요`);
-        if (p.inj.generated) delete p.inj; else p.inj.apply = false; changed.add(t);
+        if (p.inj.generated) delete p.inj; else p.inj.apply = false; changed.add(t); (back[t] = back[t] || []).push(p);
       }
     }
     for (const t of TEAMS) for (const p of this.players(t)) {
@@ -744,14 +746,21 @@
       const sev = u < 0.55 ? '' : u < 0.85 ? '' : u < 0.97 ? '(장기)' : '(수술·시즌 아웃급)', part = pickW(r, p.type === 'B' ? INJ_B : INJ_P);
       const retN = now + days, rd = new Date(retN * 864e5);
       p.inj = { dx: u >= 0.97 ? part.replace('통증', '손상 → 수술') : part, since: `${S.year}-${String(new Date(now * 864e5).getUTCMonth() + 1).padStart(2, '0')}-${String(new Date(now * 864e5).getUTCDate()).padStart(2, '0')} 발생`, ret: rd.toISOString().slice(0, 10), retN, basis: '시즌 중 발생한 부상(확률 모델)', apply: true, generated: true };
-      p.active = false; changed.add(t);
+      p.active = false; changed.add(t); (out[t] = out[t] || []).push(p);
       if (t === user) news(this, `부상: ${p.ko} — ${p.inj.dx}${sev}, 약 ${days}일 (복귀 예정 ${this.injDateStr(p)})`);
     }
     {   // 부상으로 1군 타자 12명·투수 12명 아래가 되면 건강한 2군 선수를 자동 등록(경기 진행 불가 방지)
       const a = this.players(user).filter(p => p.active), nb = a.filter(p => p.type === 'B').length, np = a.filter(p => p.type === 'P').length;
       if (nb < 12 || np < 12) { this.ensureActive(user); news(this, '부상자 때문에 1군 엔트리가 부족해 건강한 2군 선수를 자동 등록했습니다.'); }
     }
-    for (const t of changed) { if (t === user) { this.repairSettings(t); this.invalidate(); } else this.refreshTeam(t); }
+    for (const t of changed) {
+      if (t === user) { this.repairSettings(t); this.invalidate(); continue; }
+      // AI: 전체 재편성 대신 최소 교체 — 부상자는 같은 유형의 가장 가치 높은 건강한 2군 선수로, 복귀자는 같은 유형 1군 최저 가치 선수와 맞바꿈(더 나을 때만)
+      const val = q => q.type === 'B' ? this._runsB(q, true) : this._runsP(q);
+      for (const q of out[t] || []) { const c = this.players(t).filter(x => !x.active && x.type === q.type && !this.isInj(x)).sort((a, b) => (q.type === 'B' && q.pos === 'C' ? (b.pos === 'C') - (a.pos === 'C') : 0) || val(b) - val(a))[0]; if (c) c.active = true; }
+      for (const q of back[t] || []) { const act = this.players(t).filter(x => x.active && x.type === q.type), w = act.sort((a, b) => val(a) - val(b))[0]; if (w && val(q) > val(w) + 0.5 && !(q.type === 'B' && w.pos === 'C' && q.pos !== 'C' && act.filter(x => x.pos === 'C').length <= 2)) { w.active = false; q.active = true; } }
+      this._engDirty = true; this._f2dirty = true; this.assignUsage(t); this.assignUsage(t, true); this.invalidate();
+    }
   };
 
   /* ---------------- 코치진·육성 ----------------

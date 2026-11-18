@@ -173,11 +173,23 @@
      * 산정: 연봉 상위 40명 합계(신인·외국인 제외). 상한 2027년 151.1709억, 2028년 158.7294억(+5%), 이후 동결 가정.
      * 하한 2027년부터 60.6538억(2028년 +5%). 초과: 1회 30%·2회 연속 50%·3회 연속 100%를 야구발전기금으로 납부(3회 연속이면 1라운드 지명 9단계 하락).
      * 미달: 1회 30%·2회 연속 50%·3회 연속 100%. */
-    cbtCap(y) { y = y === undefined ? this.S.year : y; return Math.round(151.1709 * Math.pow(1.05, clamp(y - 2027, 0, 1)) * 10000) / 10000; }
-    cbtFloor(y) { y = y === undefined ? this.S.year : y; return y < 2027 ? null : Math.round(60.6538 * Math.pow(1.05, clamp(y - 2027, 0, 1)) * 10000) / 10000; }
+    /* 상한: KBO 공식 2025 137.1165억 → 2026 143.9723 → 2027 151.1709 → 2028 158.7294(매년 +5%). 2029년 이후는 합의 없음 → 인상률 가정(S.cbt.growth, 기본 5%).
+     * 하한: 2027 60.6538억부터 매년 +5%(공식 2028까지), 이후는 상한과 같은 인상률 가정. */
+    capGrowth() { const g = this.S.cbt && this.S.cbt.growth; return g === undefined ? 0.05 : g; }
+    cbtCap(y) { y = y === undefined ? this.S.year : y; if (y <= 2025) return 137.1165; if (y === 2026) return 143.9723; return Math.round(151.1709 * Math.pow(1.05, clamp(y - 2027, 0, 1)) * Math.pow(1 + this.capGrowth(), Math.max(0, y - 2028)) * 10000) / 10000; }
+    cbtFloor(y) { y = y === undefined ? this.S.year : y; return y < 2027 ? null : Math.round(60.6538 * Math.pow(1.05, clamp(y - 2027, 0, 1)) * Math.pow(1 + this.capGrowth(), Math.max(0, y - 2028)) * 10000) / 10000; }
     /* 경쟁균형세 산정 보수: FA 다년계약은 (보장 총액/보장 연수), 그 외는 연봉 */
     cbtVal(p) { return p.contract.cbt !== undefined ? p.contract.cbt : p.contract.salary; }
-    cbtPay(t, next) { const y = this.S.year + (next ? 1 : 0); return Math.round(this.players(t).filter(p => p.rookie !== y && !p.foreign).map(p => this.cbtVal(p)).sort((a, b) => b - a).slice(0, 40).reduce((a, b) => a + b, 0) * (this.S.calib.cbtK || 1) * 100) / 100; }
+    /* 래리 버드 룰(KBO판, 2027~): 구단이 매년 7시즌 이상 소속(등록)한 선수 1명을 예외 선수로 지정하면 그 선수 보수(계약금·옵션 포함)의 50%를 상위 40명 합계에서 제외 */
+    excEligible(p, t) { return !!p && !p.foreign && p.team === (t || p.team) && (p.tnTeam === p.team ? p.tn || 0 : 0) >= 7 && p.rookie !== this.S.year; }
+    cbtExc(t) {
+      const S = this.S; if (S.year < 2027 && !S.cbt) return null; S.cbt = S.cbt || { over: {}, under: {}, drop: {}, fees: {}, log: [] }; const c = S.cbt; c.exc = c.exc || {};
+      const cur = c.exc[t] && S.players[c.exc[t]]; if (cur && this.excEligible(cur, t)) return cur;
+      let best = null; for (const p of this.players(t)) if (this.excEligible(p, t) && (!best || this.cbtVal(p) > this.cbtVal(best))) best = p;
+      c.exc[t] = best ? best.id : null; return best;   // 지정이 없거나 무효(이적·은퇴·자격 상실)이면 자동 지정(가장 보수가 큰 자격자)
+    }
+    setCbtExc(id) { const S = this.S, p = S.players[id], t = S.userTeam; if (!p || p.team !== t) return '우리 팀 선수가 아닙니다.'; if (!this.excEligible(p, t)) return `${p.ko}은(는) 예외 선수 자격이 없습니다(우리 구단 7시즌 이상 등록 필요).`; S.cbt.exc = S.cbt.exc || {}; S.cbt.exc[t] = id; S.cbt.excManual = S.cbt.excManual || {}; S.cbt.excManual[t] = true; this.invalidate(); return null; }
+    cbtPay(t, next) { const y = this.S.year + (next ? 1 : 0), exc = this.S.year >= 2027 || next ? this.cbtExc(t) : null, eid = exc ? exc.id : null; return Math.round(this.players(t).filter(p => p.rookie !== y && !p.foreign).map(p => this.cbtVal(p) * (p.id === eid ? 0.5 : 1)).sort((a, b) => b - a).slice(0, 40).reduce((a, b) => a + b, 0) * (this.S.calib.cbtK || 1) * 100) / 100; }
     cbtRate(n) { return [0.3, 0.5, 1][clamp(n, 1, 3) - 1]; }
     /* 지금 시즌 종료 시점으로 가정한 정산(미리보기) */
     cbtPreview(t) {

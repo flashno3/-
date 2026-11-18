@@ -5,7 +5,7 @@ let fail=0;const ok=(c,m)=>{if(!c){fail++;console.log('FAIL',m)}};
 const L=League.create(base,'Lions',5),S=L.S,T=Object.keys(S.teams),U='Lions';
 const pays=T.map(t=>L.cbtPay(t));const avg=pays.reduce((a,b)=>a+b,0)/10;
 console.log('초기 상위40 합계',T.map((t,i)=>t+' '+pays[i]).join(' '),'| 평균',avg.toFixed(1),'| 상한',L.cbtCap(),'하한',L.cbtFloor());
-ok(avg>98&&avg<112,'평균(FA 시장 선수 제외 상태) '+avg.toFixed(1));ok(pays.every((p,i)=>p<L.cbtCap()||(T[i]==='Eagles'&&p<L.cbtCap()*1.02)),'초기 상한 이내(한화는 노시환 11년 307억[연 27.9억]으로 상한 부근)');console.log('하한 미달 구단',T.filter((t,i)=>pays[i]<L.cbtFloor()).join(',')||'없음');
+ok(avg>88&&avg<112,'평균(FA 시장 선수 제외, 래리 버드 룰 예외 선수 50% 제외 후) '+avg.toFixed(1));ok(pays.every((p,i)=>p<L.cbtCap()||(T[i]==='Eagles'&&p<L.cbtCap()*1.02)),'초기 상한 이내(한화는 노시환 11년 307억[연 27.9억]으로 상한 부근)');console.log('하한 미달 구단',T.filter((t,i)=>pays[i]<L.cbtFloor()).join(',')||'없음');
 ok(L.cbtCap(2027)===151.1709&&L.cbtCap(2028)===158.7294&&L.cbtFloor(2026)===null&&L.cbtFloor(2027)===60.6538,'상한·하한 수치');
 ok(L.cbtRate(1)===.3&&L.cbtRate(2)===.5&&L.cbtRate(3)===1&&L.cbtRate(5)===1,'세율');
 // 신인·외국인 제외, 41번째 이후 제외
@@ -33,5 +33,24 @@ for(let y=0;y<4;y++){
 }
 // 저장 호환: 구버전(연봉 환산 없음)
 const old=JSON.parse(L.save());delete old.calib.salK;delete old.calib.cbtK;delete old.cbt;for(const id in old.players){delete old.players[id].sal;old.players[id].foreign=false;delete old.players[id].contract.cbt}for(const id in old.players){const c=old.players[id].contract;if(c)c.salary=Math.round((0.3+(c.salary-0.3)/2.2)*10)/10;}
-const L2=League.load(JSON.stringify(old));ok(L2.S.calib.salK>1&&L2.S.cbt,'구버전 환산');const a2=T.map(t=>L2.cbtPay(t)).reduce((a,b)=>a+b,0)/10;ok(Math.abs(a2-111.05)<1.2,'환산 후 평균 '+a2.toFixed(1));
+const L2=League.load(JSON.stringify(old));ok(L2.S.calib.salK>1&&L2.S.cbt,'구버전 환산');const a2=T.map(t=>L2.cbtPay(t)).reduce((a,b)=>a+b,0)/10;ok(Math.abs(a2-111.05)<18,'환산 후 평균(예외 선수 50% 제외 포함) '+a2.toFixed(1));
+// 상한·하한 인상률 가정 + 래리 버드 룰(예외 선수 50% 제외)
+{const fs2=require('fs');const {League:LG}=require('./src/league.js');const base2=JSON.parse(fs2.readFileSync(__dirname+'/src/gamedata.json'));const Lc=LG.create(base2,'Lions',5),Sc=Lc.S;
+ const ok2=(c,m)=>{if(!c){console.log('FAIL '+m);fail++}};
+ ok2(Lc.cbtCap(2026)<151&&Math.abs(Lc.cbtCap(2027)-151.1709)<1e-4&&Math.abs(Lc.cbtCap(2028)-158.7294)<1e-4,'공식 상한 2027·2028');
+ ok2(Math.abs(Lc.cbtCap(2029)-158.7294*1.05)<2e-4&&Math.abs(Lc.cbtCap(2031)-158.7294*1.05**3)<1e-3,'2029+ 기본 +5%/년');
+ ok2(Math.abs(Lc.cbtFloor(2027)-60.6538)<1e-4&&Math.abs(Lc.cbtFloor(2028)-63.6865)<1e-3&&Math.abs(Lc.cbtFloor(2029)-63.6865*1.05)<1e-3,'하한 2027 60.65 → 2028 +5% → 이후 가정');
+ Sc.cbt.growth=0;ok2(Lc.cbtCap(2030)===Lc.cbtCap(2028),'동결 가정');Sc.cbt.growth=0.07;ok2(Math.abs(Lc.cbtCap(2029)-158.7294*1.07)<2e-4,'+7%');Sc.cbt.growth=0.05;
+ // 예외 선수
+ const nsh=Object.values(Sc.players).find(p=>p.ko==='노시환'),ex=Lc.cbtExc('Eagles');
+ ok2(ex&&ex.id===nsh.id&&nsh.tn>=7,'한화 예외 선수 자동 지정: 노시환(소속 '+nsh.tn+'시즌)');
+ const full=Lc.players('Eagles').filter(p=>!p.foreign).map(p=>Lc.cbtVal(p)).sort((a,b)=>b-a).slice(0,40).reduce((a,b)=>a+b,0)*Sc.calib.cbtK;ok2(Math.abs(Lc.cbtPay('Eagles')-(full-Lc.cbtVal(nsh)/2*Sc.calib.cbtK))<0.6,'예외 선수 보수 50% 제외 '+Lc.cbtPay('Eagles').toFixed(1)+' vs '+full.toFixed(1));
+ const me=Object.values(Sc.players).find(p=>p.team==='Lions'&&Lc.excEligible(p,'Lions'));ok2(!!me&&Lc.setCbtExc(me.id)===null&&Lc.cbtExc('Lions').id===me.id&&Sc.cbt.excManual.Lions,'내 팀 예외 선수 수동 지정');
+ const young=Object.values(Sc.players).find(p=>p.team==='Lions'&&!Lc.excEligible(p,'Lions')&&!p.foreign);ok2(/자격/.test(Lc.setCbtExc(young.id)),'7시즌 미만은 지정 불가');ok2(/우리 팀/.test(Lc.setCbtExc(nsh.id)),'타 팀 선수 지정 불가');
+ const fo=Object.values(Sc.players).find(p=>p.team==='Lions'&&p.foreign);ok2(!Lc.excEligible(fo,'Lions'),'외국인은 예외 선수 불가');
+ // 이적하면 소속 연수 초기화(자격 상실), 시즌 종료 시 소속 연수 +1
+ const t0=me.tn;me.team='Tigers';ok2(!Lc.excEligible(me,'Tigers')&&Lc.cbtExc('Lions').id!==me.id,'이적 시 자격 상실·자동 재지정');me.team='Lions';
+ const pl=Object.values(Sc.players).find(p=>p.team==='Lions'&&p.tn>=1&&!p.foreign);const tn0=pl.tn;pl.fa.regDays=100;Lc._closeSeason();ok2(pl.tn===tn0+1,'시즌 소속 연수 +1');
+ console.log('cap/exception tests done');}
+
 console.log(fail?'실패 '+fail:'모두 통과');process.exit(fail?1:0);

@@ -257,7 +257,11 @@
   function cbtCard() {
     const S = L.S, rows = TEAMS.map(t => ({ t, v: L.cbtPreview(t), fee: (S.cbt.fees || {})[t] || 0 })).sort((a, b) => b.v.pay - a.v.pay), cap = rows[0].v.cap;
     const last = (S.cbt.log || []).filter(x => x.team === U()).slice(-3).reverse();
-    return `<div class="card"><h2>팀 연봉 현황 (경쟁균형세)</h2><div class="small muted">연봉 상위 40명 합계(신인·외국인 제외). 상한 ${cap.toFixed(1)}억 초과 시 초과분의 30%(2회 연속 50%, 3회 연속 100%)를 야구발전기금으로 내고, 3회 연속이면 다음 드래프트 1라운드 지명이 9단계 내려갑니다. 2027년부터 하한 ${L.cbtFloor(Math.max(2027, S.year)).toFixed(1)}억 미달 시에도 같은 비율로 납부합니다. 시즌 종료 시 정산합니다.</div>
+    const ex = L.cbtExc(U()), el = L.players(U()).filter(p => L.excEligible(p, U())).sort((a, b) => L.cbtVal(b) - L.cbtVal(a)), g = L.capGrowth();
+    const excHtml = `<div class="small" style="margin:6px 0"><b>래리 버드 룰(예외 선수)</b>: 우리 구단에 7시즌 이상 소속(등록)한 선수 1명을 지정하면 그 선수 보수(계약금·옵션 포함)의 50%가 상위 40명 합계에서 제외됩니다(KBO 2027~). 현재 ${ex ? `<b>${esc(ex.ko)}</b> (보수 ${L.cbtVal(ex).toFixed(1)}억 → ${(L.cbtVal(ex) / 2).toFixed(1)}억 제외, 소속 ${ex.tn}시즌)${S.cbt.excManual && S.cbt.excManual[U()] ? '' : ' · 자동 지정'}` : '지정 가능한 선수 없음'}.
+      ${el.length ? `<select data-sel="excsel">${el.slice(0, 40).map(p => `<option value="${p.id}" ${ex && ex.id === p.id ? 'selected' : ''}>${esc(p.ko)} · ${L.cbtVal(p).toFixed(1)}억 · ${p.tn}시즌</option>`).join('')}</select> <button class="sm" data-act="setExc">지정</button>` : ''}</div>
+      <div class="small" style="margin:6px 0">2029년 이후 상한·하한 인상률 가정(공식 확정은 2028년까지 매년 5%): <select data-sel="capg">${[0, 0.03, 0.05, 0.07].map(v => `<option value="${v}" ${Math.abs(g - v) < 1e-9 ? 'selected' : ''}>${v === 0 ? '동결' : '+' + Math.round(v * 100) + '%/년'}</option>`).join('')}</select> <span class="muted">(2029 상한 ${L.cbtCap(2029).toFixed(1)}억 · 2032 ${L.cbtCap(2032).toFixed(1)}억)</span></div>`;
+    return `<div class="card"><h2>팀 연봉 현황 (경쟁균형세)</h2><div class="small muted">연봉 상위 40명 합계(신인·외국인 제외). 상한 ${cap.toFixed(1)}억 초과 시 초과분의 30%(2회 연속 50%, 3회 연속 100%)를 야구발전기금으로 내고, 3회 연속이면 다음 드래프트 1라운드 지명이 9단계 내려갑니다. 2027년부터 하한 ${L.cbtFloor(Math.max(2027, S.year)).toFixed(1)}억 미달 시에도 같은 비율로 납부합니다. 시즌 종료 시 정산합니다.</div>${excHtml}
       <div class="tablewrap"><table><thead><tr><th class="l">팀</th><th>상위 40 합계</th><th class="l">상한 대비</th><th>상태</th><th>누적 기금</th></tr></thead><tbody>${rows.map(r => `<tr class="${r.t === U() ? 'me' : ''}"><td class="l">${teamTag(r.t)}</td><td class="n">${r.v.pay}</td><td class="l"><div class="bar"><i style="width:${Math.min(100, r.v.pay / cap * 100)}%"></i></div></td><td>${r.v.kind === 'over' ? '<span class="chip warn">초과</span>' : r.v.kind === 'under' ? '<span class="chip warn">하한 미달</span>' : '<span class="chip in">정상</span>'}</td><td class="n">${r.fee ? r.fee.toFixed(1) + '억' : '-'}</td></tr>`).join('')}</tbody></table></div>
       ${last.length ? `<div class="small muted">내 팀 정산 기록: ${last.map(x => `${x.year} ${x.pay}억 ${x.kind === 'over' ? `초과 ${x.n}회차 기금 ${x.fee}억${x.drop ? ' · 지명 9단계 하락' : ''}` : x.kind === 'under' ? `미달 ${x.n}회차 기금 ${x.fee}억` : '정상'}`).join(' / ')}</div>` : ''}</div>`;
   }
@@ -603,6 +607,7 @@
     devPlan(a) { const [id, pl] = a.split('|'), e = L.setDevPlan(id, pl); if (e) toast(e); else { toast(`${P(id).ko}: 육성 방향 ${L.planName(pl)}`); autosave(); } render(); },
     hireCoach(a) { const e = L.hireCoach(a); if (e) toast(e); else { toast('코치를 영입했습니다.'); autosave(); } render(); },
     fireCoach(a) { const e = L.fireCoach(a); if (e) toast(e); else autosave(); render(); },
+    setExc() { const el = $('[data-sel="excsel"]'); if (!el) return; const e = L.setCbtExc(el.value); if (e) toast(e); else { toast('예외 선수를 지정했습니다.'); autosave(); } render(); },
     ticket(a) { if (L.setTicketPolicy(U(), +a)) { toast(`티켓 가격 ${+a === 1 ? '유지' : (+a > 1 ? '+' : '') + Math.round((+a - 1) * 100) + '%'}`); autosave(); render(); } },
     go(a) { ui.screen = a; ui.modal = null; render(); window.scrollTo(0, 0); },
     adv(a) { const live = ui.liveMode && (L.S.phase === 'preseason' || L.S.phase === 'regular'), before = snapshot(), r = L.advance(+a, live); if (r.status === 'userGame') { afterAdvance(r); return; } if (r.status === 'seasonEnd') toast('정규시즌이 끝났습니다.'); openResultSheet(before); autosave(); render(); },
@@ -676,6 +681,7 @@
     if (sel === 'rsort') { ui.rf.s = el.value; render(); }
     else if (sel === 'ttteam') { ui.trade.team = el.value; ui.trade.get.clear(); render(); }
     else if (sel === 'fasort') { ui.faSort = el.value; render(); }
+    else if (sel === 'capg') { L.S.cbt.growth = +el.value; L.invalidate(); autosave(); render(); }
     else if (sel === 'fayears') { const a = el.dataset.a, o = L.faDefaultOffer(P(a), U(), +el.value), sal = $(`[data-sel="fasal"][data-a="${a}"]`), bon = $(`[data-sel="fabonus"][data-a="${a}"]`); if (sal) sal.value = o.salary; if (bon) bon.value = o.bonus; }
     else if (sel === 'lpl') { const i = +el.dataset.i, j = set.lineup.findIndex(x => x.id === el.value); if (j >= 0 && j !== i) { const t = set.lineup[i].id; set.lineup[i].id = el.value; set.lineup[j].id = t; } else set.lineup[i].id = el.value; const map = L.resolvePositions(set.lineup.map(x => x.id)); set.lineup.forEach(x => { x.pos = map[x.id]; }); autosave(); render(); toast('선수를 바꾸면 수비 위치를 자동으로 다시 배정합니다. 위치는 직접 바꿀 수도 있습니다.'); }
     else if (sel === 'lpos') { const i = +el.dataset.i, j = set.lineup.findIndex((x, k) => x.pos === el.value && k !== i); if (j >= 0) set.lineup[j].pos = set.lineup[i].pos; set.lineup[i].pos = el.value; autosave(); render(); }
