@@ -197,3 +197,6 @@ details.card > summary { cursor: pointer; font-family: var(--font-display); font
 @media (max-width: 560px) { .rost td:first-child { white-space: normal; max-width: 150px; } .rost .chip { font-size: 10.5px; padding: 1px 5px; } .rost td.n { white-space: nowrap; } }
 
 .rost tr.sub td { background: var(--bg); padding-top: 4px; padding-bottom: 4px; }
+
+.tabs.sub { margin-bottom: 4px; }
+@media (max-width: 560px) { .top .info .muted:nth-child(3) { display: none; } .tabs.sub button { padding: 8px 10px; } }

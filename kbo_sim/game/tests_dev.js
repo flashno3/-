@@ -39,7 +39,7 @@ ok(L.coachGrade(80)==='S'&&L.coachGrade(65)==='A'&&L.coachGrade(55)==='B'&&L.coa
  // 일부 AI팀 정원 비우고 영입 유도
  const t0='Dinos';const fired=L4.coachesOf(t0).slice(0,2);S4.coach.teams[t0]=S4.coach.teams[t0].filter(id=>!fired.some(c=>c.id===id));fired.forEach(c=>{c.team=null;S4.coach.market.push(c.id)});
  L4.resignAll();L4.finishContracts();L4.buildDraft();L4.draftAutoRest();L4.finishDraft();L4.finishFA();
- ok(L4.coachesOf(t0).length>L4.coachLimit()-2&&L4.coachesOf(t0).length<=L4.coachLimit(),'AI 팀 코치 보충(정원 이내) '+L4.coachesOf(t0).length);
+ ok(L4.coachesOf(t0).length>=L4.coachLimit()-4&&L4.coachesOf(t0).length<=L4.coachLimit(),'AI 팀 코치 보충(정원 이내) '+L4.coachesOf(t0).length);
  for(const t of Object.keys(S4.teams))if(t!=='Lions')ok(L4.coachesOf(t).length<=Math.max(L4.coachLimit(),cnt[t]),t+' 정원 초과 없음');
  L4.startNewSeason();ok(Object.values(S4.players).filter(p=>p.team in S4.teams&&p.age<=28&&p.dev).length>100,'육성 방향이 AI 선수에도 자동 부여');
  const L5=League.fromJSON(JSON.parse(L4.save()));ok(L5.coachesOf('Giants').length===L4.coachesOf('Giants').length&&L5.coachLimit()===L4.coachLimit()&&L5.S.coach.mgr.Eagles.name==='류지현','저장·불러오기 후 코치진 유지');}

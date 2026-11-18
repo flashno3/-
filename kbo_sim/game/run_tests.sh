@@ -19,6 +19,7 @@ node game/tests_loyalty.js 2>&1 | grep -aE "FAIL|실패|AssertionError|모두 �
 node game/tests_blend.js 2>&1 | grep -aE "FAIL|실패|AssertionError|모두 통과|tests ok" | tail -3
 node game/tests_events.js 2>&1 | grep -aE "FAIL|실패|AssertionError|모두 통과|tests ok" | tail -3
 node game/tests_repair.js 2>&1 | grep -aE "FAIL|실패|AssertionError|모두 통과|tests ok" | tail -3
+node game/tests_comp.js 2>&1 | grep -aE "FAIL|실패|AssertionError|모두 통과|tests ok" | tail -3
 node game/tests_schedule.js 2>&1 | grep -aE "FAIL|실패|AssertionError|모두 통과|tests ok|우승 분포|기준선" | tail -4
 node game/tests_offseason.js 2>&1 | grep -aE "FAIL|실패|AssertionError|모두 통과|tests ok|우승 분포|기준선" | tail -4
 node game/tests_longrun.js 10 11 2>&1 | grep -aE "FAIL|실패|AssertionError|모두 통과|tests ok|우승 분포|기준선" | tail -4

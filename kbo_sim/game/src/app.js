@@ -61,6 +61,9 @@
 
   /* ---------------- 공통 셸 ---------------- */
   const NAV = [['home', '대시보드'], ['roster', '로스터'], ['farm', '2군'], ['lineup', '라인업'], ['pitching', '투수진'], ['schedule', '일정·결과'], ['standings', '순위·기록'], ['teams', '팀 정보'], ['finance', '재정'], ['coach', '코치진'], ['market', '이적시장'], ['offseason', '오프시즌'], ['save', '저장·설정']];
+  /* 메뉴를 5개 묶음으로 단순화: 대시보드 · 선수단 · 리그 · 운영 · 설정(+오프시즌). 묶음 안의 화면은 상단 탭으로 전환 */
+  const SCR = { home: '대시보드', roster: '로스터', farm: '2군', lineup: '라인업', pitching: '투수진', schedule: '일정·결과', standings: '순위·기록', teams: '팀 정보', finance: '재정', coach: '코치진', market: '이적시장', offseason: '오프시즌', save: '저장·설정' };
+  const GROUPS = [['home', '대시보드', ['home']], ['team', '선수단', ['roster', 'farm', 'lineup', 'pitching']], ['league', '리그', ['schedule', 'standings', 'teams']], ['ops', '운영', ['finance', 'coach', 'market']], ['offseason', '오프시즌', ['offseason']], ['save', '설정', ['save']]];
   function primary() {
     const S = L.S, st = L.standings(), my = st.find(x => x.team === U());
     if (S.phase === 'offseason') return { label: '오프시즌 진행', act: 'go', a: 'offseason' };
@@ -71,11 +74,11 @@
   }
   function phaseLabel() { const S = L.S; return S.phase === 'offseason' ? '오프시즌' : S.phase === 'post' || S.phase === 'post_done' ? '포스트시즌' : S.phase === 'regular_done' ? '정규시즌 종료' : L.dateStr(Math.min(S.day, 143)); }
   function shell(content) {
-    const S = L.S, st = L.standings(), my = st.find(x => x.team === U()), pr = primary(), nav = NAV.filter(n => n[0] !== 'offseason' || S.phase === 'offseason');
+    const S = L.S, st = L.standings(), my = st.find(x => x.team === U()), pr = primary(), grp = GROUPS.find(g => g[2].includes(ui.screen)) || GROUPS[0], nav = GROUPS.filter(g => g[0] !== 'offseason' || S.phase === 'offseason'), evn = L.eventsOpen().length;
     return `<div class="app"><nav class="side" aria-label="메뉴"><div class="club">${logo(U(), 34)}${KO[U()]}</div>
-      ${nav.map(n => `<button data-act="go" data-a="${n[0]}" ${ui.screen === n[0] ? 'aria-current="true"' : ''}>${n[1]}${n[0] === 'offseason' ? ' ●' : ''}</button>`).join('')}</nav>
+      ${nav.map(g => `<button data-act="goG" data-a="${g[0]}" ${grp[0] === g[0] ? 'aria-current="true"' : ''}>${g[1]}${g[0] === 'offseason' ? ' ●' : ''}${g[0] === 'home' && evn ? ` <span class="chip warn">${evn}</span>` : ''}</button>`).join('')}</nav>
       <div class="main"><header class="top"><div class="info"><span class="date">${S.year} · ${phaseLabel()}</span><span class="muted">${S.phase === 'offseason' ? '오프시즌' : (my.w + my.l + my.d === 0 ? '개막 전' : `${my.rank}위 · ${my.w}승 ${my.l}패 ${my.d}무`)}</span><span class="muted">${cbtText(U())}</span></div>
-      <button class="primary" data-act="${pr.act}" ${pr.a !== undefined ? `data-a="${pr.a}"` : ''}>${pr.label}</button></header><main class="content">${content}</main>
+      <button class="primary" data-act="${pr.act}" ${pr.a !== undefined ? `data-a="${pr.a}"` : ''}>${pr.label}</button></header><main class="content">${grp[2].length > 1 ? `<div class="tabs sub" role="tablist">${grp[2].map(s => `<button role="tab" aria-selected="${ui.screen === s}" data-act="go" data-a="${s}">${SCR[s]}</button>`).join('')}</div>` : ''}${content}</main>
       <div class="dock"><div class="dinfo"><b>${phaseLabel()}</b><span class="muted">${S.phase === 'offseason' ? '오프시즌' : (my.w + my.l + my.d === 0 ? '개막 전' : `${my.rank}위 · ${my.w}승 ${my.l}패${my.d ? ' ' + my.d + '무' : ''}`)}</span></div><button class="primary" data-act="${pr.act}" ${pr.a !== undefined ? `data-a="${pr.a}"` : ''}>${pr.label}</button></div></div></div>`;
   }
 
@@ -419,6 +422,18 @@
     if (!bi.n) return `<span class="muted">입찰 없음</span>${pe}`;
     return `<b>${bi.n}개 구단 경쟁</b>${bi.bids.slice(0, 3).map(b => `<div>${KO[b.team]} 연 ${b.per.toFixed(2)}억 × ${b.y}년</div>`).join('')}${pe}`;
   }
+  /* 보호선수 지정(FA 보상): 내 팀이 A·B등급 외부 FA를 영입할 때 원소속 구단이 지명할 수 없는 선수 */
+  function protectCard() {
+    const S = L.S, t = U(), n = L.faList().filter(p => !p.foreign && p.faInfo && p.faInfo.grade && p.faInfo.grade !== 'C' && p.faInfo.from !== t).length;
+    const log = (S.compLog || []).filter(c => c.year === S.year && !c.pending).slice(-6).reverse();
+    const logHtml = log.length ? `<details style="margin-top:6px"><summary class="small">FA 보상 내역 (${log.length})</summary><ul class="news">${log.map(c => `<li><span class="d">${c.grade}</span><span>${esc(P(c.id) ? P(c.id).ko : '')} ${KO[c.from] || ''}→${KO[c.to] || ''}: ${esc(c.text)}</span></li>`).join('')}</ul></details>` : '';
+    if (!n) return logHtml ? `<div class="card">${logHtml}</div>` : '';
+    const open = !!ui.protOpen, prot = new Set(S.protect || L.compProtected(t, 'B')), el = L._compEligible(t).sort((a, b) => L.marketValue(b) - L.marketValue(a));
+    const aProt = new Set(L.compProtected(t, 'A')), cnt = el.filter(p => prot.has(p.id)).length;
+    return `<div class="card"><div class="row"><b>보호선수 명단</b><span class="muted small">A등급 영입 시 ${aProt.size}명 · B등급 25명 보호 (지정 ${cnt}/25${S.protect ? '' : ', 자동'})</span><span class="sp"></span><button class="sm" data-act="protToggle">${open ? '닫기' : '편집'}</button></div>
+      <div class="small muted" style="margin-top:4px">A·B등급 외부 FA를 영입하면 보호선수 외 1명이 보상선수로 지명될 수 있습니다. 원소속 구단이 후보 가치와 보상금을 비교해 선택합니다. 보상금은 영입 구단 보수에 즉시 계상됩니다.</div>
+      ${open ? `<div class="row" style="margin:6px 0"><button class="sm" data-act="protAuto">자동(가치 상위 25명)</button><span class="small muted">체크한 선수가 보호됩니다. A등급은 체크한 선수 중 가치 상위 20명만 보호됩니다.</span></div><div class="tablewrap" style="max-height:300px;overflow-y:auto"><table><tbody>${el.map(p => `<tr><td data-stop="1"><input type="checkbox" data-act="protSet" data-a="${p.id}" ${prot.has(p.id) ? 'checked' : ''}></td><td class="l"><b>${esc(p.ko)}</b> <span class="muted small">${pos(p)} · ${p.age}세</span></td><td>${ovrChip(L.ovr(p))}</td><td class="n small">${f1(L.marketValue(p))}억</td><td class="small muted">${aProt.has(p.id) ? 'A·B 보호' : prot.has(p.id) ? 'B만 보호' : ''}</td></tr>`).join('')}</tbody></table></div>` : ''}${logHtml}</div>`;
+  }
   function persuadeCard() {
     const pr = ui.persuade; if (!pr) return ''; const p = P(pr.id); if (!p || p.team !== 'FA') { ui.persuade = null; return ''; }
     const o = L.boardOdds(pr.id, pr.offer); if (!o.ok || o.need <= 0) { ui.persuade = null; return ''; }
@@ -434,7 +449,7 @@
     const left = L.faDaysLeft(), log = (S.faLog || []).filter(x => x.year === S.year).slice(0, 5).map(x => `<li><span class="d">${L.faDateStr(x.day)}</span><span>${esc(x.text)}</span></li>`).join('');
     return `<div class="card"><div class="row"><h2>FA 협상 기간</h2><b>${L.faDateStr(m.day)}</b><span class="muted small">(1월 1일 개시 · 개막 전 ${left}일 남음 · ${L.faDateStr(75)}까지)</span><span class="sp"></span>
       <button data-act="faDay" data-a="1" ${left <= 0 ? 'disabled' : ''}>+1일</button><button data-act="faDay" data-a="3" ${left <= 0 ? 'disabled' : ''}>+3일</button><button data-act="faDay" data-a="7" ${left <= 0 ? 'disabled' : ''}>+7일</button><button class="primary" data-act="faClose">FA 마감${S.phase === 'offseason' ? '' : ' · 개막'}</button></div>
-      <div class="small muted" style="margin-top:6px"><b>미계약 기간이 길어질수록 요구액이 내려갑니다(현재 개시가 대비 −${Math.round((1 - L._marketDecay()) * 100)}%, 마감까지 최대 −30%).</b> AI 구단은 관심 선수에게 입찰하고 매일 상한까지 금액을 올립니다. 선수는 <b>연 보수(계약금 비중 선호) · 선호 기간 · 원소속 구단(+2%)</b>을 종합해 점수가 가장 높은 제시를 수락합니다. 내 제시가 경쟁 입찰보다 낮으면 5일간 보류되어 매일 재평가되므로, 금액을 올려 다시 제시하거나 '경쟁 이기는 제시'를 사용하세요. FA 마감 시 입찰 중인 계약이 확정되고 AI가 로스터를 정리합니다.</div>${log ? `<ul class="news" style="margin-top:6px">${log}</ul>` : ''}</div>`;
+      <details style="margin-top:6px"><summary class="small">협상 규칙 보기 (요구액 하락 현재 −${Math.round((1 - L._marketDecay()) * 100)}%)</summary><div class="small muted" style="margin-top:4px"><b>미계약 기간이 길어질수록 요구액이 내려갑니다(현재 개시가 대비 −${Math.round((1 - L._marketDecay()) * 100)}%, 마감까지 최대 −30%).</b> AI 구단은 관심 선수에게 입찰하고 매일 상한까지 금액을 올립니다. 선수는 <b>연 보수(계약금 비중 선호) · 선호 기간 · 원소속 구단(+2%)</b>을 종합해 점수가 가장 높은 제시를 수락합니다. 내 제시가 경쟁 입찰보다 낮으면 5일간 보류되어 매일 재평가되므로, 금액을 올려 다시 제시하거나 '경쟁 이기는 제시'를 사용하세요. FA 마감 시 입찰 중인 계약이 확정되고 AI가 로스터를 정리합니다.</div></details>${log ? `<ul class="news" style="margin-top:6px">${log}</ul>` : ''}</div>`;
   }
   /* 외국인·아시아쿼터 시장: FA 제도(등급·보상·계약금·다년)가 없고 1년 계약, 신규 상한·재계약 인상 한도, 보유 슬롯 규정이 적용된다 */
   function screenFAForeign(aq, all) {
@@ -471,7 +486,7 @@
       const offer = fr ? `<button class="sm primary" data-act="signFA" data-a="${p.id}">영입</button>` : `<select data-sel="fayears" data-a="${p.id}" ${tm.graded ? '' : 'disabled'}>${Array.from({ length: tm.maxYears }, (_, i) => i + 1).map(y => `<option value="${y}" ${y === o.years ? 'selected' : ''}>${y}년</option>`).join('')}</select> 연봉 <input class="num" type="number" step="0.1" min="0.3" style="width:64px" data-sel="fasal" data-a="${p.id}" value="${o.salary}"> ${tm.graded ? `계약금 <input class="num" type="number" step="0.1" min="0" style="width:64px" data-sel="fabonus" data-a="${p.id}" value="${o.bonus}">` : ''} <button class="sm primary" data-act="signFA" data-a="${p.id}">제시</button>`;
       return `<tr><td class="l"><b>${esc(p.ko)}</b></td><td class="l">${pos(p)}</td><td class="n">${p.age}</td><td>${ovrChip(L.ovr(p))}</td><td class="l">${faChip(p)}${p.faInfo && p.faInfo.from ? ` <span class="muted small">${KO[p.faInfo.from] || ''}</span>` : ''}</td><td class="l">${subHtml(p)}</td>${req}${mk ? `<td class="l small">${bidCell(bi)}</td>` : ''}<td>${offer}${bi && bi.best ? ` <button class="sm" data-act="faBeat" data-a="${p.id}" title="경쟁 입찰을 넘는 최소 제시를 입력칸에 채웁니다">경쟁 이기는 제시</button>` : ''}</td></tr>`;
     }).join('');
-    return `${faCalendar()}${persuadeCard()}${tabBar}<div class="card"><div class="row"><h2>국내 FA 시장</h2><span class="muted small">${cbtText(U())} · FA 여유자금 ${L.faRoom(U()).toFixed(1)}억 · 보유 ${S.teams[U()].ids.length}명 · 외부 FA ${L._faCount(U())}/3 · 외국인 일반 ${L.foreignOf(U()).filter(x => !x.aq).length}/3 + AQ ${L.foreignOf(U()).filter(x => x.aq).length}/1</span><span class="sp"></span><select data-sel="fasort"><option value="war" ${ui.faSort === 'war' ? 'selected' : ''}>가치순</option><option value="ovr" ${ui.faSort === 'ovr' ? 'selected' : ''}>능력치순</option><option value="age" ${ui.faSort === 'age' ? 'selected' : ''}>나이순</option></select></div>
+    return `${faCalendar()}${persuadeCard()}${protectCard()}${tabBar}<div class="card"><div class="row"><h2>국내 FA 시장</h2><span class="muted small">${cbtText(U())} · FA 여유자금 ${L.faRoom(U()).toFixed(1)}억 · 보유 ${S.teams[U()].ids.length}명 · 외부 FA ${L._faCount(U())}/3 · 외국인 일반 ${L.foreignOf(U()).filter(x => !x.aq).length}/3 + AQ ${L.foreignOf(U()).filter(x => x.aq).length}/1</span><span class="sp"></span><select data-sel="fasort"><option value="war" ${ui.faSort === 'war' ? 'selected' : ''}>가치순</option><option value="ovr" ${ui.faSort === 'ovr' ? 'selected' : ''}>능력치순</option><option value="age" ${ui.faSort === 'age' ? 'selected' : ''}>나이순</option></select></div>
       ${list.length ? `<div class="tablewrap"><table><thead><tr><th class="l">선수</th><th class="l">포지션</th><th>나이</th><th>OVR</th><th class="l">FA 등급·원소속</th><th class="l">세부 능력</th><th>요구 연 보수(억)</th><th class="l">요구 조건</th>${mk ? '<th class="l">경쟁 현황</th>' : ''}<th class="l">제시 (연 보수 = 연봉 + 계약금 ÷ 기간)</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="muted">시장에 나온 FA가 없습니다. 오프시즌에 계약이 끝난 선수가 시장에 나옵니다.</p>'}</div>`;
   }
 
@@ -695,7 +710,7 @@
     const scroll = window.scrollY;
     if (ui.live) { root.innerHTML = screenLive() + toastHtml(); window.scrollTo(0, scroll); return; }
     const S = ui.screen, f = { home: () => screenHome() + evHistory(), roster: screenRoster, farm: screenFarm, lineup: screenLineup, pitching: screenPitching, schedule: screenSchedule, standings: screenStandings, teams: screenTeams, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
-    root.innerHTML = shell((S === 'home' ? eventCards() : evBanner()) + f()) + (ui.modal ? modalPlayer(ui.modal) : '') + sheetHtml() + toastHtml();
+    root.innerHTML = shell((S === 'home' || S === 'market' || S === 'offseason' ? eventCards() : evBanner()) + f()) + (ui.modal ? modalPlayer(ui.modal) : '') + sheetHtml() + toastHtml();
     window.scrollTo(0, scroll);
     const cur = root.querySelector('.side button[aria-current=true]'); if (cur && cur.scrollIntoView) { try { cur.scrollIntoView({ inline: 'center', block: 'nearest' }); } catch (e) { /* 일부 브라우저 */ } }
   }
@@ -719,7 +734,8 @@
     fireCoach(a) { const e = L.fireCoach(a); if (e) toast(e); else autosave(); render(); },
     setExc() { const el = $('[data-sel="excsel"]'); if (!el) return; const e = L.setCbtExc(el.value); if (e) toast(e); else { toast('예외 선수를 지정했습니다.'); autosave(); } render(); },
     ticket(a) { if (L.setTicketPolicy(U(), +a)) { toast(`티켓 가격 ${+a === 1 ? '유지' : (+a > 1 ? '+' : '') + Math.round((+a - 1) * 100) + '%'}`); autosave(); render(); } },
-    go(a) { ui.screen = a; ui.modal = null; render(); window.scrollTo(0, 0); },
+    goG(a) { const g = GROUPS.find(x => x[0] === a); ui.last = ui.last || {}; ui.screen = ui.last[a] && g[2].includes(ui.last[a]) ? ui.last[a] : g[2][0]; ui.modal = null; render(); window.scrollTo(0, 0); },
+    go(a) { ui.last = ui.last || {}; const gg = GROUPS.find(x => x[2].includes(a)); if (gg) ui.last[gg[0]] = a; ui.screen = a; ui.modal = null; render(); window.scrollTo(0, 0); },
     adv(a) { if (L.S.faMkt && !L.S.faMkt.closed) { toast('FA 협상 기간입니다. 이적시장 > FA 시장에서 날짜를 진행하거나 FA를 마감하세요.'); ui.screen = 'market'; ui.market = 'fa'; render(); return; } const live = ui.liveMode && (L.S.phase === 'preseason' || L.S.phase === 'regular'), before = snapshot(), r = L.advance(+a, live, true); if (r.status === 'userGame') { afterAdvance(r); return; } if (r.status === 'seasonEnd') toast('정규시즌이 끝났습니다.'); if (r.status === 'event') toast('새 소식이 도착했습니다. 대시보드에서 결정하세요.'); openResultSheet(before); autosave(); render(); },
     advAuto(a) { if (L.S.faMkt && !L.S.faMkt.closed) { toast('FA 협상 기간입니다. 이적시장 > FA 시장에서 날짜를 진행하거나 FA를 마감하세요.'); ui.screen = 'market'; ui.market = 'fa'; render(); return; } const before = snapshot(), r = L.advance(+a, false, true); openResultSheet(before); if (r.status === 'seasonEnd') toast('정규시즌이 끝났습니다.'); if (r.status === 'event') toast('새 소식이 도착했습니다. 대시보드에서 결정하세요.'); autosave(); render(); },
     startPost() { const my = L.standings().find(x => x.team === U()); L.startPostseason(); if (my.rank > 5) { while (!L.S.post.done) L.simPostGame(); } autosave(); render(); },
@@ -746,6 +762,9 @@
     openFAMarket() { ui.screen = 'market'; ui.market = 'fa'; render(); window.scrollTo(0, 0); },
     evChoice(a) { const [id, k] = a.split('|'), r = L.resolveEvent(id, k); toast(r.msg || ''); if (r.ok) autosave(); render(); },
     persuade(a) { const pr = ui.persuade; if (!pr || pr.id !== a) return; const r = L.persuadeBoard(a, pr.offer); if (!r.ok) { toast(r.msg); } else { toast(r.success ? `이사회가 승인했습니다. ${P(a).ko} 영입 완료 (신뢰도 −${r.drop.toFixed(1)})` : r.msg); ui.persuade = null; autosave(); } render(); },
+    protToggle() { ui.protOpen = !ui.protOpen; render(); },
+    protAuto() { L.S.protect = undefined; render(); },
+    protSet(a) { const S = L.S, cur = new Set(S.protect || L.compProtected(U(), 'B')); if (cur.has(a)) cur.delete(a); else { if (cur.size >= 25) { toast('보호선수는 최대 25명입니다.'); render(); return; } cur.add(a); } L.setProtect([...cur]); autosave(); render(); },
     persuadeCancel() { ui.persuade = null; render(); },
     team(a) { ui.viewTeam = a; ui.screen = 'teams'; ui.modal = null; render(); window.scrollTo(0, 0); },
     fatab(a) { ui.faTab = a; render(); },
