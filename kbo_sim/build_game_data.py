@@ -551,7 +551,33 @@ def scale(rows,fields,w):
         v=[r['p'][f] for r in rows];t=[w(r) for r in rows];mu=sum(a*b for a,b in zip(v,t))/sum(t);sd=math.sqrt(sum(b*(a-mu)**2 for a,b in zip(v,t))/sum(t));out[f]=[mu,sd]
     return out
 regB=[b for b in R['batters'] if b['PA']>=300];regP=[p for p in R['pitchers'] if p['TBF']>=200]
-out={'coaches':COACHES,'finance':FINANCE,'faclass2027':FACLASS,'foreign2027':FOREIGN27,'draft2027':DRAFT,'teams':TEAMS,'players':players,'league_bat':R['league_bat'],'team_def':R['team_def'],'pf':PK['pf_by_team'],
+# 고교 → 연고 구단(사용자 제공 지역 연고 학교 표): 선수 DB의 약칭(유신고·선린인고 등)과 맞추기 위해 도시 접두어를 뗀 별칭도 등록
+def load_school_home():
+    import csv
+    f=D+'game/data/school_home.csv'
+    if not os.path.exists(f): return {}
+    TMC={'두산':'Bears','LG':'Twins','키움':'Heroes','SSG':'Landers','KT':'Wiz','한화':'Eagles','KIA':'Tigers','삼성':'Lions','롯데':'Giants','NC':'Dinos'}
+    CITY=['수원','안양','안산','시흥','의정부','평택','천안','순천','정읍','나주','대구','포항','속초','구미','부산','마산','양산','파주','동두천','부천','구리','경기','광주','서울','인천','청주']
+    EXTRA={'광주일고':'광주제일고','포철고':'포항제철고','선린인고':'선린인터넷고','동산고':'인천동산고'}
+    sh={}
+    for r in csv.DictReader(open(f,encoding='utf-8-sig')):
+        tm=[TMC[x] for x in r['구단'].split('|')];n=r['학교']
+        names={n}
+        for c in sorted(CITY,key=len,reverse=True):
+            if n.startswith(c) and len(n)-len(c)>=3 and n not in ('서울동산고',): names.add(n[len(c):])
+        for a in names: sh.setdefault(a,[]).append((tm,n))
+    out={}
+    for a,v in sh.items():
+        full={n for _,n in v}
+        if len(full)>1 and a not in EXTRA: continue   # 모호한 약칭은 제외
+        out[a]=v[0][0]
+    for a,full in EXTRA.items():
+        for _,vv in sh.items():
+            for tm,n in vv:
+                if n==full: out[a]=tm
+    return out
+SCHOOLHOME=load_school_home()
+out={'schoolHome':SCHOOLHOME,'coaches':COACHES,'finance':FINANCE,'faclass2027':FACLASS,'foreign2027':FOREIGN27,'draft2027':DRAFT,'teams':TEAMS,'players':players,'league_bat':R['league_bat'],'team_def':R['team_def'],'pf':PK['pf_by_team'],
  'fielding':{'lg':F['lg'],'team_avg_range':F['team_avg_range']},
  'scale':{'B':scale(regB,['k','bb','hr','babip','xbh','sba'],lambda r:r['PA']),'P':scale(regP,['k','bb','hr','babip'],lambda r:r['TBF'])}}
 os.makedirs(D+'game/src',exist_ok=True)

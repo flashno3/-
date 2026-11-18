@@ -48,6 +48,7 @@
       }
       L._calibrateSalaries();   // 2026 연봉 데이터가 있으면 실제 연봉 사용, 없으면 모델 연봉을 실제 규모로 환산
       S.cbt = { over: {}, under: {}, drop: {}, fees: {}, log: [] };
+      S.schoolHome = base.schoolHome || {};   // 고교 → 연고 구단(구단 충성도의 연고 출신 판정)
       L._f27 = base.foreign2027 || [];
       L._faclass = base.faclass2027 || [];
       if (L._initFARules) L._initFARules();   // FA 자격 연수·등급 기준 연봉·외국인 슬롯 초기화
