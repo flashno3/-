@@ -48,7 +48,7 @@ const young=dh.filter(p=>p.peak!==undefined&&p.age<=24);ok(young.length>20&&youn
  ok(['양의지','오태곤'].every(n=>Object.values(SM.players).some(p=>p.ko===n&&p.team in SM.teams&&p.contract.total||p.ko===n&&p.team in SM.teams)),'계약 확정 2명은 소속 유지');
  ok(mk.every(p=>LM.faEligible(p)&&!SM.teams[p.faInfo.from].ids.includes(p.id)),'자격 보유·원소속 명단에서 제외');
  // 사용자(삼성)도 협상 가능: 원태인(원소속) 재영입은 보상 없음, 외부 FA는 3명 한도
- const wt=mk.find(p=>p.ko==='원태인');ok(LM.signFA(wt.id,3)===null&&wt.team==='Lions'&&!(SM.compLog||[]).some(c=>c.id===wt.id),'원소속 재계약은 보상 없음');
+ SM.fin.teams.Lions.lastRev+=40;const wt=mk.find(p=>p.ko==='원태인');ok(LM.signFA(wt.id,3)===null&&wt.team==='Lions'&&!(SM.compLog||[]).some(c=>c.id===wt.id),'원소속 재계약은 보상 없음');
  LM.advance(40,false);const left=LM.faList().filter(p=>!p.foreign&&p.faInfo&&p.faInfo.grade).length;ok(left<20&&left>=3,'40경기일 후 AI가 일부 영입 '+left);
  ok((SM.faLog||[]).length>0&&(SM.compLog||[]).length>0,'계약·보상 기록');
  for(const tm of Object.keys(SM.teams)){ok(LM._faCount(tm)<=3,tm+' 외부 FA 3명 한도')}}

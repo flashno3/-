@@ -14,6 +14,9 @@ const nm=k=>Object.values(S.players).find(p=>p.ko===k&&p.team in S.teams);
  const ryu=g('류현진','Eagles');ok(ryu.contract.end===2031&&ryu.contract.bonus===0&&ryu.contract.salary===21,'류현진 2024~2031·계약금 없음');
  const hold=Object.values(S.players).filter(p=>p.hold);ok(hold.length===9&&['고영표','나성범','김광현','김재환','박세웅','박건우','박민우','노시환','김재현'].every(k=>hold.some(p=>p.ko===k)),'FA 자격 유보선수 9명');
  ok(hold.every(p=>p.contract.years>=1&&p.contract.end>=2027),'유보선수는 모두 2027 이후까지 계약');}
+// 1c) 계약금 상각: CSV 계약도 계약금÷보장연수가 연간 보수(finPay)에 포함
+{const q=Object.values(S.players).find(p=>p.ko==='양석환');const c=q.contract;ok(c.bonus===20&&c.amort===5&&c.yrs0===4,'양석환 계약금 20억 ÷ 4년 = 5억/년 상각');
+ const T=Object.keys(S.teams);ok(T.every(t=>L.finPay(t)>=L.payroll(t)),'finPay ≥ 연봉합');}
 // 2) FA 시장가: 실제 FA 분포(1위권 25~30억, 하위 2~3억)
 const g=L.faList().filter(p=>p.faInfo&&p.faInfo.grade&&!p.foreign).sort((a,b)=>L.faMV(b)-L.faMV(a));
 ok(g.length>=15&&g[0].faInfo.mv>=25&&g[0].faInfo.mv<=30&&g[g.length-1].faInfo.mv>=2.4&&g[g.length-1].faInfo.mv<=4,'시장가 범위 '+g[0].faInfo.mv+'~'+g[g.length-1].faInfo.mv);
@@ -45,7 +48,7 @@ const nofa=L.faList().find(p=>!p.foreign&&!(p.faInfo&&p.faInfo.grade));if(nofa){
 // 6) 오프시즌: 재계약은 모두 1년, AI 재계약도 1년, 자동 재계약
 {const L4=League.create(base,'Lions',9),S4=L4.S;L4.advance(300,false);const P=L4.startPostseason();let k=0;while(!P.done&&k++<100){if(L4.userInPost()){const c=L4.startUserPostGame();c.live.playToEnd();L4.finishUserPostGame(c)}else L4.simPostGame()}
  L4.startOffseason();const off=S4.off;ok(off.rep.auto>20&&off.rep.expiring.length<60,'소액·미자격 선수는 자동 재계약 '+off.rep.auto+', 직접 협상 '+off.rep.expiring.length);
- const ai=Object.keys(S4.teams).filter(t=>t!=='Lions').flatMap(t=>S4.teams[t].ids.map(id=>S4.players[id])).filter(p=>!(p.ct&&p.ct.years>1)&&!p.contract.bonus);ok(ai.length>400&&ai.every(p=>p.contract.years===1),'AI 재계약은 모두 1년(2027 시즌 중 체결된 FA 계약금 계약 제외)');const fas=Object.keys(S4.teams).filter(t=>t!=='Lions').flatMap(t=>S4.teams[t].ids.map(id=>S4.players[id])).filter(p=>p.contract.bonus>0&&p.contract.yrs0);ok(fas.length>=1&&fas.every(p=>p.contract.years>=1&&p.contract.years<=4&&true),'시즌 중 AI의 FA 계약 '+fas.length+'건: '+fas.map(p=>p.ko+' '+p.contract.total+'억').join(','));
+ const ai=Object.keys(S4.teams).filter(t=>t!=='Lions').flatMap(t=>S4.teams[t].ids.map(id=>S4.players[id])).filter(p=>!(p.ct&&p.ct.years>1)&&!p.contract.bonus);ok(ai.length>400&&ai.every(p=>p.contract.years===1),'AI 재계약은 모두 1년(2027 시즌 중 체결된 FA 계약금 계약 제외)');const fas=Object.keys(S4.teams).filter(t=>t!=='Lions').flatMap(t=>S4.teams[t].ids.map(id=>S4.players[id])).filter(p=>p.contract.bonus>0&&p.contract.yrs0&&!p.ct);ok(fas.length>=1&&fas.every(p=>p.contract.years>=1&&p.contract.years<=4&&true),'시즌 중 AI의 FA 계약 '+fas.length+'건: '+fas.map(p=>p.ko+' '+p.contract.total+'억').join(','));
  const id=off.rep.expiring.find(i=>!S4.players[i].foreign),pl=S4.players[id];ok(L4.resign(id)===null&&pl.contract.years===1&&!pl.contract.bonus,'재계약은 1년');
  const nsh=Object.values(S4.players).find(p=>p.ko==='노시환');ok(nsh.contract.years===10&&nsh.team==='Eagles','노시환 11년 계약은 2037까지 유지(잔여 10년) '+nsh.contract.years);
  const gr=L4.faList().filter(p=>p.faInfo&&p.faInfo.grade);ok(gr.length>=8&&gr.length<=40,'신규 FA 자격 신청자 '+gr.length);
@@ -53,7 +56,7 @@ const nofa=L.faList().find(p=>!p.foreign&&!(p.faInfo&&p.faInfo.grade));if(nofa){
  // AI 영입은 여유자금·상한 이내, 계약금 포함
  const sg=L4.faList().filter(p=>p.faInfo&&p.faInfo.grade&&!p.foreign).sort((a,b)=>L4.faMV(b)-L4.faMV(a))[0];const room=Object.fromEntries(Object.keys(S4.teams).map(t=>[t,L4.faRoom(t)]));
  L4.buildDraft();L4.draftAutoRest();L4.finishDraft();L4.finishFA();
- const signed=Object.keys(S4.teams).filter(t=>t!=='Lions').flatMap(t=>S4.teams[t].ids.map(id=>S4.players[id])).filter(p=>p.contract.bonus>0&&p.contract.yrs0);ok(signed.length-fas.length<=gr.length&&signed.length-fas.length>=3,'AI FA 시장 계약금 계약 수 '+(signed.length-fas.length)+' / 신청자 '+gr.length);for(const t of Object.keys(S4.teams))if(t!=='Lions')ok(L4._faCount(t)<=3,t+' 외부 FA 3명 한도');
+ const signed=Object.keys(S4.teams).filter(t=>t!=='Lions').flatMap(t=>S4.teams[t].ids.map(id=>S4.players[id])).filter(p=>p.contract.bonus>0&&p.contract.yrs0&&!p.ct);ok(signed.length-fas.length<=gr.length&&signed.length-fas.length>=3,'AI FA 시장 계약금 계약 수 '+(signed.length-fas.length)+' / 신청자 '+gr.length);for(const t of Object.keys(S4.teams))if(t!=='Lions')ok(L4._faCount(t)<=3,t+' 외부 FA 3명 한도');
  signed.forEach(p=>{const c=p.contract;if(!(c.yrs0>=1&&c.yrs0<=4&&c.years<=c.yrs0&&c.cbt>=c.salary&&Math.abs(c.total-(c.bonus+c.salary*c.yrs0))<0.11&&Math.abs(c.cbt-c.total/c.yrs0)<0.02))console.log('BAD',p.ko,JSON.stringify(c))});ok(signed.every(p=>p.contract.yrs0>=1&&p.contract.yrs0<=4&&p.contract.years<=p.contract.yrs0&&p.contract.cbt>=p.contract.salary&&Math.abs(p.contract.total-(p.contract.bonus+p.contract.salary*p.contract.yrs0))<0.11&&Math.abs(p.contract.cbt-p.contract.total/p.contract.yrs0)<0.02),'AI 계약 구조(총액=계약금+연봉×기간, 경쟁균형세=총액/기간)');
  console.log('AI 계약금 계약',signed.map(p=>p.ko+'('+p.contract.years+'년 '+p.contract.total+'억)').join(', '));}
 // 7) 잠재력: 절대 정점 기준 등급, 문동주 등 주요 1차 지명 선수의 정점이 현재 OVR 이상, 시드와 무관하게 E가 되지 않음

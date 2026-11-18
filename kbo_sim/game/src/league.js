@@ -78,7 +78,7 @@
     _applyContracts() {
       const S = this.S;
       for (const p of Object.values(S.players)) {
-        if (p.ct) { const c = p.contract; if (p.ct.years) c.years = p.ct.years; for (const k of ['total', 'bonus', 'from', 'end', 'opt', 'est']) if (p.ct[k] !== null && p.ct[k] !== undefined) c[k] = p.ct[k]; if (p.ct.cbt !== undefined) c.cbt = p.ct.cbt; if (p.ct.salary) { c.salary = p.ct.salary; p.sal = p.ct.salary; } }
+        if (p.ct) { const c = p.contract; if (p.ct.years) c.years = p.ct.years; for (const k of ['total', 'bonus', 'from', 'end', 'opt', 'est']) if (p.ct[k] !== null && p.ct[k] !== undefined) c[k] = p.ct[k]; if (p.ct.cbt !== undefined) c.cbt = p.ct.cbt; if (c.bonus > 0 && c.from && c.end >= c.from) { c.yrs0 = c.end - c.from + 1; c.amort = Math.round(c.bonus / c.yrs0 * 100) / 100; } if (p.ct.salary) { c.salary = p.ct.salary; p.sal = p.ct.salary; } }
         if (p.faStart && p.team in S.teams) { S.teams[p.team].ids = S.teams[p.team].ids.filter(x => x !== p.id); p.team = 'FA'; p.active = false; (S.fa = S.fa || []).push(p.id); }
       }
     }
