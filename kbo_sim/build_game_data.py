@@ -81,6 +81,40 @@ def eff_team(r):   # 상무 선수는 원소속(알려진 경우)으로 매칭
     return r['team']
 def mark_mil(p,r):
     t,enl,ym=MILORG[r['name']];p['milTeam']=FUT_TM[t];p['milReturn']=ym;p['milFrom']=enl;p['team']='MIL'
+# 퓨처스 → 1군 레이팅 보강: 24~26 1군 합계 표본이 작은 선수(타자 150타석·투수 100이닝 미만)에 한해 퓨처스 환산값을 정보량 가중으로 섞는다.
+#  - 합계는 2026·2025·2024 1군 기록(이름·나이로 연결, 모호하면 제외). 레이팅의 1군 정보량 = 시즌 가중(1·0.6·0.4) 표본 + 사전 표본(N)
+#  - 퓨처스 정보량 = 0.5 × 퓨처스 표본(리그 수준 차이 할인), 환산값은 겹치는 선수 회귀(기울기 감쇠)로 1군 척도에 맞춘 값
+#  - 기준선에서 비중이 0이 되도록 (1 − 합계/기준) 테이퍼. 최소 퓨처스 표본: 타자 50타석·투수 60타자(≈15이닝). 투수는 삼진·볼넷만(나머지는 퓨처스 예측력 없음)
+BLEND={'B':[],'P':[]}
+FUT_EFF=0.5
+def _career_idx(pit):
+    d={}
+    for y in (2026,2025,2024):
+        ix={}
+        for r in J(('pitching_' if pit else 'batting_')+str(y)+'.json'): ix.setdefault(r['name'],[]).append(r)
+        d[y]=ix
+    return d
+def _career(m,pit,idx):
+    try: a26=int(m['age'])-1
+    except (ValueError,TypeError): return None
+    tot=0.0;wn=0.0
+    for y,w in ((2026,1.0),(2025,0.6),(2024,0.4)):
+        c=[r for r in idx[y].get(m['name'],[]) if str(r['age'])==str(a26-(2026-y))]
+        if len(c)>1: return None
+        if c:
+            v=(c[0]['outs']/3.0,c[0]['TBF']) if pit else (c[0]['PA'],c[0]['PA'])
+            tot+=v[0];wn+=w*v[1]
+    return tot,wn
+def blend_fut(ov,fit,shr,pit):
+    idx=_career_idx(pit);th=100 if pit else 150;mn=60 if pit else 50;Ns=FPNs if pit else FNs
+    for r in ov:
+        m=r['m'];cr=_career(m,pit,idx);fs=r['BF'] if pit else r['PA']
+        if not cr or cr[0]>=th or fs<mn: continue
+        taper=1-cr[0]/th;ch={}
+        for s in (['k','bb'] if pit else list(fit)):
+            pf=fit[s]['my']+fit[s]['b']*(shr(r,s)-fit[s]['mx']);lam=taper*FUT_EFF*fs/(FUT_EFF*fs+cr[1]+Ns[s])
+            new=(1-lam)*m['p'][s]+lam*pf;ch[s]=(m['p'][s],new);m['p'][s]=new
+        BLEND['P' if pit else 'B'].append((m['ko'],m['team'],round(cr[0],1),fs,{s:(round(a,4),round(c,4)) for s,(a,c) in ch.items()}))
 def futures_hitters(players):
     f=D+'game/data/futures_bat_2026.txt'
     if not os.path.exists(f): return None
@@ -119,6 +153,7 @@ def futures_hitters(players):
         W=sum(w for _,_,w in pts);mx=sum(w*x for x,_,w in pts)/W;my=sum(w*y for _,y,w in pts)/W
         sxx=sum(w*(x-mx)**2 for x,_,w in pts);sxy=sum(w*(x-mx)*(y-my) for x,y,w in pts)
         fit[s]=dict(mx=mx,my=my,b=sxy/sxx,n=len(pts))
+    blend_fut(ov,fit,shr,False)
     lgB=R['league_bat']
     out=[]
     import hashlib
@@ -182,6 +217,7 @@ def futures_pitchers(players,nb):
         W=sum(w for _,_,w in pts);mx=sum(w*x for x,_,w in pts)/W;my=sum(w*y for _,y,w in pts)/W
         sxx=sum(w*(x-mx)**2 for x,_,w in pts);sxy=sum(w*(x-mx)*(y-my) for x,y,w in pts);syy=sum(w*(y-my)**2 for _,y,w in pts)
         fit[s]=dict(mx=mx,my=my,b=max(0.0,sxy/sxx),n=len(pts),corr=sxy/(sxx*syy)**.5)   # 음의 기울기는 0(예측력 없음)으로
+    blend_fut(ov,fit,shr,True)
     lgB=R['league_bat'];ros={}
     for l in open(D+'game/data/futures_roster_2026.txt',encoding='utf8'):
         if not l.strip() or l.startswith('#'): continue
