@@ -28,3 +28,7 @@ const base=JSON.parse(fs.readFileSync(__dirname+'/src/gamedata.json'));let n=0;c
   for(const tm of Object.keys(S.teams)){ok(S.teams[tm].ids.length>=44,tm+' 최소 인원');for(const id of S.teams[tm].ids){ok(!seen.has(id)&&S.players[id].team===tm,'중복·소속 '+id);seen.add(id)}}
   ok((S.compLog||[]).length>0,'보상 기록 존재')}}
 console.log('comp tests ok',n);
+// 4) AI 원소속 구단의 보상 선택: A등급은 선수·보상금이 섞여 나오고 B등급은 선수 비중이 높다(이전에는 100% 보상금)
+{let a=[0,0],b=[0,0];for(const seed of [1,2,3,4,5,6]){const L=League.create(base,'Lions',seed);L.faAdvance(75);L.closeFA();for(const c of (L.S.compLog||[])){const t=c.grade==='A'?a:c.grade==='B'?b:null;if(!t)continue;t[1]++;if(/보상선수/.test(c.text))t[0]++}}
+ const ra=a[0]/Math.max(1,a[1]),rb=b[0]/Math.max(1,b[1]);if(!(ra>0.1&&ra<0.8&&rb>=ra*0.8))throw new assert.AssertionError({message:'보상선수 선택 비율 A '+a+' B '+b});n++}
+console.log('comp tests 2 ok',n);

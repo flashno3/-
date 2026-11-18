@@ -505,7 +505,9 @@
     for (const x of auto) { if (mine.length >= n) break; if (!have.has(x.id)) { mine.push(x); have.add(x.id); } }   // 지정이 모자라면 가치 순으로 자동 보충
     return mine.map(x => x.id);
   };
-  proto.compCandidates = function (t, p, g) { const prot = new Set(this.compProtected(t, g)); return this._compEligible(t, p).filter(x => !prot.has(x.id)).sort((a, b) => this.marketValue(b) - this.marketValue(a)); };
+  /* 보상선수 가치(억 환산): 현재 시장가치 ×2 + 26세 이하 성장 여력(스카우트 정점 − 현재 OVR) × 0.04 — 보호선수 밖 선수는 대부분 저연봉 유망주라 현재 가치만 보면 항상 보상금이 유리해진다 */
+  proto.compValue = function (q) { return this.marketValue(q) * 2 + (q.scout && q.age <= 26 ? Math.max(0, q.scout.ceil - this.ovr(q)) * 0.04 : 0); };
+  proto.compCandidates = function (t, p, g) { const prot = new Set(this.compProtected(t, g)); return this._compEligible(t, p).filter(x => !prot.has(x.id)).sort((a, b) => this.compValue(b) - this.compValue(a)); };
   proto.setProtect = function (ids) { this.S.protect = Array.from(new Set(ids)).slice(0, 25); };   // 내 팀 보호선수(최대 25명, A등급은 그중 가치 상위 20명)
   proto._compPay = function (signer, old, amt, label) {
     const S = this.S; amt = Math.round(amt * 10) / 10; if (!amt || !S.fin) return;
@@ -535,7 +537,7 @@
         choices: top.map(x => ({ k: 'p:' + x.id, label: `${x.ko} (${x.type === 'P' ? (x.role === 'SP' ? '선발' : '구원') : x.pos})`, hint: `OVR ${this.ovr(x)} · ${x.age}세 · 시장가치 ${this.marketValue(x).toFixed(1)}억` })).concat([{ k: 'money', label: `보상금만 ${(prev * sc[1]).toFixed(1)}억`, hint: '선수 지명 없이 보상금 정산' }]) });
       (S.compLog = S.compLog || []).push({ year: S.year, from: old, to: t, id: p.id, grade: g, text: '선택 대기', pid: null, pending: true }); return;
     }
-    const best = cands[0], take = best && this.marketValue(best) >= prev * (sc[1] - sc[0]) && S.teams[t].ids.length > ROSTER_MIN + 2;   // AI: 지명 후보 가치가 보상금 차액 이상이면 선수 선택
+    const best = cands[0], pr = rngFor(S.seed, S.year, 9300 + parseInt(p.id.slice(1)), 1).random(), take = best && this.compValue(best) >= prev * (sc[1] - sc[0]) * 0.5 * (0.8 + 0.4 * pr) && S.teams[t].ids.length > ROSTER_MIN + 2;   // AI: 후보 가치가 보상금 차액(전년 연봉×1)의 절반 안팎 이상이면 선수 선택(구단별 선호 ±20%)
     this._compApply(t, old, p, g, prev, take ? best.id : null);
   };
 
