@@ -1110,16 +1110,16 @@
   };
   /* ---------------- 라이벌 · 경기 프리뷰 · 리캡 ----------------
      라이벌(게임 설정): 잠실 더비 두산-LG, 낙동강 더비 롯데-NC, 영호남 삼성-KIA, 경인 SSG-KT, 한화-키움. 라이벌전은 홈 관중 +4%, 프리뷰·리캡에 표시. */
-  const RIVAL = { Bears: 'Twins', Twins: 'Bears', Giants: 'Dinos', Dinos: 'Giants', Lions: 'Tigers', Tigers: 'Lions', Landers: 'Wiz', Wiz: 'Landers', Eagles: 'Heroes', Heroes: 'Eagles' };
-  const RIVAL_NAME = { Bears: '잠실 더비', Twins: '잠실 더비', Giants: '낙동강 더비', Dinos: '낙동강 더비', Lions: '영호남 라이벌', Tigers: '영호남 라이벌', Landers: '경인 더비', Wiz: '경인 더비', Eagles: '신구 라이벌', Heroes: '신구 라이벌' };
-  proto.isRival = function (a, b) { return RIVAL[a] === b; };
-  proto.rivalName = function (t) { return RIVAL_NAME[t] || ''; };
+  const RIVAL_PAIRS = [['Twins', 'Bears', '잠실 시리즈'], ['Giants', 'Dinos', '낙동강 시리즈'], ['Lions', 'Tigers', '달빛 시리즈'], ['Wiz', 'Landers', '수인선 시리즈'], ['Giants', 'Landers', '항구 시리즈'], ['Giants', 'Lions', '클래식 시리즈'], ['Twins', 'Wiz', '통신사 시리즈'], ['Bears', 'Tigers', '단군 매치'], ['Bears', 'Lions', '싸대기 매치'], ['Giants', 'Tigers', '헤리티지 시리즈'], ['Twins', 'Giants', '엘롯라시코'], ['Twins', 'Heroes', '엘키라시코']];   // 사용자 제공 목록(한화는 해당 없음)
+  const rivalOf = (a, b) => RIVAL_PAIRS.find(r => (r[0] === a && r[1] === b) || (r[0] === b && r[1] === a));
+  proto.isRival = function (a, b) { return !!rivalOf(a, b); };
+  proto.rivalName = function (t, opp) { if (opp) { const r = rivalOf(t, opp); return r ? r[2] : ''; } const r = RIVAL_PAIRS.find(x => x[0] === t || x[1] === t); return r ? r[2] : ''; };
   proto.gamePreview = function (g) {
     const S = this.S, me = S.userTeam, home = g.home, opp = home === me ? g.away : g.home, st = this.standings(), so = st.find(x => x.team === opp), sm = st.find(x => x.team === me), h2 = (S.h2h[me] && S.h2h[me][opp]) || [0, 0, 0];
     const res = (S.results || []).filter(r => r.home === opp || r.away === opp).slice(-5).map(r => { const my = r.home === opp ? r.rh : r.ra, op = r.home === opp ? r.ra : r.rh; return my > op ? '승' : my < op ? '패' : '무'; });
     const bats = this.hitters(opp, true).sort((a, b) => this.ovr(b) - this.ovr(a)).slice(0, 2), sps = this.pitchers(opp, true).filter(p => p.role === 'SP').sort((a, b) => this._runsP(b) - this._runsP(a)).slice(0, 2), pf = S.calib.pf[home] || { runs: 1, hr: 1 };
     const rot = S.teams[me].set.rotation, mySp = S.players[rot[S.teams[me].set.rotIdx % rot.length]];
-    const lines = []; if (this.isRival(me, opp)) lines.push(`${this.rivalName(me)} — 라이벌전입니다. 홈 관중이 평소보다 늘어납니다.`);
+    const lines = []; if (this.isRival(me, opp)) lines.push(`${this.rivalName(me, opp)} — 라이벌전입니다. 홈 관중이 평소보다 늘어납니다.`);
     if (pf.hr >= 1.08) lines.push('타자 친화 구장(홈런 ↑)'); else if (pf.hr <= 0.85) lines.push('투수 친화 구장(홈런 ↓)');
     if (so.rank <= 3) lines.push(`상위권 상대(${so.rank}위) — 접전 가능성이 높습니다.`); else if (Math.abs(so.rank - sm.rank) <= 2) lines.push('순위 경쟁 상대 — 이기면 순위가 직접 바뀝니다.');
     if (mySp) lines.push(`우리 선발 ${mySp.ko}(OVR ${this.ovr(mySp)}) vs 상대 주요 선발 ${sps[0] ? sps[0].ko + '(OVR ' + this.ovr(sps[0]) + ')' : '-'}`);
@@ -1133,7 +1133,7 @@
     const bits = []; if (ctx.prep && ctx.prep.presetUsed) bits.push(`프리셋 라인업(${ctx.prep.presetUsed})`); if (bs && bs.s >= 3) bits.push(`${bs.p.ko} ${bs.h}안타${bs.hr ? ' ' + bs.hr + '홈런' : ''}${bs.rbi ? ' ' + bs.rbi + '타점' : ''}`);
     if (sc && sc.outs >= 12) bits.push(`선발 ${sp.ko} ${Math.floor(sc.outs / 3)}${sc.outs % 3 ? '⅓⅔'[sc.outs % 3 - 1] : ''}이닝 ${sc.R}실점${sc.K ? ' ' + sc.K + 'K' : ''}`);
     const g = (S.results || []).filter(r => r.home === t || r.away === t).slice(-15).map(r => (r.home === t ? r.rh : r.ra) - (r.home === t ? r.ra : r.rh)); let n = 0; for (let i = g.length - 1; i >= 0 && !tie && g[i] !== 0 && ((g[i] > 0) === win); i--) n++;
-    const text = `${this.isRival(t, opp) ? '[' + this.rivalName(t) + '] ' : ''}${KO0[opp]}전 ${my}:${op} ${tie ? '무승부' : win ? '승' : '패'}${!tie && n >= 3 ? ` (${n}${win ? '연승' : '연패'})` : ''}${bits.length ? ' — ' + bits.join(' · ') : ''}`;
+    const text = `${this.isRival(t, opp) ? '[' + this.rivalName(t, opp) + '] ' : ''}${KO0[opp]}전 ${my}:${op} ${tie ? '무승부' : win ? '승' : '패'}${!tie && n >= 3 ? ` (${n}${win ? '연승' : '연패'})` : ''}${bits.length ? ' — ' + bits.join(' · ') : ''}`;
     (S.recap = S.recap || []).unshift({ day: S.day, text, win, tie }); if (S.recap.length > 20) S.recap.pop(); news(this, text); return text;
   };
   /* ---------------- 선수 성격 · 주장 · 클럽하우스 ----------------

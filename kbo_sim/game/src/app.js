@@ -2,7 +2,8 @@
   'use strict';
   const { League, KO, POSS, ACTIVE_MAX } = KBOLeague, E0 = KBOEngine, TEAMS = E0.TEAMS, PARK = E0.PARKNAME;
   /* 홈 구장 공식 명칭(풀네임). PARK(짧은 이름)는 파크팩터 키로만 쓴다. 명칭은 구단 발표 기준이며 명명권 변경 시 갱신 필요 */
-  const STAD = { Bears: '서울 잠실야구장', Twins: '서울 잠실야구장', Heroes: '서울 고척스카이돔', Landers: '인천 SSG 랜더스필드', Wiz: '수원 케이티 위즈 파크', Eagles: '대전 한화생명 볼파크', Tigers: '광주-기아 챔피언스 필드', Giants: '부산 사직야구장', Dinos: '창원 NC 파크', Lions: '대구 삼성 라이온즈 파크' };
+  const STAD0 = { Bears: '서울종합운동장 야구장(잠실야구장)', Twins: '서울종합운동장 야구장(잠실야구장)', Heroes: '고척스카이돔', Landers: '인천SSG랜더스필드', Wiz: '수원케이티위즈파크', Eagles: '대전한화생명볼파크', Tigers: '광주기아챔피언스필드', Giants: '사직야구장', Dinos: '창원NC파크', Lions: '대구삼성라이온즈파크' };   // 공식 명칭(사용자 제공)
+  const STAD = new Proxy(STAD0, { get: (o, t) => (t === 'Bears' || t === 'Twins') && L && L.S && L.S.year >= 2027 ? '서울올림픽주경기장(임시 홈)' : o[t] });   // 2027년부터 LG·두산은 서울올림픽주경기장 사용(파크팩터는 잠실 값을 그대로 가정)
   const park = t => STAD[t] || PARK[t] || '';
   const COL = { Bears: '#1A1748', Twins: '#C30452', Heroes: '#820024', Landers: '#CE0E2D', Wiz: '#6B6B6B', Eagles: '#FF6600', Tigers: '#EA0029', Giants: '#0B2A56', Dinos: '#315288', Lions: '#0A5BC4' };
   // 팀 색(테마용). 로고는 사용자가 제공한 이미지(KBO_LOGOS)를 사용한다.

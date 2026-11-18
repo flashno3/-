@@ -3,7 +3,7 @@ const {League}=require(__dirname+'/src/league.js');require(__dirname+'/src/offse
 const base=JSON.parse(fs.readFileSync(__dirname+'/src/gamedata.json'));let n=0;const ok=(c,m)=>{n++;if(!c)throw new assert.AssertionError({message:m})};
 const mk=(seed,team)=>{const L=League.create(base,team||'Lions',seed);L.faAdvance(75);L.closeFA();return L};
 // 1) 라이벌: 대칭·관중 보너스
-{const L=mk(3,'Bears'),S=L.S;const T=Object.keys(S.teams);ok(T.every(t=>{const r=Object.keys(S.teams).find(x=>L.isRival(t,x));return r&&L.isRival(r,t)&&L.rivalName(t)}),'라이벌 대칭');ok(L.isRival('Bears','Twins')&&L.isRival('Giants','Dinos')&&!L.isRival('Bears','Giants'),'라이벌 지정');
+{const L=mk(3,'Bears'),S=L.S;const T=Object.keys(S.teams);ok(T.filter(t=>t!=='Eagles').every(t=>{const r=Object.keys(S.teams).find(x=>L.isRival(t,x));return r&&L.isRival(r,t)&&L.rivalName(t)}),'라이벌 대칭');ok(L.isRival('Bears','Twins')&&L.isRival('Giants','Dinos')&&!L.isRival('Bears','Giants')&&L.rivalName('Giants','Tigers')==='헤리티지 시리즈'&&!L.isRival('Eagles','Heroes'),'라이벌 지정');
  const f=S.fin.teams.Bears;f.gate=0;f.games=0;L._finGame('Bears','Wiz');const g1=f.gate;f.gate=0;L._finGame('Bears','Twins');ok(Math.abs(f.gate/g1-1.04)<1e-9,'라이벌전 관중 +4%');}
 // 2) 프리뷰: 구성과 값
 {const L=mk(4,'Lions'),S=L.S;const g=L.advance(1,true);const ng=S.schedule[S.day].find(x=>x[0]===S.userTeam||x[1]===S.userTeam);const pv=L.gamePreview({home:ng[0],away:ng[1],day:S.day});
