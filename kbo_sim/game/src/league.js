@@ -123,7 +123,7 @@
     }
     /* 컨디션(분위기)·운영 방침: 내 팀 선수의 경기 능력치에 반영(엔진 입력만 바꾸므로 시뮬레이션 규칙은 그대로).
        mood: 선수 개별(-3~+3, 기한 있음) + 팀 분위기. 1단계 ≈ OVR 0.55 */
-    moodOf(p) { const S = this.S, m = p.mood && S.day < p.mood.until ? p.mood.v : 0, tm = S.teamMood && S.day < S.teamMood.until && p.team === S.userTeam ? S.teamMood.v : 0; return clamp(m + tm, -4, 4); }
+    moodOf(p) { const S = this.S, m = p.mood && S.day < p.mood.until ? p.mood.v : 0, tm = S.teamMood && S.day < S.teamMood.until && p.team === S.userTeam ? S.teamMood.v : 0, cb = p.team === S.userTeam && this.capBonus ? this.capBonus() : 0, cl = p.team === S.userTeam && /^post/.test(S.phase) && this.traitOf && this.traitOf(p) === 'clutch' ? 1 : 0; return clamp(m + tm + cb + cl, -4, 4); }
     policy() { const P = this.S.policy || {}; return { pitch: P.pitch || 'normal', run: P.run || 'normal' }; }
     setPolicy(k, v) { const ok = { pitch: ['save', 'normal', 'push'], run: ['low', 'normal', 'high'] }; if (!ok[k] || !ok[k].includes(v)) return false; this.S.policy = Object.assign({ pitch: 'normal', run: 'normal' }, this.S.policy, { [k]: v }); this.invalidate(); return true; }
     _modRates(p) {
@@ -631,7 +631,7 @@
       this.mergeTracking2(d);
     }
     commit(home, away, rh, ra, meta) {
-      const S = this.S, R = S.rec; if (this._finGame && S.fin) this._finGame(home); R[home][3] += rh; R[home][4] += ra; R[away][3] += ra; R[away][4] += rh;
+      const S = this.S, R = S.rec; if (this._finGame && S.fin) this._finGame(home, away); R[home][3] += rh; R[home][4] += ra; R[away][3] += ra; R[away][4] += rh;
       if (rh > ra) { R[home][0]++; R[away][1]++; S.h2h[home][away][0]++; S.h2h[away][home][1]++; }
       else if (ra > rh) { R[away][0]++; R[home][1]++; S.h2h[away][home][0]++; S.h2h[home][away][1]++; }
       else { R[home][2]++; R[away][2]++; S.h2h[home][away][2]++; S.h2h[away][home][2]++; }
@@ -749,14 +749,15 @@
       const S = this.S, live = ctx.live, t = S.userTeam, d = S.day;
       const rh = live.score.home, ra = live.score.away, E = ctx.E;
       // 투수 피로·선발 기록
-      const tr = E.tracking().pit;
+      const tr = E.tracking().pit, trB = E.tracking().bat || {};   // 이 경기 기록(리캡용)
       for (const p of this.pitchers(t)) { const c = tr[p.id]; if (c && c.outs > 0) p.fat = (p.fat || 0) + 5 + 5 * c.outs; }   // 1이닝(3아웃) = 20, 3일 연투하면 휴식 필요
       for (const x of ctx.prep.spec) { const q = S.players[x.id]; if (q) this.learnPosition(q, x.pos); }
       const sp = ctx.prep.sp; sp.lastStart = d; const set = S.teams[t].set; set.rotIdx = (ctx.prep.rotIdx + 1) % set.rotation.length;
       this.mergeTracking();
       this.commit(live.home, live.away, rh, ra, { user: true, inns: live.inns, spH: live.staff.home.sp.name, spA: live.staff.away.sp.name, subs: { home: live.subs.home.length, away: live.subs.away.length } });
+      const recap = this._recap ? this._recap(ctx, rh, ra, tr, trB) : null;
       S.pendingDay = null; S.day++; if (S.day >= S.schedule.length) S.phase = 'regular_done';
-      return { home: live.home, away: live.away, rh, ra, win: (live.home === t ? rh > ra : ra > rh), tie: rh === ra, inns: live.inns };
+      return { recap, home: live.home, away: live.away, rh, ra, win: (live.home === t ? rh > ra : ra > rh), tie: rh === ra, inns: live.inns };
     }
 
     /* ------------------------------------------------------------ 포스트시즌 */

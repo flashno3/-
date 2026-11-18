@@ -213,3 +213,6 @@ details.card > summary { cursor: pointer; font-family: var(--font-display); font
   .rt tr.sub { display: block; } .rt tr.sub td { display: block; }
   .rt select, .rt input.num { max-width: 100%; }
 }
+
+.rivalcard { border-left: 4px solid var(--warn, #d97706); }
+a[data-act] { cursor: pointer; text-decoration: underline; color: inherit; }

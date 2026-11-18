@@ -25,7 +25,7 @@ const mk=(seed,team)=>{const L=League.create(base,team||'Eagles',seed);L.faAdvan
  const b=L.players(t).filter(p=>p.type==='B'&&p.active)[0];S.day=30;
  const ev=L._evAdd({type:'slump',title:'t',data:{pid:b.id},text:'',choices:[{k:'coach'},{k:'trust'},{k:'farm'}],def:'trust'});const c0=f.evCost||0;L.resolveEvent(ev.id,'coach');ok(Math.abs((f.evCost||0)-c0-0.3)<1e-9&&b.mood&&Math.abs(b.mood.v)>=1,'집중 지도: 비용 0.3억·컨디션 변화');
  const st=L._evAdd({type:'streak',title:'t',data:{kind:'win',n:7},text:'',choices:[{k:'bonus'}],def:'none'});L.resolveEvent(st.id,'bonus');ok(S.teamMood&&S.teamMood.v===1&&L.moodOf(L.players(t)[1])>=1,'연승 격려금: 팀 컨디션 +1');
- const g2=L._evAdd({type:'grievance',title:'t',data:{pid:b.id},text:'',choices:[{k:'ignore'}],def:'ignore'});b.mood=null;L.resolveEvent(g2.id,'ignore');ok(b.mood&&b.mood.v===-2,'불만 방치: 컨디션 −2');
+ const g2=L._evAdd({type:'grievance',title:'t',data:{pid:b.id},text:'',choices:[{k:'ignore'}],def:'ignore'});b.mood=null;L.resolveEvent(g2.id,'ignore');ok(b.mood&&b.mood.v===-({clutch:3,model:1}[L.traitOf(b)]||2),'불만 방치: 성격별 컨디션 하락 '+L.traitOf(b)+' '+(b.mood&&b.mood.v));
  // 시즌 중 슬럼프·연승 이벤트가 실제로 발생
  let seen=new Set();for(const seed of [1,2,3,4,5,6]){if(seen.has('slump')||seen.has('streak'))break;const L2=mk(seed,'Lions');let g=0;while(L2.S.day<L2.S.schedule.length&&g++<60&&!(seen.has('slump')||seen.has('streak'))){L2.advance(5,false);for(const e of L2.eventsOpen())L2.resolveEvent(e.id,e.def||e.choices[0].k);for(const e of L2.S.events.list)seen.add(e.type)}}
  ok(seen.has('slump')||seen.has('streak'),'슬럼프·연승연패 이벤트 발생 '+[...seen]);}

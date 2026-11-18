@@ -831,15 +831,15 @@
       return;
     }
     // 2) 선수 불만(출전 기회) — 하루 4%
-    if (!this._evOpenOf('grievance') && r.random() < 0.04) {
+    if (!this._evOpenOf('grievance') && r.random() < 0.04) {   // 모범생은 불만을 잘 드러내지 않는다(후보에서 절반 제외)
       const act = this.players(t).filter(p => p.active), med = act.map(p => this.ovr(p)).sort((a, b) => a - b)[Math.floor(act.length * 0.5)] || 0, rec = new Set((E.list || []).filter(e => e.type === 'grievance' && e.day > d - 40).map(e => e.data.pid));
-      const c = this.players(t).filter(p => !p.active && !this.isInj(p) && !p.foreign && this.ovr(p) >= med + 4 && !rec.has(p.id) && !p.lockUntil).sort((a, b) => this.ovr(b) - this.ovr(a))[0];
+      const c = this.players(t).filter(p => !p.active && !this.isInj(p) && !p.foreign && this.ovr(p) >= med + 4 && !rec.has(p.id) && !p.lockUntil && !(this.traitOf(p) === 'model' && r.random() < 0.5)).sort((a, b) => this.ovr(b) - this.ovr(a))[0];
       if (c) { this._evAdd({ type: 'grievance', title: `${c.ko} 출전 기회 불만`, ttl: 7, data: { pid: c.id }, text: `2군에 있는 ${c.ko}(OVR ${this.ovr(c)})가 "1군 경기에 뛸 자격이 있다"며 면담을 요청했습니다. (1군 중앙값 OVR ${med})`,
         choices: [{ k: 'promote', label: '1군에 등록한다', hint: '엔트리에 여유가 있어야 합니다. 충성도 +4' }, { k: 'talk', label: '면담으로 설득한다', hint: `성공 ${Math.round(clamp(0.35 + (this.loyalty(c) ? this.loyalty(c).v : 40) / 200, 0.2, 0.85) * 100)}% — 성공 시 충성도 +1, 실패 시 −5` }, { k: 'ignore', label: '무시한다', hint: '충성도 −6' }], def: 'ignore' }); return; }
     }
     // 2b) 부진(슬럼프): 최근 경기 성적이 나쁜 1군 선수 — 하루 3%, 같은 선수 30일 간격
     if (!this._evOpenOf('slump') && r.random() < 0.03) {
-      const rec = new Set((E.list || []).filter(e => e.type === 'slump' && e.day > d - 30).map(e => e.data.pid)), form = p => { const x = S.recent[p.id] || []; if (p.type === 'B') { let ab = 0, h = 0; for (const e of x) { ab += e[1]; h += e[2]; } return ab >= 30 ? { bad: h / ab < 0.17, txt: `최근 ${x.length}경기 타율 ${(h / ab).toFixed(3).slice(1)}`, s: h / ab } : null; } let o = 0, R = 0; for (const e of x) { o += e[1]; R += e[2]; } return o >= 18 ? { bad: R * 27 / o > 8.5, txt: `최근 ${x.length}경기 RA9 ${(R * 27 / o).toFixed(2)}`, s: -R * 27 / o } : null; };
+      const rec = new Set((E.list || []).filter(e => e.type === 'slump' && e.day > d - 30).map(e => e.data.pid)), form = p => { const x = S.recent[p.id] || []; if (p.type === 'B') { let ab = 0, h = 0; for (const e of x) { ab += e[1]; h += e[2]; } return ab >= 30 ? { bad: h / ab < 0.17 + (['free', 'shy'].includes(this.traitOf(p)) ? 0.018 : 0), txt: `최근 ${x.length}경기 타율 ${(h / ab).toFixed(3).slice(1)}`, s: h / ab } : null; } let o = 0, R = 0; for (const e of x) { o += e[1]; R += e[2]; } return o >= 18 ? { bad: R * 27 / o > 8.5, txt: `최근 ${x.length}경기 RA9 ${(R * 27 / o).toFixed(2)}`, s: -R * 27 / o } : null; };
       const c = this.players(t).filter(p => p.active && !rec.has(p.id)).map(p => ({ p, f: form(p) })).filter(x => x.f && x.f.bad).sort((a, b) => a.f.s - b.f.s)[0];
       if (c) { const p = c.p, pr = Math.round(clamp(0.45 + 0.15 * (this.coachRating(t, p.type === 'P' ? 'control' : 'contact') - 55) / 20, 0.3, 0.75) * 100);
         this._evAdd({ type: 'slump', title: `${p.ko} 부진`, ttl: 6, data: { pid: p.id }, text: `${p.ko}(OVR ${this.ovr(p)})가 ${c.f.txt}로 부진합니다. 대응에 따라 컨디션(경기 능력치 ±)이 바뀝니다.`,
@@ -852,6 +852,21 @@
           choices: [{ k: 'bonus', label: '연승 격려금 (0.3억)', hint: '20일간 팀 컨디션 +1' }, { k: 'rest', label: '선수단 휴식 배려', hint: '14일간 부상 위험 −30%' }, { k: 'none', label: '그대로 진행', hint: '변화 없음' }], def: 'none' }); return; }
       if (k === -1 && n >= 6) { this._evAdd({ type: 'streak', title: `${n}연패 — 선수단 분위기`, ttl: 5, data: { kind: 'lose', n }, text: `팀이 ${n}연패 중입니다. 분위기 반전이 필요합니다.`,
           choices: [{ k: 'meeting', label: '선수단 면담·미팅', hint: '60% 성공: 15일간 팀 컨디션 +1, 실패: 7일간 −1' }, { k: 'camp', label: '휴식일 부여(훈련 강도 ↓)', hint: '10일간 팀 컨디션 +1, 부상 위험 −20%' }, { k: 'none', label: '정면 돌파(그대로)', hint: '변화 없음' }], def: 'none' }); return; }
+    }
+    // 2c2) 선수 요청 트레이드 — 충성도가 많이 깎였거나 자유분방 + 컨디션 부진, 하루 5%, 시즌 2회
+    if (!this._evOpenOf('request') && this._evCount('request') < 2 && d > 10 && d < LIM_DEADLINE - 3 && this.canTrade() && r.random() < 0.05) {
+      const c = this.players(t).filter(p => !p.foreign && p.rookie !== S.year && !this.isInj(p) && ((p.loyAdj || 0) <= -5 || (this.traitOf(p) === 'free' && this.moodOf(p) <= -2))).sort((a, b) => (a.loyAdj || 0) - (b.loyAdj || 0))[0];
+      if (c) { const off = this._offerFor(c, r); if (off) { const cap = this.captain(), pr = Math.round(clamp(0.3 + (cap ? 0.15 * (this.traitOf(cap) === 'leader' ? 1.5 : 1) : 0) + (this.loyalty(c) ? this.loyalty(c).v : 40) / 250 + (this.traitOf(c) === 'leader' ? 0.1 : this.traitOf(c) === 'free' ? -0.1 : 0), 0.1, 0.85) * 100);
+        this._evAdd({ type: 'request', title: `${c.ko} 트레이드 요청`, ttl: 7, data: { pid: c.id, t: off.t, get: off.y.id }, text: `${c.ko}(${TRAITS[this.traitOf(c)]}, OVR ${this.ovr(c)})가 구단에 트레이드를 요청했습니다. ${KO0[off.t]}가 ${off.y.ko}(OVR ${this.ovr(off.y)})와의 맞교환에 응할 의사가 있습니다.`,
+          choices: [{ k: 'trade', label: `요청 수락: ${c.ko} ↔ ${off.y.ko}`, hint: `즉시 트레이드(받는 선수는 2군 등록)` }, { k: 'talk', label: `면담으로 설득${cap ? ' (주장 도움)' : ''}`, hint: `성공 ${pr}% — 성공 시 충성도 +5·컨디션 +1(15일), 실패 시 컨디션 −2` }, { k: 'refuse', label: '요청 거절', hint: '충성도 −4·컨디션 −2(30일)' }], def: 'refuse' }); return; } }
+    }
+    // 2c3) 선수 갈등 — 같은 포지션 1군 선수 중 승부사/자유분방 조합, 하루 2%, 시즌 1회
+    if (!this._evOpenOf('conflict') && this._evCount('conflict') < 1 && d > 15 && r.random() < 0.02) {
+      const act = this.players(t).filter(p => p.active && p.type === 'B' && !this.isInj(p)), by = {}; for (const p of act) (by[p.pos] = by[p.pos] || []).push(p);
+      const pair = Object.values(by).map(g => g.filter(p => ['clutch', 'free'].includes(this.traitOf(p)))).find(g => g.length >= 2);
+      if (pair) { const [a, b] = pair, cap = this.captain(), pm = Math.round(clamp(cap ? 0.6 + (this.traitOf(cap) === 'leader' ? 0.2 : 0) : 0.25, 0.1, 0.9) * 100);
+        this._evAdd({ type: 'conflict', title: `${a.ko}·${b.ko} 갈등`, ttl: 6, data: { a: a.id, b: b.id }, text: `같은 ${a.pos} 자리를 놓고 ${a.ko}(${TRAITS[this.traitOf(a)]})와 ${b.ko}(${TRAITS[this.traitOf(b)]})의 신경전이 클럽하우스로 번지고 있습니다.`,
+          choices: [{ k: 'captain', label: cap ? `주장 ${cap.ko}가 중재` : '주장 없이 중재(성공 낮음)', hint: `성공 ${pm}% — 성공 시 팀 컨디션 +1(10일), 실패 시 −1(7일)` }, { k: 'talk', label: '각각 면담 (0.2억)', hint: '성공 55% — 성공 시 팀 컨디션 +1(8일), 실패 시 −1(7일)' }, { k: 'ignore', label: '지켜본다', hint: '팀 컨디션 −1(10일)' }], def: 'ignore' }); return; }
     }
     // 2d) AI 트레이드 제안 — 하루 1.5%, 시즌 3회, 마감 전
     if (!this._evOpenOf('trade') && this._evCount('trade') < 3 && d > 8 && d < LIM_DEADLINE - 5 && r.random() < 0.015) {
@@ -895,13 +910,13 @@
       if (!p || p.team !== t) res = '선수가 이미 팀을 떠났습니다.';
       else if (k === 'promote') { const err = this.moveActive(p.id, true); if (err) { if (!auto) return { ok: false, msg: err }; adj(p, -6); mood(p, -2, 30); res = `${p.ko} 불만을 처리하지 못했습니다(${err}). 컨디션 −2(30일).`; } else { adj(p, 4); mood(p, 1, 20); res = `${p.ko}을(를) 1군에 등록했습니다. 충성도 +4, 컨디션 +1(20일).`; } }
       else if (k === 'talk') { const pr = clamp(0.35 + (this.loyalty(p) ? this.loyalty(p).v : 40) / 200, 0.2, 0.85); if (rngFor(S.seed, S.year, S.day, 8810 + parseInt(p.id.slice(1))).random() < pr) { adj(p, 1); mood(p, 1, 15); res = `면담이 잘 풀렸습니다. ${p.ko} 충성도 +1, 컨디션 +1(15일).`; } else { adj(p, -5); mood(p, -2, 20); res = `면담이 결렬되었습니다. ${p.ko} 충성도 −5, 컨디션 −2(20일).`; } }
-      else { adj(p, -6); mood(p, -2, 30); res = `${p.ko} 불만을 방치했습니다. 충성도 −6(FA·재계약 협상), 컨디션 −2(30일).`; }
+      else { const hv = this.traitOf(p) === 'clutch' ? 3 : this.traitOf(p) === 'model' ? 1 : 2; adj(p, -6); mood(p, -hv, 30); res = `${p.ko}(${TRAITS[this.traitOf(p)]}) 불만을 방치했습니다. 충성도 −6(FA·재계약 협상), 컨디션 −${hv}(30일).`; }
     } else if (e.type === 'slump') {
       const p = S.players[e.data.pid];
       if (!p || p.team !== t) res = '선수가 팀을 떠났습니다.';
-      else if (k === 'coach') { f.evCost = Math.round(((f.evCost || 0) + 0.3) * 10) / 10; if (rr(8830 + parseInt(p.id.slice(1))) < clamp(0.45 + 0.15 * (this.coachRating(t, p.type === 'P' ? 'control' : 'contact') - 55) / 20, 0.3, 0.75)) { mood(p, 2, 20); res = `${p.ko} 집중 지도 성공: 컨디션 +2(20일).`; } else { mood(p, -1, 10); res = `${p.ko} 집중 지도가 통하지 않았습니다: 컨디션 −1(10일).`; } }
+      else if (k === 'coach') { f.evCost = Math.round(((f.evCost || 0) + 0.3) * 10) / 10; if (rr(8830 + parseInt(p.id.slice(1))) < clamp(0.45 + 0.15 * (this.coachRating(t, p.type === 'P' ? 'control' : 'contact') - 55) / 20 + (this.traitOf(p) === 'shy' ? -0.1 : this.traitOf(p) === 'leader' ? 0.05 : 0), 0.2, 0.75)) { mood(p, 2, 20); res = `${p.ko} 집중 지도 성공: 컨디션 +2(20일).`; } else { mood(p, -1, 10); res = `${p.ko} 집중 지도가 통하지 않았습니다: 컨디션 −1(10일).`; } }
       else if (k === 'farm') { const err = this.moveActive(p.id, false); if (err) { res = `2군 재조정 불가(${err}).`; } else { mood(p, 2, 25); res = `${p.ko}을(를) 2군에서 재조정합니다. 복귀 후 컨디션 +2(~25일).`; } }
-      else { if (rr(8840 + parseInt(p.id.slice(1))) < 0.4) { mood(p, 1, 14); res = `${p.ko}이(가) 부진을 털었습니다: 컨디션 +1(14일).`; } else { mood(p, -1, 14); res = `${p.ko}의 부진이 이어집니다: 컨디션 −1(14일).`; } }
+      else { if (rr(8840 + parseInt(p.id.slice(1))) < (this.traitOf(p) === 'clutch' ? 0.5 : this.traitOf(p) === 'shy' ? 0.3 : 0.4)) { mood(p, 1, 14); res = `${p.ko}이(가) 부진을 털었습니다: 컨디션 +1(14일).`; } else { mood(p, -1, 14); res = `${p.ko}의 부진이 이어집니다: 컨디션 −1(14일).`; } }
     } else if (e.type === 'streak') {
       if (k === 'bonus') { f.evCost = Math.round(((f.evCost || 0) + 0.3) * 10) / 10; tmood(1, 20); res = '격려금 지급: 팀 컨디션 +1(20일), 비용 0.3억.'; }
       else if (k === 'rest') { S.restUntil = S.day + 14; res = '휴식 배려: 14일간 부상 위험 −30%.'; }
@@ -912,6 +927,17 @@
       if (k === 'accept') { f.evRev = Math.round(((f.evRev || 0) + e.data.amt) * 10) / 10; f.attMult = (f.attMult || 1) * 0.985; res = `스폰서 계약 체결: 올 시즌 매출 +${e.data.amt}억, 관중 −1.5%.`; } else res = '제안을 거절했습니다.';
     } else if (e.type === 'promo') {
       if (k === 'go') { f.evCost = Math.round(((f.evCost || 0) + e.data.cost) * 10) / 10; f.promo = { until: S.day + 20, mult: 1.06 }; res = `팬 이벤트 진행: 비용 ${e.data.cost}억, 20일간 관중 +6%.`; } else res = '이벤트를 보류했습니다.';
+    } else if (e.type === 'request') {
+      const D = e.data, p = S.players[D.pid];
+      if (!p || p.team !== t) res = '선수가 이미 팀을 떠났습니다.';
+      else if (k === 'trade') { const ev = this.executeTrade(D.t, [D.pid], [D.get]); res = ev.ok ? `요청을 수락해 트레이드했습니다: ${S.players[D.get].ko} 영입(2군 등록), ${p.ko} 이적.` : `트레이드가 성사되지 않았습니다(${ev.why || '조건 변경'}).`; }
+      else if (k === 'talk') { const cap = this.captain(), pr = clamp(0.3 + (cap ? 0.15 * (this.traitOf(cap) === 'leader' ? 1.5 : 1) : 0) + (this.loyalty(p) ? this.loyalty(p).v : 40) / 250 + (this.traitOf(p) === 'leader' ? 0.1 : this.traitOf(p) === 'free' ? -0.1 : 0), 0.1, 0.85); if (rr(8860 + parseInt(p.id.slice(1))) < pr) { adj(p, 5); mood(p, 1, 15); res = `면담이 통했습니다. ${p.ko} 잔류 — 충성도 +5, 컨디션 +1(15일).`; } else { mood(p, -2, 20); res = `설득에 실패했습니다. ${p.ko} 컨디션 −2(20일).`; } }
+      else { adj(p, -4); mood(p, -2, 30); res = `요청을 거절했습니다. ${p.ko} 충성도 −4, 컨디션 −2(30일).`; }
+    } else if (e.type === 'conflict') {
+      const cap = this.captain(), pm = clamp(cap ? 0.6 + (this.traitOf(cap) === 'leader' ? 0.2 : 0) : 0.25, 0.1, 0.9);
+      if (k === 'captain') { if (rr(8870) < pm) { tmood(1, 10); res = '주장의 중재가 통했습니다: 팀 컨디션 +1(10일).'; } else { tmood(-1, 7); res = '중재가 먹히지 않았습니다: 팀 컨디션 −1(7일).'; } }
+      else if (k === 'talk') { f.evCost = Math.round(((f.evCost || 0) + 0.2) * 10) / 10; if (rr(8871) < 0.55) { tmood(1, 8); res = '면담 후 화해했습니다: 팀 컨디션 +1(8일), 비용 0.2억.'; } else { tmood(-1, 7); res = '면담이 오히려 불씨가 됐습니다: 팀 컨디션 −1(7일), 비용 0.2억.'; } }
+      else { tmood(-1, 10); res = '갈등을 방치했습니다: 팀 컨디션 −1(10일).'; }
     } else if (e.type === 'trade') {
       const D = e.data;
       if (k !== 'accept') res = '제안을 거절했습니다.';
@@ -1077,6 +1103,64 @@
       else { const c = S.stats.pit[p.id]; if (!c) continue; const v = { K: c.K, IP: Math.floor(c.outs / 3) }; for (const [k, n, lab] of [['K', 100, '탈삼진'], ['K', 150, '탈삼진'], ['K', 200, '탈삼진'], ['IP', 100, '이닝'], ['IP', 150, '이닝']]) { const key = k + n; if (v[k] >= n && !p.ms.d[key]) { p.ms.d[key] = S.day; news(this, `기록 달성: ${p.ko} 시즌 ${n}${lab}${p.myFrom ? ` (내가 ${p.myFrom.how})` : ''}`); } } }
     }
   };
+  /* ---------------- 라이벌 · 경기 프리뷰 · 리캡 ----------------
+     라이벌(게임 설정): 잠실 더비 두산-LG, 낙동강 더비 롯데-NC, 영호남 삼성-KIA, 경인 SSG-KT, 한화-키움. 라이벌전은 홈 관중 +4%, 프리뷰·리캡에 표시. */
+  const RIVAL = { Bears: 'Twins', Twins: 'Bears', Giants: 'Dinos', Dinos: 'Giants', Lions: 'Tigers', Tigers: 'Lions', Landers: 'Wiz', Wiz: 'Landers', Eagles: 'Heroes', Heroes: 'Eagles' };
+  const RIVAL_NAME = { Bears: '잠실 더비', Twins: '잠실 더비', Giants: '낙동강 더비', Dinos: '낙동강 더비', Lions: '영호남 라이벌', Tigers: '영호남 라이벌', Landers: '경인 더비', Wiz: '경인 더비', Eagles: '신구 라이벌', Heroes: '신구 라이벌' };
+  proto.isRival = function (a, b) { return RIVAL[a] === b; };
+  proto.rivalName = function (t) { return RIVAL_NAME[t] || ''; };
+  proto.gamePreview = function (g) {
+    const S = this.S, me = S.userTeam, home = g.home, opp = home === me ? g.away : g.home, st = this.standings(), so = st.find(x => x.team === opp), sm = st.find(x => x.team === me), h2 = (S.h2h[me] && S.h2h[me][opp]) || [0, 0, 0];
+    const res = (S.results || []).filter(r => r.home === opp || r.away === opp).slice(-5).map(r => { const my = r.home === opp ? r.rh : r.ra, op = r.home === opp ? r.ra : r.rh; return my > op ? '승' : my < op ? '패' : '무'; });
+    const bats = this.hitters(opp, true).sort((a, b) => this.ovr(b) - this.ovr(a)).slice(0, 2), sps = this.pitchers(opp, true).filter(p => p.role === 'SP').sort((a, b) => this._runsP(b) - this._runsP(a)).slice(0, 2), pf = S.calib.pf[home] || { runs: 1, hr: 1 };
+    const rot = S.teams[me].set.rotation, mySp = S.players[rot[S.teams[me].set.rotIdx % rot.length]];
+    const lines = []; if (this.isRival(me, opp)) lines.push(`${this.rivalName(me)} — 라이벌전입니다. 홈 관중이 평소보다 늘어납니다.`);
+    if (pf.hr >= 1.08) lines.push('타자 친화 구장(홈런 ↑)'); else if (pf.hr <= 0.85) lines.push('투수 친화 구장(홈런 ↓)');
+    if (so.rank <= 3) lines.push(`상위권 상대(${so.rank}위) — 접전 가능성이 높습니다.`); else if (Math.abs(so.rank - sm.rank) <= 2) lines.push('순위 경쟁 상대 — 이기면 순위가 직접 바뀝니다.');
+    if (mySp) lines.push(`우리 선발 ${mySp.ko}(OVR ${this.ovr(mySp)}) vs 상대 주요 선발 ${sps[0] ? sps[0].ko + '(OVR ' + this.ovr(sps[0]) + ')' : '-'}`);
+    return { opp, home, rank: so.rank, rec: `${so.w}승 ${so.l}패`, h2h: h2, recent: res, bats: bats.map(p => ({ id: p.id, ko: p.ko, ovr: this.ovr(p) })), sps: sps.map(p => ({ id: p.id, ko: p.ko, ovr: this.ovr(p) })), pf, rival: this.isRival(me, opp), lines, mySp: mySp ? { id: mySp.id, ko: mySp.ko, ovr: this.ovr(mySp) } : null };
+  };
+  proto._recap = function (ctx, rh, ra, trP, trB) {
+    const S = this.S, t = S.userTeam, home = ctx.live.home === t, my = home ? rh : ra, op = home ? ra : rh, opp = home ? ctx.live.away : ctx.live.home, win = my > op, tie = my === op;
+    const mine = id => { const p = S.players[id]; return p && p.team === t ? p : null; };
+    const bs = Object.entries(trB).map(([id, c]) => ({ p: mine(id), c })).filter(x => x.p && x.p.type === 'B').map(x => { const h = (x.c['1B'] || 0) + (x.c['2B'] || 0) + (x.c['3B'] || 0) + (x.c.HR || 0); return { p: x.p, h, hr: x.c.HR || 0, rbi: x.c.RBI || 0, s: (x.c.HR || 0) * 4 + (x.c.RBI || 0) * 1.5 + h }; }).sort((a, b) => b.s - a.s)[0];
+    const sp = ctx.prep && ctx.prep.sp, sc = sp && trP[sp.id];
+    const bits = []; if (bs && bs.s >= 3) bits.push(`${bs.p.ko} ${bs.h}안타${bs.hr ? ' ' + bs.hr + '홈런' : ''}${bs.rbi ? ' ' + bs.rbi + '타점' : ''}`);
+    if (sc && sc.outs >= 12) bits.push(`선발 ${sp.ko} ${Math.floor(sc.outs / 3)}${sc.outs % 3 ? '⅓⅔'[sc.outs % 3 - 1] : ''}이닝 ${sc.R}실점${sc.K ? ' ' + sc.K + 'K' : ''}`);
+    const g = (S.results || []).filter(r => r.home === t || r.away === t).slice(-15).map(r => (r.home === t ? r.rh : r.ra) - (r.home === t ? r.ra : r.rh)); let n = 0; for (let i = g.length - 1; i >= 0 && !tie && g[i] !== 0 && ((g[i] > 0) === win); i--) n++;
+    const text = `${this.isRival(t, opp) ? '[' + this.rivalName(t) + '] ' : ''}${KO0[opp]}전 ${my}:${op} ${tie ? '무승부' : win ? '승' : '패'}${!tie && n >= 3 ? ` (${n}${win ? '연승' : '연패'})` : ''}${bits.length ? ' — ' + bits.join(' · ') : ''}`;
+    (S.recap = S.recap || []).unshift({ day: S.day, text, win, tie }); if (S.recap.length > 20) S.recap.pop(); news(this, text); return text;
+  };
+  /* ---------------- 선수 성격 · 주장 · 클럽하우스 ----------------
+     성격(선수별 고정, 시드 기반): 승부사(포스트시즌 컨디션 +1·불만 방치 시 반발 큼) / 모범생(불만 이벤트 드묾·방치 충격 작음) / 자유분방(부진·불만에 취약, 면담 성공률 −) / 리더형(면담 성공률 +, 주장 효과 큼) / 소심형(부진 잘 빠짐, 집중 지도 효과 −).
+     주장: 임명하면 팀 전체 컨디션 보정(리더형 +1.0·모범생 +0.6·승부사 +0.4·그 외 +0.3). 요청 트레이드·선수 갈등 이벤트의 해결 확률에도 영향. */
+  const TRAITS = { clutch: '승부사', model: '모범생', free: '자유분방', leader: '리더형', shy: '소심형' };
+  proto.traitName = function (k) { return TRAITS[k] || ''; };
+  proto.traitOf = function (p) {
+    if (p.foreign && !p.team) return null; if (p.trait) return p.trait;
+    const r = rngFor(this.S.seed, 4242, parseInt(p.id.slice(1))).random(), lead = (p.tn || 0) >= 7 && p.age >= 30 ? 0.12 : 0;
+    const x = r - lead; p.trait = lead && r < lead + 0.15 ? 'leader' : x < 0.15 ? 'leader' : x < 0.37 ? 'clutch' : x < 0.62 ? 'model' : x < 0.80 ? 'free' : 'shy'; return p.trait;
+  };
+  proto.captain = function () { const S = this.S, p = S.captain ? S.players[S.captain] : null; return p && p.team === S.userTeam ? p : null; };
+  proto.setCaptain = function (id) {
+    const S = this.S, p = S.players[id]; if (!p || p.team !== S.userTeam) return '우리 팀 선수만 주장으로 임명할 수 있습니다.'; if (p.foreign) return '외국인 선수는 주장이 될 수 없습니다.';
+    if (S.captain === id) { S.captain = null; news(this, `${p.ko} 주장 해임`); this.invalidate(); return null; }
+    S.captain = id; this.traitOf(p); news(this, `${p.ko}(${TRAITS[p.trait]}) 주장 임명 — 팀 컨디션 +${this.capBonus().toFixed(1)}`); this.invalidate(); return null;
+  };
+  proto.capBonus = function () { const c = this.captain(); if (!c) return 0; return { leader: 1.0, model: 0.6, clutch: 0.4, free: 0.3, shy: 0.3 }[this.traitOf(c)] || 0.3; };
+  proto.clubhouse = function () {
+    const S = this.S, t = S.userTeam, act = this.players(t).filter(p => p.active), ms = act.map(p => this.moodOf(p)), avg = ms.length ? ms.reduce((a, b) => a + b, 0) / ms.length : 0, cnt = {};
+    for (const p of this.players(t)) { const k = this.traitOf(p); cnt[k] = (cnt[k] || 0) + 1; }
+    return { captain: this.captain(), mood: Math.round(avg * 10) / 10, counts: cnt, unhappy: this.players(t).filter(p => !p.foreign && (p.loyAdj || 0) <= -4).length };
+  };
+  /* 요청 트레이드·선수 갈등 이벤트에서 쓰는 보조: 특정 내 선수에 대해 규칙을 통과하는 1대1 제안 */
+  proto._offerFor = function (mine, r) {
+    const S = this.S, me = S.userTeam; for (const t of TEAMS.filter(x => x !== me).sort(() => r.random() - 0.5)) {
+      const vGive = this.tradeValue(mine, t), opts = this.players(t).filter(p => !p.foreign && p.type === mine.type && p.rookie !== S.year && this.tradeValue(p, t) * 1.12 + 0.1 <= vGive).sort((a, b) => this.ovr(b) - this.ovr(a));
+      for (const y of opts.slice(0, 4)) { if (this.ovr(y) < this.ovr(mine) - 10) continue; if (this.evaluateTrade(t, [mine.id], [y.id]).ok) return { t, y }; }
+    }
+    return null;
+  };
   /* ---------------- 새 시즌 ---------------- */
   proto.ensureActive = function (t) {   // 1군 28명 유지(부족하면 가치 높은 선수로 채움, 초과하면 낮은 순으로 내림)
     const S = this.S, P = this.players(t);
@@ -1178,7 +1262,7 @@
     const S = this.S, f = S.fin.teams[t], r = S.rec[t], wp = (r[0] + r[1] + r[2]) >= 10 ? r[0] / Math.max(1, r[0] + r[1]) : 0.5;
     return Math.min(this.finCap(t), Math.round(f.att0 * clamp(1 + 0.8 * (wp - 0.5), 0.8, 1.25) * clamp(1 - ELAST * (f.pm - 1), 0.6, 1.2) * (f.attMult || 1) * (f.promo && S.day < f.promo.until ? f.promo.mult : 1)));   // 이벤트(광고 확대·팬 이벤트) 보정
   };
-  proto._finGame = function (home) { if (!this.finReady()) return; const f = this.S.fin.teams[home]; if (!f) return; f.gate += this.finAtt(home) * f.price * f.pm; f.games++; };
+  proto._finGame = function (home, away) { if (!this.finReady()) return; const f = this.S.fin.teams[home]; if (!f) return; f.gate += this.finAtt(home) * f.price * f.pm * (this.isRival(home, away) ? 1.04 : 1); f.games++; };   // 라이벌전은 홈 관중 +4%
   proto.setTicketPolicy = function (t, pm) { if (!this.finReady() || !PRICE_PM.includes(pm)) return false; this.S.fin.teams[t].pm = pm; return true; };
   proto.finPay = function (t) { return Math.round((this.payroll(t) + this.coachPayDelta(t) + this.deadNow(t) + this.S.teams[t].ids.reduce((a, id) => { const c = this.S.players[id].contract; return a + (c.amort && c.years > 0 ? c.amort : 0); }, 0)) * 10) / 10; };   // 선수단 보수 = 연봉 + 신규 FA 계약금 상각
   proto.finAllowed = function (t) { const f = this.S.fin.teams[t]; return f.lastRev * LOSS * (0.5 + f.trust / 100); };
