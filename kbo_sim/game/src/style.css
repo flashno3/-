@@ -173,3 +173,15 @@ details.card > summary { cursor: pointer; font-family: var(--font-display); font
 .teamcard .logo { border-radius: 8px; }
 .side .club .logo { border-radius: 8px; background: #1E1F23; }
 @media (max-width: 560px) { td select { max-width: 112px; font-size: 13px; padding: 4px 4px; } th, td { padding: 6px 5px; } .chip { font-size: 11px; padding: 1px 6px; } }
+
+/* 팀 정보 칩 · 휴대폰 순위표 */
+.chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+.chips button { white-space: nowrap; flex: 0 0 auto; }
+.chips button[aria-pressed=true] { background: var(--accent); color: #fff; border-color: var(--accent); }
+@media (max-width: 560px) {
+  .hm { display: none; }
+  .stand td, .stand th { padding-left: 4px; padding-right: 4px; }
+  .stand .logo { height: 18px !important; width: 26px !important; }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .card { padding: 12px; }
+}
