@@ -28,7 +28,9 @@ const base=JSON.parse(fs.readFileSync(__dirname+'/src/gamedata.json'));let n=0;c
   for(const tm of Object.keys(S.teams)){ok(S.teams[tm].ids.length>=44,tm+' 최소 인원');for(const id of S.teams[tm].ids){ok(!seen.has(id)&&S.players[id].team===tm,'중복·소속 '+id);seen.add(id)}}
   ok((S.compLog||[]).length>0,'보상 기록 존재')}}
 console.log('comp tests ok',n);
-// 4) AI 원소속 구단의 보상 선택: A등급은 선수·보상금이 섞여 나오고 B등급은 선수 비중이 높다(이전에는 100% 보상금)
-{let a=[0,0],b=[0,0];for(const seed of [1,2,3,4,5,6]){const L=League.create(base,'Lions',seed);L.faAdvance(75);L.closeFA();for(const c of (L.S.compLog||[])){const t=c.grade==='A'?a:c.grade==='B'?b:null;if(!t)continue;t[1]++;if(/보상선수/.test(c.text))t[0]++}}
- const ra=a[0]/Math.max(1,a[1]),rb=b[0]/Math.max(1,b[1]);if(!(ra>0.1&&ra<0.8&&rb>=ra*0.8))throw new assert.AssertionError({message:'보상선수 선택 비율 A '+a+' B '+b});n++}
+// 4) AI 원소속 구단의 보상 선택: 실제 2020~2026 사례(A·B 25건 전부 보상선수)에 맞춰 후보가 있으면 항상 선수 지명, 보상금은 전년 연봉 200%/100%
+{let a=[0,0],b=[0,0],badMoney=0;for(const seed of [1,2,3,4,5,6]){const L=League.create(base,'Lions',seed);L.faAdvance(75);L.closeFA();for(const c of (L.S.compLog||[])){const t=c.grade==='A'?a:c.grade==='B'?b:null;if(!t||c.pending)continue;t[1]++;if(/보상선수/.test(c.text))t[0]++;const m=/보상금 ([\d.]+)억/.exec(c.text);const p=L.S.players[c.id];}}
+ const ra=a[0]/Math.max(1,a[1]),rb=b[0]/Math.max(1,b[1]);if(!(ra>=0.95&&rb>=0.95))throw new assert.AssertionError({message:'보상선수 선택 비율 A '+a+' B '+b});n++;
+ // 실제 사례 데이터 일관성: 보상금 = 전년 연봉 × (A 200% / B 100%)
+ const rows=fs.readFileSync(__dirname+'/data/fa_compensation_2020_2026.csv','utf8').trim().split('\n').slice(1).map(l=>l.split(','));ok(rows.length===25&&rows.every(r=>Math.abs(+r[7]-(+r[8])*(+r[9]))<0.01),'실제 보상 사례 25건: 보상금 = 전년 연봉 × 배수');ok(rows.filter(r=>r[4]==='A'||r[4]==='B'||r[4]==='구제도').length===25,'등급 표기');}
 console.log('comp tests 2 ok',n);

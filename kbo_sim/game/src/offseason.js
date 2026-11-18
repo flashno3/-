@@ -532,12 +532,12 @@
     if (old === S.userTeam) {   // 내 선수가 떠남: 후보를 보고 선수/보상금 선택
       if (!cands.length) { this._compApply(t, old, p, g, prev, null); return; }
       const top = cands.slice(0, 4); for (const x of top) x.compHold = true;   // 결정 전까지 보호(방출·정리 대상 제외)
-      this._evAdd({ type: 'comp', title: `FA 보상 선택: ${p.ko}(${g}등급) → ${KO0[t]}`, ttl: 30, data: { signer: t, fa: p.id, grade: g, prev, cands: top.map(x => x.id) }, def: 'money',
+      this._evAdd({ type: 'comp', title: `FA 보상 선택: ${p.ko}(${g}등급) → ${KO0[t]}`, ttl: 30, data: { signer: t, fa: p.id, grade: g, prev, cands: top.map(x => x.id) },
         text: `${KO0[t]}가 ${p.ko}를 영입했습니다. 보상은 (보상선수 1명 + 전년 연봉 ${sc[0] * 100}%) 또는 (보상금만 ${sc[1] * 100}%) 중 선택합니다. 전년 연봉 ${prev.toFixed(1)}억 기준 — 선수 선택 시 ${(prev * sc[0]).toFixed(1)}억, 보상금만 ${(prev * sc[1]).toFixed(1)}억.`,
-        choices: top.map(x => ({ k: 'p:' + x.id, label: `${x.ko} (${x.type === 'P' ? (x.role === 'SP' ? '선발' : '구원') : x.pos})`, hint: `OVR ${this.ovr(x)} · ${x.age}세 · 시장가치 ${this.marketValue(x).toFixed(1)}억` })).concat([{ k: 'money', label: `보상금만 ${(prev * sc[1]).toFixed(1)}억`, hint: '선수 지명 없이 보상금 정산' }]) });
+        def: 'p:' + top[0].id, choices: top.map(x => ({ k: 'p:' + x.id, label: `${x.ko} (${x.type === 'P' ? (x.role === 'SP' ? '선발' : '구원') : x.pos})`, hint: `OVR ${this.ovr(x)} · ${x.age}세 · 시장가치 ${this.marketValue(x).toFixed(1)}억` })).concat([{ k: 'money', label: `보상금만 ${(prev * sc[1]).toFixed(1)}억`, hint: '선수 지명 없이 보상금 정산' }]) });
       (S.compLog = S.compLog || []).push({ year: S.year, from: old, to: t, id: p.id, grade: g, text: '선택 대기', pid: null, pending: true }); return;
     }
-    const best = cands[0], pr = rngFor(S.seed, S.year, 9300 + parseInt(p.id.slice(1)), 1).random(), take = best && this.compValue(best) >= prev * (sc[1] - sc[0]) * 0.5 * (0.8 + 0.4 * pr) && S.teams[t].ids.length > ROSTER_MIN + 2;   // AI: 후보 가치가 보상금 차액(전년 연봉×1)의 절반 안팎 이상이면 선수 선택(구단별 선호 ±20%)
+    const best = cands[0], take = !!best && S.teams[t].ids.length > ROSTER_MIN + 2;   // 실제 2020~2026 A·B등급 25건 모두 보상선수(+보상금 200%/100%) 선택 → 후보가 있으면 항상 선수 지명(data/fa_compensation_2020_2026.csv)
     this._compApply(t, old, p, g, prev, take ? best.id : null);
   };
 
