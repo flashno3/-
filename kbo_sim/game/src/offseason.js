@@ -1020,13 +1020,25 @@
   proto.stopOpts = function () { return Object.assign({ event: true, injury: true, deadline: true, odds: true, goal: true, month: false }, this.S.stopOpts || {}); };
   proto.setStop = function (k, v) { if (!['event', 'injury', 'deadline', 'odds', 'goal', 'month'].includes(k)) return false; this.S.stopOpts = Object.assign({}, this.S.stopOpts, { [k]: !!v }); return true; };
   proto._momState = function () { const S = this.S, t = S.userTeam, gs = this.goalStatus(); return { inj: this.players(t).filter(p => this.isInj(p) && p.inj && p.inj.generated).map(p => p.id), rankOk: gs ? gs.rank.ok : null, band: S._band === undefined ? null : S._band, ev: S.events ? S.events.seq : 0 }; };
-  proto.advanceMoment = function (live) {
+  /* 중요 경기(직접 지휘 모드에서 멈출 경기): 30일차 이후 상대가 상위 3팀이거나 순위 차이가 2 이내인 순위 경쟁 맞대결 */
+  proto._keyGame = function (g) {
+    const S = this.S, t = S.userTeam; if (S.day < 30) return null; const st = this.standings(), me = st.find(x => x.team === t), opp = st.find(x => x.team === (g[0] === t ? g[1] : g[0]));
+    return opp.rank <= 3 || Math.abs(opp.rank - me.rank) <= 2 ? `중요 경기: ${KO0[opp.team]}(${opp.rank}위) 전` : null;
+  };
+  proto.advanceMoment = function (live, hl) {
     const S = this.S, o = this.stopOpts(), t = S.userTeam, len = S.schedule.length; if (S.faMkt && this.closeFA) this.closeFA();
     let n = 0; const band = p => p < 10 ? 0 : p < 40 ? 1 : p < 70 ? 2 : 3, bandTxt = ['가을야구 가능성 희박(10% 미만)', '가을야구 가능성 낮음(10~40%)', '가을야구 경합(40~70%)', '가을야구 유력(70% 이상)'];
     let st = this._momState(); if (S.day >= 10 && S._band === undefined) { S._band = band(this.playoffOdds(200)[t].top5); st.band = S._band; }
     while (S.day < len) {
       const before = st, r = this.playDay(live); n++;
-      if (r.status === 'userGame') return { status: 'userGame', ...r, played: n - 1 };
+      if (r.status === 'userGame') {   // 직접 지휘 모드: 내 경기마다 멈추지 않고 '중요한' 경기·접전에서만 멈춘다
+        const kg = hl ? null : this._keyGame(r.game);
+        if (!hl && kg) return { status: 'userGame', ...r, played: n - 1, reason: kg };
+        const ctx = this.startUserGame(r.game, r.idx), us = ctx.userSide;
+        if (hl) { const done = this.playAuto(ctx, gm => this.isHighlight(gm, us)); if (!done) return { status: 'highlight', ctx, game: r.game, idx: r.idx, played: n, reason: `접전: ${KO0[r.game[0] === t ? r.game[1] : r.game[0]]} 전` }; }
+        else this.playAuto(ctx);
+        this.finishUserGame(ctx);
+      }
       const now = this._momState(), why = [];
       if (o.event && S.events && S.events.seq > before.ev) { const e = this.eventsOpen()[0]; why.push('새 소식' + (e ? `: ${e.title}` : '')); }
       if (o.injury) { const nw = now.inj.filter(id => !before.inj.includes(id)); if (nw.length) why.push(`부상: ${nw.map(id => S.players[id].ko).join(', ')}`); }

@@ -13,6 +13,11 @@ const mk=(seed,team)=>{const L=League.create(base,team||'Lions',seed);L.faAdvanc
 // 3) 개별 조건: 월초 점검·이벤트
 {const L=mk(5),S=L.S;for(const k of ['event','injury','deadline','odds','goal'])L.setStop(k,false);L.setStop('month',true);let g=0,rs=[];while(g++<20){const r=L.advanceMoment(false);if(r.status!=='moment')break;rs.push(r.reason)}
  ok(rs.length>=4&&rs.every(x=>/월 점검/.test(x)),'월초 점검만 켜면 월마다 멈춤 '+rs.join(','));}
-// 4) 직접 지휘: 내 경기 직전 멈춤
-{const L=mk(6),S=L.S;const r=L.advanceMoment(true);ok(r.status==='userGame'||r.status==='moment','직접 지휘 시 내 경기 또는 중요 순간에서 멈춤 '+r.status);}
+// 4) 직접 지휘 모드: 내 경기마다 멈추지 않는다(다음 중요 순간 = 다음 경기 1회 문제)
+{const L=mk(6),S=L.S;let g=0,stops={highlight:0,moment:0,userGame:0},maxPlayed=0,total=0;
+ while(g++<200){const r=L.advanceMoment(true,true);if(r.status==='seasonEnd')break;ok(r.status!=='userGame','접전 모드는 경기 시작에서 멈추지 않는다');stops[r.status]=(stops[r.status]||0)+1;maxPlayed=Math.max(maxPlayed,r.played);total+=r.played;
+  if(r.status==='highlight'){const gm=r.ctx.live;ok(!gm.finished&&gm.inning>=7,'하이라이트에서 멈춤');L.playAuto(r.ctx);L.finishUserGame(r.ctx)}for(const e of L.eventsOpen())L.resolveEvent(e.id,e.def||e.choices[0].k)}
+ ok(maxPlayed>=3,'한 번에 여러 날 진행 '+maxPlayed);ok((stops.highlight||0)+(stops.moment||0)>=5,'멈춤 '+JSON.stringify(stops));}
+{const L=mk(7),S=L.S;let g=0,kg=0,mom=0;while(g++<300){const r=L.advanceMoment(true,false);if(r.status==='seasonEnd')break;if(r.status==='userGame'){kg++;ok(/중요 경기/.test(r.reason),'전체 직접 지휘는 중요 경기에서만 멈춤 '+r.reason);const ctx=L.startUserGame(r.game,r.idx);L.playAuto(ctx);L.finishUserGame(ctx)}else mom++;for(const e of L.eventsOpen())L.resolveEvent(e.id,e.def||e.choices[0].k)}
+ ok(kg>=1&&mom>=1,'중요 경기 '+kg+'회 · 기타 중요 순간 '+mom+'회');ok(S.day>=S.schedule.length,'시즌 끝까지 진행');}
 console.log('moment tests ok',n);
