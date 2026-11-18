@@ -48,6 +48,7 @@
     } else if (a <= 26 && p.pot > 0) { const g2 = Math.min(p.pot, 0.4) * (0.6 + 0.8 * r.random()) * pf; gain = Math.max(gain, g2); p.pot = Math.max(0, p.pot - Math.max(0, g2)); }
     const dv = a <= 28 && this.S.coach ? this._devEffects(p) : null;   // 육성 방향·코치진 효과(28세 이하)
     if (dv && gain > 0) gain *= dv.mul;
+    if (gain > 0 && p.team === this.S.userTeam) gain *= this._trainMult(p);   // 시즌 중 훈련 방침 누적 효과
     const shift = f => gain * 0.75 * (dv ? dv.w[f] || 1 : 1) + gauss(r, 0, 0.07);
     const set = (f, dir, lo, hi, s) => { p.p[f] = clamp(p.p[f] + dir * s * sc[f][1], lo, hi); };
     if (p.type === 'B') {
@@ -268,7 +269,7 @@
     for (const id in S.players) {
       const p = S.players[id]; if (p.retired || p.team === 'DRAFT') continue;
       const d = this.progress(p, rngFor(S.seed, S.year, 32, parseInt(id.slice(1))), this.playShare(p));
-      if (p.team === user) rep.prog.push({ id, d });
+      if (p.team === user) { rep.prog.push({ id, d }); (p.ovrHist = p.ovrHist || []).push({ y: S.year + 1, o: this.ovr(p) }); if (p.ovrHist.length > 8) p.ovrHist.shift(); }
     }
     // 2) 은퇴
     for (const id in S.players) {
@@ -323,7 +324,7 @@
   proto._draftTake = function (t, id) {
     const S = this.S, d = S.off.draft, p = S.players[id]; d.pool = d.pool.filter(x => x !== id); p.team = t; p.contract = { salary: 0.3, years: 1 }; S.teams[t].ids.push(id);
     d.picks.push({ pick: d.pick + 1, team: t, id }); d.pick++; this.invalidate();
-    if (t === S.userTeam) news(this, `드래프트 ${Math.ceil(d.pick / 10)}라운드: ${p.ko} 지명`);
+    if (t === S.userTeam) { p.myFrom = { y: S.year, how: `드래프트 ${Math.ceil(d.pick / 10)}라운드 지명` }; news(this, `드래프트 ${Math.ceil(d.pick / 10)}라운드: ${p.ko} 지명`); }
     if (S.teams[t].ids.length > ROSTER_MAX) { const worst = S.teams[t].ids.map(x => S.players[x]).filter(x => x.id !== id && !x.active).sort((a, b) => this.marketValue(a) - this.marketValue(b))[0]; if (worst) { if (t === S.userTeam) { /* 사용자 팀은 직접 정리 */ } else this._retireOrRelease(t, worst.id); } }
   };
   proto._retireOrRelease = function (t, id) { const p = this.S.players[id]; this.removeFromTeam(t, id); p.retired = true; p.team = 'RET'; p.active = false; };
@@ -485,7 +486,7 @@
   /* 공통 영입 처리: 팀 이동·계약·FA 행사(재취득 연수 리셋)·보상 */
   proto._doSign = function (t, p, years, ask, bonus) {
     const S = this.S, info = p.faInfo, graded = info && info.grade, comp = graded && info.from !== t ? graded : null;
-    S.fa = (S.fa || []).filter(x => x !== p.id); p.team = t; p.active = false; S.teams[t].ids.push(p.id);
+    S.fa = (S.fa || []).filter(x => x !== p.id); p.team = t; p.active = false; S.teams[t].ids.push(p.id); if (t === S.userTeam) p.myFrom = { y: S.year, how: p.foreign ? '외국인 영입' : 'FA 영입' };
     ask = Math.round(ask * 10) / 10; bonus = Math.round((bonus || 0) * 10) / 10; p.contract = this._newContract(p, ask, p.foreign || !graded ? 1 : years, p.foreign || !graded ? 0 : bonus); p.salHist = (p.salHist || []).slice(-2).concat([Math.round(((p.contract.bonus || 0) / p.contract.years + ask) * 10) / 10]);
     if (graded && p.fa) { p.fa.used += 1; p.fa.last = graded; p.fa.svc = 0; p.fa.rem = 0; }
     if (comp) { this._faCount(t, 1); this._compensate(t, p, info); }
@@ -1040,6 +1041,30 @@
     }
     S.phase = 'regular_done'; return { status: 'seasonEnd', played: n };
   };
+  /* ---------------- 훈련 방침 · 기록 달성 ----------------
+     훈련 방침(집중 분야 × 강도)은 시즌 중 날짜별로 누적되어 연말 성장(양의 성장분)과 부상 위험에 반영된다.
+       분야: 타격(타자 100%·성장 +) / 투구(투수 100%) / 수비(타자 50%) / 컨디션 관리(전원 40%·부상 위험 −12%)
+       강도: 가볍게(효과 ×0.5·부상 −8%) / 보통 / 강하게(효과 ×1.5·부상 +15%)
+       효과 = 1 + 0.12 × Σ(분야별 강도 가중 누적 일수 ÷ 시즌 일수 × 해당 분야 비중) — 시즌 내내 보통 강도로 같은 분야면 +12%(강하게 +18%) */
+  proto.train = function () { return Object.assign({ focus: 'none', inten: 'normal' }, this.S.train || {}); };
+  proto.setTrain = function (k, v) { const ok = { focus: ['none', 'bat', 'pit', 'def', 'cond'], inten: ['light', 'normal', 'heavy'] }; if (!ok[k] || !ok[k].includes(v)) return false; this.S.train = Object.assign({}, this.S.train, { [k]: v }); return true; };
+  proto._trainDay = function () { const S = this.S; if (S.phase !== 'regular' && S.phase !== 'preseason') return; const T = this.train(), a = S.trainAcc = S.trainAcc || { total: 0 }; a.total++; a[T.focus] = (a[T.focus] || 0) + ({ light: 0.5, normal: 1, heavy: 1.5 }[T.inten] || 1); };   // 강도는 날짜별 가중으로 누적
+  proto._trainMult = function (p) {
+    const a = this.S.trainAcc; if (!a || !a.total) return 1; let tot = 0;
+    for (const f of ['bat', 'pit', 'def', 'cond']) { const share = (a[f] || 0) / a.total; tot += share * ({ bat: p.type === 'B' ? 1 : 0, pit: p.type === 'P' ? 1 : 0, def: p.type === 'B' ? 0.5 : 0, cond: 0.4 }[f]) ; }
+    return 1 + 0.12 * tot;
+  };
+  proto._trainInj = function () { const T = this.train(); return ({ light: 0.92, normal: 1, heavy: 1.15 }[T.inten]) * (T.focus === 'cond' ? 0.88 : 1); };
+  proto.trainForecast = function () { const a = this.S.trainAcc || { total: 0 }, pl = this.players(this.S.userTeam).filter(p => p.age <= 30 && !p.foreign), avg = pl.length ? pl.reduce((x, p) => x + (this._trainMult(p) - 1), 0) / pl.length : 0; return { days: a.total, acc: a, avgBonus: Math.round(avg * 1000) / 10 }; };
+  const MS_B = [['H', 100, '안타'], ['H', 150, '안타'], ['H', 200, '안타'], ['HR', 10, '홈런'], ['HR', 20, '홈런'], ['HR', 30, '홈런'], ['HR', 40, '홈런'], ['RBI', 50, '타점'], ['RBI', 100, '타점'], ['SB', 20, '도루'], ['SB', 30, '도루']];
+  proto._milestoneDay = function () {
+    const S = this.S, t = S.userTeam;
+    for (const p of this.players(t)) {
+      p.ms = p.ms && p.ms.y === S.year ? p.ms : { y: S.year, d: {} };
+      if (p.type === 'B') { const c = S.stats.bat[p.id]; if (!c) continue; const v = { H: c['1B'] + c['2B'] + c['3B'] + c.HR, HR: c.HR, RBI: c.RBI, SB: c.SB || 0 }; for (const [k, n, lab] of MS_B) { const key = k + n; if (v[k] >= n && !p.ms.d[key]) { p.ms.d[key] = S.day; news(this, `기록 달성: ${p.ko} 시즌 ${n}${lab}${p.myFrom ? ` (내가 ${p.myFrom.how})` : ''}`); } } }
+      else { const c = S.stats.pit[p.id]; if (!c) continue; const v = { K: c.K, IP: Math.floor(c.outs / 3) }; for (const [k, n, lab] of [['K', 100, '탈삼진'], ['K', 150, '탈삼진'], ['K', 200, '탈삼진'], ['IP', 100, '이닝'], ['IP', 150, '이닝']]) { const key = k + n; if (v[k] >= n && !p.ms.d[key]) { p.ms.d[key] = S.day; news(this, `기록 달성: ${p.ko} 시즌 ${n}${lab}${p.myFrom ? ` (내가 ${p.myFrom.how})` : ''}`); } } }
+    }
+  };
   /* ---------------- 새 시즌 ---------------- */
   proto.ensureActive = function (t) {   // 1군 28명 유지(부족하면 가치 높은 선수로 채움, 초과하면 낮은 순으로 내림)
     const S = this.S, P = this.players(t);
@@ -1065,7 +1090,7 @@
     this.invalidate();
   };
   proto.startNewSeason = function () {
-    const S = this.S; S.year += 1; S.off = null; S.faMkt = null; S.teamMood = null; S.restUntil = 0; for (const id in S.players) if (S.players[id].mood) delete S.players[id].mood; if (S.events) for (const e of (S.events.list || [])) if (e.status === 'open') { e.status = 'done'; e.result = '시즌 종료로 자동 종결'; } S.fa = (S.fa || []);
+    const S = this.S; S.year += 1; S.off = null; S.faMkt = null; S.teamMood = null; S.restUntil = 0; S.trainAcc = { total: 0 }; for (const id in S.players) if (S.players[id].mood) delete S.players[id].mood; if (S.events) for (const e of (S.events.list || [])) if (e.status === 'open') { e.status = 'done'; e.result = '시즌 종료로 자동 종결'; } S.fa = (S.fa || []);
     for (const id in S.players) if (S.players[id].retired || S.players[id].team === 'RET') delete S.players[id];   // 은퇴·이탈 선수 정리(저장 용량)
     this.finishFA === undefined; const adj = this.normalizeTalent(); S.lastAdj = adj;
     for (const t of TEAMS) if (t === S.userTeam) this.ensureActive(t);
@@ -1101,6 +1126,7 @@
     for (const id of give) { this.removeFromTeam(me, id); S.players[id].team = aiTeam; S.players[id].active = false; S.teams[aiTeam].ids.push(id); }
     for (const id of get) delete S.players[id].aiGs;
     for (const id of get) { this.removeFromTeam(aiTeam, id); S.players[id].team = me; S.players[id].active = false; S.teams[me].ids.push(id); }
+    for (const id of get) S.players[id].myFrom = { y: S.year, how: `트레이드(${KO0[aiTeam]})` };
     news(this, `트레이드: ${give.map(i => S.players[i].ko).join(', ')} ↔ ${get.map(i => S.players[i].ko).join(', ')} (${aiTeam})`);
     this.refreshTeam(aiTeam); this.repairSettings(me); this.invalidate(); return ev;
   };
@@ -1196,7 +1222,7 @@
     }
     for (const t of TEAMS) for (const p of this.players(t)) {
       if (!p.active || this.isInj(p)) continue;
-      const pol = t === user ? this.policy() : null, hz = (p.type === 'B' ? 0.0030 : p.role === 'SP' ? 0.0042 : 0.0033) * (p.age >= 33 ? 1.3 : p.age <= 24 ? 0.9 : 1) * (pol ? (p.type === 'P' ? { save: 0.8, normal: 1, push: 1.3 }[pol.pitch] : { low: 0.95, normal: 1, high: 1.1 }[pol.run]) * (S.restUntil && d < S.restUntil ? 0.75 : 1) : 1);   // 운영 방침: 투수 혹사(push)·적극 주루는 부상 위험↑
+      const pol = t === user ? this.policy() : null, hz = (p.type === 'B' ? 0.0030 : p.role === 'SP' ? 0.0042 : 0.0033) * (p.age >= 33 ? 1.3 : p.age <= 24 ? 0.9 : 1) * (pol ? (p.type === 'P' ? { save: 0.8, normal: 1, push: 1.3 }[pol.pitch] : { low: 0.95, normal: 1, high: 1.1 }[pol.run]) * (S.restUntil && d < S.restUntil ? 0.75 : 1) * this._trainInj() : 1);   // 운영 방침: 투수 혹사(push)·적극 주루는 부상 위험↑
       if (r.random() >= hz) continue;
       const u = r.random(), days = u < 0.55 ? 7 + Math.floor(r.random() * 8) : u < 0.85 ? 15 + Math.floor(r.random() * 21) : u < 0.97 ? 45 + Math.floor(r.random() * 56) : 150 + Math.floor(r.random() * 181);
       const sev = u < 0.55 ? '' : u < 0.85 ? '' : u < 0.97 ? '(장기)' : '(수술·시즌 아웃급)', part = pickW(r, p.type === 'B' ? INJ_B : INJ_P);
