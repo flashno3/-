@@ -352,6 +352,11 @@ def load_fa(players):
         p['ct']=ct;st['ok']+=1
     return st
 FAC=load_fa(players)
+# KBO 2027 FA 자격 유보선수 9명(2026-11 공시): 비FA 다년·옵션 등으로 자격은 충족했으나 계약 기간이 남아 FA 신청 불가(계약 만료 시점까지 자격 유지)
+HOLD=[('고영표','Wiz'),('나성범','Tigers'),('김광현','Landers'),('김재환','Landers'),('박세웅','Giants'),('박건우','Dinos'),('박민우','Dinos'),('노시환','Eagles'),('김재현','Heroes')]
+for ko,tm in HOLD:
+    c=[p for p in players if p['ko']==ko and p['team']==tm and (ko!='김재현' or p['type']=='B' and p.get('pos')=='C')]
+    assert len(c)==1,(ko,tm,len(c));c[0]['hold']=True
 RETIRED=[('황재균','Wiz')]   # 2026 시즌 후 은퇴(사용자 확인) → 게임에서 제외
 players[:]=[p for p in players if (p['ko'],p['team']) not in RETIRED]
 

@@ -7,6 +7,13 @@ const nm=k=>Object.values(S.players).find(p=>p.ko===k&&p.team in S.teams);
  ok(Object.values(S.players).filter(p=>p.team in S.teams&&!(p.ct&&p.ct.years>1)).every(p=>p.contract.years===1),'그 외 모두 단년');
  const nsh=nm('노시환');ok(nsh.team==='Eagles'&&nsh.contract.years===11&&nsh.contract.end===2037&&nsh.contract.total===307&&Math.abs(nsh.contract.cbt-27.91)<0.01&&Math.abs(nsh.contract.salary-13.95)<0.01,'노시환 11년 307억(2027~2037), 경쟁균형세 연 27.9억');
  ok(Object.values(S.players).filter(p=>p.draft&&p.contract).every(p=>p.contract.years===1),'신인도 1년');}
+// 1b) 비FA 다년계약(보도): 류현진 8년 170억(2024~2031, 잔여 5년·연 21.25억) 등
+{const g=(k,t,ty)=>Object.values(S.players).find(p=>p.ko===k&&p.team===t&&(!ty||p.type===ty));
+ const exp=[['류현진','Eagles',5,21.25,170],['구창모','Dinos',2,14.67,132],['고영표','Wiz',2,19,107],['박세웅','Giants',1,14,90],['김광현','Landers',1,15,36],['김재환','Landers',1,8,22],['하영민','Heroes',8,10,80],['박민우','Dinos',1,18,90]];
+ for(const [k,t,y,c,tot] of exp){const p=g(k,t);ok(p&&p.contract.years===y&&Math.abs(p.contract.cbt-c)<0.01&&p.contract.total===tot,k+' 잔여 '+y+'년·경쟁균형세 '+c);}
+ const ryu=g('류현진','Eagles');ok(ryu.contract.end===2031&&ryu.contract.bonus===0&&ryu.contract.salary===21,'류현진 2024~2031·계약금 없음');
+ const hold=Object.values(S.players).filter(p=>p.hold);ok(hold.length===9&&['고영표','나성범','김광현','김재환','박세웅','박건우','박민우','노시환','김재현'].every(k=>hold.some(p=>p.ko===k)),'FA 자격 유보선수 9명');
+ ok(hold.every(p=>p.contract.years>=1&&p.contract.end>=2027),'유보선수는 모두 2027 이후까지 계약');}
 // 2) FA 시장가: 실제 FA 분포(1위권 25~30억, 하위 2~3억)
 const g=L.faList().filter(p=>p.faInfo&&p.faInfo.grade&&!p.foreign).sort((a,b)=>L.faMV(b)-L.faMV(a));
 ok(g.length>=15&&g[0].faInfo.mv>=25&&g[0].faInfo.mv<=30&&g[g.length-1].faInfo.mv>=2.4&&g[g.length-1].faInfo.mv<=4,'시장가 범위 '+g[0].faInfo.mv+'~'+g[g.length-1].faInfo.mv);
