@@ -938,6 +938,11 @@
       if (k === 'captain') { if (rr(8870) < pm) { tmood(1, 10); res = '주장의 중재가 통했습니다: 팀 컨디션 +1(10일).'; } else { tmood(-1, 7); res = '중재가 먹히지 않았습니다: 팀 컨디션 −1(7일).'; } }
       else if (k === 'talk') { f.evCost = Math.round(((f.evCost || 0) + 0.2) * 10) / 10; if (rr(8871) < 0.55) { tmood(1, 8); res = '면담 후 화해했습니다: 팀 컨디션 +1(8일), 비용 0.2억.'; } else { tmood(-1, 7); res = '면담이 오히려 불씨가 됐습니다: 팀 컨디션 −1(7일), 비용 0.2억.'; } }
       else { tmood(-1, 10); res = '갈등을 방치했습니다: 팀 컨디션 −1(10일).'; }
+    } else if (e.type === 'return') {
+      const p = S.players[e.data.pid];
+      if (!p || p.team !== t) res = '선수가 팀을 떠났습니다.';
+      else if (k === 'callup') { if (p.active) res = `${p.ko}을(를) 1군에 콜업했습니다.`; else if (this.players(t).filter(x => x.active).length < ACTIVE_MAX) { const err = this.moveActive(p.id, true); if (err) { if (!auto) return { ok: false, msg: err }; res = err; } else res = `${p.ko}을(를) 1군에 콜업했습니다.`; } else if (!auto) return { ok: false, need: 'swap', msg: '1군 엔트리가 가득 찼습니다. 교체할 선수를 고르세요.' }; else res = '엔트리가 가득 차 콜업하지 못했습니다.'; }
+      else res = `${p.ko}은(는) 2군에서 컨디션을 조절합니다.`;
     } else if (e.type === 'trade') {
       const D = e.data;
       if (k !== 'accept') res = '제안을 거절했습니다.';
@@ -1161,6 +1166,21 @@
     }
     return null;
   };
+  /* 부상 복귀: 콜업할지 묻는 결정 카드(콜업 시 교체할 선수는 화면에서 고름). 부상 선수는 콜업 후보 목록에 나오지 않는다 */
+  proto._returnEvent = function (p) {
+    const S = this.S; if (!S.events) S.events = { seq: 0, list: [] }; if (this.eventsOpen().some(e => e.type === 'return' && e.data.pid === p.id)) return;
+    const act = this.players(S.userTeam).filter(x => x.active && x.type === p.type), weak = act.sort((a, b) => this.ovr(a) - this.ovr(b))[0], rec = weak && this.ovr(p) >= this.ovr(weak) + 1 ? 'callup' : 'stay';
+    this._evAdd({ type: 'return', title: `${p.ko} 부상 복귀`, ttl: 12, rec, def: 'stay', data: { pid: p.id }, text: `${p.ko}(${p.type === 'P' ? (p.role === 'SP' ? '선발' : '구원') : p.pos} · OVR ${this.ovr(p)})가 ${p.inj ? p.inj.dx : '부상'}에서 복귀했습니다. 1군에 콜업할까요? ${rec === 'callup' ? `(1군 최저 ${weak.ko} OVR ${this.ovr(weak)}보다 높아 콜업을 추천합니다)` : ''}`,
+      choices: [{ k: 'callup', label: '콜업 (교체할 선수 선택)', hint: '1군 엔트리에서 같은 유형의 선수와 교체합니다' }, { k: 'stay', label: '2군에서 컨디션 조절', hint: '나중에 직접 올릴 수 있습니다' }] });
+  };
+  proto.resolveAllRecommended = function () {   // 할 일 함: 추천(없으면 기본) 선택으로 모두 처리
+    const out = []; for (const e of this.eventsOpen().slice()) {
+      let k = e.rec || e.def || (e.choices[e.choices.length - 1] || {}).k, res;
+      if (e.type === 'return' && k === 'callup') { const p = this.S.players[e.data.pid], cs = p ? this.downCandidates(p.id).filter(c => !c.block) : [], c = cs[0]; if (!p || p.active || !c || this.swapActive(p.id, c.p.id)) k = 'stay'; }
+      res = this.resolveEvent(e.id, k, true); out.push({ id: e.id, title: e.title, k, msg: res.msg });
+    }
+    return out;
+  };
   /* ---------------- 새 시즌 ---------------- */
   proto.ensureActive = function (t) {   // 1군 28명 유지(부족하면 가치 높은 선수로 채움, 초과하면 낮은 순으로 내림)
     const S = this.S, P = this.players(t);
@@ -1312,7 +1332,7 @@
     const S = this.S, now = this.todayN(), r = rngFor(S.seed, S.year, d, 7000), changed = new Set(), user = S.userTeam, back = {}, out = {};
     for (const t of TEAMS) for (const p of this.players(t)) {
       if (p.inj && p.inj.apply !== false && !this.isInj(p)) {   // 복귀
-        if (t === user) news(this, `부상 복귀: ${p.ko} (${p.inj.dx}) — 2군에서 대기 중, 1군에 등록하세요`);
+        if (t === user) { news(this, `부상 복귀: ${p.ko} (${p.inj.dx}) — 2군에서 대기 중`); if (!p.foreign || true) this._returnEvent(p); }
         if (p.inj.generated) delete p.inj; else p.inj.apply = false; changed.add(t); (back[t] = back[t] || []).push(p);
       }
     }

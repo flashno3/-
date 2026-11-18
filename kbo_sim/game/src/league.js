@@ -643,6 +643,7 @@
     get seasonOver() { return this.S.day >= this.S.schedule.length; }
     /* 하루 진행. live=true 면 내 경기 직전에 멈춘다. 반환 {status:'ok'|'userGame'|'seasonEnd', ...} */
     playDay(live) {
+      this.S.base = null;   // 하루가 지나면 변경이 확정된 것으로 본다
       const S = this.S; if (S.day >= S.schedule.length) return { status: 'seasonEnd' };
       S.phase = 'regular'; const E = this.engine(), rd = S.schedule[S.day], d = S.day, others = [];
       let ug = null;
@@ -704,19 +705,80 @@
       ctx.live = live; ctx.E = E; return ctx;
     }
     /* 내 팀 자동 불펜 운용: 하프 이닝 시작 전에 호출(ctx.auto 가 꺼져 있으면 건너뜀) */
+    /* ---------------- 엔트리 관리(교체형 콜업·부상 복귀·변경 요약·할 일) ---------------- */
+    /* 체력 표시: 남은 체력 = 100 − 피로(이닝당 −20, 하루 +8 회복). 등판 가능일: 선발은 4일 휴식, 불펜은 피로 35 미만 */
+    restInfo(p) {
+      const S = this.S, fat = Math.min(100, Math.max(0, p.fat || 0)), left = 100 - fat, inRot = p.role === 'SP' && S.teams[p.team] && S.teams[p.team].set.rotation.includes(p.id);
+      const days = inRot ? Math.max(0, 4 - (S.day - (p.lastStart === undefined ? -99 : p.lastStart))) : (fat < 35 ? 0 : Math.ceil((fat - 34) / 8));
+      return { left, days, label: days === 0 ? '오늘 가능' : `${days}일 뒤 가능`, level: fat >= 35 ? 'low' : fat >= 25 ? 'mid' : 'good', inRot };
+    }
+    fitTag(p, pos) { return pos === 'DH' ? 'ok' : p.pos === pos ? 'main' : (p.gs && (p.gs[pos] || 0) >= 20) ? 'ok' : 'bad'; }
+    /* 콜업(교체) 후보: 같은 유형의 1군 선수. 약한 선수·부진/피로한 선수 순으로 추천하고 라인업·로테이션 소속은 표시 */
+    downCandidates(upId) {
+      const S = this.S, t = S.userTeam, up = S.players[upId], set = S.teams[t].set, lin = new Set(set.lineup.map(x => x.id)), rot = new Set(set.rotation), bp = set.bullpen;
+      const act = this.players(t).filter(p => p.active && p.type === up.type && p.id !== upId), cat = this.players(t).filter(p => p.active && p.pos === 'C').length;
+      return act.map(p => { const role = lin.has(p.id) ? '주전 라인업' : rot.has(p.id) ? '선발 로테이션' : bp.closer === p.id ? '마무리' : bp.setup.includes(p.id) ? '셋업' : '', fat = p.type === 'P' ? (p.fat || 0) : 0;
+        const block = p.pos === 'C' && up.pos !== 'C' && cat <= 2 ? '포수가 2명 아래가 됩니다' : '';
+        return { p, role, block, score: this.ovr(p) + (role ? 12 : 0) + (fat >= 35 ? -3 : 0) }; }).sort((a, b) => a.score - b.score);
+    }
+    swapActive(upId, downId) {   // 2군 선수를 올리고 같은 유형 1군 선수를 내리는 교체(한 번에 검증)
+      const S = this.S, t = S.userTeam, up = S.players[upId], dn = S.players[downId];
+      if (!up || !dn || up.team !== t || dn.team !== t) return '선수를 찾을 수 없습니다.'; if (up.active || !dn.active) return '1군/2군 상태가 바뀌었습니다.'; if (up.type !== dn.type) return '같은 유형(투수/타자)끼리만 교체할 수 있습니다.';
+      if (this.isInj(up)) return `${up.ko}은(는) 부상자 명단입니다.`; if (up.pos !== 'C' && dn.pos === 'C' && this.players(t).filter(p => p.active && p.pos === 'C').length <= 2) return '1군에는 포수가 최소 2명 필요합니다.';
+      const lock = S.day < S.schedule.length && S.day < (up.lockUntil || 0); if (lock) return `${up.ko}은(는) 2군 말소 후 10경기일이 지나야 1군에 등록할 수 있습니다. (${up.lockUntil - S.day}일 남음)`;
+      this.pushUndo('콜업 교체'); dn.active = false; if (S.day < S.schedule.length && S.phase !== 'preseason') dn.lockUntil = S.day + 10; up.active = true; this.invalidate(); this.repairSettings(t); return null;
+    }
+    /* 변경 요약: 마지막 '확정' 이후의 변경과 규칙 점검 */
+    diffSinceBase() {
+      const S = this.S, b = S.base; if (!b || b.t !== S.userTeam) return null; const ps = this.players(b.t), up = [], down = [], ch = [];
+      for (const p of ps) { if (!(p.id in b.act)) continue; if (p.active && !b.act[p.id]) up.push(p); else if (!p.active && b.act[p.id]) down.push(p); }
+      const set = S.teams[b.t].set, nm = id => (S.players[id] || { ko: '?' }).ko;
+      b.set.lineup.forEach((x, i) => { const y = set.lineup[i]; if (y && (y.id !== x.id || y.pos !== x.pos)) ch.push(`${i + 1}번 ${nm(x.id)}(${x.pos}) → ${nm(y.id)}(${y.pos})`); });
+      b.set.rotation.forEach((id, i) => { if (set.rotation[i] !== id) ch.push(`${i + 1}선발 ${nm(id)} → ${nm(set.rotation[i])}`); });
+      if (b.set.bullpen.closer !== set.bullpen.closer) ch.push(`마무리 ${nm(b.set.bullpen.closer)} → ${nm(set.bullpen.closer)}`);
+      return { up, down, ch, n: up.length + down.length + ch.length };
+    }
+    validateEntry() {
+      const S = this.S, t = S.userTeam, a = this.players(t).filter(p => p.active), w = [], P = a.filter(p => p.type === 'P').length, B = a.filter(p => p.type === 'B').length, C = a.filter(p => p.pos === 'C').length, set = S.teams[t].set;
+      if (a.length !== ACTIVE_MAX) w.push(`1군 엔트리 ${a.length}/${ACTIVE_MAX}명`); if (P < 13) w.push(`투수 ${P}명 (13명 이상 권장)`); if (B < 13) w.push(`타자 ${B}명 (13명 이상 권장)`); if (C < 2) w.push(`포수 ${C}명 (최소 2명)`);
+      if (set.rotation.length < 5) w.push('선발 로테이션 5명 미만'); if (!set.bullpen.closer) w.push('마무리 미지정');
+      const bad = set.lineup.filter(x => this.fitTag(S.players[x.id], x.pos) === 'bad'); if (bad.length) w.push(`수비 부적합 ${bad.length}명 (${bad.map(x => S.players[x.id].ko).join(', ')})`);
+      return w;
+    }
+    confirmChanges() { this.S.base = null; return true; }
+    revertToBase() { const S = this.S, b = S.base; if (!b || b.t !== S.userTeam) return false; S.undo = (S.undo || []).filter(x => false); this._restore(b); S.base = null; return true; }
+    /* 재배치 도우미(탭으로 맞바꾸기) */
+    swapLineup(i, j) { const l = this.S.teams[this.S.userTeam].set.lineup; if (i === j || !l[i] || !l[j]) return false; this.pushUndo('타순 변경'); [l[i], l[j]] = [l[j], l[i]]; return true; }
+    replaceLineup(i, id) {
+      const S = this.S, l = S.teams[S.userTeam].set.lineup, p = S.players[id]; if (!l[i] || !p || p.team !== S.userTeam || p.type !== 'B' || !p.active || this.isInj(p)) return '올릴 수 없는 선수입니다.';
+      this.pushUndo('라인업 교체'); const j = l.findIndex(x => x.id === id); if (j >= 0 && j !== i) { const t = l[i].id; l[i].id = id; l[j].id = t; } else l[i].id = id; return null;
+    }
+    setLineupPos(i, pos) { const l = this.S.teams[this.S.userTeam].set.lineup; if (!l[i]) return false; this.pushUndo('수비 위치 변경'); const j = l.findIndex((x, k) => x.pos === pos && k !== i); if (j >= 0) l[j].pos = l[i].pos; l[i].pos = pos; return true; }
+    assignPitcher(k, i, nid) {   // k: rot|close|setup|mid|long
+      const S = this.S, set = S.teams[S.userTeam].set, b = set.bullpen, p = S.players[nid]; if (!p || p.team !== S.userTeam || p.type !== 'P' || !p.active || this.isInj(p)) return '올릴 수 없는 선수입니다.';
+      const get = (kk, ii) => kk === 'rot' ? set.rotation[ii] : kk === 'close' ? b.closer : kk === 'setup' ? b.setup[ii] : kk === 'mid' ? b.middle[ii] : b.long[ii];
+      const put = (kk, ii, id) => { if (kk === 'rot') set.rotation[ii] = id; else if (kk === 'close') b.closer = id; else if (kk === 'setup') b.setup[ii] = id; else if (kk === 'mid') b.middle[ii] = id; else b.long[ii] = id; };
+      const slots = []; set.rotation.forEach((id, ii) => slots.push({ k: 'rot', i: ii, id })); slots.push({ k: 'close', i: 0, id: b.closer }); b.setup.forEach((id, ii) => slots.push({ k: 'setup', i: ii, id })); b.middle.forEach((id, ii) => slots.push({ k: 'mid', i: ii, id })); b.long.forEach((id, ii) => slots.push({ k: 'long', i: ii, id }));
+      this.pushUndo('투수진 교체'); const old = get(k, i), at = slots.find(s => s.id === nid && !(s.k === k && s.i === i)); if (at) put(at.k, at.i, old); put(k, i, nid); return null;
+    }
     /* 되돌리기: 로스터·라인업·계획 변경 직전 상태를 저장(최대 20개). FA 계약·트레이드·방출 같은 되돌릴 수 없는 거래는 제외 */
     pushUndo(label) {
       const S = this.S, t = S.userTeam, act = {}, lock = {}; S.undo = S.undo || [];
       for (const p of this.players(t)) { act[p.id] = !!p.active; lock[p.id] = p.lockUntil || 0; }
       const cl = x => x === undefined ? undefined : JSON.parse(JSON.stringify(x));
-      S.undo.push({ label, t, day: S.day, act, lock, set: cl(S.teams[t].set), plan: cl(S.plan), train: cl(S.train), policy: cl(S.policy), captain: S.captain || null, presets: cl(S.presets) }); if (S.undo.length > 20) S.undo.shift();
+      const snap = { label, t, day: S.day, act, lock, set: cl(S.teams[t].set), plan: cl(S.plan), train: cl(S.train), policy: cl(S.policy), captain: S.captain || null, presets: cl(S.presets) }; S.undo.push(snap); if (S.undo.length > 20) S.undo.shift();
+      if (!S.base || S.base.t !== t) S.base = JSON.parse(JSON.stringify(snap));   // 변경 요약의 기준(마지막 확정 시점)
     }
     undoLabel() { const u = this.S.undo; return u && u.length ? u[u.length - 1].label : null; }
     undo() {
       const S = this.S, e = S.undo && S.undo.pop(); if (!e) return null; if (e.t !== S.userTeam) { S.undo = []; return null; }
+      this._restore(e); if (!S.undo.length) S.base = null; return e.label;
+    }
+    _restore(e) {
+      const S = this.S;
       for (const p of this.players(e.t)) { if (p.id in e.act) { p.active = e.act[p.id] && !this.isInj(p); p.lockUntil = e.lock[p.id] || 0; } }
       S.teams[e.t].set = JSON.parse(JSON.stringify(e.set)); S.plan = e.plan; S.train = e.train; S.policy = e.policy; S.captain = e.captain; S.presets = e.presets;
-      this.invalidate(); this.repairSettings(e.t); return e.label;
+      this.invalidate(); this.repairSettings(e.t);
     }
     /* 라인업 프리셋: 상대 선발 좌/우투에 따라 저장해 둔 라인업을 자동 적용 */
     savePreset(hand) { const S = this.S, set = S.teams[S.userTeam].set; if (!['L', 'R'].includes(hand) || set.lineup.length !== 9) return false; S.presets = Object.assign({ on: false }, S.presets, { [hand]: set.lineup.map(x => ({ id: x.id, pos: x.pos })) }); return true; }

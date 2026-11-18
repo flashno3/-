@@ -219,3 +219,16 @@ a[data-act] { cursor: pointer; text-decoration: underline; color: inherit; }
 
 .dock .dk { min-width: 46px; padding: 8px 10px !important; font-size: 20px !important; }
 tr[data-act=player] { -webkit-touch-callout: none; user-select: none; }
+
+/* 체력 게이지(남은 체력) · 선택·끌기 */
+.gauge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
+.gauge .gbar { display: inline-block; width: 64px; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.gauge .gbar i { display: block; height: 100%; border-radius: 4px; }
+.gauge.good .gbar i { background: #16a34a; } .gauge.mid .gbar i { background: #eab308; } .gauge.low .gbar i { background: #dc2626; }
+.gauge.low .gtxt { color: #dc2626; font-weight: 600; }
+tr.sel td { background: var(--accent-soft, rgba(37,99,235,.12)) !important; }
+.selcard { border-left: 4px solid var(--accent); }
+.dgrip { cursor: grab; touch-action: none; padding: 6px 4px; color: var(--muted); font-size: 16px; user-select: none; }
+tr.dragover td { box-shadow: inset 0 2px 0 var(--accent); }
+.warncard { border-left: 4px solid var(--warn, #d97706); }
+.chiprow { display: flex; gap: 6px; flex-wrap: wrap; } .recchip { background: var(--accent); color: #fff; min-height: 40px; }
