@@ -38,6 +38,7 @@ ok(S.nextId>Math.max(...Object.keys(S.players).map(id=>parseInt(id.slice(1)))),'
 {const csv=fs.readFileSync(path.join(__dirname,'data/roster_1군_2026.csv'),'utf8').split('\n').slice(1).filter(Boolean);
  const R=Object.values(S.players).filter(p=>p.birth);ok(R.length>=330,'생년월일 반영 '+R.length);
  ok(R.every(p=>p.age===2027-parseInt(p.birth.slice(0,4))&&(p.ko==='최지만'||p.throws&&p.bats)),'나이=2027-출생연도, 투타 입력');
+ {const Le=League.create(base,'Eagles',3),g=k=>Le.players('Eagles').find(p=>p.ko===k);ok(g('류현진').active&&g('채은성').active,'등록 명단 밖이어도 주전급(류현진·채은성)은 시작 1군');ok(!g('문동주').active&&!g('엄상백').active&&Le.isInj(g('문동주')),'장기 부상(문동주·엄상백)은 1군에 오르지 않음');ok(typeof Le.moveActive(g('문동주').id,true)==='string'&&!g('문동주').active,'장기 부상자 1군 등록 거부');for(const t of Object.keys(Le.S.teams))ok(Le.players(t).filter(p=>p.active&&Le.isInj(p)).length===0,t+' 부상자가 1군에 없음');}
  const Lk=League.create(base,'Eagles',3);let bad=0;for(const t of Object.keys(Lk.S.teams)){const a=Lk.players(t).filter(p=>p.active);if(a.length<28||a.length>29)bad++;if(a.filter(p=>!p.reg1).length>4)bad++}ok(bad===0,'초기 1군 28명, 대부분 실제 등록 명단');
  const old=Object.values(S.players).find(p=>p.ko==='최형우'&&p.birth);ok(old&&old.age===44,'최형우 44세');
  const q=JSON.parse(JSON.stringify(old));q.age=44;ok(L.retireChance(q)<0.7,'능력치 높은 노장은 일괄 은퇴하지 않음 '+L.retireChance(q).toFixed(2));

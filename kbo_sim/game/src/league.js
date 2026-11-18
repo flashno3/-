@@ -299,7 +299,7 @@
     _obpSlg(p) { const q = p.p, obp = q.bb + q.hbp + q.hr + (1 - q.k - q.bb - q.hbp - q.hr) * q.babip * 0.97, slg = obp + 2 * q.hr + q.babip * q.xbh * 0.5; return obp * 2 + slg; }
     /* 팀 초기 설정: 1군 29명, 라인업/로테이션/불펜 자동 */
     initTeam(t) {
-      const pool = this.reg1Pool(t);
+      const pool = this.startPool(t);
       if (pool.length >= ACTIVE_MAX) { this.autoActive(t, pool); this.autoSettings(t); return; }   // 실제 2026.10 1군 등록 명단이 있으면 그 안에서 28명 선발
       const T = this.S.teams[t], H = this.hitters(t).sort((a, b) => b.PA - a.PA), P = this.pitchers(t);
       const act = new Set();
@@ -312,6 +312,14 @@
     }
     /* 실제 1군 등록 명단(2026.10, 확대 엔트리 33명) 선수 */
     reg1Pool(t) { return this.players(t).filter(p => p.reg1); }
+    /* 시작 1군 후보: 2026.10 등록 명단 + 명단에 없지만 능력이 명단 선수 상위 25% 이상인 건강한 선수(예: 한화 류현진·채은성). 확대 엔트리 시점의 등록 여부만으로 주전급이 2군에 남지 않게 한다 */
+    startPool(t) {
+      const reg = this.reg1Pool(t); if (reg.length < ACTIVE_MAX) return reg;
+      const ov = reg.map(p => this.ovr(p)).sort((a, b) => a - b), med = ov[Math.floor(ov.length * 0.75)];
+      const extra = this.players(t).filter(p => !p.reg1 && !p.rookie && !p.foreign && !this.isInj(p) && p.team !== 'MIL' && this.ovr(p) >= med);
+      for (const p of extra) p.reg1 = true;
+      return reg.concat(extra);
+    }
     autoSettings(t, only) {
       const T = this.S.teams[t], set = T.set, H = this.hitters(t, true), P = this.pitchers(t, true);
       if (!only || only === 'lineup') set.lineup = this.bestLineup(H);
@@ -477,7 +485,7 @@
     newSeasonSetup(first) {
       const S = this.S; S.day = 0; S.phase = 'preseason';   // 부상 판정(달력)이 새 시즌 개막일 기준이 되도록 먼저 설정
       for (const p of Object.values(S.players)) p.lockUntil = 0;
-      for (const t of TEAMS) { if (t !== S.userTeam) { const rp = first ? this.reg1Pool(t) : []; this.autoActive(t, rp.length >= ACTIVE_MAX ? rp : null); this.assignUsage(t); } }
+      for (const t of TEAMS) { if (t !== S.userTeam) { const rp = first ? this.startPool(t) : []; this.autoActive(t, rp.length >= ACTIVE_MAX ? rp : null); this.assignUsage(t); } }
       this.repairSettings(S.userTeam);
       S.day = 0; S.results = []; S.stats = { bat: {}, pit: {} }; S.stats2 = { bat: {}, pit: {} }; S.recent = {}; S.rec2 = {}; for (const t of this.farmTeams()) S.rec2[t] = [0, 0, 0, 0, 0]; S.post = null; S.phase = 'preseason';
       S.rec = {}; S.h2h = {}; for (const t of TEAMS) { S.rec[t] = [0, 0, 0, 0, 0]; S.h2h[t] = {}; for (const u of TEAMS) S.h2h[t][u] = [0, 0, 0]; }

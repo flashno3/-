@@ -136,7 +136,8 @@
     const hasPot = p => p.peak !== undefined && p.scout && !p.foreign;
     const flt = { all: () => true, act: p => p.active, res: p => !p.active, inj: p => L.isInj(p), exp: p => p.contract.years <= 1 && !p.foreign, frn: p => p.foreign, young: p => p.age <= 25 && hasPot(p) && 'ABC'.includes(L.potLetter(p)) };
     const key = { ovr: (a, b) => L.ovr(b) - L.ovr(a), age: (a, b) => a.age - b.age, sal: (a, b) => b.contract.salary - a.contract.salary, pot: (a, b) => potv(b) - potv(a) };
-    const cmp = (a, b) => (v === 'pos' ? (b.active - a.active) : 0) || key[sk](a, b) || L.ovr(b) - L.ovr(a);
+    const rank = p => (p.active ? 0 : L.isInj(p) ? 2 : 1);   // 1군 → 2군(건강) → 부상자 명단
+    const cmp = (a, b) => (v === 'pos' ? rank(a) - rank(b) : 0) || key[sk](a, b) || L.ovr(b) - L.ovr(a);
     const rows = all.filter(flt[f] || flt.all).sort(cmp);
     const n1 = all.filter(p => p.active), avg = (arr, fn) => arr.length ? arr.reduce((s, p) => s + fn(p), 0) / arr.length : 0;
     const rowOf = p => { const c = p.contract, lk = hasPot(p) && p.age <= 25 ? `<span class="pot" data-l="${L.potLetter(p)}" title="잠재력 ${L.potLetter(p)} · ${L.tierLabel(potv(p))}">${L.potLetter(p)}</span>` : '<span class="muted">-</span>';
@@ -144,7 +145,7 @@
     const head = '<thead><tr><th class="l">선수</th><th class="l hm">포지션</th><th class="hm">나이</th><th>OVR</th><th title="스카우트 추정 성장 상한(25세 이하)">잠재</th><th>연봉·계약</th><th class="l hm">세부 능력</th><th class="l hm">올 시즌</th></tr></thead>';
     const groups = [['선발투수', p => p.type === 'P' && p.role === 'SP'], ['구원투수', p => p.type === 'P' && p.role !== 'SP'], ['포수', p => p.pos === 'C'], ['내야수', p => ['1B', '2B', '3B', 'SS'].includes(p.pos)], ['외야수', p => ['LF', 'CF', 'RF'].includes(p.pos)], ['지명타자', p => p.type === 'B' && p.pos === 'DH']];
     const body = v === 'pos' ? groups.map(([nm, g]) => { const r = rows.filter(g); if (!r.length) return ''; const a1 = r.filter(p => p.active);
-      return `<div class="card"><div class="row"><h2 style="margin:0">${nm}</h2><span class="muted small">${r.length}명 · 1군 ${a1.length} · 평균 OVR ${avg(r, p => L.ovr(p)).toFixed(1)} · 평균 ${avg(r, p => p.age).toFixed(1)}세</span></div><div class="tablewrap"><table class="rost">${head}<tbody>${r.map(rowOf).join('')}</tbody></table></div></div>`; }).join('')
+      return `<div class="card"><div class="row"><h2 style="margin:0">${nm}</h2><span class="muted small">${r.length}명 · 1군 ${a1.length} · 평균 OVR ${avg(r, p => L.ovr(p)).toFixed(1)} · 평균 ${avg(r, p => p.age).toFixed(1)}세</span></div><div class="tablewrap"><table class="rost">${head}<tbody>${r.map((p, i) => (rank(p) === 2 && (i === 0 || rank(r[i - 1]) !== 2) ? '<tr class="sub"><td colspan="8" class="small muted">부상자 명단 — 복귀(예정일) 전까지 1군에 등록할 수 없습니다</td></tr>' : '') + rowOf(p)).join('')}</tbody></table></div></div>`; }).join('')
       : `<div class="card"><div class="tablewrap"><table class="rost">${head}<tbody>${rows.map(rowOf).join('')}</tbody></table></div></div>`;
     const flab = [['all', '전체'], ['act', '1군'], ['res', '2군'], ['inj', '부상'], ['exp', '계약 1년 이하'], ['frn', '외국인'], ['young', '유망주(25세↓ 잠재 C+)']];
     const sortName = { ovr: '능력치(OVR) 높은 순', age: '나이 어린 순', sal: '연봉 높은 순', pot: '잠재력 높은 순' }[sk];
@@ -152,7 +153,7 @@
       <div class="kpis" style="margin-top:10px"><div class="kpi"><div class="l">1군 평균 OVR</div><div class="v">${avg(n1, p => L.ovr(p)).toFixed(1)}</div><div class="small muted">1군 평균 ${avg(n1, p => p.age).toFixed(1)}세</div></div><div class="kpi"><div class="l">구성</div><div class="v">투수 ${all.filter(p => p.type === 'P').length} · 타자 ${all.filter(p => p.type === 'B').length}</div><div class="small muted">부상 ${all.filter(p => L.isInj(p)).length} · 외국인 ${all.filter(p => p.foreign).length}</div></div><div class="kpi"><div class="l">연봉(상위 40)</div><div class="v">${L.cbtPay(t)}</div><div class="small muted">상한 ${L.cbtCap().toFixed(1)}억 · 계약 1년 이하 ${all.filter(flt.exp).length}명</div></div></div></div>
       <div class="tabs" role="tablist"><button role="tab" aria-selected="${v === 'pos'}" data-act="rview" data-a="pos">포지션별</button><button role="tab" aria-selected="${v === 'list'}" data-act="rview" data-a="list">전체 목록</button></div>
       <div class="chips">${flab.map(x => `<button class="sm" aria-pressed="${f === x[0]}" data-act="rfilter" data-a="${x[0]}">${x[1]}</button>`).join('')}</div>
-      <div class="small muted">정렬: ${v === 'pos' ? '포지션 그룹 안에서 <b>1군 → 2군</b>, 각각 ' : ''}<b>${sortName}</b> · 행을 누르면 상세(능력·잠재력·계약·성장 경로)가 열립니다. 2군은 흐리게 표시됩니다.</div>${body || '<div class="card muted">조건에 맞는 선수가 없습니다.</div>'}`;
+      <div class="small muted">정렬: ${v === 'pos' ? '포지션 그룹 안에서 <b>1군 → 2군 → 부상자 명단</b>, 각각 ' : ''}<b>${sortName}</b> · 행을 누르면 상세(능력·잠재력·계약·성장 경로)가 열립니다. 2군은 흐리게 표시됩니다.</div>${body || '<div class="card muted">조건에 맞는 선수가 없습니다.</div>'}`;
   }
   function modalPlayer(id) {
     const p = P(id), mine = p.team === U(), s = L.sub(p);
