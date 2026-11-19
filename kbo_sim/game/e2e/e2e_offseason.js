@@ -41,7 +41,9 @@ for(let season=0;season<2;season++){
   let w=0;while(!(await pg.$('button[data-act="draftPick"]'))&&w++<80)await pg.waitForTimeout(300);ok(await pg.evaluate(()=>/스카우트 추천/.test(document.body.innerText)&&/확신도|낮음|보통|높음/.test(document.body.innerText)),`드래프트 화면 스카우트 추천·확신도${season}`);ok(!!(await pg.$('button[data-act="draftPick"]')),`내 차례 도달${season}`);
   await pg.evaluate(()=>window.scrollTo(0,0));await sweep('내 차례');
   for(let k=0;k<2;k++){if(await click('button[data-act="draftPick"]')){await pg.waitForTimeout(900);let q=0;while(!(await pg.$('button[data-act="draftPick"]'))&&!(await pg.$('button[data-act="toFA"]'))&&q++<60)await pg.waitForTimeout(250)}}
+  ok(await pg.evaluate(()=>/드래프트 데이/.test(document.body.innerText)&&/내 다음 지명|지금 내 차례/.test(document.body.innerText)&&document.querySelectorAll('table.dboard td.dc').length===100),`드래프트 데이 카드·지명 보드${season}`);
   await click('button[data-act="draftAuto"]');await pg.waitForTimeout(300);await sweep('드래프트 종료');
+  ok(await pg.evaluate(()=>/드래프트 결과 리포트/.test(document.body.innerText)&&/평균 보드 순위/.test(document.body.innerText)&&/드래프트 종료/.test(document.body.innerText)),`드래프트 결과 리포트${season}`);await sweep('드래프트 리포트');
   ok(!!(await pg.$('button[data-act="toFA"]')),`FA로 이동 가능${season}`);await click('button[data-act="toFA"]');await pg.waitForTimeout(300);await sweep('FA 시작');
   for(let d=0;d<6;d++){await click('button[data-act="faDay"][data-a="7"]');await pg.waitForTimeout(150)}
   ok(await pg.evaluate(()=>/스프링캠프/.test(document.body.innerText)),`스프링캠프 소식 표시${season}`);await sweep('캠프 소식');if(await click('button[data-act="evChoice"][data-a$="|bat"]')||await click('button[data-act="evChoice"][data-a$="|pit"]')){await pg.waitForTimeout(150);await sweep('캠프 소식 선택')}

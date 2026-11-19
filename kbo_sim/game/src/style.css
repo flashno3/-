@@ -308,3 +308,11 @@ table.cf { width: 100%; border-collapse: collapse; margin: 8px 0; } table.cf th,
 .gsubs { margin-top: 8px; display: flex; flex-direction: column; gap: 5px; } .grow { display: grid; grid-template-columns: 64px 1fr 64px; align-items: center; gap: 8px; font-size: 13px; } .grow .k { color: var(--muted); }
 .gbar { position: relative; height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; } .gbar i { position: absolute; left: 0; top: 0; height: 100%; border-radius: 4px; } .gbar i.ghost { background: color-mix(in srgb, var(--muted) 45%, transparent); } .gbar i.now { background: var(--accent); transition: width .9s ease-out; } .gbar i.now.up { background: var(--pos, #2e9e57); } .gbar i.now.dn { background: var(--neg); }
 .prow { padding: 8px 0; border-bottom: 1px solid var(--line); } .spark { flex: none; }
+
+/* 투자 센터 */
+.card.inv .invic { font-size: 28px; line-height: 1; } .ldots { display: inline-flex; gap: 4px; } .ldot { width: 10px; height: 10px; border-radius: 50%; background: var(--line); display: inline-block; } .ldot.on { background: var(--accent); } .ldot.pend { background: transparent; border: 2px dashed var(--warn); }
+
+/* 드래프트 데이 */
+.dprog { position: relative; height: 10px; background: var(--surface2); border-radius: 5px; margin-top: 8px; overflow: visible; } .dprog i { display: block; height: 100%; background: var(--accent); border-radius: 5px; } .dprog b.mk { position: absolute; top: -3px; width: 4px; height: 16px; margin-left: -2px; background: var(--gold); border-radius: 2px; }
+table.dboard { border-collapse: collapse; width: 100%; font-size: 11px; } table.dboard th, table.dboard td { border: 1px solid var(--line); padding: 3px 4px; text-align: center; white-space: nowrap; } table.dboard td.dc { min-width: 62px; } table.dboard td.dc span { display: inline-block; max-width: 56px; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; } table.dboard td.dc img, table.dboard td.dc svg { vertical-align: middle; }
+table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transparent); font-weight: 700; } table.dboard td.cur { outline: 2px solid var(--accent); } table.dboard td.steal { box-shadow: inset 0 -3px 0 var(--pos, #2e9e57); } table.dboard td.reach { box-shadow: inset 0 -3px 0 var(--warn); }

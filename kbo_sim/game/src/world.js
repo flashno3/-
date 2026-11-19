@@ -246,6 +246,7 @@
       if (p.sub) { const o = S.players[p.sub.for]; if (p.team !== S.userTeam || !p.foreign || p.aq) E('sub-team', `${p.ko}의 대체 계약 상태가 올바르지 않습니다.`, [p.id]); else if (!o || o.team !== p.team || !o.rehab || o.rehab.sub !== p.id) E('sub-link', `${p.ko}와(과) 재활 선수명단 선수의 연결이 끊어져 있습니다.`, [p.id]); }
       if (p.rehab) { const c = S.players[p.rehab.sub]; if (!c || c.team !== p.team || !c.sub || c.sub.for !== p.id) E('rehab-link', `${p.ko}의 재활 선수명단 등재가 대체 선수와 연결되어 있지 않습니다.`, [p.id]); }
     }
+    if (S.invest) { const I = S.invest, KEYS = ['train', 'med', 'scout', 'farm', 'fan']; for (const k of KEYS) { const lv = I.eff[k] || 0, q = I.queue[k]; if (!(lv >= 0 && lv <= 3)) E('invest-lv', `투자 단계(${k}=${lv})가 범위를 벗어났습니다.`); if (q !== undefined && q !== lv + 1) E('invest-queue', `투자 공사 단계(${k}: ${lv}→${q})가 올바르지 않습니다.`); if ((I.paid[k] || 0) < 0) E('invest-paid', `투자 누적액(${k})이 음수입니다.`); } for (const k of Object.keys(I.eff).concat(Object.keys(I.queue))) if (!KEYS.includes(k)) E('invest-key', `알 수 없는 투자 항목(${k})입니다.`); }
     if (S.fSwap && S.fSwap.y === S.year && S.fSwap.n > 2) E('swap-count', `올 시즌 외국인 교체가 ${S.fSwap.n}회로 연 2회를 넘었습니다.`);
     const key = p => `${p.ko}|${p.type}`, groups = {};
     for (const p of all) (groups[key(p)] = groups[key(p)] || []).push(p);
@@ -375,4 +376,26 @@
     return { id: p.id, name: p.ko, age: p.age, pos: p.type === 'P' ? (p.role === 'SP' ? '선발' : '구원') : p.pos, ovr: cur, spark: pts, facts, line: parts.join(' · '), active: !!p.active };
   };
   proto.prospectNotes = function (n) { return this.players(this.S.userTeam).filter(p => p.age <= 24 && !p.foreign).sort((a, b) => this.ovr(b) - this.ovr(a)).slice(0, n || 6).map(p => this.prospectNote(p)); };
+
+  /* ================= 드래프트 데이 (읽기 전용: 지명 로직·AI 선택은 그대로) =================
+   * 내 스카우트 보드(드래프트 시작 때 내 평가 순위) 대비 실제 지명 순번으로 '스틸/이른 지명/예상 범위'를 해설한다. 내 평가는 오차가 있는 추정이다. */
+  proto.draftReaction = function (x) {
+    const S = this.S, d = S.off && S.off.draft; if (!d || !x) return null; const b = d.board || [], i = b.indexOf(x.id); if (i < 0) return null;
+    const rank = i + 1, diff = x.pick - rank, mine = x.team === S.userTeam;
+    const kind = diff >= 10 && rank <= 40 ? 'steal' : diff <= -10 ? 'reach' : 'fair', label = { steal: '스틸', reach: '이른 지명', fair: '예상 범위' }[kind];
+    return { kind, label, rank, pick: x.pick, diff, mine, text: `내 스카우트 보드 ${rank}위 → ${x.pick}순번 지명${kind === 'steal' ? ` (보드보다 ${diff}순번 늦게 지명)` : kind === 'reach' ? ` (보드보다 ${-diff}순번 일찍 지명)` : ''}` };
+  };
+  proto.draftDay = function () {
+    const S = this.S, d = S.off && S.off.draft; if (!d) return null; const t = S.userTeam, tot = d.order.length, per = Math.round(tot / d.rounds);
+    const mineIdx = []; d.order.forEach((tm, i) => { if (tm === t) mineIdx.push(i); }); const next = mineIdx.find(i => i >= d.pick), left = mineIdx.filter(i => i >= d.pick).length;
+    const grid = []; for (let r = 0; r < d.rounds; r++) { const row = []; for (let s = 0; s < per; s++) { const i = r * per + s, pk = d.picks[i] || null; row.push({ i, team: d.order[i], id: pk ? pk.id : null, mine: d.order[i] === t, cur: i === d.pick, rx: pk ? this.draftReaction(pk) : null }); } grid.push(row); }
+    const last = d.picks[d.picks.length - 1] || null;
+    return { done: d.pick >= tot, pick: d.pick, total: tot, per, round: Math.min(d.rounds, Math.floor(d.pick / per) + 1), untilMine: next === undefined ? null : next - d.pick, nextMine: next === undefined ? null : next + 1, myLeft: left, myTotal: mineIdx.length, grid, last, lastRx: last ? this.draftReaction(last) : null };
+  };
+  proto.draftReport = function () {
+    const S = this.S, d = S.off && S.off.draft; if (!d || d.pick < d.order.length) return null; const t = S.userTeam, per = Math.round(d.order.length / d.rounds);
+    const mine = d.picks.filter(x => x.team === t).map(x => { const p = S.players[x.id], rx = this.draftReaction(x), e = this.scoutEst ? this.scoutEst(p) : null; return { id: x.id, name: p.ko, pick: x.pick, round: Math.floor((x.pick - 1) / per) + 1, rank: rx ? rx.rank : null, diff: rx ? rx.diff : null, kind: rx ? rx.kind : null, est: e ? { o: Math.round(e.o), ceil: e.ceil, sd: e.ceilSd } : null }; });
+    const ranked = mine.filter(x => x.rank !== null), avg = ranked.length ? Math.round(ranked.reduce((a, x) => a + x.rank, 0) / ranked.length * 10) / 10 : null, best = ranked.slice().sort((a, b) => b.diff - a.diff)[0] || null;
+    return { mine, avgRank: avg, best, steals: ranked.filter(x => x.kind === 'steal').length, reaches: ranked.filter(x => x.kind === 'reach').length, first: d.picks.slice(0, per).map(x => ({ pick: x.pick, team: x.team, id: x.id, name: S.players[x.id].ko })) };
+  };
 });

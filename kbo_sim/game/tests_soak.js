@@ -73,6 +73,12 @@ function randSub(L,R,tag){   // 부상 대체 외국인: 가끔 일반 외국인
   for(const q of L.subList()){ok(q.orig&&q.orig.rehab&&q.orig.rehab.sub===q.p.id&&q.p.contract.salary===0,`${tag} 대체-재활 연결`)}
   const e=L.integrity().errors.filter(z=>!/dup-name/.test(z.code));ok(e.length===0,`${tag} 대체 무결성 ${JSON.stringify(e).slice(0,200)}`);
 }
+function randInvest(L,R,tag){   // 구단 투자: 무작위 착공 시도(예산·중복·단계 한도 오류는 거절되어야 함)
+  if(R()>0.06)return;const ks=['train','med','scout','farm','fan','zzz'];const k=ks[Math.floor(R()*ks.length)];const before=JSON.stringify(L.S.invest||null);const e=L.investBuy(k);
+  if(e){ok(typeof e==='string'&&JSON.stringify(L.S.invest||null)===before,`${tag} 거절된 투자는 상태를 바꾸지 않음 ${e}`)}else{const I=L.S.invest;ok(I.queue[k]===L.investLv(k)+1&&I.paid[k]>0,`${tag} 착공 상태`)}
+  for(const r of L.investRows())ok(r.lv>=0&&r.lv<=3&&(!r.pend||r.pend===r.lv+1),`${tag} 투자 행 ${r.key}`);ok(L.scoutLimit()>=3&&L.scoutLimit()<=5,`${tag} 스카우트 한도 ${L.scoutLimit()}`);
+  const ig=L.integrity().errors.filter(z=>/^invest/.test(z.code));ok(ig.length===0,`${tag} 투자 무결성 ${JSON.stringify(ig)}`);
+}
 function randScout(L,R,tag){
   const S=L.S,x=R();
   if(x<0.2&&S.scoutMkt&&S.scoutMkt.length)L.scoutHire(S.scoutMkt[Math.floor(R()*S.scoutMkt.length)].id);else if(x<0.3){const sc=L.scouts();if(sc.length)L.scoutFire(sc[Math.floor(R()*sc.length)].id)}
@@ -89,12 +95,12 @@ function run(seed,team,seasons,actSeed,detail){
     L.faAdvance(75);L.closeFA();invariants(L,`Y${y}closeFA`);
     // 시즌: 20일 단위 진행하며 면담·연장
     let guard=0;while(S.phase!=='offseason'&&S.day<260&&guard++<30){const r=L.advance(10,false);invariants(L,`Y${y}d${S.day}`);if(R()<0.6)negs+=randomNeg(L,R,`Y${y}d${S.day}ext`,R()<0.5?'extend':'meeting')?1:0;
-      randTrain(L,R,`Y${y}d${S.day}`);randScout(L,R,`Y${y}d${S.day}`);randSub(L,R,`Y${y}d${S.day}`);
+      randTrain(L,R,`Y${y}d${S.day}`);randScout(L,R,`Y${y}d${S.day}`);randSub(L,R,`Y${y}d${S.day}`);randInvest(L,R,`Y${y}d${S.day}`);
       // 이벤트 무작위 처리
       for(const e of L.eventsOpen().slice(0,2)){const ch=e.choices[Math.floor(R()*e.choices.length)];L.resolveEvent(e.id,ch.k)}
       if(r&&r.status==='userGame'){const ctx=L.startUserGame(r.game,r.idx);L.playAuto(ctx);L.finishUserGame(ctx)}}
     L.advance(300,false);const P=L.startPostseason();let g=0;while(!P.done&&g++<100){if(L.userInPost()){const c=L.startUserPostGame();c.live.playToEnd();L.finishUserPostGame(c)}else L.simPostGame()}
-    const off=L.startOffseason();invariants(L,`Y${y}offseason`);{const gr=L.growthReveal();ok(gr&&gr.list.every(x=>x.d===x.o1-x.o0&&Number.isFinite(x.o1)),`Y${y} 성장 공개 일관성`);ok(gr.reveal.length<=15,`Y${y} 공개 개수`);const pn=L.prospectNotes(8);ok(pn.every(x=>x.age<=24&&Number.isFinite(x.ovr)&&x.spark.length>=1&&x.line.length>0),`Y${y} 유망주 노트`)}for(let k=0;k<4;k++)randTrain(L,R,`Y${y}off${k}`);
+    const off=L.startOffseason();invariants(L,`Y${y}offseason`);for(let q=0;q<3;q++)randInvest(L,()=>0.01+R()*0.04,`Y${y}off-inv${q}`);{const gr=L.growthReveal();ok(gr&&gr.list.every(x=>x.d===x.o1-x.o0&&Number.isFinite(x.o1)),`Y${y} 성장 공개 일관성`);ok(gr.reveal.length<=15,`Y${y} 공개 개수`);const pn=L.prospectNotes(8);ok(pn.every(x=>x.age<=24&&Number.isFinite(x.ovr)&&x.spark.length>=1&&x.line.length>0),`Y${y} 유망주 노트`)}for(let k=0;k<4;k++)randTrain(L,R,`Y${y}off${k}`);
     for(const id of off.rep.expiring.slice()){const p=S.players[id];if(L.negBlock(id,'resign')===null&&R()<0.7){negs+=randomNeg(L,R,`Y${y}resign`,'resign')?1:0}}
     for(const id of off.rep.expiring.slice()){const p=S.players[id];if(!p.foreign&&L.ovr(p)>=48)L.resign(id)}
     L.finishContracts();const d=L.buildDraft();let steps=0;for(;;){const r=L.draftAiStep();if(r.done||r.userTurn)break;if(steps++>400)break}

@@ -75,8 +75,12 @@ async function run(vp,label,team){
   await nav('선수단','로스터');await pg.evaluate(()=>{const r=document.querySelector('tr[data-act="player"]');if(r)r.click()});await pg.waitForTimeout(150);
   if(await click('button[data-act="releaseAsk"]')){await pg.waitForTimeout(100);ok(await pg.evaluate(()=>/위약금 합계/.test(document.body.innerText)&&/방출 후 로스터/.test(document.body.innerText)),`${label}: 방출 확정 요약`);await sweep('방출 요약');await click('.sheet button[data-act="cfClose"]');ok(!(await pg.$('table.cf')),`${label}: 요약 취소`)}
   await click('button[data-act="closeModal"]');
+  // 4-6) 구단 투자 센터: 착공 전 요약 → 확정 → 공사 중
+  await nav('운영','투자 센터');ok(await pg.evaluate(()=>/구단 투자 센터/.test(document.body.innerText)&&/올해 투자 예산/.test(document.body.innerText)&&/투자하지 않으면 아무 것도 달라지지 않습니다/.test(document.body.innerText)),`${label}: 투자 센터 화면`);await sweep('투자 센터');
+  if(await click('button[data-act="investAsk"]:not([disabled])')){await pg.waitForTimeout(100);ok(await pg.evaluate(()=>/착공 확정/.test(document.body.innerText)&&/올해 예상 손익/.test(document.body.innerText)&&/선수단 예산·경쟁균형세/.test(document.body.innerText)),`${label}: 착공 전 요약`);await sweep('착공 요약');
+    await click('button[data-act="cfDo"]');await pg.waitForTimeout(150);ok(await pg.evaluate(()=>/공사 중/.test(document.body.innerText)&&/투자 이력/.test(document.body.innerText)&&/착공/.test(document.body.innerText)),`${label}: 착공 후 공사 중 표시`);await sweep('착공 후')}
   // 5) 전 화면 순회
-  const groups=[['대시보드',[]],['선수단',['로스터','2군','라인업','투수진','훈련','분위기']],['리그',['일정·결과','순위·기록','팀 정보','스토리']],['운영',['재정','코치진','스카우팅','이적시장']],['설정',[]]];
+  const groups=[['대시보드',[]],['선수단',['로스터','2군','라인업','투수진','훈련','분위기']],['리그',['일정·결과','순위·기록','팀 정보','스토리']],['운영',['재정','투자 센터','코치진','스카우팅','이적시장']],['설정',[]]];
   for(const [g,subs] of groups){await nav(g);await sweep(g);for(const s of subs){await nav(g,s);await sweep(g+'/'+s)}}
   // 스토리 탭
   await nav('리그','스토리');for(const t of ['top','line','press','chal','hist']){await click(`button[data-act="storyTab"][data-a="${t}"]`);await sweep('스토리'+t)}

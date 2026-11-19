@@ -2,7 +2,7 @@
  * 성장·노화·은퇴 → 계약 만료/재계약 → 신인 드래프트 → FA 시장 → 새 시즌. 트레이드는 시즌 중(마감 전)과 오프시즌에 가능.
  */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) { factory(require('./league.js'), require('../../web/src/engine.js')); require('./negotiate.js'); require('./world.js'); require('./training.js'); require('./scout.js'); }
+  if (typeof module === 'object' && module.exports) { factory(require('./league.js'), require('../../web/src/engine.js')); require('./negotiate.js'); require('./world.js'); require('./training.js'); require('./scout.js'); require('./invest.js'); }
   else factory(root.KBOLeague, root.KBOEngine);
 })(typeof self !== 'undefined' ? self : this, function (LG, Engine) {
   'use strict';
@@ -277,7 +277,7 @@
     for (const id in S.players) {
       const p = S.players[id]; if (p.retired || p.team === 'DRAFT') continue;
       const share = this.playShare(p), pre = p.team === user ? { o0: this.ovr(p), s0: this.sub(p), a0: p.age, ps: Math.round(share * 100), trd: p.tr && p.tr.y === S.year ? p.tr.total : null } : null;   // 성장 공개 연출용 '성장 전' 기록(읽기 전용)
-      const d = this.progress(p, rngFor(S.seed, S.year, 32, parseInt(id.slice(1))), share);
+      const d = this.progress(p, rngFor(S.seed, S.year, 32, parseInt(id.slice(1))), p.team === user && this.investFarm && this.investFarm() > 0 ? clamp(share + this.investFarm(), 0, 1) : share);   // 육성 시설 투자: 내 선수의 출전 비중 보정(투자하지 않으면 그대로)
       if (p.team === user) { rep.prog.push(Object.assign({ id, d }, pre)); (p.ovrHist = p.ovrHist || []).push({ y: S.year + 1, o: this.ovr(p) }); if (p.ovrHist.length > 8) p.ovrHist.shift(); }
     }
     for (const x of rep.prog) { const p = S.players[x.id]; if (p && p.age <= 24 && x.d >= 5) this.story('train', `유망주 급성장: ${p.ko}(${p.age}세) OVR ${x.o0}→${this.ovr(p)} (+${x.d})`, 2); }
@@ -331,7 +331,7 @@
     const st = this.standings().slice().reverse().map(x => x.team), order = [], st1 = st.slice();
     for (const t of st) if (S.cbt && S.cbt.drop && S.cbt.drop[t]) { const i = st1.indexOf(t); st1.splice(i, 1); st1.splice(Math.min(i + 9, st1.length), 0, t); }   // 경쟁균형세 3회 연속 초과: 1라운드 지명 9단계 하락
     order.push(...st1); for (let k = 1; k < 10; k++) order.push(...st);
-    S.off.draft = { pool, order, pick: 0, picks: [], rounds: 10 }; return S.off.draft;
+    S.off.draft = { pool, order, pick: 0, picks: [], rounds: 10, board: this.userScore ? pool.slice().sort((a, b) => this.userScore(S.players[b]) - this.userScore(S.players[a])) : null }; return S.off.draft;   // board: 드래프트 시작 시점 내 스카우트 평가 순위(드래프트 데이 해설용)
   };
   proto.draftOnClock = function () { const d = this.S.off.draft; return d.pick < d.order.length ? d.order[d.pick] : null; };
   proto._draftTake = function (t, id) {
@@ -1054,7 +1054,7 @@
   };
   proto.takeOverTeam = function (t) {   // 해임 후 다른 구단 지휘: 라인업·로테이션 자동 편성, 신뢰도 55로 시작
     const S = this.S; if (!(t in S.teams) || t === S.userTeam) return false; const old = S.userTeam;
-    S.userTeam = t; this.autoSettings(t); this.repairSettings(t); const f = S.fin.teams[t]; f.trust = 55;
+    S.userTeam = t; if (this._investReset) this._investReset(); this.autoSettings(t); this.repairSettings(t); const f = S.fin.teams[t]; f.trust = 55;
     S.protect = undefined; S.policy = { pitch: 'normal', run: 'normal' }; S.teamMood = null; if (S.events) for (const e of S.events.list) if (e.status === 'open') { e.status = 'done'; e.result = '감독 교체로 종결'; }
     for (const id in S.players) if (S.players[id].mood) delete S.players[id].mood;
     if (S.fired) S.fired.done = true; this._setGoals(); this.invalidate(); news(this, `${KO0[old]} 감독 해임 → ${KO0[t]} 감독 취임`); return true;
@@ -1239,7 +1239,7 @@
     this.newSeasonSetup(false); this.repairSettings(S.userTeam);
     const cap = S.calib.cap; S.calib.cap = cap;
     this._setGoals(); S.report = S.report;
-    if (this._campApply) this._campApply(); if (this._campEvApply) this._campEvApply(); if (this._loyDecay) this._loyDecay(2);   // 새 시즌: 오래된 불만·기쁨이 가라앉는다
+    if (this._campApply) this._campApply(); if (this._campEvApply) this._campEvApply(); if (this._investApply) this._investApply(); if (this._loyDecay) this._loyDecay(2);   // 새 시즌: 오래된 불만·기쁨이 가라앉는다
     S.prospectsDone = null; S.scWatch = []; S.scPtr = 0; if (this.ensureProspects) this.ensureProspects();   // 이번 시즌의 드래프트 후보 풀 공개
     news(this, `${S.year} 시즌 개막 준비`);
   };
@@ -1366,7 +1366,7 @@
     }
     for (const t of TEAMS) for (const p of this.players(t)) {
       if (!p.active || this.isInj(p)) continue;
-      const pol = t === user ? this.policy() : null, hz = (p.type === 'B' ? 0.0030 : p.role === 'SP' ? 0.0042 : 0.0033) * (p.age >= 33 ? 1.3 : p.age <= 24 ? 0.9 : 1) * (pol ? (p.type === 'P' ? { save: 0.8, normal: 1, push: 1.3 }[pol.pitch] : { low: 0.95, normal: 1, high: 1.1 }[pol.run]) * (S.restUntil && d < S.restUntil ? 0.75 : 1) * this._trainInjFor(p) : 1);   // 운영 방침: 투수 혹사(push)·적극 주루는 부상 위험↑
+      const pol = t === user ? this.policy() : null, hz = (p.type === 'B' ? 0.0030 : p.role === 'SP' ? 0.0042 : 0.0033) * (p.age >= 33 ? 1.3 : p.age <= 24 ? 0.9 : 1) * (pol ? (p.type === 'P' ? { save: 0.8, normal: 1, push: 1.3 }[pol.pitch] : { low: 0.95, normal: 1, high: 1.1 }[pol.run]) * (S.restUntil && d < S.restUntil ? 0.75 : 1) * this._trainInjFor(p) * (this.investMult ? this.investMult('med') : 1) : 1);   // 운영 방침: 투수 혹사(push)·적극 주루는 부상 위험↑
       if (r.random() >= hz) continue;
       const u = r.random(), days = u < 0.55 ? 7 + Math.floor(r.random() * 8) : u < 0.85 ? 15 + Math.floor(r.random() * 21) : u < 0.97 ? 45 + Math.floor(r.random() * 56) : 150 + Math.floor(r.random() * 181);
       const sev = u < 0.55 ? '' : u < 0.85 ? '' : u < 0.97 ? '(장기)' : '(수술·시즌 아웃급)', part = pickW(r, p.type === 'B' ? INJ_B : INJ_P);

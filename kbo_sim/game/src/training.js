@@ -108,7 +108,7 @@
       for (const k of Object.keys(info.w)) out.w[k] = (out.w[k] || 1) + EMPH * share * info.w[k] * cf;
       if (info.speed) out.speed += share * info.speed * cf; if (info.range) out.range += share * info.range * cf; if (info.stamina) out.stamina += share * info.stamina * cf;
     }
-    out.mult = 1 + 0.12 * tot; return out;
+    out.mult = 1 + 0.12 * tot * (this.investMult ? this.investMult('train') : 1); return out;   // 훈련 시설 투자: 훈련 보정 ×1.05~1.15(투자하지 않으면 1)
   };
   proto._trainMult = function (p) { return this._trainEff(p).mult; };
   proto._trainInjFor = function (p) {

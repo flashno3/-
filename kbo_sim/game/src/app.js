@@ -67,8 +67,8 @@
   /* ---------------- 공통 셸 ---------------- */
   const NAV = [['home', '대시보드'], ['roster', '로스터'], ['farm', '2군'], ['lineup', '라인업'], ['pitching', '투수진'], ['train', '훈련'], ['schedule', '일정·결과'], ['standings', '순위·기록'], ['teams', '팀 정보'], ['story', '스토리'], ['mood', '분위기'], ['finance', '재정'], ['coach', '코치진'], ['scout', '스카우팅'], ['market', '이적시장'], ['offseason', '오프시즌'], ['save', '저장·설정']];
   /* 메뉴를 5개 묶음으로 단순화: 대시보드 · 선수단 · 리그 · 운영 · 설정(+오프시즌). 묶음 안의 화면은 상단 탭으로 전환 */
-  const SCR = { home: '대시보드', desk: '프런트 데스크', roster: '로스터', farm: '2군', lineup: '라인업', pitching: '투수진', train: '훈련', schedule: '일정·결과', standings: '순위·기록', teams: '팀 정보', story: '스토리', mood: '분위기', finance: '재정', coach: '코치진', scout: '스카우팅', market: '이적시장', offseason: '오프시즌', save: '저장·설정' };
-  const GROUPS = [['home', '대시보드', ['home', 'desk']], ['team', '선수단', ['roster', 'farm', 'lineup', 'pitching', 'train', 'mood']], ['league', '리그', ['schedule', 'standings', 'teams', 'story']], ['ops', '운영', ['finance', 'coach', 'scout', 'market']], ['offseason', '오프시즌', ['offseason']], ['save', '설정', ['save']]];
+  const SCR = { home: '대시보드', desk: '프런트 데스크', roster: '로스터', farm: '2군', lineup: '라인업', pitching: '투수진', train: '훈련', schedule: '일정·결과', standings: '순위·기록', teams: '팀 정보', story: '스토리', mood: '분위기', finance: '재정', invest: '투자 센터', coach: '코치진', scout: '스카우팅', market: '이적시장', offseason: '오프시즌', save: '저장·설정' };
+  const GROUPS = [['home', '대시보드', ['home', 'desk']], ['team', '선수단', ['roster', 'farm', 'lineup', 'pitching', 'train', 'mood']], ['league', '리그', ['schedule', 'standings', 'teams', 'story']], ['ops', '운영', ['finance', 'invest', 'coach', 'scout', 'market']], ['offseason', '오프시즌', ['offseason']], ['save', '설정', ['save']]];
   function primary() {
     const S = L.S, st = L.standings(), my = st.find(x => x.team === U());
     if (S.phase === 'offseason') return { label: '오프시즌 진행', act: 'go', a: 'offseason' };
@@ -960,12 +960,12 @@
       const pr = pool.slice(0, 60).map(p => `<tr><td class="l"><b>${esc(p.ko)}</b></td><td class="l">${p.type === 'B' ? posName[p.pos] : (p.role === 'SP' ? '선발형' : '구원형')}</td><td class="n">${p.age}</td><td>${ovrChip(Math.max(20, Math.min(80, Math.round(L.scoutEst(p).o))))}</td><td class="l"><span class="chip ${L.scoutEst(p).ceil >= 57 ? 'in' : ''}" title="스카우트 추정 ${L.scoutEst(p).ceil}±${L.scoutEst(p).ceilSd} — 실제 정점은 달라질 수 있습니다">${gradeRange(L.scoutEst(p))}급 ${L.tierLabel(L.scoutEst(p).ceil)}</span> <span class="chip ${confCls(L.scoutEst(p).conf)}">${L.scoutEst(p).conf}</span></td><td>${mine ? `<button class="sm primary" data-act="draftPick" data-a="${p.id}">지명</button>` : ''}</td></tr>`).join('');
       const picks = d.picks.slice(-14).reverse().map(x => `<tr><td class="l n">${x.pick}</td><td class="l">${teamTag(x.team)}</td><td class="l">${esc(P(x.id).ko)}</td></tr>`).join('');
       const myp = d.picks.filter(x => x.team === U()).map(x => esc(P(x.id).ko)).join(', ');
-      const lastPk = d.picks[d.picks.length - 1], stage = lastPk ? `<div class="draftstage"><div class="small muted">${Math.ceil(lastPk.pick / 10)}라운드 ${((lastPk.pick - 1) % 10) + 1}순위 · ${KO[lastPk.team]}</div><div class="dname">${esc(P(lastPk.id).ko)}${lastPk.team === U() ? ' <span class="chip in">우리 구단 지명</span>' : ''}</div><div class="small">${esc(L.draftIntro(lastPk.id))}</div></div>` : '';
+      const lastPk = d.picks[d.picks.length - 1], stage = lastPk ? `<div class="draftstage"><div class="small muted">${Math.ceil(lastPk.pick / 10)}라운드 ${((lastPk.pick - 1) % 10) + 1}순위 · ${KO[lastPk.team]}</div><div class="dname">${esc(P(lastPk.id).ko)}${lastPk.team === U() ? ' <span class="chip in">우리 구단 지명</span>' : ''}</div><div class="small">${esc(L.draftIntro(lastPk.id))}</div>${L.draftDay().lastRx ? `<div class="small" style="margin-top:4px">${rxChip(L.draftDay().lastRx)} ${esc(L.draftDay().lastRx.text)}</div>` : ''}</div>` : '';
       const topPk = mine ? `<div class="card"><h2>스카우트 추천</h2><div class="small muted">내 스카우트 추정 기준 상위 3명입니다. 확신도가 낮으면 실제와 크게 다를 수 있습니다(스카우팅 탭에서 관찰해 오차를 줄일 수 있습니다).</div>${pool.slice(0, 3).map(p => `<div class="row small" style="margin-top:6px"><b>${esc(p.ko)}</b> <span class="muted">${progLabel(p)} · ${p.age}세</span> ${estChips(p)}<span class="sp"></span><button class="sm primary" data-act="draftPick" data-a="${p.id}">지명</button></div>`).join('')}</div>` : '';
-      return `${bar}${stage}${topPk}<div class="card"><div class="row"><h2>신인 드래프트</h2><span class="muted small">${d.pick}/${d.order.length}번째 지명 · ${onClock ? (mine ? '<b class="pos">내 차례</b>' : KO[onClock] + ' 차례') : '종료'}</span><span class="sp"></span>${onClock && !mine ? (ui.draftT ? '<button data-act="draftSkip">건너뛰기</button>' : '<button data-act="draftSim">발표 보기</button><button data-act="draftSkip">내 차례까지 바로</button>') : ''}${onClock ? '<button data-act="draftAuto">나머지 자동 지명</button>' : '<button class="primary" data-act="toFA">FA 시장으로</button>'}</div>
+      return `${bar}${draftDayCard()}${stage}${topPk}<div class="card"><div class="row"><h2>신인 드래프트</h2><span class="muted small">${d.pick}/${d.order.length}번째 지명 · ${onClock ? (mine ? '<b class="pos">내 차례</b>' : KO[onClock] + ' 차례') : '종료'}</span><span class="sp"></span>${onClock && !mine ? (ui.draftT ? '<button data-act="draftSkip">건너뛰기</button>' : '<button data-act="draftSim">발표 보기</button><button data-act="draftSkip">내 차례까지 바로</button>') : ''}${onClock ? '<button data-act="draftAuto">나머지 자동 지명</button>' : '<button class="primary" data-act="toFA">FA 시장으로</button>'}</div>
         <p class="small muted" style="margin:6px 0">스카우트 평가(능력치·성장 상한 등급)는 오차가 있어 지명 순번이 높아도 크게 못 클 수 있고, 하위 지명에서 대성하기도 합니다. 지명 순서는 정규시즌 성적 역순이고 10라운드까지 진행합니다. 신인은 2군으로 들어옵니다. 내 지명: ${myp || '없음'}</p></div>
         <div class="grid"><div class="card"><h2>지명 가능 선수</h2><div class="tablewrap" style="max-height:520px;overflow-y:auto"><table><thead><tr><th class="l">선수</th><th class="l">유형</th><th>나이</th><th>OVR(추정)</th><th class="l">성장 상한·확신도</th><th></th></tr></thead><tbody>${pr}</tbody></table></div></div>
-        <div class="card"><h2>최근 지명</h2><div class="tablewrap"><table><tbody>${picks || '<tr><td class="muted">아직 없습니다.</td></tr>'}</tbody></table></div></div></div>`;
+        <div class="card"><h2>최근 지명</h2><div class="tablewrap"><table><tbody>${picks || '<tr><td class="muted">아직 없습니다.</td></tr>'}</tbody></table></div></div></div>${draftBoardCard()}${draftReportCard()}`;
     }
     return `${bar}${screenFA()}<div class="row"><button class="primary big" data-act="toSeason">FA 종료 · 새 시즌 시작</button></div>`;
   }
@@ -1406,6 +1406,51 @@
     const ns = L.prospectNotes(6); if (!ns.length) return '';
     return `<div class="card"><div class="row"><h2 style="margin:0">유망주 노트</h2><span class="sp"></span><span class="small muted">24세 이하 · OVR 순</span></div><div class="small muted" style="margin:4px 0">입단 경로, OVR 추이, 1군 출전 같은 확인된 기록으로 정리합니다. 숨은 잠재력(정점)은 알 수 없으며 표시하지 않습니다.</div>${ns.map(prospectRowNote).join('')}</div>`;
   }
+  /* ---------------- 구단 투자 센터 ---------------- */
+  function screenInvest() {
+    const S = L.S, t = U(), rows = L.investRows(), budget = L.investBudget(), spent = L.investSpent(), left = Math.round((budget - spent) * 10) / 10, up = L.investUpkeep(), I = S.invest, pv = L.finReady() ? L.finPreview(t) : null;
+    const dots = (lv, pend) => [1, 2, 3].map(i => `<i class="ldot ${i <= lv ? 'on' : i === pend ? 'pend' : ''}"></i>`).join('');
+    const card = r => `<div class="card inv"><div class="row" style="flex-wrap:nowrap"><div class="invic">${r.icon}</div><div style="flex:1;min-width:0"><div class="row" style="gap:8px"><h3 style="margin:0">${esc(r.n)}</h3><span class="ldots" aria-label="${r.lv}단계">${dots(r.lv, r.pend)}</span>${r.pend ? `<span class="chip warn">${r.pend}단계 공사 중</span>` : ''}</div><div class="small muted">${esc(r.desc)}</div></div></div>
+      <div class="small" style="margin-top:6px">현재 효과: <b>${esc(r.effNow)}</b>${r.pend ? ` → 개막 후 <b>${esc(L.investProjects()[r.key].eff[r.pend])}</b>` : ''}</div>
+      ${r.canBuy ? `<div class="small" style="margin-top:4px">다음 단계: <b>${esc(r.effNext)}</b> · 비용 <b>${r.cost}억</b>${r.cost > left + 1e-9 ? ' <span class="neg">(올해 예산 부족)</span>' : ''}</div>${r.key === 'fan' ? `<div class="small muted">${esc(L.investEstimate('fan', r.lv + 1))}</div>` : ''}` : (r.pend ? '<div class="small muted">다음 시즌 개막 때 완공되어 효과가 시작됩니다.</div>' : '<div class="small muted">최고 단계입니다.</div>')}
+      <div class="row" style="margin-top:8px"><button class="primary" data-act="investAsk" data-a="${r.key}" ${r.canBuy && r.cost <= left + 1e-9 ? '' : 'disabled'}>${r.pend ? '공사 중' : r.lv >= 3 ? '최고 단계' : (r.lv + 1) + '단계 착공'}</button><span class="small muted">누적 투자 ${r.paid}억</span></div></div>`;
+    return `<div class="card"><div class="row"><h2 style="margin:0">구단 투자 센터</h2><span class="sp"></span><span class="small muted">장기 시설 투자 · 효과는 다음 시즌 개막부터</span></div>
+      <div class="small muted" style="margin:4px 0">시설에 투자하면 몇 시즌에 걸쳐 훈련·부상·스카우팅·육성·관중에 보정이 붙습니다. 비용은 올해 구단 손익(목표·이사회 평가)에 반영되고, 선수단 예산(FA 여유자금)과 경쟁균형세는 직접 바뀌지 않습니다. <b>투자하지 않으면 아무 것도 달라지지 않습니다.</b></div>
+      <div class="kpis"><div class="kpi"><div class="l">올해 투자 예산</div><div class="v">${left.toFixed(1)}억</div><div class="small muted">총 ${budget.toFixed(1)}억 · 사용 ${spent.toFixed(1)}억</div></div><div class="kpi"><div class="l">연 유지비</div><div class="v">${up.toFixed(1)}억</div><div class="small muted">완공 시설 투자액의 5%</div></div>${pv ? `<div class="kpi"><div class="l">올해 예상 손익</div><div class="v ${pv.op < 0 ? 'neg' : ''}">${pv.op.toFixed(1)}억</div></div>` : ''}</div></div>
+      <div class="grid">${rows.map(card).join('')}</div>
+      <div class="card"><h2>투자 이력</h2>${I && I.log.length ? I.log.slice(0, 10).map(x => `<div class="small"><span class="muted">${x.ph === 'offseason' || x.ph === 'preseason' ? `${x.y} ${x.ph === 'offseason' ? '오프시즌' : '개막'}` : L.dateStr(x.d)}</span> ${esc(x.text)}</div>`).join('') : '<div class="small muted">투자 이력이 없습니다.</div>'}</div>
+      <div class="card"><h2>규칙 <span class="chip warn">가정값</span></h2><div class="small muted">프로젝트 5개 × 3단계, 한 번에 한 단계씩 착공 → <b>다음 시즌 개막 때 완공</b>. 단계 비용(억): 훈련·의무·스카우팅·육성 8/16/28, 팬 경험 10/20/34. 착공할 때 올해 행사 비용으로 한 번에 계상. 연 유지비는 완공된 단계에 낸 누적 투자액의 5%. 올해 착공 비용 합계는 '이사회가 허용하는 적자 한도'의 80% 이내. 효과는 훈련 보정 ×1.05/1.10/1.15 · 부상 확률 −5/−10/−15% · 스카우트 한도 +1/+2/+2(3단계는 주간 관찰 +1건) · 성장 출전 비중 +0.04/+0.08/+0.12 · 기본 관중 +0.7/+1.4/+2.2%(구장 수용 한계까지). 실제 구단 투자 규모와 효과 데이터가 없어 모든 수치는 게임 균형용 가정입니다.</div></div>`;
+  }
+  function confirmInvest(k) {
+    const r = L.investRows().find(x => x.key === k), t = U(), pv = L.finPreview(t), bl = L.investCheck(k), left = Math.round((L.investBudget() - L.investSpent()) * 10) / 10, P = L.investProjects()[k], I = L.S.invest;
+    const up0 = L.investUpkeep(), up1 = Math.round(((up0 / 0.05 || 0) + r.cost) * 0.05 * 10) / 10;
+    askConfirm({ title: `${r.n} ${r.lv + 1}단계 착공`, ok: '착공 확정', disabled: !!bl,
+      rows: [['프로젝트', `${r.icon} ${esc(r.n)} (${r.lv}단계 → ${r.lv + 1}단계)`], ['비용', `<b>${r.cost}억</b> (올해 행사 비용으로 즉시 계상)`], ['올해 예상 손익', `${pv.op.toFixed(1)}억 → <b class="${pv.op - r.cost < 0 ? 'neg' : ''}">${(pv.op - r.cost).toFixed(1)}억</b>`], ['올해 투자 예산', `${left.toFixed(1)}억 → ${(left - r.cost).toFixed(1)}억`], ['완공', '다음 시즌 개막 때'], ['효과', `${esc(r.effNow)} → <b>${esc(r.effNext)}</b>`], ['연 유지비(완공 후)', `${up0.toFixed(1)}억 → +${Math.round(r.cost * 0.05 * 10) / 10}억 증가`], ['선수단 예산·경쟁균형세', '변화 없음']],
+      notes: [{ t: '착공하면 취소할 수 없고 비용은 돌려받지 못합니다. 효과 수치는 게임 균형을 위한 가정값입니다.' }, ...(bl ? [{ t: bl, cls: 'neg' }] : [])], run: () => A.investDo(k) });
+  }
+  /* ---------------- 드래프트 데이 ---------------- */
+  const rxChip = r => (r ? `<span class="chip ${r.kind === 'steal' ? 'in' : r.kind === 'reach' ? 'warn' : ''}" title="${esc(r.text)}">${r.label}</span>` : '');
+  function draftDayCard() {
+    const dd = L.draftDay(); if (!dd) return ''; const pct = Math.round(dd.pick / dd.total * 100), d = L.S.off.draft;
+    const mineList = d.order.map((t, i) => (t === U() ? i + 1 : 0)).filter(Boolean);
+    const status = dd.done ? '<b>드래프트 종료</b>' : dd.untilMine === 0 ? '<b class="pos">지금 내 차례입니다</b>' : dd.untilMine === null ? '내 지명은 모두 끝났습니다' : `내 다음 지명(${dd.nextMine}순번)까지 <b>${dd.untilMine}명</b>`;
+    return `<div class="card draftday"><div class="row"><h2 style="margin:0">드래프트 데이</h2><span class="sp"></span><span class="small muted">${dd.round}라운드 · ${dd.pick}/${dd.total}</span></div>
+      <div class="dprog" role="progressbar" aria-valuemin="0" aria-valuemax="${dd.total}" aria-valuenow="${dd.pick}"><i style="width:${pct}%"></i>${mineList.map(n => `<b class="mk" style="left:${((n - 0.5) / dd.total * 100).toFixed(1)}%" title="내 지명 ${n}순번"></b>`).join('')}</div>
+      <div class="small" style="margin-top:6px">${status} · 내 지명 ${dd.myTotal - dd.myLeft}/${dd.myTotal}명 완료 <span class="muted">(내 순번: ${mineList.join(', ')})</span></div></div>`;
+  }
+  function draftBoardCard() {
+    const dd = L.draftDay(); if (!dd) return ''; const S = L.S;
+    const cell = c => `<td class="dc ${c.mine ? 'mine' : ''} ${c.cur ? 'cur' : ''} ${c.rx ? c.rx.kind : ''}" title="${c.id ? esc(P(c.id).ko) + ' — ' + esc(c.rx ? c.rx.text : '') : ''}">${c.id ? `${logo(c.team, 14)}<span>${esc(P(c.id).ko)}</span>` : `<span class="muted">${logo(c.team, 14)}</span>`}</td>`;
+    return `<details class="card"${dd.pick > 0 && !dd.done ? '' : ' open'}><summary><b>지명 보드</b> <span class="muted small">라운드별 전체 지명 · 내 지명 강조 · ▲스틸 초록 / 이른 지명 주황(내 스카우트 보드 기준)</span></summary><div class="tablewrap"><table class="dboard"><thead><tr><th>R</th>${Array.from({ length: dd.per }, (_, i) => `<th>${i + 1}</th>`).join('')}</tr></thead><tbody>${dd.grid.map((row, r) => `<tr><th>${r + 1}</th>${row.map(cell).join('')}</tr>`).join('')}</tbody></table></div></details>`;
+  }
+  function draftReportCard() {
+    const r = L.draftReport(); if (!r) return '';
+    return `<div class="card"><h2>드래프트 결과 리포트</h2><div class="small muted">내 스카우트 보드(드래프트 시작 때의 평가 순위)와 실제 지명 순번을 비교합니다. 평가에는 오차가 있고, 지명 순번만으로 선수의 성장이 정해지지 않습니다.</div>
+      <div class="kpis" style="margin-top:6px"><div class="kpi"><div class="l">내 지명</div><div class="v">${r.mine.length}명</div></div><div class="kpi"><div class="l">평균 보드 순위</div><div class="v">${r.avgRank === null ? '-' : r.avgRank}</div></div><div class="kpi"><div class="l">스틸 / 이른 지명</div><div class="v">${r.steals} / ${r.reaches}</div></div></div>
+      ${r.best && r.best.diff >= 5 ? `<div class="small" style="margin-top:6px">가장 값진 지명: <b>${esc(r.best.name)}</b> — 보드 ${r.best.rank}위를 ${r.best.pick}순번에 지명</div>` : ''}
+      <div class="tablewrap" style="margin-top:6px"><table><thead><tr><th class="l">순번</th><th class="l">선수</th><th>보드</th><th>OVR(추정)</th><th class="l">성장 상한(추정)</th><th class="l">평가</th></tr></thead><tbody>${r.mine.map(x => `<tr class="click" data-act="player" data-a="${x.id}"><td class="l n">${x.round}R · ${x.pick}</td><td class="l"><b>${esc(x.name)}</b></td><td class="n">${x.rank === null ? '-' : x.rank + '위'}</td><td class="n">${x.est ? x.est.o : '-'}</td><td class="l small">${x.est ? `${x.est.ceil}±${x.est.sd}` : '-'}</td><td class="l">${x.kind ? rxChip({ kind: x.kind, label: { steal: '스틸', reach: '이른 지명', fair: '예상 범위' }[x.kind], text: '' }) : ''}</td></tr>`).join('')}</tbody></table></div>
+      <div class="small muted" style="margin-top:6px">입단 후 성장은 훈련 센터의 유망주 노트와 연말 성장 공개에서 이어서 볼 수 있습니다.</div></div>`;
+  }
   /* ---------------- 렌더 ---------------- */
   /* 휴대폰(≤560px)에서 가로로 넘치는 표는 행을 카드처럼 쌓아 보여준다(좌우 스크롤 제거). 열 이름은 셀 앞에 라벨로 붙는다 */
   function stackTables(root) {
@@ -1430,7 +1475,7 @@
     if (!L) { root.innerHTML = renderStart() + toastHtml(); return; }
     const scroll = window.scrollY;
     if (ui.live) { root.innerHTML = screenLive() + toastHtml(); window.scrollTo(0, scroll); return; }
-    const S = ui.screen, f = { desk: screenDesk, home: () => goalCard() + pressCard() + screenHome() + evHistory(), roster: () => changeBar() + screenRoster(), farm: () => changeBar() + screenFarm(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, story: screenStory, mood: screenMood, train: screenTrain, scout: screenScout, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
+    const S = ui.screen, f = { invest: screenInvest, desk: screenDesk, home: () => goalCard() + pressCard() + screenHome() + evHistory(), roster: () => changeBar() + screenRoster(), farm: () => changeBar() + screenFarm(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, story: screenStory, mood: screenMood, train: screenTrain, scout: screenScout, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
     document.body.classList.toggle('modal-open', !!ui.modal);
     const keep = snapInner(root);   // 체크박스·버튼으로 다시 그려도 안쪽 스크롤 상자와 펼침 상태를 유지한다
     root.innerHTML = shell((S === 'home' || S === 'market' || S === 'offseason' ? eventCards() : evBanner()) + f()) + (ui.modal ? modalPlayer(ui.modal) : '') + sheetHtml() + firedModal() + quickSheet() + swapSheet() + posPickSheet() + fslotSheet() + scoutSheet() + growthSheet() + subSheet() + confirmSheet() + cmpSheet() + searchSheet() + cmpTray() + negView() + toastHtml();
@@ -1572,6 +1617,7 @@
     grOpen() { ui.gr = { i: 0, shown: false, sum: false }; render(); }, grShow() { ui.gr.shown = true; render(); growthAnimate(); },
     grNext() { const n = (L.growthReveal() || { reveal: [] }).reveal.length; if (ui.gr.i < n - 1) { ui.gr.i++; ui.gr.shown = false; } else ui.gr.sum = true; render(); }, grPrev() { if (ui.gr.i > 0) { ui.gr.i--; ui.gr.shown = true; } render(); growthAnimate(); },
     grSum() { ui.gr = { i: 0, shown: false, sum: true }; render(); }, grClose() { const gr = L.growthReveal(); if (gr) (ui.grSeen = ui.grSeen || {})[gr.year] = true; ui.gr = null; render(); }, grPlayer(a) { ui.gr = null; A.player(a); },
+    investAsk(a) { confirmInvest(a); }, investDo(a) { const e = L.investBuy(a); if (e) toast(e); else { toast('착공했습니다. 다음 시즌 개막 때 완공됩니다.'); autosave(); } render(); },
     searchOpen() { ui.search = { q: '' }; render(); setTimeout(() => { const i = $('#gsq'); if (i) i.focus(); }, 40); }, searchClose() { ui.search = null; render(); },
     searchPick(a) {
       const k = a.slice(0, 1), v = a.slice(2); ui.recent = ui.recent || []; let label = '', sub = '';

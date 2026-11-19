@@ -57,13 +57,13 @@
     S.scoutMkt = out;
   };
   proto._scoutSalary = function (h, u, a) { return Math.round(clamp(0.5 + 0.04 * ((h + u) / 2 - 40) + 0.01 * ((a === undefined ? 50 : a) - 50), 0.5, 2.8) * 10) / 10; };
-  proto.scoutLimit = function () { return SCOUT_MAX; };
-  proto.scoutCap = function (s) { return clamp(3 + Math.floor(((s.high + s.univ) / 2 - 50) / 10), 2, 6); };   // 한 스카우트의 주간 관찰 수
+  proto.scoutLimit = function () { return SCOUT_MAX + (this.investSlots ? this.investSlots() : 0); };   // 스카우팅 센터 투자: 한도 +1~2
+  proto.scoutCap = function (s) { return clamp(3 + Math.floor(((s.high + s.univ) / 2 - 50) / 10), 2, 6) + (this.investObs ? this.investObs() : 0); };   // 한 스카우트의 주간 관찰 수
   proto.scouts = function () { return (this.S.scouts || []).slice(); };
   proto.scoutPay = function (t) { const S = this.S; return t === S.userTeam ? Math.round((S.scouts || []).reduce((a, s) => a + s.salary, 0) * 10) / 10 : 0; };
   proto.scoutHire = function (id) {
     const S = this.S; this.ensureProspects(); const c = (S.scoutMkt || []).find(x => x.id === id); if (!c) return '영입할 수 없는 스카우트입니다.';
-    S.scouts = S.scouts || []; if (S.scouts.length >= SCOUT_MAX) return `스카우트는 ${SCOUT_MAX}명까지 둘 수 있습니다.`;
+    S.scouts = S.scouts || []; if (S.scouts.length >= this.scoutLimit()) return `스카우트는 ${this.scoutLimit()}명까지 둘 수 있습니다.`;
     const room = this.faRoom(S.userTeam); if (room < c.salary) return `예산 부족: 연봉 ${c.salary}억이 FA 여유자금 ${room.toFixed(1)}억을 넘습니다.`;
     S.scouts.push({ id: c.id, name: c.name, age: c.age, high: c.high, univ: c.univ, abroad: c.abroad === undefined ? 45 : c.abroad, salary: c.salary, y: S.year, ex: !!c.ex }); S.scoutMkt = S.scoutMkt.filter(x => x.id !== id); this.invalidate();
     this._scoutNews(`스카우트 영입: ${c.name}${c.ex ? '(은퇴 선수 출신)' : ''}(고교 ${c.high} · 대학 ${c.univ} · 해외 ${c.abroad === undefined ? 45 : c.abroad}) 연봉 ${c.salary}억`); return null;
