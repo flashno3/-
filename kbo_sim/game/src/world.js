@@ -187,8 +187,10 @@
   };
 
   /* ---------------- 경기 중 '이 순간' 카드(사실 기반) ---------------- */
+  /* 지금 이 순간의 점수: 엔진의 g.score는 초/말이 끝나야 반영되므로, 진행 중인 공격 이닝의 득점(h.runs)을 더해야 화면의 점수판과 같다 */
+  proto.liveScore = function (g) { return { away: g.score.away + (g.top && !g.finished ? g.h.runs : 0), home: g.score.home + (!g.top && !g.finished ? g.h.runs : 0) }; };
   proto.momentInfo = function (g, us) {
-    const opp = us === 'home' ? 'away' : 'home', diff = g.score[us] - g.score[opp], b = g.bases, inn = g.inning, outs = g.outs, runners = (b[0] ? 1 : 0) + (b[1] ? 1 : 0) + (b[2] ? 1 : 0), risp = !!(b[1] || b[2]);
+    const opp = us === 'home' ? 'away' : 'home', ls = this.liveScore(g), diff = ls[us] - ls[opp], b = g.bases, inn = g.inning, outs = g.outs, runners = (b[0] ? 1 : 0) + (b[1] ? 1 : 0) + (b[2] ? 1 : 0), risp = !!(b[1] || b[2]);
     const late = inn >= 7, close = Math.abs(diff) <= 3; let kind = null;
     if (runners === 3) kind = 'loaded'; else if (inn >= 9 && diff === 0) kind = 'tie9'; else if (late && close && risp && outs === 2) kind = 'twoout'; else if (late && close && risp) kind = 'risp'; else if (late && Math.abs(diff) <= 1) kind = 'lead1'; else if (late && close && g.top === (us === 'home') && inn >= 9) kind = 'save';
     if (!kind) return null; return { kind, inn, top: g.top, outs, runners, diff, risp };

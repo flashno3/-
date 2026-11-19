@@ -594,7 +594,7 @@
     const m = L.momentInfo(g, us); if (!m) return ''; const b = g.bases, bt = P(g.batter.id), pp = P(g.pitcher.id), side = myBat ? 'bat' : 'fld', subj = myBat ? bt : pp; if (!subj) return '';
     const pool = (MOM[m.kind] || MOM.lead1)[side], idx = (m.inn * 7 + m.outs * 3 + m.runners + (m.top ? 1 : 0)) % pool.length, line = pool[idx].replace('{n}', esc(subj.ko));
     const baseTxt = m.runners === 3 ? '만루' : m.runners === 0 ? '주자 없음' : [b[0] ? '1루' : '', b[1] ? '2루' : '', b[2] ? '3루' : ''].filter(Boolean).join('·') + ' 주자';
-    const opp = us === 'home' ? 'away' : 'home', sc = `${g.score[us]}:${g.score[opp]}`, dtxt = m.diff === 0 ? '동점' : m.diff > 0 ? `${m.diff}점 리드` : `${-m.diff}점 열세`;
+    const opp = us === 'home' ? 'away' : 'home', ls = L.liveScore(g), sc = `${ls[us]}:${ls[opp]}`, dtxt = m.diff === 0 ? '동점' : m.diff > 0 ? `${m.diff}점 리드` : `${-m.diff}점 열세`;
     let facts = ''; const fm = formOf(subj);
     if (myBat) { const pas = g.log.filter(x => x.k === 'PA' && x.b === g.batter), ab = pas.filter(x => !['BB', 'HBP', 'IBB', '번트'].includes(x.e)).length, h = pas.filter(x => ['1B', '2B', '3B', 'HR', '번트안타'].includes(x.e)).length;
       facts = `${esc(subj.ko)} ${ovrChip(L.ovr(subj))} · 올 시즌 ${batLine(subj.id)}${fm ? ' · 최근 ' + esc(fm.txt) : ''} · 오늘 ${ab}타수 ${h}안타`; }
@@ -1060,7 +1060,7 @@
     lv.halfKey = key; lv.halfL = g.log.length;
   }
   function stateText(e, g) {   // 타석 직후 상황(아웃·주자·점수): 엔진이 기록한 값만 사용
-    const sc = ` · ${KO[g.away]} ${g.score.away}:${g.score.home} ${KO[g.home]}`;
+    const ls = L.liveScore(g), sc = ` · ${KO[g.away]} ${ls.away}:${ls.home} ${KO[g.home]}`;
     if (e.outs >= 3) return ` — 3아웃 공수 교대${e.runs > 0 ? sc : ''}`;
     const occ = g.bases.map((b, i) => (b ? i + 1 : 0)).filter(Boolean);
     return ` — ${e.outs}아웃 ${occ.length ? occ.join('·') + '루' : '주자 없음'}${e.runs > 0 ? sc : ''}`;
@@ -1095,7 +1095,7 @@
   function pcScore(p) { const g = ui.live && ui.live.ctx.live, bt = g && g.batter ? P(g.batter.id) : null, ri = L.restInfo(p); let s = ri.left * 0.5 + L.ovr(p) * 0.5; if (bt && bt.bats && p.throws) { if (bt.bats === 'S') s += 0; else if (bt.bats !== p.throws) s += 0; else s += 6; } if (p.role !== 'SP') s += 3; return s; }   // 체력·종합·같은 손(좌투-좌타) 상성 순
   function advice() {
     const lv = ui.live, ctx = lv.ctx, g = ctx.live, us = ctx.userSide, opp = us === 'home' ? 'away' : 'home', myBat = g.batSide === us, myField = g.fldSide === us, out = [];
-    const inn = g.inning, diff = g.score[us] - g.score[opp], b = g.bases, bt = P(g.batter.id), bo = bt ? L.ovr(bt) : 50, bench = benchOf().sort((x, y) => L.ovr(y) - L.ovr(x));
+    const inn = g.inning, diff = L.liveScore(g)[us] - L.liveScore(g)[opp], b = g.bases, bt = P(g.batter.id), bo = bt ? L.ovr(bt) : 50, bench = benchOf().sort((x, y) => L.ovr(y) - L.ovr(x));
     if (myField) {
       const f = g.pitchFatigue(us), pp = P(g.pitcher.id);
       if (f.over > 0) out.push({ t: `${pp.ko}의 체력이 한계를 넘었습니다 (상대 타자 ${f.bf}명 / 한계 ${f.lim}). 볼넷·피홈런이 늘고 삼진이 줄고 있습니다.`, a: 'pcOpen', l: '투수 교체' });
