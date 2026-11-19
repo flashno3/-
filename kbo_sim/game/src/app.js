@@ -846,9 +846,12 @@
       <div class="row small"><label><input type="checkbox" data-act="vibTog" ${pref('vib', '1') === '1' ? 'checked' : ''}> 조작 시 진동 효과(지원 기기)</label></div>
       <div class="small muted" style="margin-top:6px">관심 선수 ${fv.length}명 — 선수 상세의 ☆ 버튼으로 추가합니다.${fv.length ? '<br>' + fv.map(p => `<button class="sm" data-act="player" data-a="${p.id}">${esc(p.ko)} ${L.ovr(p)}</button>`).join(' ') : ''}</div></div>`;
   }
+  function integrityCard() {
+    const r = ui.integ; return `<div class="card"><div class="row"><h2 style="margin:0">데이터 점검</h2><span class="sp"></span><button class="sm primary" data-act="integrityRun">지금 점검</button></div><div class="small muted" style="margin-top:4px">같은 선수가 두 번 들어 있는지(개명·동명이인), 한 선수가 두 팀에 있는지, 계약·외국인 슬롯·엔트리에 이상이 없는지 검사합니다.</div>${r ? (r.errors.length || r.warns.length ? `<div style="margin-top:8px">${r.errors.map(e => `<div class="small neg">⚠ ${esc(e.text)}</div>`).join('')}${r.warns.map(e => `<div class="small muted">· ${esc(e.text)}</div>`).join('')}</div>` : '') + `<div class="small ${r.errors.length ? 'neg' : 'pos'}" style="margin-top:6px">${r.errors.length ? `오류 ${r.errors.length}건` : '이상 없음'} · 점검한 선수 ${r.checked}명${r.warns.length ? ` · 확인 필요 ${r.warns.length}건` : ''}</div>` : ''}</div>`;
+  }
   function screenSave() {
     const hk = L.handsKnown();
-    return prefCard() + `<div class="card"><h2>투타(좌우) 정보</h2><p class="small muted" style="margin:0 0 8px">대타 좌우 매치업은 투타 정보가 있는 선수에게만 적용됩니다. 현재 타자 ${hk.b}/${hk.bt}명, 투수 ${hk.p}/${hk.pt}명이 입력되어 있고, 나머지는 좌우 상성 없이 중립으로 처리합니다.<br>KBO 홈페이지의 선수 등록 현황 표를 그대로 붙여넣거나, 한 줄에 「이름,우투좌타」 형식으로 입력하세요. 같은 이름의 선수가 여러 명이면 같은 줄에 팀 이름(예: 삼성)을 함께 적어야 합니다.</p>
+    return prefCard() + integrityCard() + `<div class="card"><h2>투타(좌우) 정보</h2><p class="small muted" style="margin:0 0 8px">대타 좌우 매치업은 투타 정보가 있는 선수에게만 적용됩니다. 현재 타자 ${hk.b}/${hk.bt}명, 투수 ${hk.p}/${hk.pt}명이 입력되어 있고, 나머지는 좌우 상성 없이 중립으로 처리합니다.<br>KBO 홈페이지의 선수 등록 현황 표를 그대로 붙여넣거나, 한 줄에 「이름,우투좌타」 형식으로 입력하세요. 같은 이름의 선수가 여러 명이면 같은 줄에 팀 이름(예: 삼성)을 함께 적어야 합니다.</p>
       <textarea id="handsText" placeholder="예) 최재훈 우투우타&#10;김도영,KIA,우투우타">${esc(ui.handsText)}</textarea><div class="row"><button class="primary" data-act="importHands">투타 정보 적용</button><button data-act="handTemplate">입력 안 된 선수 목록 복사</button></div></div>
       <div class="card"><h2>저장·불러오기</h2><p class="small muted">진행 상황은 자동 저장됩니다(이 브라우저에만 보관). 아래 텍스트로 백업하거나 다른 곳에서 불러올 수 있습니다.</p>
       <div class="row"><button class="primary" data-act="saveNow">지금 저장</button><button data-act="exportSave">백업 텍스트 만들기</button><button class="warn" data-act="newGameMenu">새 게임(팀 다시 선택)</button></div>
@@ -1106,6 +1109,7 @@
     negLeave() { L.negLeave(); autosave(); render(); },
     negExit() { const n = L.S.neg; negSync(); if (n && n.kind === 'meeting' && n.state === 'open' && n.round === 0) { L.S.neg = null; } else if (n && (n.state !== 'open' || n.kind === 'meeting')) L.negClose(); ui.negOpen = false; negBackTo(); autosave(); },
     negDone() { negSync(); L.negClose(); ui.negOpen = false; ui.negIn = null; negBackTo(); autosave(); },
+    integrityRun() { ui.integ = L.integrity(); render(); },
     storyTab(a) { ui.storyTab = a; render(); }, storyMin(a) { ui.storyMin = +a; render(); },
     devPlan(a) { const [id, pl] = a.split('|'), e = L.setDevPlan(id, pl); if (e) toast(e); else { toast(`${P(id).ko}: 육성 방향 ${L.planName(pl)}`); autosave(); } render(); },
     hireCoach(a) { const e = L.hireCoach(a); if (e) toast(e); else { toast('코치를 영입했습니다.'); autosave(); } render(); },

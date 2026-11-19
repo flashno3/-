@@ -174,4 +174,36 @@
 
   /* ---------------- 관심 선수·소식 보조 ---------------- */
   proto.favNews = function () { const S = this.S, f = S.favs || []; return f.map(id => S.players[id]).filter(Boolean); };
+
+  /* ---------------- 데이터 무결성 점검 ----------------
+     같은 사람이 두 번 들어 있거나(개명·동명이인 오매칭), 한 선수가 두 팀에 있거나, 계약·능력치에 이상한 값이 있는지 검사한다.
+     반환: { errors: [...], warns: [...], checked: n } — 오류는 반드시 고쳐야 하는 문제, 경고는 확인이 필요한 의심 사례(동명이인 등). */
+  proto.integrity = function () {
+    const S = this.S, errors = [], warns = [], E = (code, text, ids) => errors.push({ code, text, ids: ids || [] }), W = (code, text, ids) => warns.push({ code, text, ids: ids || [] });
+    const all = Object.values(S.players).filter(p => p && !p.retired && p.team !== 'RET' && p.team !== 'DRAFT'), teamOf = {};
+    for (const t of Object.keys(S.teams)) for (const id of S.teams[t].ids) { if (teamOf[id]) E('two-teams', `${S.players[id] ? S.players[id].ko : id}이(가) ${teamOf[id]}와 ${t} 두 팀에 있습니다.`, [id]); teamOf[id] = t; if (!S.players[id]) E('missing', `${t} 명단의 ${id}에 해당하는 선수가 없습니다.`, [id]); else if (S.players[id].team !== t) E('team-mismatch', `${S.players[id].ko}의 소속(${S.players[id].team})과 ${t} 명단이 다릅니다.`, [id]); }
+    for (const id of S.fa || []) if (S.players[id] && S.players[id].team !== 'FA') E('fa-mismatch', `${S.players[id].ko}이(가) FA 목록에 있지만 소속은 ${S.players[id].team}입니다.`, [id]);
+    const key = p => `${p.ko}|${p.type}`, groups = {};
+    for (const p of all) (groups[key(p)] = groups[key(p)] || []).push(p);
+    const dhKey = p => p.dh && p.dh.y && p.dh.school ? [p.dh.y, p.dh.dt, p.dh.round, p.dh.pick, p.dh.school, p.dh.kind].join('/') : null, dhs = {};
+    for (const p of all) { const k = dhKey(p); if (k) (dhs[k] = dhs[k] || []).push(p); }
+    for (const v of Object.values(dhs)) if (v.length > 1) E('dup-draft', `같은 드래프트 지명 이력(${v[0].dh.y}년 ${v[0].dh.school})을 가진 선수가 ${v.length}명입니다: ${v.map(p => p.ko + '(' + (KO[p.team] || p.team) + ')').join(', ')}`, v.map(p => p.id));
+    for (const v of Object.values(groups)) {
+      if (v.length < 2) continue; const foreign = v.filter(p => p.foreign);
+      for (let i = 0; i < v.length; i++) for (let j = i + 1; j < v.length; j++) {
+        const a = v[i], b = v[j], tm = q => q.team in S.teams ? q.team : (q.faInfo && q.faInfo.from) || q.milTeam || q.team, sameTeam = tm(a) === tm(b), dA = dhKey(a), dB = dhKey(b);
+        const distinct = (a.ns && b.ns) || (a.fpid && b.fpid && a.fpid !== b.fpid) || (dA && dB && dA !== dB) || (a.birth && b.birth && a.birth !== b.birth) || Math.abs(a.age - b.age) >= 3 || (a.foreign && b.foreign && a.name !== b.name) || (!!a.foreign !== !!b.foreign);
+        if (a.birth && b.birth && a.birth === b.birth) E('dup-person', `${a.ko}: 생년월일(${a.birth})이 같은 선수가 둘 있습니다(${KO[a.team] || a.team}·${KO[b.team] || b.team}).`, [a.id, b.id]);
+        else if (sameTeam && !distinct) E('dup-name', `${KO[a.team] || a.team}에 이름·유형·나이가 같은 ${a.ko}이(가) 두 명 있습니다. 개명·중복 가능성이 있습니다.`, [a.id, b.id]);
+        else if (sameTeam && distinct && !(a.ns && b.ns) && !(dA && dB) && !(a.birth && b.birth) && Math.abs(a.age - b.age) < 5) W('namesake', `${KO[a.team] || a.team}의 동명이인 ${a.ko}(${a.age}세·${b.age}세)가 나이 차이만으로 구분됩니다. 같은 사람이면 한 명을 정리해야 합니다.`, [a.id, b.id]);
+      }
+    }
+    for (const p of all) {
+      if (!Number.isFinite(this.ovr(p))) E('ovr', `${p.ko}의 능력치가 올바르지 않습니다.`, [p.id]);
+      if (p.team in S.teams) { const c = p.contract || {}; if (!(c.salary >= 0.3) || !(c.years >= 0 && c.years <= 12) || !Number.isFinite(c.salary)) E('contract', `${p.ko}의 계약(${JSON.stringify(c)})이 올바르지 않습니다.`, [p.id]); }
+      if (!Number.isFinite(p.age) || p.age < 16 || p.age > 50) E('age', `${p.ko}의 나이(${p.age})가 올바르지 않습니다.`, [p.id]);
+    }
+    for (const t of Object.keys(S.teams)) { const fo = this.foreignOf(t), gen = fo.filter(p => !p.aq), aq = fo.filter(p => p.aq); if (gen.length > 3 || aq.length > 1) E('foreign-slot', `${KO[t] || t} 외국인 슬롯 초과(일반 ${gen.length}/3, AQ ${aq.length}/1)`); if (S.teams[t].ids.length > LG.ROSTER_MAX + 6) E('roster', `${KO[t] || t} 보유 선수 ${S.teams[t].ids.length}명이 한도를 크게 넘습니다.`); }
+    return { errors, warns, checked: all.length };
+  };
 });

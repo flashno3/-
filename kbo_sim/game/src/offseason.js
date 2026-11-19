@@ -142,8 +142,9 @@
     opts = opts || {};
     const S = this.S, sc = S.calib.scale[type], lb = S.calib.lb, id = (type === 'B' ? 'B' : 'P') + (S.nextId++);
     const g = gauss(r, 0, 0.5), z = () => -1.1 + g + gauss(r, 0, 0.6);
-    let name = opts.name; if (!name) do { name = SURN[Math.floor(r.random() * SURN.length)] + GIV[Math.floor(r.random() * GIV.length)]; } while (this._nameTaken && this._nameTaken.has(name) && this._nameTaken.size < 800);
-    (this._nameTaken = this._nameTaken || new Set()).add(name);
+    if (!this._nameTaken || this._nameTakenS !== S) { this._nameTaken = new Set(Object.values(S.players).map(q => q.ko)); this._nameTakenS = S; }   // 이미 있는 모든 선수 이름과 겹치지 않게(가상 신인이 실제 선수와 같은 이름이 되어 중복처럼 보이는 것을 막는다)
+    let name = opts.name; if (!name) for (let k = 0; k < 60; k++) { name = SURN[Math.floor(r.random() * SURN.length)] + GIV[Math.floor(r.random() * GIV.length)]; if (!this._nameTaken.has(name)) break; }
+    this._nameTaken.add(name);
     const age = opts.age || 18 + Math.min(5, Math.floor(r.random() * r.random() * 6 + r.random() * 2));
     const p = { id, type, name, ko: name, team: 'DRAFT', age, rookie: S.year + 1, foreign: false, active: false, fat: 0, lastStart: -99, retired: false, pot: Math.max(0, gauss(r, 0.75, 0.5)), p: {} };
     if (type === 'B') {

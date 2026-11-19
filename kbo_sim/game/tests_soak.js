@@ -12,6 +12,7 @@ function invariants(L,tag){
   for(const p of mine){finite(p.contract.salary,tag+' 연봉');ok(p.contract.salary>=0.3&&p.contract.years>=0&&p.contract.years<=6,`${tag} 계약 범위 ${p.ko} ${JSON.stringify(p.contract)}`);if(p.contract.bonus)ok(p.contract.bonus>=0&&p.contract.amort>=0,`${tag} 계약금`);if(p.loyAdj!==undefined)ok(p.loyAdj>=-15&&p.loyAdj<=15,`${tag} loyAdj ${p.loyAdj}`);if(p.promise)ok(p.promise.kind&&p.promise.label,`${tag} 약속 형식`)}
   const n=S.neg;if(n){ok(n.mood>=0&&n.mood<=100,`${tag} 호감도 범위 ${n.mood}`);ok(n.round<=n.max,`${tag} 라운드 ${n.round}/${n.max}`);ok(['open','paused','signed','broke','done'].includes(n.state),`${tag} 상태 ${n.state}`);ok(n.log.every(x=>typeof x.text==='string'&&x.text.length>0&&!/undefined|NaN|\{[a-z]+\}/.test(x.text)),`${tag} 대사 오류: `+n.log.filter(x=>/undefined|NaN|\{[a-z]+\}/.test(x.text)).map(x=>x.text).join('|'))}
   if(L.finReady&&L.finReady()){finite(L.faRoom(t),tag+' faRoom');finite(L.payroll(t),tag+' payroll')}
+  if(L.integrity){const ir=L.integrity();ok(ir.errors.length===0,`${tag} 데이터 무결성 오류: ${ir.errors.map(e=>e.text).join(' | ')}`)}
   const rp=L.reputation();ok(rp.score>=10&&rp.score<=95,`${tag} 평판 ${rp.score}`);
   ok((S.story||[]).every(e=>e.text&&!/undefined|NaN/.test(e.text)&&e.imp>=0),`${tag} 스토리 형식`);ok((S.press||[]).every(e=>e.head&&!/undefined|NaN|\{[a-z]+\}/.test(e.head+(e.fan||''))),`${tag} 언론 형식`);
   const v=L.validateEntry?L.validateEntry():[];ok(Array.isArray(v),`${tag} validateEntry`);

@@ -115,6 +115,30 @@ def blend_fut(ov,fit,shr,pit):
             pf=fit[s]['my']+fit[s]['b']*(shr(r,s)-fit[s]['mx']);lam=taper*FUT_EFF*fs/(FUT_EFF*fs+cr[1]+Ns[s])
             new=(1-lam)*m['p'][s]+lam*pf;ch[s]=(m['p'][s],new);m['p'][s]=new
         BLEND['P' if pit else 'B'].append((m['ko'],m['team'],round(cr[0],1),fs,{s:(round(a,4),round(c,4)) for s,(a,c) in ch.items()}))
+def load_alias():
+    """드래프트 명단의 '현재이름 (이전이름)' 표기에서 개명 선수를 읽는다 → {현재이름: [(이전이름, 지명 당시 추정 출생연도)]}. 2024 기록(이전 이름)과 2026 명단·퓨처스(현재 이름)가 한 사람으로 이어지도록 쓴다."""
+    import csv,re
+    f=D+'game/data/draft_2002_2027.csv';al={}
+    if not os.path.exists(f): return al
+    for r in csv.DictReader(open(f,encoding='utf-8-sig')):
+        m=re.match(r'^([가-힣]{2,4})\s*\(([가-힣]{2,4})\)$',r['선수'].strip())
+        if not m or m.group(1)==m.group(2): continue
+        toks=r['이력'].split('-');univ=any(re.search(r'대$',t) for t in toks[1:]) and not any('중퇴' in t for t in toks)
+        al.setdefault(m.group(1),[]).append((m.group(2),int(r['연도'])-(23 if univ else 19)))
+    return al
+ALIAS=load_alias()
+RENAMED=[]   # 개명 병합 기록(검증·보고용)
+def alias_cands(by,name,team):
+    """이름 그대로 못 찾았을 때 개명 전 이름으로 같은 팀 선수를 찾는다. 흔한 이름이 겹쳐 다른 사람을 합치지 않도록 지명 당시 나이와 현재 나이가 맞는 선수만 인정(±3세)."""
+    out=[]
+    for old,by_ in ALIAS.get(name,[]):
+        out+=[p for p in by.get(old,[]) if p['team']==team and abs((2027-p['age'])-by_)<=3]
+    return out
+def apply_rename(p,new):
+    old=p['ko']
+    if old==new: return
+    p['aka']=(p.get('aka') or [])+[old];p['name']=p['name'].replace(old,new) if old in p['name'] else new;p['ko']=new;RENAMED.append((old,new,p['team']))
+
 def futures_hitters(players):
     f=D+'game/data/futures_bat_2026.txt'
     if not os.path.exists(f): return None
@@ -142,7 +166,9 @@ def futures_hitters(players):
     used=set();ov=[];new=[];unassigned=[]
     for r in rows:
         c=[p for p in byname.get(r['name'],[]) if p['team']==FUT_TM.get(eff_team(r)) and p['id'] not in used]
+        if not c: c=[p for p in alias_cands(byname,r['name'],FUT_TM.get(eff_team(r))) if p['id'] not in used]   # 개명 선수
         if c:
+            apply_rename(c[0],r['name']) if c[0]['ko']!=r['name'] else None
             used.add(c[0]['id']);r['m']=c[0];ov.append(r)
             if r['team']=='상무' and r['name'] in MILORG: mark_mil(c[0],r)
         elif eff_team(r) in FUT_TM: new.append(r)
@@ -206,7 +232,9 @@ def futures_pitchers(players,nb):
     used=set();ov=[];new=[];unassigned=[]
     for r in rows:
         c=[p for p in by.get(r['name'],[]) if p['team']==FUT_TM.get(eff_team(r)) and p['id'] not in used]
+        if not c: c=[p for p in alias_cands(by,r['name'],FUT_TM.get(eff_team(r))) if p['id'] not in used]   # 개명 선수
         if c:
+            apply_rename(c[0],r['name']) if c[0]['ko']!=r['name'] else None
             used.add(c[0]['id']);r['m']=c[0];ov.append(r)
             if r['team']=='상무' and r['name'] in MILORG: mark_mil(c[0],r)
         elif eff_team(r) in FUT_TM: new.append(r)
@@ -316,6 +344,8 @@ def load_salary(players):
     for r in csv.DictReader(open(f,encoding='utf-8-sig')):
         c=by.get((r['선수명'],TM2[r['구단']]),[])
         if not c: miss.append((r['구단'],r['선수명'],int(r['연봉_만원'])));continue
+        if r['동명이인_팀내']=='Y':
+            for q in c: q['ns']=True   # 연봉표가 같은 팀 동명이인(서로 다른 사람)으로 표시한 선수 — 무결성 점검에서 중복으로 보지 않는다
         if len(c)>1 or r['동명이인_팀내']=='Y': skip.append((r['구단'],r['선수명']));continue
         c[0]['sal']=int(r['연봉_만원'])/10000;c[0]['foreign']=bool(r['외국인구분']);c[0]['aq']='(AQ)' in r['비고']   # 아시아쿼터 여부(별첨 성명의 (AQ) 표기);ok+=1
     return ok,skip,miss
@@ -415,8 +445,11 @@ def load_drafthist(players):
         toks=r['이력'].split('-');r['_teams']=[ALI[t] for t in toks if t in ALI];r['_toks']=toks
         nm=r['선수'];names={re.sub(r'\s*\(.*\)','',nm)}|set(re.findall(r'\((.*?)\)',nm))
         for n in names: by.setdefault(n.strip(),[]).append(r)
-    st={'ok':0,'amb':[],'miss':0}
-    for p in players:
+    st={'ok':0,'amb':[],'miss':0,'dup':[]}
+    NAMESAKE={}
+    for q in players: NAMESAKE[(q['ko'],q['type'])]=NAMESAKE.get((q['ko'],q['type']),0)+1
+    claimed={}   # 같은 드래프트 행은 한 선수만 가질 수 있다(동명이인에게 같은 지명 이력이 중복 부여되는 것을 막음): 근거가 확실한 선수(1군 기록·생년월일)부터 배정
+    for p in sorted(players,key=lambda q:(q.get('src')=='F',not q.get('birth'))):
         if p.get('foreign') or p['ko'] not in by: st['miss']+=1;continue
         team=p.get('milTeam') or (p['team'] if p['team'] in ('Bears','Twins','Wiz','Dinos','Giants','Lions','Tigers','Eagles','Landers','Heroes') else None)
         isP=p['type']=='P'
@@ -424,12 +457,19 @@ def load_drafthist(players):
         if team: allc=[r for r in allc if team in r['_teams']]
         c=[r for r in allc if ((('투수' in r['포지션'] or r['포지션']=='투타겸업') if isP else (r['포지션']!='투수' )))]
         if not c: c=allc   # 자료의 포지션 표기가 다른 경우(예: 최정이 투수로 표기)는 이름·팀·나이로만 매칭
+        if p.get('src')=='F' and not isP:   # 퓨처스 선수는 포수/내야/외야 구분을 알고 있다 → 지명 당시 포지션이 다른 후보는 제외(동명이인 구분)
+            gp={'C':'포수','1B':'내야수','2B':'내야수','3B':'내야수','SS':'내야수','LF':'외야수','CF':'외야수','RF':'외야수'}.get(p.get('pos'))
+            if gp:
+                c2=[r for r in c if r['포지션']==gp or r['포지션']=='투타겸업']
+                if c2 or NAMESAKE.get((p['ko'],'B'),0)>1: c=c2   # 동명이인이 있으면 포지션 구분이 안 맞는 지명 이력은 부여하지 않는다
         def birth(r):
             y=int(r['연도']);univ=any(re.search(r'대$',t) and t not in ALI for t in r['_toks'])
             return y-(21 if any(TWO.search(t) for t in r['_toks']) else 23) if univ else y-19
         cur=2027-p['age']
         tol=2 if p.get('birth') else 5
         c=[r for r in c if abs(birth(r)-cur)<=tol and int(r['연도'])<=2027]
+        c2=[r for r in c if id(r) not in claimed]
+        if c2: c=c2   # 먼저 배정된 지명 행은 후보에서 뺀다(남은 후보가 있을 때)
         if len(c)>1:
             c.sort(key=lambda r:abs(birth(r)-cur))
             if abs(birth(c[0])-cur)==abs(birth(c[1])-cur):
@@ -439,6 +479,9 @@ def load_drafthist(players):
                 else: st['amb'].append(p['ko']);continue
         if len(c)!=1: st['miss']+=1;continue
         r=c[0];toks=r['_toks']
+        if id(r) in claimed:   # 이미 다른 선수가 가진 지명 이력 → 같은 사람일 수 없으므로 부여하지 않는다
+            st['dup'].append((p['id'],p['ko'],claimed[id(r)]));continue
+        claimed[id(r)]=p['id']
         univ=any(re.search(r'대$',t) and t not in ALI for t in toks) and not any('중퇴' in t for t in toks)
         rnd=re.match(r'(\d+)라운드',r['갈래']);pick=re.search(r'(\d+)',r['자리'] or '')
         p['dh']={'y':int(r['연도']),'univ':univ,'two':any(TWO.search(t) for t in toks),'deb':int(r['데뷔']) if r['데뷔'] else None,'ss':int(r['시즌']) if r['시즌'] else 0,
@@ -650,6 +693,8 @@ print('2027 드래프트 지명',len(DRAFT),'명')
 
 print('FA 계약 반영',FAC['ok'],'| 시장 진출',FAC['fa'],'| 매칭 실패',FAC['skip'])
 
+print('개명 병합(이전이름→현재이름·팀)',len(RENAMED),RENAMED)
+print('드래프트 이력 중복 방지 제외',DHS['dup'])
 print('드래프트 이력 매칭',DHS['ok'],'| 모호',DHS['amb'],'| 미매칭',DHS['miss'],'| 나이 재추정',sum(1 for p in players if p.get('ageEstDraft')))
 
 print('FA 이력 반영',FAH['ok'],'행 | 미매칭(은퇴·자료 없음)',FAH['miss'])
