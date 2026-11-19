@@ -1043,6 +1043,15 @@
       t.querySelectorAll('tbody tr').forEach(tr => Array.from(tr.children).forEach((td, i) => { if (heads[i] && td.tagName === 'TD' && !td.getAttribute('colspan')) td.dataset.l = heads[i]; }));
     });
   }
+  const INNER_SEL = '.tablewrap, .plist, .neg-panel, .neg-chat, .mbody, .sheet, .modal-bg, [style*="overflow-y"]';
+  function snapInner(root) {
+    const sc = [...root.querySelectorAll(INNER_SEL)].map((e, i) => e.scrollTop > 0 ? [i, e.scrollTop] : null).filter(Boolean);
+    return { sig: [ui.screen, ui.modal, ui.mtab, ui.market, ui.faTab, ui.negOpen, ui.storyTab].join('|'), sc, n: root.querySelectorAll(INNER_SEL).length, det: [...root.querySelectorAll('details')].map(d => d.open) };
+  }
+  function restoreInner(root, k) {
+    if (!k || k.sig !== [ui.screen, ui.modal, ui.mtab, ui.market, ui.faTab, ui.negOpen, ui.storyTab].join('|')) return; const els = [...root.querySelectorAll(INNER_SEL)]; if (els.length === k.n) for (const [i, v] of k.sc) { if (!els[i].classList.contains('neg-chat')) els[i].scrollTop = v; }
+    const ds = [...root.querySelectorAll('details')]; if (ds.length === k.det.length) ds.forEach((d, i) => { d.open = k.det[i]; });
+  }
   function render() {
     const root = $('#root'); applyTheme();
     if (!L) { root.innerHTML = renderStart() + toastHtml(); return; }
@@ -1050,8 +1059,9 @@
     if (ui.live) { root.innerHTML = screenLive() + toastHtml(); window.scrollTo(0, scroll); return; }
     const S = ui.screen, f = { home: () => goalCard() + pressCard() + screenHome() + evHistory(), roster: () => changeBar() + screenRoster(), farm: () => changeBar() + screenFarm(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, story: screenStory, mood: screenMood, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
     document.body.classList.toggle('modal-open', !!ui.modal);
+    const keep = snapInner(root);   // 체크박스·버튼으로 다시 그려도 안쪽 스크롤 상자와 펼침 상태를 유지한다
     root.innerHTML = shell((S === 'home' || S === 'market' || S === 'offseason' ? eventCards() : evBanner()) + f()) + (ui.modal ? modalPlayer(ui.modal) : '') + sheetHtml() + firedModal() + quickSheet() + swapSheet() + posPickSheet() + fslotSheet() + negView() + toastHtml();
-    window.scrollTo(0, scroll); stackTables(root);
+    window.scrollTo(0, scroll); stackTables(root); restoreInner(root, keep);
     { const ch = root.querySelector('.neg-chat'); if (ch) ch.scrollTop = ch.scrollHeight; document.body.classList.toggle('modal-open', !!(ui.modal || (ui.negOpen && L.S.neg))); }
     const cur = root.querySelector('.side button[aria-current=true]'); if (cur && cur.scrollIntoView) { try { cur.scrollIntoView({ inline: 'center', block: 'nearest' }); } catch (e) { /* 일부 브라우저 */ } }
   }

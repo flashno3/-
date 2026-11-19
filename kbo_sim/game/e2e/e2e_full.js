@@ -18,6 +18,11 @@ async function run(vp,label,team){
   // 1) FA 시장 전 화면
   await nav('운영','이적시장');await click('button[data-act="mtab"][data-a="fa"]');await pg.waitForTimeout(200);await sweep('FA국내');
   for(const tab of ['for','aq','dom']){await click(`button[data-act="fatab"][data-a="${tab}"]`);await pg.waitForTimeout(150);await sweep('FA탭'+tab)}
+  // 보호선수 체크 시 화면 유지(안쪽 스크롤·페이지 스크롤·펼침 상태)
+  if(await click('button[data-act="protToggle"]')){await pg.waitForTimeout(150);await pg.evaluate(()=>{const w=document.querySelector('.tablewrap[style*="max-height"]');if(w){w.scrollTop=300;w.scrollIntoView()}});const before=await pg.evaluate(()=>({y:Math.round(scrollY),i:document.querySelector('.tablewrap[style*="max-height"]').scrollTop}));
+    await pg.evaluate(()=>{const bs=document.querySelectorAll('.tablewrap[style*="max-height"] input[type=checkbox]');bs[Math.min(bs.length-1,12)].click()});await pg.waitForTimeout(200);
+    const after=await pg.evaluate(()=>({y:Math.round(scrollY),i:document.querySelector('.tablewrap[style*="max-height"]')?document.querySelector('.tablewrap[style*="max-height"]').scrollTop:-1}));
+    ok(Math.abs(after.y-before.y)<=2&&Math.abs(after.i-before.i)<=2,`${label}: 보호선수 체크 후 스크롤 유지 (${JSON.stringify(before)} → ${JSON.stringify(after)})`);await click('button[data-act="protToggle"]');await pg.evaluate(()=>window.scrollTo(0,0))}
   // 2) 협상: 열기→카드→제시→돌아가기→복귀 확인
   await pg.evaluate(()=>window.scrollTo(0,600));const y0=await pg.evaluate(()=>scrollY);
   const opened=await pg.evaluate(()=>{const b=[...document.querySelectorAll('button[data-act="negOpen"]')].find(b=>/\|fa$/.test(b.dataset.a));if(b){b.click();return true}return false});ok(opened,`${label}: FA 협상 버튼`);await pg.waitForTimeout(250);
