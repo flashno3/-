@@ -187,8 +187,6 @@
   };
 
   /* ---------------- 경기 중 '이 순간' 카드(사실 기반) ---------------- */
-  /* 지금 이 순간의 점수: 엔진의 g.score는 초/말이 끝나야 반영되므로, 진행 중인 공격 이닝의 득점(h.runs)을 더해야 화면의 점수판과 같다 */
-  proto.liveScore = function (g) { return { away: g.score.away + (g.top && !g.finished ? g.h.runs : 0), home: g.score.home + (!g.top && !g.finished ? g.h.runs : 0) }; };
   /* ---------------- 라이브 해설(엔진 기록만 사용) ----------------
    * ns(상태)는 호출하는 쪽이 경기 동안 들고 있다: { hits:{away,home}, reach:{away,home}, k:{투수id:연속삼진}, lead, any, hits0 }.
    * evs = 이번 동작에서 새로 생긴 로그, side = 그 동작 직전의 공격 팀. 반환: 해설 문장 배열(득점·역전·연속 삼진·만루·끝내기). */

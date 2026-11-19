@@ -15,7 +15,7 @@ const mk=(seed,team)=>{const L=League.create(base,team||'Lions',seed);L.faAdvanc
  const on=count(true),off=count(false);ok(on.contact>0&&on.inf>0&&on.hold>0,'작전 발동 '+JSON.stringify(on));ok(off.contact+off.inf+off.hold+off.careful===0,'끄면 작전 없음 '+JSON.stringify(off));}
 // 4) 하이라이트: 접전 전까지 자동, 이후 멈춤(직접 지휘 전환), 경기 종료 가능
 {const L=mk(7,'Lions');let stopped=0,finished=0,g=0;while(stopped+finished<25&&g++<150){const r=L.advance(1,true);if(r.status!=='userGame'){if(r.status==='seasonEnd')break;continue}
-  const ctx=L.startUserGame(r.game,r.idx),us=ctx.userSide,done=L.playAuto(ctx,gm=>L.isHighlight(gm,us));if(done){finished++;ok(ctx.live.finished,'접전 없이 종료');L.finishUserGame(ctx)}else{stopped++;const gm=ctx.live,opp=us==='home'?'away':'home';ok(!gm.finished&&gm.inning>=7&&Math.abs(gm.score[us]-gm.score[opp])<=2,'하이라이트 멈춤 조건 '+gm.inning+' '+JSON.stringify(gm.score));
+  const ctx=L.startUserGame(r.game,r.idx),us=ctx.userSide,done=L.playAuto(ctx,gm=>L.isHighlight(gm,us));if(done){finished++;ok(ctx.live.finished,'접전 없이 종료');L.finishUserGame(ctx)}else{stopped++;const gm=ctx.live,opp=us==='home'?'away':'home';const ls=L.liveScore(gm);ok(!gm.finished&&gm.inning>=7&&Math.abs(ls[us]-ls[opp])<=2,'하이라이트 멈춤 조건(진행 중 이닝 득점 포함) '+gm.inning+' '+JSON.stringify(ls));
    L.playAuto(ctx);ok(ctx.live.finished,'멈춘 뒤 이어서 종료 가능');L.finishUserGame(ctx)}}
  ok(stopped>=3&&finished>=3,'하이라이트 멈춤/종료 모두 발생 '+stopped+'/'+finished);}
 console.log('plan tests ok',n);

@@ -14,4 +14,15 @@ for(const [seed,team] of [[2027,'Lions'],[5,'Tigers'],[9,'Wiz']]){
   const res=L.finishUserGame(ctx);ok(res.rh===g.score.home&&res.ra===g.score.away,'결과 반영 점수 = 화면 최종 점수');const last=L.S.results[L.S.results.length-1];ok(!last||!last.h&&!last.a||true,'기록');}
  ok(games>=1,'내 경기를 진행');
 }
+// 자동 진행(경기 계획·하이라이트 개입)도 진행 중 이닝 득점까지 더한 점수차로 판단한다
+{const L=League.create(base,'Lions',2027);L.faAdvance(75);L.closeFA();L.setPlan('infIn',true);L.setPlan('careful',true);L.setPlan('contact',true);let games=0,hl=0,dec=0;
+ for(let k=0;k<12&&games<3;k++){const r=L.advance(4,true);if(r.status!=='userGame')continue;const ctx=L.startUserGame(r.game,r.idx),g=ctx.live,us=ctx.userSide,opp=us==='home'?'away':'home';games++;let st=0;
+  while(!g.finished&&st++<600){const b=board(g),diff=b[us]-b[opp],P=L.plan();
+   ok(L.isHighlight(g,us)===(g.inning>=P.hlFrom&&Math.abs(diff)<=2),`하이라이트 판단 = 점수판 점수차 (${diff}, ${g.inning}회)`);if(L.isHighlight(g,us))hl++;
+   L._applyPlan(g,us);const T=g.tact[us],bs=g.h.bases,outs=g.h.outs,inn=g.inning;
+   if(g.batSide===us)ok(T.bat===(P.contact&&bs[2]&&outs<2&&Math.abs(diff)<=2?'contact':'normal'),'타격 접근 = 점수판 점수차');
+   else{ok(!!T.inf===!!(P.infIn&&bs[2]&&outs<2&&inn>=7&&diff>=0&&diff<=2),'전진 수비 판단');ok(T.pit===(P.careful&&inn>=8&&diff>0&&diff<=2&&(bs[0]||bs[1]||bs[2])?'careful':'normal'),'투구 접근 판단');dec++}
+   g.step()}
+  L.finishUserGame(ctx)}
+ ok(games>=2&&dec>50,'판단 횟수 '+dec);}
 console.log('livescore tests ok '+n);

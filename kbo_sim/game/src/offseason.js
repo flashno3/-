@@ -1305,26 +1305,38 @@
   };
   proto.finBC = function (year) { return (year || this.S.year) >= 2027 ? BC_NEXT : BC_BASE; };   // KBOP 중계권 균등 분배: 2024~2026 연 990억/10 = 99억, 2027~2031 연 1,440억/10 = 144억
   proto.finReady = function () { const F = this.S.fin; return !!(F && F.v === 3 && F.teams && F.teams.Lions); };
-  proto.finCap = function (t, year) { const f = this.S.fin.teams[t]; let c = f.cap; for (const [y, v] of f.capchg) if ((year || this.S.year) >= y) c = v; return c; };
-  proto.finAtt = function (t) {   // 홈 관중: 기준 관중 × 성적 보정 × 티켓 가격 탄력성, 좌석 수 이내
-    const S = this.S, f = S.fin.teams[t], r = S.rec[t], wp = (r[0] + r[1] + r[2]) >= 10 ? r[0] / Math.max(1, r[0] + r[1]) : 0.5;
-    return Math.min(this.finCap(t), Math.round(f.att0 * clamp(1 + 0.8 * (wp - 0.5), 0.8, 1.25) * clamp(1 - ELAST * (f.pm - 1), 0.6, 1.2) * (f.attMult || 1) * (f.promo && S.day < f.promo.until ? f.promo.mult : 1)));   // 이벤트(광고 확대·팬 이벤트) 보정
+  /* 구장 계획(사용자 제공 2차 자료, ⚠ 수치 일부 가정): 잠실(LG·두산) 2027~2031 올림픽주경기장 임시 이전 — 정규시즌 1~2층만 개방(일반 경기 13,000석, finCap), 주말·빅매치는 18,000~30,000석 중 24,000석(가정),
+   * 포스트시즌 홈경기는 3층 개방 30,000석, 객단가 ×1.12. 2032~ 잠실돔 30,673석(객단가는 자료 없음 → 1.0 가정). SSG는 2028 청라돔 이전으로 객단가 +35~45%(중간 ×1.40 가정, 좌석 수 동일).
+   * 빅매치 = 잠실 라이벌전(LG–두산) + 어린이날(5/5) 홈경기(자료의 '약 8~12경기'). 포스트시즌 입장 수입은 기존 PS 객단가(45,000원)를 유지하고 수용량만 바꾼다(자료의 ×1.25는 정규 객단가 대비 값인데 게임의 PS 객단가가 이미 더 높다). */
+  const STADIUM = { Twins: { tier: [2027, 2031], bigCap: 24000, psCap: 30000, price: [[2027, 1.12], [2032, 1]] }, Bears: { tier: [2027, 2031], bigCap: 24000, psCap: 30000, price: [[2027, 1.12], [2032, 1]] }, Landers: { price: [[2028, 1.40]] } }, BIG_SHARE = 10 / 72;
+  proto.finTier = function (t, year) { const s = STADIUM[t], y = year || this.S.year; return s && s.tier && y >= s.tier[0] && y <= s.tier[1] ? s : null; };
+  proto.finPriceMult = function (t, year) { const s = STADIUM[t], y = year || this.S.year; let m = 1; if (s && s.price) for (const [yy, v] of s.price) if (y >= yy) m = v; return m; };
+  proto.isBigMatch = function (home, away) { if (!this.finTier(home)) return false; if (this.isRival(home, away)) return true; const d = this.dateOf(this.S.day); return d.getUTCMonth() === 4 && d.getUTCDate() === 5; };
+  proto.finCapPS = function (t) { const s = this.finTier(t); return s ? s.psCap : this.finCap(t); };
+  proto.finGateAvg = function (t) {   // 홈경기 1경기 평균 입장 수입(예상용): 이원화 구장은 일반·빅매치를 비중대로 섞는다
+    const f = this.S.fin.teams[t], pm = this.finPriceMult(t), tier = this.finTier(t), att = tier ? (1 - BIG_SHARE) * this.finAtt(t, false) + BIG_SHARE * this.finAtt(t, true) : this.finAtt(t);
+    return att * f.price * f.pm * pm;
   };
-  proto._finGame = function (home, away) { if (!this.finReady()) return; const f = this.S.fin.teams[home]; if (!f) return; f.gate += this.finAtt(home) * f.price * f.pm * (this.isRival(home, away) ? 1.04 : 1); f.games++; };   // 라이벌전은 홈 관중 +4%
+  proto.finCap = function (t, year) { const f = this.S.fin.teams[t]; let c = f.cap; for (const [y, v] of f.capchg) if ((year || this.S.year) >= y) c = v; return c; };
+  proto.finAtt = function (t, big) {   // 홈 관중: 기준 관중 × 성적 보정 × 티켓 가격 탄력성, 좌석 수 이내(big: 이원화 구장의 빅매치는 더 많은 좌석 개방)
+    const S = this.S, f = S.fin.teams[t], r = S.rec[t], wp = (r[0] + r[1] + r[2]) >= 10 ? r[0] / Math.max(1, r[0] + r[1]) : 0.5, tier = big ? this.finTier(t) : null;
+    return Math.min(tier ? Math.max(this.finCap(t), tier.bigCap) : this.finCap(t), Math.round(f.att0 * clamp(1 + 0.8 * (wp - 0.5), 0.8, 1.25) * clamp(1 - ELAST * (f.pm - 1), 0.6, 1.2) * (f.attMult || 1) * (f.promo && S.day < f.promo.until ? f.promo.mult : 1)));   // 이벤트(광고 확대·팬 이벤트) 보정
+  };
+  proto._finGame = function (home, away) { if (!this.finReady()) return; const f = this.S.fin.teams[home]; if (!f) return; f.gate += this.finAtt(home, this.isBigMatch(home, away)) * f.price * f.pm * this.finPriceMult(home) * (this.isRival(home, away) ? 1.04 : 1); f.games++; };   // 라이벌전은 홈 관중 +4%
   proto.setTicketPolicy = function (t, pm) { if (!this.finReady() || !PRICE_PM.includes(pm)) return false; this.S.fin.teams[t].pm = pm; return true; };
   proto.finPay = function (t) { return Math.round((this.payroll(t) + this.coachPayDelta(t) + (this.scoutPay ? this.scoutPay(t) : 0) + this.deadNow(t) + this.S.teams[t].ids.reduce((a, id) => { const c = this.S.players[id].contract; return a + (c.amort && c.years > 0 ? c.amort : 0); }, 0)) * 10) / 10; };   // 선수단 보수 = 연봉 + 신규 FA 계약금 상각
   proto.finAllowed = function (t) { const f = this.S.fin.teams[t]; return f.lastRev * LOSS * (0.5 + f.trust / 100); };
   proto.finBudget = function (t) { const f = this.S.fin.teams[t]; return Math.round((f.lastRev - f.opex + this.finAllowed(t) + (f.boardExtra || 0)) * 10) / 10; };   // 이사회 승인 추가 예산 포함
   proto.faRoom = function (t) { return this.finReady() ? Math.round((this.finBudget(t) - this.finPay(t)) * 10) / 10 : 1e9; };
   proto.finPreview = function (t) {   // 시즌 예상 손익(진행분 + 남은 홈 경기를 현재 관중으로 환산), 포스트시즌 수입 제외
-    const S = this.S, f = S.fin.teams[t], rem = Math.max(0, FIN_GAMES - f.games), gate = f.gate + rem * this.finAtt(t) * f.price * f.pm;
+    const S = this.S, f = S.fin.teams[t], rem = Math.max(0, FIN_GAMES - f.games), gate = f.gate + rem * this.finGateAvg(t);
     const pay = this.finPay(t), v = this.cbtPreview(t), cbt = v.fee || 0, bc = this.finBC(), ev = f.evRev || 0, evc = f.evCost || 0, rev = gate + f.parAds + f.other + bc + ev;
     return { gate, par: f.parAds, other: f.other, bc, ev, evc, dead: this.deadNow(t), parts: f.parts, rev, pay, opex: f.opex, cbt, op: rev - pay - f.opex - evc - cbt, att: this.finAtt(t), cap: this.finCap(t), room: this.faRoom(t), budget: this.finBudget(t), trust: f.trust, allowed: this.finAllowed(t) };
   };
   proto._psSettle = function () {   // 포스트시즌 입장수입 → 배당 재원 → 팀별 배당
     const P = this.S.post; if (!P || !P.rounds || !P.rounds.length) return null;
     let gate = 0, games = 0; const alloc = {}, add = (t, x) => { if (t) alloc[t] = (alloc[t] || 0) + x; };
-    P.rounds.forEach(r => { if (r) for (const g of r.games) { gate += this.finCap(g.home) * PS_PRICE; games++; } });
+    P.rounds.forEach(r => { if (r) for (const g of r.games) { gate += this.finCapPS(g.home) * PS_PRICE; games++; } });
     const pool = gate * (1 - PS_COST), lose = r => r.winner === r.hi ? r.lo : r.hi;
     add(P.seeds[0], pool * PS_SHARE.reg);
     const keys = ['wcL', 'jpoL', 'poL']; P.rounds.forEach((r, i) => { if (r && r.winner) { if (i < 3) add(lose(r), pool * PS_SHARE[keys[i]]); else { add(r.winner, pool * PS_SHARE.ks); add(lose(r), pool * PS_SHARE.ksL); } } });

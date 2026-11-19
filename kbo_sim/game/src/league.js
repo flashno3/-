@@ -794,7 +794,7 @@
       if (!ok[k] || !ok[k].includes(v)) return false; this.S.plan = Object.assign({}, this.S.plan, { [k]: v }); return true;
     }
     _applyPlan(g, us) {   // 타석마다 상황 규칙으로 작전(타격 접근·전진 수비·견제·투구 접근)을 정한다
-      const P = this.plan(), opp = us === 'home' ? 'away' : 'home', diff = g.score[us] - g.score[opp], b = g.h.bases, outs = g.h.outs, inn = g.inning;
+      const P = this.plan(), opp = us === 'home' ? 'away' : 'home', ls = this.liveScore(g), diff = ls[us] - ls[opp], b = g.h.bases, outs = g.h.outs, inn = g.inning;   // 진행 중인 이닝의 득점까지 더한 현재 점수차
       if (g.batSide === us) { g.setTactic(us, 'bat', P.contact && b[2] && outs < 2 && Math.abs(diff) <= 2 ? 'contact' : 'normal'); }
       else {
         g.setTactic(us, 'inf', !!(P.infIn && b[2] && outs < 2 && inn >= 7 && diff >= 0 && diff <= 2));
@@ -809,7 +809,9 @@
       return true;
     }
     /* 하이라이트: 설정한 이닝 이후 2점 차 이내 접전 */
-    isHighlight(g, us) { const P = this.plan(), opp = us === 'home' ? 'away' : 'home'; return g.inning >= P.hlFrom && Math.abs(g.score[us] - g.score[opp]) <= 2; }
+    /* 현재 점수: 엔진의 g.score는 초/말이 끝나야 그 이닝 득점이 반영되므로 진행 중인 공격 이닝 득점(h.runs)을 더한다 */
+    liveScore(g) { return { away: g.score.away + (g.top && !g.finished ? g.h.runs : 0), home: g.score.home + (!g.top && !g.finished ? g.h.runs : 0) }; }
+    isHighlight(g, us) { const P = this.plan(), opp = us === 'home' ? 'away' : 'home', ls = this.liveScore(g); return g.inning >= P.hlFrom && Math.abs(ls[us] - ls[opp]) <= 2; }
     _autoBullpen(game, ss, side, ctx) {
       if (!ctx.auto) return;
       const S = this.S, E = ctx.E, set = S.teams[S.userTeam].set, bp = set.bullpen, opp = side === 'home' ? 'away' : 'home';
