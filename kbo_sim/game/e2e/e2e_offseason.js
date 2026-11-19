@@ -22,6 +22,10 @@ for(let season=0;season<2;season++){
   ok(!!(await pg.$('button[data-act="toOff"]')),`시즌${season}: 시즌 종료 도달`);
   if(!(await pg.$('button[data-act="toOff"]')))break;
   await click('button[data-act="toOff"]');await pg.waitForTimeout(300);await sweep(`오프시즌${season}`);
+  // 비시즌 캠프 설정
+  await nav('선수단','훈련');await sweep(`훈련 센터(오프시즌${season})`);ok(await pg.evaluate(()=>[...document.querySelectorAll('button[data-act="campSet"]')].some(b=>!b.disabled)),`오프시즌 캠프 활성${season}`);
+  await click('button[data-act="campSet"][data-a^="B:power:"]:not([data-a$=":0"])');await click('button[data-act="campSet"][data-a^="B:"][data-a$=":2"]');await click('button[data-act="campSet"][data-a^="P:"][data-a$=":1"]');await sweep('캠프 설정');ok(await pg.evaluate(()=>/예약 비용/.test(document.body.innerText)),`캠프 예약 비용 표시${season}`);
+  await nav('선수단','로스터');await click('button[data-act="go"][data-a="offseason"]');await pg.evaluate(()=>{const b=[...document.querySelectorAll('nav button')].find(b=>b.innerText.includes('오프시즌'));if(b)b.click()});await pg.waitForTimeout(200);
   // 재계약 협상
   if(await pg.evaluate(()=>{const b=[...document.querySelectorAll('button[data-act="negOpen"]')].find(b=>/\|resign$/.test(b.dataset.a));if(b){b.click();return true}return false})){await pg.waitForTimeout(250);ok(!!(await pg.$('.negwin')),`재계약 협상창${season}`);await sweep('재계약협상');await click('button[data-act="negFill"]');await click('button[data-act="negSend"]');await sweep('재계약제안');await click('button[data-act="negDone"]')||await click('button[data-act="negExit"]');await pg.waitForTimeout(150)}
   await click('button[data-act="negExit"]');await click('button[data-act="resignAll"]');await sweep('재계약후');

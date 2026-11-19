@@ -65,10 +65,10 @@
   }
 
   /* ---------------- 공통 셸 ---------------- */
-  const NAV = [['home', '대시보드'], ['roster', '로스터'], ['farm', '2군'], ['lineup', '라인업'], ['pitching', '투수진'], ['schedule', '일정·결과'], ['standings', '순위·기록'], ['teams', '팀 정보'], ['story', '스토리'], ['mood', '분위기'], ['finance', '재정'], ['coach', '코치진'], ['market', '이적시장'], ['offseason', '오프시즌'], ['save', '저장·설정']];
+  const NAV = [['home', '대시보드'], ['roster', '로스터'], ['farm', '2군'], ['lineup', '라인업'], ['pitching', '투수진'], ['train', '훈련'], ['schedule', '일정·결과'], ['standings', '순위·기록'], ['teams', '팀 정보'], ['story', '스토리'], ['mood', '분위기'], ['finance', '재정'], ['coach', '코치진'], ['market', '이적시장'], ['offseason', '오프시즌'], ['save', '저장·설정']];
   /* 메뉴를 5개 묶음으로 단순화: 대시보드 · 선수단 · 리그 · 운영 · 설정(+오프시즌). 묶음 안의 화면은 상단 탭으로 전환 */
-  const SCR = { home: '대시보드', roster: '로스터', farm: '2군', lineup: '라인업', pitching: '투수진', schedule: '일정·결과', standings: '순위·기록', teams: '팀 정보', story: '스토리', mood: '분위기', finance: '재정', coach: '코치진', market: '이적시장', offseason: '오프시즌', save: '저장·설정' };
-  const GROUPS = [['home', '대시보드', ['home']], ['team', '선수단', ['roster', 'farm', 'lineup', 'pitching', 'mood']], ['league', '리그', ['schedule', 'standings', 'teams', 'story']], ['ops', '운영', ['finance', 'coach', 'market']], ['offseason', '오프시즌', ['offseason']], ['save', '설정', ['save']]];
+  const SCR = { home: '대시보드', roster: '로스터', farm: '2군', lineup: '라인업', pitching: '투수진', train: '훈련', schedule: '일정·결과', standings: '순위·기록', teams: '팀 정보', story: '스토리', mood: '분위기', finance: '재정', coach: '코치진', market: '이적시장', offseason: '오프시즌', save: '저장·설정' };
+  const GROUPS = [['home', '대시보드', ['home']], ['team', '선수단', ['roster', 'farm', 'lineup', 'pitching', 'train', 'mood']], ['league', '리그', ['schedule', 'standings', 'teams', 'story']], ['ops', '운영', ['finance', 'coach', 'market']], ['offseason', '오프시즌', ['offseason']], ['save', '설정', ['save']]];
   function primary() {
     const S = L.S, st = L.standings(), my = st.find(x => x.team === U());
     if (S.phase === 'offseason') return { label: '오프시즌 진행', act: 'go', a: 'offseason' };
@@ -197,7 +197,7 @@
     const contract = `<div class="small muted">${teamTag(p.team in KO ? p.team : U())} · 연봉 ${money(p.contract.salary)}${p.contract.amort ? ' + 계약금 상각 ' + p.contract.amort + '억/년' : ''} · 계약 ${p.contract.years}년 남음${p.contract.total ? ` · FA 계약 총 ${p.contract.total}억${p.contract.bonus ? '(계약금 ' + p.contract.bonus + '억)' : ''}${p.contract.end ? ' ~' + p.contract.end : ''}${p.contract.opt ? ' · 옵션 ' + esc(p.contract.opt) : ''}${p.contract.est ? ' · 기간 추정' : ''}` : ''} · 시장 가치 ${money(L.marketValue(p))}</div>`;
     const evalHtml = p.eval ? `<div class="card" style="margin:8px 0"><b>평가(사용자 제공)</b><div class="small">${esc(p.eval.text)}</div><div class="small muted">${esc(p.eval.src)} — 잠재력 하한 ${esc(p.eval.floor)}등급 이상으로 반영${p.eval.role === 'SP' ? ', 선발 후보 보직' : ''}</div></div>` : '';
     const dev = devBlock(p) || (mine ? `<div class="card" style="margin:8px 0"><b>육성 방향</b><div class="small muted">${!L.S.coach ? '코치진 정보가 없어 육성 방향을 정할 수 없습니다.' : '30세 이상 선수는 육성 방향을 정하지 않습니다(성장보다 유지 단계). 대신 팀 훈련 방침이 적용됩니다.'}</div></div>` : '<div class="small muted">우리 팀 선수만 육성·훈련을 정할 수 있습니다.</div>');
-    const trainInfo = mine ? `<div class="card" style="margin:8px 0"><b>훈련</b><div class="small muted">훈련은 팀 단위(집중 분야·강도)로 정하고 선수별로는 육성 방향을 고릅니다. 집중 분야·강도는 [선수단 ▸ 2군] 화면의 훈련 방침에서 바꿉니다.</div><div class="row"><button class="sm" data-act="goTrain">훈련 방침 열기</button></div></div>` : '';
+    const slotNow = mine ? L.trainSlots().find(x => x.id === p.id) : null, trainInfo = mine ? `<div class="card" style="margin:8px 0"><b>훈련</b><div class="small muted">팀 훈련(타자/투수 집중 분야·강도)은 훈련 센터에서, 선수별 육성 방향은 위에서 정합니다. 이 선수만 따로 훈련시키려면 개별 훈련에 추가하세요.</div>${slotNow ? `<div class="small" style="margin-top:4px">개별 훈련 중: <b>${esc(L.trainFocusInfo(p.type === 'P' ? 'P' : 'B')[slotNow.focus].n)}</b> (${L.trainIntenName(slotNow.inten)}) ${riskChip(L.trainRisk(p))}</div>` : `<div class="small muted" style="margin-top:4px">${riskChip(L.trainRisk(p))}</div>`}<div class="row" style="gap:6px;margin-top:6px"><button class="sm primary" data-act="goTrain">훈련 센터 열기</button>${slotNow ? `<button class="sm" data-act="slotRemoveA" data-a="${p.id}">개별 훈련 종료</button>` : `<button class="sm" data-act="slotAddDo" data-a="${p.id}">개별 훈련에 추가</button>`}</div></div>` : '';
     const body = tab === 'sum' ? `${injBlock(p)}${ovrTrend(p)}<div class="pbars">${bars}</div>${fits}<div class="small">올 시즌 1군 기록: ${statLine(p)}</div>${(L.S.stats2.bat[p.id] || L.S.stats2.pit[p.id]) ? `<div class="small">올 시즌 2군 기록: ${p.type === 'B' ? batLine(p.id, true) : pitLine(p.id, true)}</div>` : ''}${p.lockUntil > L.S.day && p.team === U() && !p.active ? `<div class="small muted">1군 재등록 잠금: ${L.lockLeft(p)}경기일 남음</div>` : ''}`
       : tab === 'car' ? careerPanel(p) : tab === 'grow' ? `${dev}${trainInfo}` : `${contract}${negEntry}<div class="row" style="gap:6px">${chips}</div>${evalHtml}`;
     const tabs = [['sum', '능력·기록'], ['grow', '육성·훈련'], ['info', '계약·정보'], ['car', '커리어']].map(([k, t]) => `<button role="tab" aria-selected="${tab === k}" data-act="mtab2" data-a="${k}">${t}</button>`).join('');
@@ -720,16 +720,54 @@
       <div><h3 style="margin:8px 0 4px">시상</h3><div class="tablewrap"><table><tbody>${aw}</tbody></table></div>${gg ? `<details open style="margin-top:8px"><summary><b>골든글러브</b> (포지션별)</summary><div class="tablewrap"><table><tbody>${gg}</tbody></table></div></details>` : ''}</div></div></div>`;
   }
   /* ---------------- 훈련 방침 · 내가 키운 선수 ---------------- */
-  function trainCard() {
-    const T = L.train(), F = L.trainForecast(), foc = { none: '없음', bat: '타격', pit: '투구', def: '수비', cond: '컨디션 관리' }, inten = { light: '가볍게', normal: '보통', heavy: '강하게' };
-    const tip = { none: '특별한 집중 없이 운영', bat: '타자의 연말 성장 ↑', pit: '투수의 연말 성장 ↑', def: '타자 성장 +(절반 효과)', cond: '전원 소폭 성장 ↑ · 부상 위험 −12%' };
-    const btn = (k, v, lab, t) => `<button class="sm ${T[k] === v ? 'primary' : ''}" data-act="train" data-a="${k}:${v}" title="${esc(t || '')}">${lab}</button>`;
-    const acc = F.acc, tot = F.days || 0, parts = ['bat', 'pit', 'def', 'cond'].filter(f => acc[f]).map(f => `${foc[f]} ${Math.round(acc[f])}일(강도 가중)`).join(' · ');
-    const injf = Math.round((({ light: 0.92, normal: 1, heavy: 1.15 }[T.inten]) * (T.focus === 'cond' ? 0.88 : 1) - 1) * 100);
-    return `<div class="card"><div class="row"><h2 style="margin:0">훈련 방침</h2><span class="muted small">시즌 중 매일 누적되어 연말 성장에 반영</span></div>
-      <div class="row small" style="gap:6px;margin-top:8px"><span style="min-width:72px">집중 분야</span>${['none', 'bat', 'pit', 'def', 'cond'].map(v => btn('focus', v, foc[v], tip[v])).join('')}</div>
-      <div class="row small" style="gap:6px;margin-top:6px"><span style="min-width:72px">훈련 강도</span>${['light', 'normal', 'heavy'].map(v => btn('inten', v, inten[v], v === 'heavy' ? '효과 ×1.5 · 부상 위험 +15%' : v === 'light' ? '효과 ×0.5 · 부상 위험 −8%' : '기본')).join('')}</div>
-      <div class="small muted" style="margin-top:6px">${tip[T.focus]} · 강도 ${inten[T.inten]}${injf ? ` · 부상 위험 ${injf > 0 ? '+' : ''}${injf}%` : ''}. 올 시즌 누적 ${tot}일${parts ? ' (' + parts + ')' : ''} — 30세 이하 평균 성장 보정 <b class="${F.avgBonus > 0 ? 'pos' : ''}">+${F.avgBonus}%</b> (연말 반영).</div></div>`;
+  /* ---------------- 훈련 센터 ---------------- */
+  function trainCard() {   // 2군 화면용 요약(설정은 선수단 ▸ 훈련 탭)
+    const c = L.trainCfg(), fB = L.trainFocusInfo('B')[c.B.focus].n, fP = L.trainFocusInfo('P')[c.P.focus].n;
+    return `<div class="card"><div class="row"><h2 style="margin:0">훈련</h2><span class="sp"></span><button class="sm primary" data-act="go" data-a="train">훈련 센터 열기</button></div><div class="small muted" style="margin-top:4px">타자 ${esc(fB)}(${L.trainIntenName(c.B.inten)}) · 투수 ${esc(fP)}(${L.trainIntenName(c.P.inten)}) · 개별 훈련 ${L.trainSlots().length}/${L.slotLimit()}명</div></div>`;
+  }
+  const riskChip = r => `<span class="chip ${r.level === 'high' ? 'bad' : r.level === 'mid' ? 'warn' : r.level === 'low' ? 'in' : ''}" title="${esc(r.why.join(' · ') || '기본')}">부상 위험 ${r.pct > 0 ? '+' : ''}${r.pct}%${r.level === 'high' ? ' ⚠' : ''}</span>`;
+  function trainSideCard(side) {
+    const cfg = L.trainCfg()[side], info = L.trainFocusInfo(side), keys = L.trainFocusKeys(side), pv = ui.trainPv || (ui.trainPv = L.trainPreview()), coach = L.trainCoach(side, cfg.focus), isB = side === 'B';
+    const chips = keys.map(k => `<button class="sm ${cfg.focus === k ? 'primary' : ''}" data-act="trainSide" data-a="${side}:focus:${k}" title="${esc(info[k].tip)}">${info[k].n}</button>`).join('');
+    const ints = ['light', 'normal', 'heavy'].map(v => `<button class="sm ${cfg.inten === v ? 'primary' : ''}" data-act="trainSide" data-a="${side}:inten:${v}" title="${v === 'heavy' ? '효과 ×1.5 · 부상 위험 +15%' : v === 'light' ? '효과 ×0.5 · 부상 위험 −8%' : '기본'}">${L.trainIntenName(v)}</button>`).join('');
+    const p = pv[side], fields = p.fields.slice(0, 3).map(f => `${esc(L.trainFieldName(f[0]))} +${f[1]}%`).join(' · ');
+    const inj = Math.round(((({ light: 0.92, normal: 1, heavy: 1.15 })[cfg.inten]) * (cfg.focus === 'cond' ? 0.88 : 1) - 1) * 100);
+    return `<div class="card"><div class="row"><h2 style="margin:0">${isB ? '타자 훈련' : '투수 훈련'}</h2><span class="sp"></span><span class="small muted">${p.n}명(30세 이하)</span></div>
+      <div class="small muted" style="margin:4px 0">${esc(info[cfg.focus].tip)}</div>
+      <div class="small">집중 분야</div><div class="chips wrap">${chips}</div>
+      <div class="small" style="margin-top:6px">훈련 강도</div><div class="chips wrap">${ints}</div>
+      ${info[cfg.focus].coach ? `<div class="small" style="margin-top:8px">담당 코치 <b>${esc(coach.who)}</b> · 능력 ${coach.rating}(${coach.grade}) · 효과 ×${coach.cf.toFixed(2)}</div>` : ''}
+      <div class="small muted" style="margin-top:4px">부상 위험 ${inj > 0 ? '+' : ''}${inj}% · 연말 예상 보정(시즌 끝까지 유지 시) <b class="${p.bonus > 0 ? 'pos' : ''}">+${p.bonus}%</b>${fields ? ' · 집중 능력: ' + fields : ''}</div></div>`;
+  }
+  function slotRow(s) {
+    const p = P(s.id), side = p.type === 'P' ? 'P' : 'B', info = L.trainFocusInfo(side), r = L.trainRisk(p), keys = L.trainFocusKeys(side).filter(k => k !== 'none');
+    return `<div class="slotrow"><div class="row" style="flex-wrap:nowrap"><div style="flex:1;min-width:0"><button class="linkbtn" data-act="player" data-a="${p.id}"><b>${esc(p.ko)}</b></button> <span class="muted small">${pos(p)} · ${p.age}세</span> ${ovrChip(L.ovr(p))} ${riskChip(r)}</div><button class="sm" data-act="slotRemoveA" data-a="${p.id}" aria-label="개별 훈련 종료">종료</button></div>
+      <div class="chips wrap">${keys.map(k => `<button class="sm ${s.focus === k ? 'primary' : ''}" data-act="slotSetA" data-a="${p.id}:focus:${k}">${info[k].n}</button>`).join('')}</div>
+      <div class="chips wrap">${['light', 'normal', 'heavy'].map(v => `<button class="sm ${s.inten === v ? 'primary' : ''}" data-act="slotSetA" data-a="${p.id}:inten:${v}">${L.trainIntenName(v)}</button>`).join('')}</div>
+      <div class="small muted">${p.tr && p.tr.y === L.S.year ? `개별 누적 ${Math.round(Object.values(p.tr.acc).reduce((x, y) => x + y, 0))}일(가중)` : '아직 누적 없음'}</div></div>`;
+  }
+  function screenTrain() {
+    const S = L.S; ui.trainPv = L.trainPreview();
+    const pr = L.trainPresets(), presets = pr.map(x => `<span class="presetchip"><button class="sm" data-act="trainPreset" data-a="${x.id}" title="${esc(x.tip || '내가 저장한 설정')}">${esc(x.name)}</button>${x.builtin ? '' : `<button class="sm" data-act="trainPresetDel" data-a="${x.id}" aria-label="삭제">✕</button>`}</span>`).join('');
+    const slots = L.trainSlots(), lim = L.slotLimit(), cand = L.slotCandidates().filter(c => !slots.some(s => s.id === c.p.id)), all = L.players(U()).filter(p => !slots.some(s => s.id === p.id)).sort((a, b) => a.age - b.age).slice(0, 80);
+    const F = L.trainForecast(), pv = ui.trainPv, risk = L.trainRiskList(), camp = L.camp(), ci = L.campInfo(), canCamp = !L.campCanSet(), log = (S.trainLog || []).slice(0, 8);
+    const campSide = side => { const c = camp[side], info = L.trainFocusInfo(side), keys = L.trainFocusKeys(side).filter(k => k !== 'none'); return `<div class="small" style="margin-top:6px"><b>${side === 'B' ? '타자 캠프' : '투수 캠프'}</b></div><div class="chips wrap">${keys.map(k => `<button class="sm ${c.focus === k ? 'primary' : ''}" data-act="campSet" data-a="${side}:${k}:${c.level}" ${canCamp ? '' : 'disabled'}>${info[k].n}</button>`).join('')}</div><div class="chips wrap">${[0, 1, 2, 3].map(v => `<button class="sm ${c.level === v ? 'primary' : ''}" data-act="campSet" data-a="${side}:${c.focus}:${v}" ${canCamp ? '' : 'disabled'}>${ci.names[v]}${v ? ` · ${ci.cost[v]}억` : ''}</button>`).join('')}</div>`; };
+    const coachTable = ['B', 'P'].map(side => { const info = L.trainFocusInfo(side); return L.trainFocusKeys(side).filter(k => info[k].coach).map(k => { const c = L.trainCoach(side, k); return `<tr><td class="l">${side === 'B' ? '타자' : '투수'} ${info[k].n}</td><td class="l">${esc(c.who)}</td><td>${c.rating} (${c.grade})</td><td>×${c.cf.toFixed(2)}</td></tr>`; }).join(''); }).join('');
+    return `<div class="card"><div class="row"><h2 style="margin:0">훈련 센터</h2><span class="sp"></span><span class="small muted">올 시즌 누적 ${F.days}일 · 30세 이하 평균 보정 <b class="${F.avgBonus > 0 ? 'pos' : ''}">+${F.avgBonus}%</b></span></div>
+      <div class="small muted" style="margin-top:4px">훈련은 시즌 중 매일 누적되어 연말 성장(양의 성장분)에 곱해집니다. 집중한 능력치는 더 빨리 크고, 담당 코치의 능력에 따라 효과가 달라집니다. 설정은 언제든 바꿀 수 있으며 되돌리기가 됩니다.</div>
+      <div class="small" style="margin-top:8px">프리셋</div><div class="chips wrap">${presets}</div>
+      <div class="row" style="margin-top:6px"><input id="presetName" type="text" maxlength="12" placeholder="현재 설정을 저장할 이름" style="flex:1;min-width:0"><button class="sm" data-act="trainPresetSave">저장</button></div></div>
+      ${trainSideCard('B')}${trainSideCard('P')}
+      <div class="card"><div class="row"><h2 style="margin:0">개별 훈련</h2><span class="sp"></span><span class="small muted">${slots.length}/${lim}명 · 육성관리 코치 능력에 따라 늘어남</span></div>
+        <div class="small muted" style="margin:4px 0">팀 훈련과 별개로 선수 몇 명을 따로 지정합니다. 유망주·부진한 선수에게 적합합니다. 부상 중에는 훈련 효과가 쌓이지 않습니다.</div>
+        ${slots.length ? slots.map(slotRow).join('') : '<div class="small muted">지정한 선수가 없습니다.</div>'}
+        ${slots.length < lim ? `${cand.length ? `<div class="small" style="margin-top:8px">추천 후보</div><div class="chips wrap">${cand.slice(0, 5).map(c => `<button class="sm" data-act="slotAddDo" data-a="${c.p.id}" title="${esc(c.why)}">${esc(c.p.ko)} <span class="muted">${c.p.age}세 · ${esc(c.why)}</span></button>`).join('')}</div>` : ''}<div class="row" style="margin-top:8px"><select data-sel="slotpick" style="flex:1;min-width:0"><option value="">선수 선택…</option>${all.map(p => `<option value="${p.id}">${esc(p.ko)} · ${pos(p)} · ${p.age}세 · ${L.ovr(p)}</option>`).join('')}</select><button class="sm primary" data-act="slotAddPick">추가</button></div>` : ''}</div>
+      <div class="card"><h2>부상 위험 경고</h2>${risk.length ? risk.map(x => `<div class="row small"><button class="linkbtn" data-act="player" data-a="${x.p.id}"><b>${esc(x.p.ko)}</b></button> <span class="muted">${x.p.age}세</span> ${riskChip(x.r)}<span class="muted">${esc(x.r.why.join(' · '))}</span></div>`).join('') : '<div class="small muted">특별히 위험한 선수가 없습니다. 33세 이상 선수에게 강한 훈련을 하면 이곳에 표시됩니다.</div>'}</div>
+      <div class="card"><div class="row"><h2 style="margin:0">비시즌 캠프</h2><span class="sp"></span><span class="small muted">${canCamp ? '지금 설정 가능' : '오프시즌에만 설정'}</span></div>
+        <div class="small muted" style="margin:4px 0">새 시즌 훈련 누적에 일수(소 8·중 16·대 24일)를 더합니다. 비용은 새 시즌 행사 비용으로 계상됩니다(⚠ 비용·효과 크기는 가정값).</div>${campSide('B')}${campSide('P')}
+        <div class="small" style="margin-top:8px">예약 비용 <b>${L.campTotalCost()}억</b>${canCamp ? '' : ' · 시즌이 끝나면 설정할 수 있습니다.'}</div></div>
+      <div class="card"><h2>코치 담당표</h2><div class="tablewrap"><table><thead><tr><th class="l">훈련</th><th class="l">담당 코치</th><th>능력</th><th>효과</th></tr></thead><tbody>${coachTable}</tbody></table></div><div class="small muted">효과 = 1 + 0.006 × (코치 능력 − 60), 0.8~1.25배. 코치는 운영 ▸ 코치진에서 영입·해임합니다.</div></div>
+      <div class="card"><h2>훈련 이력</h2>${log.length ? log.map(x => `<div class="small"><span class="muted">${x.ph === 'offseason' ? '오프시즌' : L.dateStr(x.d)}</span> ${esc(x.text)}</div>`).join('') : '<div class="small muted">변경 이력이 없습니다.</div>'}</div>`;
   }
   const myChip = p => p.myFrom ? ` <span class="chip in" title="${esc(p.myFrom.y + ' · ' + p.myFrom.how)}">내가 ${p.myFrom.how.replace(/ 지명|영입/g, m => m === ' 지명' ? ' 지명' : ' 영입').slice(0, 12)}</span>` : '';
   function ovrTrend(p) {
@@ -1060,7 +1098,7 @@
     if (!L) { root.innerHTML = renderStart() + toastHtml(); return; }
     const scroll = window.scrollY;
     if (ui.live) { root.innerHTML = screenLive() + toastHtml(); window.scrollTo(0, scroll); return; }
-    const S = ui.screen, f = { home: () => goalCard() + pressCard() + screenHome() + evHistory(), roster: () => changeBar() + screenRoster(), farm: () => changeBar() + screenFarm(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, story: screenStory, mood: screenMood, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
+    const S = ui.screen, f = { home: () => goalCard() + pressCard() + screenHome() + evHistory(), roster: () => changeBar() + screenRoster(), farm: () => changeBar() + screenFarm(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, story: screenStory, mood: screenMood, train: screenTrain, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
     document.body.classList.toggle('modal-open', !!ui.modal);
     const keep = snapInner(root);   // 체크박스·버튼으로 다시 그려도 안쪽 스크롤 상자와 펼침 상태를 유지한다
     root.innerHTML = shell((S === 'home' || S === 'market' || S === 'offseason' ? eventCards() : evBanner()) + f()) + (ui.modal ? modalPlayer(ui.modal) : '') + sheetHtml() + firedModal() + quickSheet() + swapSheet() + posPickSheet() + fslotSheet() + negView() + toastHtml();
@@ -1134,7 +1172,7 @@
     farmF(a) { ui.farmF = a; render(); }, farmS(a) { ui.farmS = a; render(); },
     mtab2(a) { ui.mtab = a; render(); const b = document.querySelector('.modal .mbody'); if (b) b.scrollTop = 0; },
     mnav(a) { const p = P(ui.modal), list = ui.mlist && ui.mlist.includes(p.id) ? ui.mlist.map(P).filter(Boolean) : L.players(p.team).sort((x, y) => L.ovr(y) - L.ovr(x)), i = list.findIndex(x => x.id === p.id), n = list[(i + +a + list.length) % list.length]; if (n) { ui.modal = n.id; ui.confirm = null; render(); } },
-    goTrain() { ui.modal = null; ui.screen = 'farm'; const g = GROUPS.find(x => x[2].includes('farm')); if (g) (ui.last = ui.last || {})[g[0]] = 'farm'; render(); window.scrollTo(0, 0); },
+    goTrain() { ui.modal = null; ui.screen = 'train'; const g = GROUPS.find(x => x[2].includes('train')); if (g) (ui.last = ui.last || {})[g[0]] = 'train'; render(); window.scrollTo(0, 0); },
     closeModal() { ui.modal = null; ui.confirm = null; render(); },
     toggleActive(a) { const p = P(a); if (!p.active) { openSwap(a); return; } const err = L.moveActive(a, !p.active); if (err) toast(err); else { autosave(); } render(); },
     swapFarm(a) { const [up, dn] = a.split('|'), err = L.swapActive(up, dn); if (err) toast(err); else { toast('콜업/말소를 완료했습니다.'); autosave(); } render(); },
@@ -1183,7 +1221,15 @@
       else if (k === 'captain') { const e = L.setCaptain(id); if (e) toast(e); else { toast(L.S.captain === id ? `${p.ko} 주장 임명` : '주장 해임'); autosave(); } }
       else if (k === 'detail') ui.modal = id; render(); },
     captain(a) { const e = L.setCaptain(a); if (e) toast(e); else { toast(L.S.captain === a ? `${P(a).ko}을(를) 주장으로 임명했습니다.` : '주장을 해임했습니다.'); autosave(); } render(); },
-    train(a) { const [k, v] = a.split(':'); if (L.setTrain(k, v)) { autosave(); render(); } },
+    trainSide(a) { const [s, k, v] = a.split(':'); if (L.setTrainSide(s, k, v)) { autosave(); render(); } },
+    trainPreset(a) { const e = L.applyTrainPreset(a); if (e) toast(e); else { toast('훈련 프리셋을 적용했습니다.'); autosave(); } render(); },
+    trainPresetSave() { const e = L.saveTrainPreset(($('#presetName') || {}).value); if (e) toast(e); else { toast('현재 설정을 프리셋으로 저장했습니다.'); autosave(); } render(); },
+    trainPresetDel(a) { const e = L.deleteTrainPreset(a); if (e) toast(e); else autosave(); render(); },
+    slotAddDo(a) { const e = L.slotAdd(a); if (e) toast(e); else { toast('개별 훈련을 시작했습니다.'); autosave(); } render(); },
+    slotAddPick() { const id = ui.slotPick; if (!id) return toast('추가할 선수를 선택하세요.'); const e = L.slotAdd(id); if (e) toast(e); else { ui.slotPick = ''; autosave(); } render(); },
+    slotSetA(a) { const [id, k, v] = a.split(':'), e = L.slotSet(id, k, v); if (e) toast(e); else autosave(); render(); },
+    slotRemoveA(a) { const e = L.slotRemove(a); if (e) toast(e); else autosave(); render(); },
+    campSet(a) { const [s, f, lv] = a.split(':'), e = L.setCamp(s, f, +lv); if (e) toast(e); else autosave(); render(); },
     team(a) { ui.viewTeam = a; ui.screen = 'teams'; ui.modal = null; render(); window.scrollTo(0, 0); },
     fatab(a) { ui.faTab = a; render(); },
     faDay(a) { const k = L.faAdvance(+a); toast(L.S.faMkt ? `${L.faDateStr(L.S.faMkt.day)}가 되었습니다.` : ''); if (k) autosave(); render(); },
@@ -1224,6 +1270,7 @@
     }
   };
   const UNDO_LABEL = { toggleActive: '1군/2군 이동', autoLineup: '라인업 자동 설정', autoPitch: '투수진 자동 설정', lmove: '타순 변경', plan: '경기 계획', train: '훈련 방침', policy: '운영 방침', captain: '주장 변경', quickAct: '빠른 메뉴 변경' };
+  Object.assign(UNDO_LABEL, { trainSide: '훈련 설정', trainPreset: '훈련 프리셋', slotAddDo: '개별 훈련 추가', slotAddPick: '개별 훈련 추가', slotSetA: '개별 훈련 변경', slotRemoveA: '개별 훈련 종료', campSet: '비시즌 캠프' });
   Object.keys(UNDO_LABEL).forEach(k => { const f = A[k]; if (f) A[k] = function (...args) { if (L) L.pushUndo(UNDO_LABEL[k]); return f.apply(this, args); }; });
   /* 길게 누르기(0.45초): 선수 행에서 빠른 메뉴 */
   let lpT = null, lpX = 0, lpY = 0, lpFired = false;
@@ -1255,6 +1302,7 @@
     if (sel === 'negsal' || sel === 'negbon') { const n = L.S.neg; if (n) { ui.negIn = Object.assign({}, ui.negIn || L.negBest(n.id)); ui.negIn[sel === 'negsal' ? 'salary' : 'bonus'] = Math.max(0, +el.value || 0); render(); } return; }
     if (sel === 'negrole') { ui.negRole = el.value; return; }
     if (sel === 'storyy') { ui.storyY = +el.value; render(); return; }
+    if (sel === 'slotpick') { ui.slotPick = el.value; return; }
     if (['lpl', 'lpos', 'pslot'].includes(sel)) L.pushUndo('편성 변경');
     const set = L.team(U()).set;
     if (sel === 'rsort') { ui.rf.s = el.value; render(); }

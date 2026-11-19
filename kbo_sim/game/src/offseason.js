@@ -2,7 +2,7 @@
  * 성장·노화·은퇴 → 계약 만료/재계약 → 신인 드래프트 → FA 시장 → 새 시즌. 트레이드는 시즌 중(마감 전)과 오프시즌에 가능.
  */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) { factory(require('./league.js'), require('../../web/src/engine.js')); require('./negotiate.js'); require('./world.js'); }
+  if (typeof module === 'object' && module.exports) { factory(require('./league.js'), require('../../web/src/engine.js')); require('./negotiate.js'); require('./world.js'); require('./training.js'); }
   else factory(root.KBOLeague, root.KBOEngine);
 })(typeof self !== 'undefined' ? self : this, function (LG, Engine) {
   'use strict';
@@ -48,18 +48,19 @@
     } else if (a <= 26 && p.pot > 0) { const g2 = Math.min(p.pot, 0.4) * (0.6 + 0.8 * r.random()) * pf; gain = Math.max(gain, g2); p.pot = Math.max(0, p.pot - Math.max(0, g2)); }
     const dv = a <= 28 && this.S.coach ? this._devEffects(p) : null;   // 육성 방향·코치진 효과(28세 이하)
     if (dv && gain > 0) gain *= dv.mul;
-    if (gain > 0 && p.team === this.S.userTeam) gain *= this._trainMult(p);   // 시즌 중 훈련 방침 누적 효과
-    const shift = f => gain * 0.75 * (dv ? dv.w[f] || 1 : 1) + gauss(r, 0, 0.07);
+    const te = p.team === this.S.userTeam && this._trainEff ? this._trainEff(p) : { mult: 1, w: {}, speed: 0, range: 0, stamina: 0 };   // 시즌 중 훈련(팀·개별·캠프) 누적 효과
+    if (gain > 0) gain *= te.mult; const tw = gain > 0 ? te.w : {};
+    const shift = f => gain * 0.75 * (dv ? dv.w[f] || 1 : 1) * (tw[f] || 1) + gauss(r, 0, 0.07);
     const set = (f, dir, lo, hi, s) => { p.p[f] = clamp(p.p[f] + dir * s * sc[f][1], lo, hi); };
     if (p.type === 'B') {
       set('k', -1, 0.06, 0.45, shift('k')); set('bb', 1, 0.015, 0.20, shift('bb')); set('hr', 1, 0.002, 0.07, shift('hr')); set('babip', 1, 0.24, 0.39, shift('babip')); set('xbh', 1, 0.10, 0.32, shift('xbh'));
-      const sp = (a <= 24 ? 0.04 : a <= 28 ? -0.05 : -0.2) + (dv ? dv.speed : 0) + gauss(r, 0, 0.08); set('sba', 1, 0.005, 0.25, sp); p.p.tri = clamp(p.p.tri * (1 + sp * 0.25), 0.01, 0.2);
+      const sp = (a <= 24 ? 0.04 : a <= 28 ? -0.05 : -0.2) + (dv ? dv.speed : 0) + (gain > 0 ? te.speed : 0) + gauss(r, 0, 0.08); set('sba', 1, 0.005, 0.25, sp); p.p.tri = clamp(p.p.tri * (1 + sp * 0.25), 0.01, 0.2);
       if (a >= 31) for (const pos in p.fr) p.fr[pos].range = clamp(p.fr[pos].range - 1.1 * r.random() * 1.6, 25, 80);
-      else if (a <= 24) for (const pos in p.fr) p.fr[pos].range = clamp(p.fr[pos].range + 0.8 * r.random() * 1.6 + (dv ? dv.range : 0), 25, 80);
-      if (a > 24 && a < 31 && dv && dv.range) for (const pos in p.fr) p.fr[pos].range = clamp(p.fr[pos].range + dv.range, 25, 80);
+      else if (a <= 24) for (const pos in p.fr) p.fr[pos].range = clamp(p.fr[pos].range + 0.8 * r.random() * 1.6 + (dv ? dv.range : 0) + (gain > 0 ? te.range : 0), 25, 80);
+      if (a > 24 && a < 31 && (dv && dv.range || gain > 0 && te.range)) for (const pos in p.fr) p.fr[pos].range = clamp(p.fr[pos].range + (dv ? dv.range : 0) + (gain > 0 ? te.range : 0), 25, 80);
     } else {
       set('k', 1, 0.08, 0.40, shift('k')); set('bb', -1, 0.02, 0.18, shift('bb')); set('hr', -1, 0.004, 0.06, shift('hr')); set('babip', -1, 0.25, 0.37, shift('babip'));
-      p.stamina = clamp(p.stamina + (a <= 25 ? 1.2 : a >= 33 ? -1.5 : 0) + (dv ? dv.stamina : 0) + gauss(r, 0, 1.2), 25, 75);
+      p.stamina = clamp(p.stamina + (a <= 25 ? 1.2 : a >= 33 ? -1.5 : 0) + (dv ? dv.stamina : 0) + (gain > 0 ? te.stamina : 0) + gauss(r, 0, 1.2), 25, 75);
       if (dv) this._devRole(p, dv.plan);
     }
     if (p.peak !== undefined) p.pot = clamp((p.peak - this.ovr(p)) / 30, 0, 1.4);
@@ -1211,7 +1212,7 @@
     this.invalidate();
   };
   proto.startNewSeason = function () {
-    const S = this.S; S.year += 1; S.off = null; S.faMkt = null; S.teamMood = null; S.restUntil = 0; S.trainAcc = { total: 0 }; for (const id in S.players) if (S.players[id].mood) delete S.players[id].mood; if (S.events) for (const e of (S.events.list || [])) if (e.status === 'open') { e.status = 'done'; e.result = '시즌 종료로 자동 종결'; } S.fa = (S.fa || []);
+    const S = this.S; S.year += 1; S.off = null; S.faMkt = null; S.teamMood = null; S.restUntil = 0; S.trainAcc = { total: 0, B: {}, P: {} }; S.trainTrack = []; for (const id in S.players) if (S.players[id].tr) delete S.players[id].tr; for (const id in S.players) if (S.players[id].mood) delete S.players[id].mood; if (S.events) for (const e of (S.events.list || [])) if (e.status === 'open') { e.status = 'done'; e.result = '시즌 종료로 자동 종결'; } S.fa = (S.fa || []);
     for (const id in S.players) if (S.players[id].retired || S.players[id].team === 'RET') delete S.players[id];   // 은퇴·이탈 선수 정리(저장 용량)
     this.finishFA === undefined; const adj = this.normalizeTalent(); S.lastAdj = adj;
     for (const t of TEAMS) if (t === S.userTeam) this.ensureActive(t);
@@ -1220,6 +1221,7 @@
     this.newSeasonSetup(false); this.repairSettings(S.userTeam);
     const cap = S.calib.cap; S.calib.cap = cap;
     this._setGoals(); S.report = S.report;
+    if (this._campApply) this._campApply();
     news(this, `${S.year} 시즌 개막 준비`);
   };
 
@@ -1345,7 +1347,7 @@
     }
     for (const t of TEAMS) for (const p of this.players(t)) {
       if (!p.active || this.isInj(p)) continue;
-      const pol = t === user ? this.policy() : null, hz = (p.type === 'B' ? 0.0030 : p.role === 'SP' ? 0.0042 : 0.0033) * (p.age >= 33 ? 1.3 : p.age <= 24 ? 0.9 : 1) * (pol ? (p.type === 'P' ? { save: 0.8, normal: 1, push: 1.3 }[pol.pitch] : { low: 0.95, normal: 1, high: 1.1 }[pol.run]) * (S.restUntil && d < S.restUntil ? 0.75 : 1) * this._trainInj() : 1);   // 운영 방침: 투수 혹사(push)·적극 주루는 부상 위험↑
+      const pol = t === user ? this.policy() : null, hz = (p.type === 'B' ? 0.0030 : p.role === 'SP' ? 0.0042 : 0.0033) * (p.age >= 33 ? 1.3 : p.age <= 24 ? 0.9 : 1) * (pol ? (p.type === 'P' ? { save: 0.8, normal: 1, push: 1.3 }[pol.pitch] : { low: 0.95, normal: 1, high: 1.1 }[pol.run]) * (S.restUntil && d < S.restUntil ? 0.75 : 1) * this._trainInjFor(p) : 1);   // 운영 방침: 투수 혹사(push)·적극 주루는 부상 위험↑
       if (r.random() >= hz) continue;
       const u = r.random(), days = u < 0.55 ? 7 + Math.floor(r.random() * 8) : u < 0.85 ? 15 + Math.floor(r.random() * 21) : u < 0.97 ? 45 + Math.floor(r.random() * 56) : 150 + Math.floor(r.random() * 181);
       const sev = u < 0.55 ? '' : u < 0.85 ? '' : u < 0.97 ? '(장기)' : '(수술·시즌 아웃급)', part = pickW(r, p.type === 'B' ? INJ_B : INJ_P);

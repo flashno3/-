@@ -45,8 +45,16 @@ async function run(vp,label,team){
     if(i===1){await click('button[data-act="mtab2"][data-a="info"]');if(await click('button[data-act="negOpen"][data-a$="|extend"]')){await pg.waitForTimeout(200);await sweep('연장협상');await click('button[data-act="negFill"]');await click('button[data-act="negSend"]');await sweep('연장제안');await click('button[data-act="negExit"]')}}
     if(i===2){await click('button[data-act="mtab2"][data-a="info"]');if(await click('button[data-act="negOpen"][data-a$="|meeting|checkin"]')){await pg.waitForTimeout(200);await sweep('면담');for(const k of ['listen','praise','honest','rest']){await click(`button[data-act="meetCard"][data-a="${k}"]`)}await click('button[data-act="meetEnd"]');await sweep('면담종료');await click('button[data-act="negDone"]')}}
     await click('button[data-act="closeModal"]');await pg.waitForTimeout(80)}
+  // 4-2) 훈련 센터: 타자/투수 분리 설정·프리셋·개별 훈련·되돌리기
+  await nav('선수단','훈련');await sweep('훈련 센터');ok(await pg.evaluate(()=>/타자 훈련/.test(document.body.innerText)&&/투수 훈련/.test(document.body.innerText)&&/개별 훈련/.test(document.body.innerText)&&/비시즌 캠프/.test(document.body.innerText)),`${label}: 훈련 센터 구성`);
+  for(const a of ['B:focus:power','B:inten:heavy','P:focus:control','P:inten:light','B:focus:cond','P:focus:stamina'])await click(`button[data-act="trainSide"][data-a="${a}"]`);await sweep('훈련 설정');
+  await click('button[data-act="trainPreset"][data-a="b_bat"]');await sweep('프리셋');await pg.evaluate(()=>{const e=document.querySelector('#presetName');if(e)e.value='점검용'});await click('button[data-act="trainPresetSave"]');await sweep('프리셋 저장');
+  ok(await click('button[data-act="slotAddDo"]'),`${label}: 추천 후보로 개별 훈련 추가`);await click('button[data-act="slotAddDo"]');await sweep('개별 훈련');await click('button[data-act="slotSetA"][data-a$=":focus:eye"]')||await click('button[data-act="slotSetA"][data-a$=":focus:contact"]');await click('button[data-act="slotSetA"][data-a$=":inten:heavy"]');await sweep('개별 훈련 변경');
+  ok(await pg.evaluate(()=>[...document.querySelectorAll('button[data-act="campSet"]')].every(b=>b.disabled)),`${label}: 시즌 중 캠프 비활성`);
+  await click('button[data-act="slotRemoveA"]');await click('button[data-act="trainPresetDel"]');await click('button[data-act="undo"]');await sweep('훈련 되돌리기');
+  await nav('선수단','2군');ok(await pg.evaluate(()=>/훈련 센터 열기/.test(document.body.innerText)),`${label}: 2군 화면 훈련 요약 카드`);
   // 5) 전 화면 순회
-  const groups=[['대시보드',[]],['선수단',['로스터','2군','라인업','투수진','분위기']],['리그',['일정·결과','순위·기록','팀 정보','스토리']],['운영',['재정','코치진','이적시장']],['설정',[]]];
+  const groups=[['대시보드',[]],['선수단',['로스터','2군','라인업','투수진','훈련','분위기']],['리그',['일정·결과','순위·기록','팀 정보','스토리']],['운영',['재정','코치진','이적시장']],['설정',[]]];
   for(const [g,subs] of groups){await nav(g);await sweep(g);for(const s of subs){await nav(g,s);await sweep(g+'/'+s)}}
   // 스토리 탭
   await nav('리그','스토리');for(const t of ['top','line','press','chal','hist']){await click(`button[data-act="storyTab"][data-a="${t}"]`);await sweep('스토리'+t)}

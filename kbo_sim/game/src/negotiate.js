@@ -183,7 +183,7 @@
   /* ---------------- 협상 시작 ---------------- */
   proto.negBlock = function (id, kind, rep) {   // 협상 불가 사유(없으면 null)
     const S = this.S, p = S.players[id], t = S.userTeam; if (!p) return '선수를 찾을 수 없습니다.';
-    if (p.negLock && p.negLock.until > this._negClock() && p.negLock.team === t) return `${p.ko}은(는) 방금 협상이 결렬되어 ${p.negLock.until - this._negClock()}일 뒤에 다시 협상할 수 있습니다.`;
+    if (kind !== 'meeting' && p.negLock && p.negLock.until > this._negClock() && p.negLock.team === t) return `${p.ko}은(는) 방금 협상이 결렬되어 ${p.negLock.until - this._negClock()}일 뒤에 다시 협상할 수 있습니다.`;
     if (kind === 'fa' || kind === 'foreign') { if (p.team !== 'FA') return '이미 계약된 선수입니다.'; if (!!p.foreign !== (kind === 'foreign')) return '계약 종류가 맞지 않습니다.'; if (S.teams[t].ids.length >= ROSTER_MAX) return `보유 선수 ${ROSTER_MAX}명 제한입니다.`; }
     if (kind === 'fa') { const info = p.faInfo, ext = info && info.grade && info.from !== t; if (ext && this._faCount(t) >= 3) return '외부 FA는 한 시즌에 3명까지만 영입할 수 있습니다.'; }
     if (kind === 'foreign') {
