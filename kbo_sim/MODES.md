@@ -73,8 +73,7 @@
   → 확인되면 parse 스크립트의 split 필드로 추가 후 ratings 재생성
 
 ## 웹 버전 (web/)
-- 빌드: python3 build_web.py  ->  web/index.html (서버 없이 파일로 열림, 데이터·엔진·화면 인라인 약 470KB), web/artifact.html (게시용 본문)
-- 소스: web/src/{engine.js, app.js, style.css, template.html}, 데이터는 build_web.py 가 ratings_*_pk.json·fielding·parks 에서 생성(web/src/data.json)
+- 단독 시뮬레이터 화면(web/index.html·artifact.html, app.js·style.css·template.html)은 제거되었다. 남은 것: 엔진 web/src/engine.js(감독 모드가 그대로 사용)와 검증용 데이터 web/src/data.json(python3 build_web.py 가 ratings_*_pk.json·fielding·parks 에서 생성)
 - 엔진(engine.js)은 engine2.py 의 1:1 포팅이며 파이썬 Mersenne Twister 와 random/choices/shuffle/gauss 를 그대로 구현 -> 같은 시드·모드면 정규시즌 결과가 파이썬과 완전히 같음
 - 검증: web/tests/run_tests.sh (2모드 x 4시드 일치 + 포스트시즌 불변식 300시즌)
 - 포스트시즌: 와일드카드(4위 1승 안고 시작, 최대 2경기) -> 준PO(5전3선승, 3위 홈 1·2·5차전) -> PO(5전3선승, 2위) -> 한국시리즈(7전4선승, 1위 홈 1·2·6·7차전)

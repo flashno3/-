@@ -1,5 +1,5 @@
-"""웹용 데이터 생성 + 단일 HTML 빌드.
-  python3 build_web.py        -> web/src/data.json, web/index.html (데이터·스크립트·스타일 인라인, 서버 없이 열림)
+"""엔진 검증용 데이터 생성(단독 시뮬레이터 화면은 제거됨).
+  python3 build_web.py        -> web/src/data.json (web/tests 일치 검사와 포스트시즌 검사가 읽는다)
 데이터는 엔진이 실제로 쓰는 필드만 추려 담는다(값은 원본 그대로, 반올림 없음 → 파이썬 엔진과 동일 결과)."""
 import json,os,re
 D=os.path.dirname(os.path.abspath(__file__))+'/'
@@ -24,18 +24,3 @@ out['shared']['fielding']={'players':{k:{p:{'range':v['range'],'err_reg':v['err_
 os.makedirs(D+'web/src',exist_ok=True)
 json.dump(out,open(D+'web/src/data.json','w',encoding='utf8'),ensure_ascii=False,separators=(',',':'))
 print('data.json',os.path.getsize(D+'web/src/data.json')//1024,'KB')
-# 단일 HTML 조립 (소스가 아직 없으면 데이터만 생성)
-S=D+'web/src/'
-if all(os.path.exists(S+f) for f in ('template.html','engine.js','app.js','style.css')):
-    t=open(S+'template.html',encoding='utf8').read()
-    data='const KBO_DATA='+open(S+'data.json',encoding='utf8').read()+';'
-    for tag,src in (('/*__STYLE__*/',open(S+'style.css',encoding='utf8').read()),('/*__DATA__*/',data),('/*__ENGINE__*/',open(S+'engine.js',encoding='utf8').read()),('/*__APP__*/',open(S+'app.js',encoding='utf8').read())):
-        assert tag in t,tag
-        t=t.replace(tag,src)   # str.replace 는 역슬래시를 해석하지 않는다
-    shell=('<!doctype html>\n<html lang="ko">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
-           '<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui}[hidden]{display:none!important}</style>\n'
-           '</head>\n<body>\n')
-    # t 의 <title>, <meta>, <link>, <style> 은 head 로 쓰지 않고 본문 앞에 두어도 브라우저가 동일하게 처리한다
-    open(D+'web/index.html','w',encoding='utf8').write(shell+t+'\n</body>\n</html>\n')
-    open(D+'web/artifact.html','w',encoding='utf8').write(t)   # 아티팩트 게시용: 문서 골격 없이 본문만
-    print('web/index.html',os.path.getsize(D+'web/index.html')//1024,'KB  web/artifact.html',os.path.getsize(D+'web/artifact.html')//1024,'KB')
