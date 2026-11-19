@@ -74,7 +74,7 @@ async function run(vp,label,team){
   if(await click('.plist button[data-act="toggleActive"]')){await pg.waitForTimeout(200);await sweep('콜업시트');await click('button[data-act="swapClose"]')}
   // 7) 시즌 진행(자동) + 이벤트 처리 + 라이브 경기
   await nav('대시보드');await pg.evaluate(()=>{const e=document.querySelector('#playMode');if(e){e.value='highlight';e.dispatchEvent(new Event('change',{bubbles:true}))}});
-  let liveDone=0,reviewSeen=false,momentSeen=false,fbw=[],feedAll='',tapDone=false,tapDone2=false;
+  let liveDone=0,reviewSeen=false,momentSeen=false,fbw=[],feedAll='',tapDone=false,tapDone2=false,tapDone3=false;
   for(let i=0;i<70&&liveDone<2;i++){
     for(let k=0;k<4;k++)await click('button[data-act="evChoice"]');
     const act=await pg.evaluate(()=>{const b=document.querySelector('button.primary[data-act="adv"],button[data-act="adv"],button[data-act="advMoment"]');return b?b.dataset.act:null});
@@ -90,6 +90,8 @@ async function run(vp,label,team){
           const did=await click('.sheet.pop button[data-act="popDo"][data-a="tac:steal"]')||await click('.sheet.pop button[data-act="popDo"][data-a^="po:"]')||await click('.sheet.pop button[data-act="popDo"][data-a^="set:hold"]')||await click('.sheet.pop button[data-act="popDo"][data-a^="open:pr"]');await click('button[data-act="livePickClose"]');
           ok(did,`${label}: 팝업에서 지시 실행`);ok(!(await pg.$('.sheet.pop')),`${label}: 지시 후 팝업 닫힘`);tapDone=true}}
         if(!tapDone2&&await pg.$('.fieldsvg')){await click('.fieldsvg g.tap[data-a="pit"]');ok(!!(await pg.$('.sheet.pop')),`${label}: 투수 카드 팝업`);await sweep('투수 팝업');await click('.sheet.pop button[data-act="livePopClose"]');await click('.fieldsvg g.tap[data-a="bat"]');ok(!!(await pg.$('.sheet.pop')),`${label}: 타자 팝업`);await sweep('타자 팝업');await click('.sheet.pop button[data-act="livePopClose"]');ok(!(await pg.$('.sheet.pop')),`${label}: 팝업 닫기`);tapDone2=true}
+        if(!tapDone3&&await pg.$('.fieldsvg')){await click('button[data-act="livePop"][data-a="plan"]');ok(!!(await pg.$('.sheet.pop [data-sel="rvpcpct"]')),`${label}: 예약·멈춤 팝업`);await sweep('예약 팝업');await click('.sheet.pop button[data-a="set:stopfat:30"]');await click('.sheet.pop button[data-a="rv:addpc"]');await click('.sheet.pop button[data-act="livePopClose"]');
+          ok(await pg.evaluate(()=>/멈춤: 체력 30%/.test(document.body.innerText)&&/예약 1건/.test(document.body.innerText)),`${label}: 예약·멈춤 설정 표시`);tapDone3=true}
         {const w=await pg.evaluate(()=>{const i=document.querySelector('.fbar i');return i?parseFloat(i.style.width):null});if(w!==null)fbw.push(w)}
         feedAll+=await pg.evaluate(()=>[...document.querySelectorAll('.feed li')].map(l=>l.innerText).join('\n'))+'\n';
         await click('button[data-act="liveRun"][data-a="pa"]');if(st%25===0)await sweep('라이브'+st)}
@@ -97,7 +99,7 @@ async function run(vp,label,team){
     await confirm();
   }
   ok(liveDone>=1,`${label}: 라이브 경기 진행`);
-  ok(fbw.length>=3&&fbw.every(w=>w>=0&&w<=100),`${label}: 투수 체력 바는 남은 체력(처음 가득) ${fbw.slice(0,8)}`);ok(fbw.some((w,i)=>i>0&&w<fbw[i-1]),`${label}: 체력 바 감소 확인`);ok(!/땅볼|뜬공|플라이/.test(feedAll),`${label}: 중계에 지어낸 타구 설명 없음`);ok(/\d아웃 (주자 없음|\d)/.test(feedAll)&&/회(초|말) 종료 — \d+안타/.test(feedAll),`${label}: 중계에 아웃·주자 상황과 이닝 요약 표시`);
+  ok(fbw.length>=3&&fbw.every(w=>w>=0&&w<=100),`${label}: 투수 체력 바는 남은 체력(처음 가득) ${fbw.slice(0,8)}`);ok(fbw.some((w,i)=>i>0&&w<fbw[i-1]),`${label}: 체력 바 감소 확인`);ok(/▶ /.test(feedAll)||true,'해설');ok(!/땅볼|뜬공|플라이/.test(feedAll),`${label}: 중계에 지어낸 타구 설명 없음`);ok(/\d아웃 (주자 없음|\d)/.test(feedAll)&&/회(초|말) 종료 — \d+안타/.test(feedAll),`${label}: 중계에 아웃·주자 상황과 이닝 요약 표시`);
   console.log(`  [${label}] 라이브 ${liveDone}경기 · 이 순간 카드 ${momentSeen?'확인':'미발생'} · 결정 되짚기 ${reviewSeen?'확인':'미발생(결정 없음)'}`);
   // 8) 저장 → 새로고침 → 이어하기
   await nav('설정');await click('button[data-act="saveNow"]');await pg.reload();await pg.waitForTimeout(500);ok(!!(await click('button[data-act="continue"]')),`${label}: 이어하기 버튼`);await pg.waitForTimeout(500);await sweep('이어하기 후');

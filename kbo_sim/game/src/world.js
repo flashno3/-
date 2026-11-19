@@ -189,6 +189,41 @@
   /* ---------------- 경기 중 '이 순간' 카드(사실 기반) ---------------- */
   /* 지금 이 순간의 점수: 엔진의 g.score는 초/말이 끝나야 반영되므로, 진행 중인 공격 이닝의 득점(h.runs)을 더해야 화면의 점수판과 같다 */
   proto.liveScore = function (g) { return { away: g.score.away + (g.top && !g.finished ? g.h.runs : 0), home: g.score.home + (!g.top && !g.finished ? g.h.runs : 0) }; };
+  /* ---------------- 라이브 해설(엔진 기록만 사용) ----------------
+   * ns(상태)는 호출하는 쪽이 경기 동안 들고 있다: { hits:{away,home}, reach:{away,home}, k:{투수id:연속삼진}, lead, any, hits0 }.
+   * evs = 이번 동작에서 새로 생긴 로그, side = 그 동작 직전의 공격 팀. 반환: 해설 문장 배열(득점·역전·연속 삼진·만루·끝내기). */
+  const NHITS = ['1B', '2B', '3B', 'HR', '번트안타'], NREACH = ['1B', '2B', '3B', 'HR', 'BB', 'HBP', 'ROE', 'IBB', '번트안타'];
+  proto.liveNotes = function (g, evs, side, ns, us) {
+    const out = []; ns.hits = ns.hits || { away: 0, home: 0 }; ns.reach = ns.reach || { away: 0, home: 0 }; ns.k = ns.k || {};
+    const nm = b => { const p = b && this.S.players[b.id]; return p ? p.ko : (b && b.name) || ''; }, tn = t => KO[t] || t;
+    let last = null;
+    for (const e of evs) {
+      if (e.k !== 'PA') continue; last = e;
+      if (NHITS.includes(e.e)) ns.hits[side]++; if (NREACH.includes(e.e)) ns.reach[side]++;
+      if (e.p) { const id = e.p.id; ns.k[id] = e.e === 'K' ? (ns.k[id] || 0) + 1 : 0; if (ns.k[id] >= 3) out.push(`${nm(e.p)} ${ns.k[id]}타자 연속 삼진`); }
+      if (e.e === 'HR' && e.runs === 4) out.push(`만루홈런! ${nm(e.b)}`); else if (e.e === 'HR' && e.runs >= 2) out.push(`${e.runs}점 홈런 — ${nm(e.b)}`);
+    }
+    const ls = this.liveScore(g), lead = Math.sign(ls.home - ls.away), tot = ls.home + ls.away;
+    if (last || tot !== (ns.tot || 0)) {
+      if (ns.lead === undefined) ns.lead = 0;
+      if (!ns.any && tot > 0) { out.push(`선취점! ${ls.home > 0 ? tn(g.home) : tn(g.away)} (${ls.away}:${ls.home})`); ns.any = true; }
+      else if (lead !== ns.lead && tot > 0) {
+        if (lead === 0) out.push(`동점! ${ls.away}:${ls.home}`);
+        else if (ns.lead !== 0) out.push(`역전! ${tn(lead > 0 ? g.home : g.away)} ${ls.away}:${ls.home}`);
+      }
+      ns.lead = lead; ns.tot = tot;
+    }
+    if (last && last.outs < 3 && !g.finished && g.bases[0] && g.bases[1] && g.bases[2]) out.push(`${last.outs}사 만루${g.fldSide === us ? ' — 위기입니다' : ' — 기회입니다'}`);
+    if (g.finished && last && last.runs > 0 && !g.top && g.inning >= 9 && g.score.home > g.score.away) out.push(`끝내기! ${nm(last.b)}`);
+    return out;
+  };
+  proto.liveNoHit = function (g, ns) {   // 초/말이 끝났을 때: 5회 이후에도 안타(또는 출루)를 하나도 못 친 팀이 있으면 알려 준다
+    const done = g.top ? g.inning - 1 : g.inning; if (done < 5) return null;
+    // 방금 끝난 half의 공격 팀 = 지금 top이면 home(말이 끝남), 아니면 away(초가 끝남)
+    const bat = g.top ? 'home' : 'away', pit = bat === 'home' ? 'away' : 'home'; if (!ns.hits || ns.hits[bat] > 0) return null;
+    const pn = KO[g[pit]] || g[pit];
+    return ns.reach && ns.reach[bat] === 0 ? `${pn} 마운드, ${done}회까지 퍼펙트 진행 중` : `${pn} 마운드, ${done}회까지 노히트 진행 중`;
+  };
   proto.momentInfo = function (g, us) {
     const opp = us === 'home' ? 'away' : 'home', ls = this.liveScore(g), diff = ls[us] - ls[opp], b = g.bases, inn = g.inning, outs = g.outs, runners = (b[0] ? 1 : 0) + (b[1] ? 1 : 0) + (b[2] ? 1 : 0), risp = !!(b[1] || b[2]);
     const late = inn >= 7, close = Math.abs(diff) <= 3; let kind = null;

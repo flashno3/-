@@ -1046,16 +1046,18 @@
       default: return null;
     }
   }
-  function pushLive(l0) {
+  function pushLive(l0, side0) {
     const lv = ui.live, g = lv.ctx.live;
     const ev = g.log.slice(l0); let last = -1; ev.forEach((e, i) => { if (e.k === 'PA') last = i; });
     ev.forEach((e, i) => { const o = evText(e); if (!o) return; if (i === last) o.t += stateText(e, g); lv.feed.unshift({ w: lv.lbl || '', ...o }); });
+    for (const t of L.liveNotes(g, ev, side0 || g.batSide, lv.ns || (lv.ns = {}), lv.ctx.userSide)) lv.feed.unshift({ w: lv.lbl || '', t: '▶ ' + t, sys: true, cm: true });   // 해설: 엔진 기록으로 확인되는 사실만
     syncHalf(lv, g);
   }
   function syncHalf(lv, g) {   // 초↔말 전환(타석·도루 실패·번트 등 어떤 경로든)을 감지해 이닝 요약과 공격 팀 안내를 남긴다
     const key = g.inning + (g.top ? 't' : 'b'); if (lv.halfKey === undefined) { lv.halfKey = key; lv.halfL = 0; return; } if (lv.halfKey === key) return;
     const oi = parseInt(lv.halfKey), ot = /t$/.test(lv.halfKey);
     lv.feed.unshift({ w: '', t: halfSummary(lv.halfL, oi, ot), sys: true });
+    { const nh = L.liveNoHit(g, lv.ns || (lv.ns = {})); if (nh) lv.feed.unshift({ w: '', t: '▶ ' + nh, sys: true, cm: true }); }
     if (!g.finished) lv.feed.unshift({ w: '', t: `— ${g.inning}회${g.top ? '초' : '말'} ${g.top ? KO[g.away] : KO[g.home]} 공격 (${g.score.away}:${g.score.home}) —`, sys: true });
     lv.halfKey = key; lv.halfL = g.log.length;
   }
@@ -1072,16 +1074,18 @@
   function liveRun(mode) {
     const lv = ui.live, g = lv.ctx.live, start = g.inning, st = g.top;
     while (!g.finished) {
-      const l0 = g.log.length; lv.lbl = `${g.inning}${g.top ? '초' : '말'}`;
-      const wasInn = g.inning, wasTop = g.top; g.step(); pushLive(l0);
+      lvOrders(lv); applyOrders(); if (g.finished) break;
+      const l0 = g.log.length, side0 = g.batSide, us = lv.ctx.userSide, pre = stopState(g, us, lv); lv.lbl = `${g.inning}${g.top ? '초' : '말'}`;
+      g.step(); pushLive(l0, side0);
       if (g.finished) { lv.feed.unshift({ w: '', t: `경기 종료 ${KO[g.away]} ${g.score.away} : ${g.score.home} ${KO[g.home]}`, sys: true }); break; }
       if (mode === 'pa') break;
+      { const post = stopState(g, us, lv); if ((post.fat && !pre.fat) || (post.risp && !pre.risp)) { lv.feed.unshift({ w: lv.lbl || '', t: post.fat && !pre.fat ? `⏸ 멈춤: ${P(g.pitcher.id) ? P(g.pitcher.id).ko : '투수'}의 남은 체력 ${fatLeft(g)}% (설정 ${lv.stops.fat}% 이하)` : '⏸ 멈춤: 득점권 주자가 나갔습니다', sys: true, cm: true }); break; } }
       if (mode === 'inning' && (g.inning !== start || g.top !== st)) break;
     }
     lv.sheet = null; render();
   }
-  function liveTactic(kind, arg) {
-    const lv = ui.live, g = lv.ctx.live, us = lv.ctx.userSide, E = lv.ctx.E; lv.lbl = `${g.inning}${g.top ? '초' : '말'}`; const l0 = g.log.length, d0 = { kind, arg, l0, inn: g.inning, top: g.top, old: P(g.pitcher.id) ? P(g.pitcher.id).ko : '', name: (kind === 'pc' || kind === 'ph') && P(arg) ? P(arg).ko : '' };
+  function runTactic(kind, arg) {   // 화면을 다시 그리지 않고 작전을 실행(예약 실행에서도 사용)
+    const lv = ui.live, g = lv.ctx.live, us = lv.ctx.userSide, E = lv.ctx.E, side0 = g.batSide; lv.lbl = `${g.inning}${g.top ? '초' : '말'}`; const l0 = g.log.length, d0 = { kind, arg, l0, inn: g.inning, top: g.top, old: P(g.pitcher.id) ? P(g.pitcher.id).ko : '', name: (kind === 'pc' || kind === 'ph') && P(arg) ? P(arg).ko : '' };
     if (kind === 'ibb') g.ibb(); else if (kind === 'bunt') g.bunt(); else if (kind === 'steal') g.steal(); else if (kind === 'har') g.hitAndRun(); else if (kind === 'po') g.pickoff(arg === undefined || arg === '' ? undefined : +arg); else if (kind === 'mv') g.moundVisit(us);
     else if (kind === 'pc') g.changePitcher(us, E.pitById[arg]);
     else if (kind === 'ph') g.pinchHit(us, g.idx[us] % 9, E.batById[arg]);
@@ -1089,8 +1093,9 @@
     else if (kind === 'ds') { const [sl, id] = arg.split(':'); g.swapField(us, +sl, E.batById[id]); }
     else if (kind === 'sw') { const [x, y] = arg.split(':'); g.swapPos(us, +x, +y); }
     if (['pc', 'ph', 'ibb', 'bunt', 'steal'].includes(kind) && g.log.length > l0) (lv.dec = lv.dec || []).push(d0);   // 경기 후 결정 되짚기용
-    pushLive(l0); lv.pick = null; lv.sheet = null; lv.pop = null; render();
+    pushLive(l0, side0);
   }
+  function liveTactic(kind, arg) { const lv = ui.live; runTactic(kind, arg); lv.pick = null; lv.sheet = null; lv.pop = null; render(); }
   const benchOf = () => { const lv = ui.live, g = lv.ctx.live, us = lv.ctx.userSide, E = lv.ctx.E; return L.hitters(U(), true).filter(p => E.batById[p.id] && !g.L[us].includes(E.batById[p.id]) && !g.subs[us].some(s => s.out === E.batById[p.id])); };
   function pcScore(p) { const g = ui.live && ui.live.ctx.live, bt = g && g.batter ? P(g.batter.id) : null, ri = L.restInfo(p); let s = ri.left * 0.5 + L.ovr(p) * 0.5; if (bt && bt.bats && p.throws) { if (bt.bats === 'S') s += 0; else if (bt.bats !== p.throws) s += 0; else s += 6; } if (p.role !== 'SP') s += 3; return s; }   // 체력·종합·같은 손(좌투-좌타) 상성 순
   function advice() {
@@ -1124,6 +1129,32 @@
     const row = (arr, side) => { let c = ''; for (let i = 0; i < n; i++) { const v = arr[i]; const cur = !g.finished && i === A.length - 1 && ((g.top && side === 'away') || (!g.top && side === 'home')); c += `<td class="${cur ? 'cur' : ''}">${v === undefined || v === null ? (i < A.length ? 'x' : '') : v}</td>`; } return c; };
     return `<table><thead><tr><th class="l"></th>${Array.from({ length: n }, (_, i) => `<th>${i + 1}</th>`).join('')}<th>R</th></tr></thead><tbody><tr><td class="t">${teamTag(g.away)}</td>${row(A, 'away')}<td class="r">${g.score.away + (g.top && !g.finished ? g.h.runs : 0)}</td></tr><tr><td class="t">${teamTag(g.home)}</td>${row(H, 'home')}<td class="r">${g.score.home + (!g.top && !g.finished ? g.h.runs : 0)}</td></tr></tbody></table>`;
   }
+
+  /* ---------------- 세분화 지시: 타자별 접근 · 교체 예약 · 자동 진행 멈춤 조건 ----------------
+   * 모두 화면(UI) 단계의 편의 기능이다. 실제 효과는 같은 작전 함수(setTactic·changePitcher·pinchHit)를 같은 시점에 호출하는 것과 같아 엔진은 그대로다. */
+  const lvOrders = lv => { lv.batPlan = lv.batPlan || {}; lv.resv = lv.resv || []; lv.stops = lv.stops || { fat: 0, risp: false }; lv.form = lv.form || {}; if (!lv.batBase) lv.batBase = lv.ctx.live.tact[lv.ctx.userSide].bat || 'normal'; return lv; };
+  const fatLeft = g => Math.max(0, 100 - Math.round(g.pitchFatigue(g.fldSide).pct * 100));
+  function applyOrders() {
+    const lv = lvOrders(ui.live), g = lv.ctx.live, us = lv.ctx.userSide, myBat = g.batSide === us, myField = g.fldSide === us, E = lv.ctx.E;
+    for (const r of lv.resv.slice()) {
+      if (g.finished) break; let note = null, drop = false;
+      if (r.kind === 'pc' && myField && fatLeft(g) <= r.thr) {
+        const to = E.pitById[r.to], usedP = g.staff[us].used;
+        if (!to || usedP.has(to.name) || g.pitcher.id === r.to) { drop = true; note = `예약 취소: ${P(r.to) ? P(r.to).ko : '투수'}를 투입할 수 없습니다`; }
+        else { runTactic('pc', r.to); drop = true; note = `예약 실행: 남은 체력 ${r.thr}% 이하 → ${P(r.to).ko} 투입`; }
+      } else if (r.kind === 'ph' && myBat && g.batter.id === r.batter) {
+        const to = E.batById[r.to]; if (!to || !benchOf().some(p => p.id === r.to)) { drop = true; note = `예약 취소: ${P(r.to) ? P(r.to).ko : '대타'}를 쓸 수 없습니다`; }
+        else { runTactic('ph', r.to); drop = true; note = `예약 실행: ${P(r.batter).ko} 타석 → ${P(r.to).ko} 대타`; }
+      } else if (r.kind === 'ph' && !g.L[us].some(b => b.id === r.batter)) { drop = true; note = `예약 취소: ${P(r.batter) ? P(r.batter).ko : '타자'}가 이미 교체되었습니다`; }
+      if (drop) lv.resv = lv.resv.filter(x => x.id !== r.id); if (note) lv.feed.unshift({ w: lv.lbl || '', t: '⏱ ' + note, sys: true, cm: true });
+    }
+    if (myBat) { const want = lv.batPlan[g.batter.id] || lv.batBase; if (g.tact[us].bat !== want) g.setTactic(us, 'bat', want); }   // 타자별 접근(없으면 기본 접근)
+  }
+  function ordersChips() {
+    const lv = lvOrders(ui.live), n = lv.resv.length, st = [lv.stops.fat ? `체력 ${lv.stops.fat}%` : '', lv.stops.risp ? '득점권' : ''].filter(Boolean);
+    return `<div class="tacts small" style="margin-top:6px"><button class="sm" data-act="livePop" data-a="plan">예약·멈춤 설정</button>${n ? `<span class="chip in">예약 ${n}건</span>` : ''}${st.length ? `<span class="chip in">멈춤: ${st.join('·')}</span>` : ''}${Object.keys(lv.batPlan).length ? `<span class="chip in">타자별 접근 ${Object.keys(lv.batPlan).length}명</span>` : ''}</div>`;
+  }
+  function stopState(g, us, lv) { const myField = g.fldSide === us; return { fat: !!(lv.stops.fat && myField && fatLeft(g) <= lv.stops.fat), risp: !!(lv.stops.risp && myField && (g.bases[1] || g.bases[2])) }; }
   function pickerHtml() {
     const lv = ui.live, ctx = lv.ctx, g = ctx.live, us = ctx.userSide, E = ctx.E, pk = lv.pick; if (!pk) return '';
     const close = '<button class="sm" data-act="livePickClose">닫기</button>';
@@ -1174,7 +1205,7 @@
     return `<svg class="fieldsvg" viewBox="0 0 240 192" role="group" aria-label="경기장: 주자·타자·투수를 눌러 지시"><polygon class="grass" points="120,40 190,105 120,168 50,105"/>${pos.map(base).join('')}${mound}${bat}${home}</svg>`;
   }
   function popSheet() {
-    const lv = ui.live; if (!lv || !lv.pop) return '';
+    const lv = ui.live; if (!lv || !lv.pop) return ''; lvOrders(lv);
     const ctx = lv.ctx, g = ctx.live, us = ctx.userSide, myBat = g.batSide === us, myField = g.fldSide === us, bs = g.bases, T = g.tact[us], k = lv.pop === 'home' && g.batSide === us ? 'bat' : lv.pop;   // 내 공격 중 홈 플레이트 = 타자
     const b = (a, label, on, why, hint) => `<button class="big" data-act="popDo" data-a="${a}" ${on ? '' : 'disabled'}>${label}${hint ? `<span class="muted small"> · ${hint}</span>` : ''}${!on && why ? `<span class="why small"> · ${why}</span>` : ''}</button>`;
     const seg = (kind, cur, lbls) => `<div class="seg">${Object.entries(lbls).map(([v, t]) => `<button data-act="popDo" data-a="set:${kind}:${v}" aria-pressed="${cur === v}">${t}</button>`).join('')}</div>`;
@@ -1198,15 +1229,29 @@
     } else if (k === 'bat') {
       const pb = P(g.batter.id); title = `${myBat ? '내' : '상대'} 타자 ${pb ? pb.ko : g.batter.name} (${g.idx[g.batSide] % 9 + 1}번)`;
       const info = `<div class="small muted">${pb ? `${posName[pb.pos] || ''} · OVR ${L.ovr(pb)} · 올 시즌 ${batLine(pb.id)}` : ''}</div>`;
-      if (myBat) body = info + `<div class="small" style="margin-top:6px">타석 접근</div>${seg('bat', T.bat, BAT_LBL)}<p class="help">${BAT_HELP[T.bat] || '기본: 선수 능력치대로 타석에 섭니다.'}</p>`
+      if (myBat) body = info + `<div class="small" style="margin-top:6px">이 타자의 접근 <span class="muted">(이 타자가 설 때만 적용)</span></div>${seg('bplan', lv.batPlan[g.batter.id] || lv.batBase, BAT_LBL)}<p class="help">${BAT_HELP[lv.batPlan[g.batter.id] || lv.batBase] || '기본: 선수 능력치대로 타석에 섭니다.'}</p><div class="small">모든 타자의 기본 접근 <span class="muted">(타자별 설정이 없을 때)</span></div>${seg('bbase', lv.batBase, BAT_LBL)}`
         + b('tac:bunt', '희생번트', !!(bs[0] || bs[1] || bs[2]) && g.outs < 2, '주자가 있고 2사 미만일 때', '주자를 한 베이스 보냄') + b('open:ph', '대타', true, '', '타자를 교체');
       else body = info + b('tac:ibb', '고의사구', true, '', '타자를 거르고 1루를 채움') + `<p class="help">상대 타자는 지시할 수 없습니다. 투수 카드에서 투구 접근을 정하세요.</p>`;
     } else if (k === 'pit') {
       const pp = P(g.pitcher.id), f = g.pitchFatigue(g.fldSide), left = Math.max(0, 100 - Math.round(f.pct * 100)); title = `${myField ? '내' : '상대'} 투수 ${pp ? pp.ko : g.pitcher.name}`;
       const info = `<div class="small muted">${pp ? `OVR ${L.ovr(pp)} · ` : ''}남은 체력 ${left}%${f.over > 0 ? ' · 한계 초과(구위 저하)' : ''} · 상대 타자 ${f.bf}명</div>`;
       if (myField) body = info + `<div class="small" style="margin-top:6px">투구 접근</div>${seg('pit', T.pit, PIT_LBL)}<p class="help">${PIT_HELP[T.pit] || '기본: 투수 능력치대로 던집니다.'}</p>`
-        + b('tac:mv', `마운드 방문 (${g.visits[us]}/3)`, g.canVisit(us), '경기당 3번 · 한 이닝에 한 번', '체력 조금 회복, 다음 3타자 안정') + b('open:pc', '투수 교체', true, '', '불펜에서 고르기');
+        + b('tac:mv', `마운드 방문 (${g.visits[us]}/3)`, g.canVisit(us), '경기당 3번 · 한 이닝에 한 번', '체력 조금 회복, 다음 3타자 안정') + b('open:pc', '투수 교체', true, '', '불펜에서 고르기') + b('open:plan', '교체 예약 · 자동 진행 멈춤 설정', true, '', '체력 기준 자동 교체, 대타 예약');
       else body = info + `<p class="help">상대 투수는 지시할 수 없습니다.</p>`;
+    } else if (k === 'plan') {
+      title = '교체 예약 · 자동 진행 멈춤'; const E = ctx.E, f = lv.form, usedP = new Set([...g.staff[us].used]);
+      const cands = L.pitchers(U(), true).filter(p => E.pitById[p.id] && !usedP.has(E.pitById[p.id].name) && p.id !== g.pitcher.id).sort((a, c) => pcScore(c) - pcScore(a)).slice(0, 12), bench = benchOf().sort((a, c) => L.ovr(c) - L.ovr(a)).slice(0, 12);
+      const sel = (key, opts, cur) => `<select data-sel="${key}" style="flex:1;min-width:0">${opts.map(([v, t]) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
+      const rl = lv.resv.map(r => `<div class="row small" style="flex-wrap:nowrap"><span style="flex:1;min-width:0">${r.kind === 'pc' ? `남은 체력 ${r.thr}% 이하 → <b>${esc(P(r.to) ? P(r.to).ko : '')}</b> 투입` : `<b>${esc(P(r.batter) ? P(r.batter).ko : '')}</b> 타석 → <b>${esc(P(r.to) ? P(r.to).ko : '')}</b> 대타`}</span><button class="sm" data-act="popDo" data-a="rv:del:${r.id}">취소</button></div>`).join('');
+      body = `<div class="small"><b>자동 진행 멈춤</b> <span class="muted">('이닝 끝까지'·'경기 끝까지' 중 이 조건이 새로 생기면 멈춥니다)</span></div>
+        <div class="seg">${[[0, '체력 알림 끔'], [30, '남은 체력 30%'], [15, '남은 체력 15%']].map(([v, t]) => `<button data-act="popDo" data-a="set:stopfat:${v}" aria-pressed="${lv.stops.fat === v}">${t}</button>`).join('')}</div>
+        <div class="seg"><button data-act="popDo" data-a="set:stoprisp:${lv.stops.risp ? 0 : 1}" aria-pressed="${lv.stops.risp}">내 수비 중 득점권 주자 ${lv.stops.risp ? 'ON' : 'OFF'}</button></div>
+        <div class="small" style="margin-top:6px"><b>예약</b> <span class="muted">(조건이 되면 자동으로 실행)</span></div>${rl || '<div class="small muted">예약이 없습니다.</div>'}
+        <div class="small" style="margin-top:6px">투수 교체 예약</div>
+        <div class="row">${sel('rvpcpct', [[40, '남은 체력 40%'], [30, '남은 체력 30%'], [15, '남은 체력 15%']], f.rvpcpct || 30)}${sel('rvpcto', cands.map(p => [p.id, `${p.ko} (${L.ovr(p)})`]), f.rvpcto || '')}<button class="sm primary" data-act="popDo" data-a="rv:addpc" ${cands.length ? '' : 'disabled'}>예약</button></div>
+        <div class="small" style="margin-top:6px">대타 예약 <span class="muted">(그 타자 차례가 되면)</span></div>
+        <div class="row">${sel('rvphbat', g.L[us].map((x, i) => [x.id, `${i + 1}번 ${nm(x)}`]), f.rvphbat || '')}${sel('rvphto', bench.map(p => [p.id, `${p.ko} (${L.ovr(p)})`]), f.rvphto || '')}<button class="sm primary" data-act="popDo" data-a="rv:addph" ${bench.length ? '' : 'disabled'}>예약</button></div>
+        <p class="help">예약은 실제 교체와 같은 효과이며, 실행되면 중계에 ⏱ 표시와 함께 기록되고 경기 후 되짚기에도 포함됩니다. 이미 던진 투수·교체된 선수는 쓸 수 없어 예약이 취소됩니다.</p>`;
     }
     return `<div class="sheet-bg" data-act="livePopClose"><div class="sheet pop" data-stop="1" role="dialog" aria-label="${esc(title)} 지시"><div class="grabber"></div><div class="row"><h2 style="margin:0">${esc(title)}</h2><span class="sp"></span><button class="sm" data-act="livePopClose">닫기</button></div><div class="popbody">${body}</div></div></div>`;
   }
@@ -1236,12 +1281,12 @@
     const matchup = `<div class="cards2"><div class="pcard"><div class="small muted">${myBat ? '내 타자' : '상대 타자'} (${g.idx[g.batSide] % 9 + 1}번)</div><div class="nm">${esc(bp ? bp.ko : b.name)} ${bp ? ovrChip(L.ovr(bp)) : ''}</div><div class="small muted">${bp ? posName[bp.pos] : ''}${bp && L.handLabel(bp) ? ' · ' + L.handLabel(bp) : ''} · 올 시즌 ${bp ? batLine(bp.id) : ''}</div>${platChip(bp, pp)}${bp ? subHtml(bp) : ''}</div>
       <div class="pcard"><div class="small muted">${myField ? '내 투수' : '상대 투수'}</div><div class="nm">${esc(pp ? pp.ko : pt.name)} ${pp ? ovrChip(L.ovr(pp)) : ''}${pp && L.handLabel(pp) ? ` <span class="chip">${L.handLabel(pp)}</span>` : ''}</div><div class="small muted">이 경기 ${Math.floor(tr.outs / 3)}${tr.outs % 3 ? '.' + tr.outs % 3 : ''}이닝 ${tr.R}실점 ${tr.K}K · 상대 타자 ${f.bf}명</div><div class="fbar ${fcls}" title="남은 체력 ${Math.max(0, 100 - Math.round(f.pct * 100))}% (상대 타자 ${f.bf}명 / 한계 ${f.lim}명)" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.max(0, 100 - Math.round(f.pct * 100))}" aria-label="투수 남은 체력"><i style="width:${Math.max(0, 100 - Math.round(f.pct * 100))}%"></i></div><div class="small ${f.over > 0 ? 'neg' : 'muted'}">${f.over > 0 ? '체력 바닥 · 한계 초과(구위 저하 중)' : `남은 체력 ${Math.max(0, 100 - Math.round(f.pct * 100))}%${f.pct >= 0.85 ? ' · 한계에 가까움' : ''}`}</div>${pp ? subHtml(pp) : ''}</div></div>`;
     const advHtml = adv.length ? `<div class="card"><h2>코치 조언</h2><div class="advice">${adv.map(a => `<div class="adv"><span>${a.t}</span><button class="sm" data-act="liveAdv" data-a="${a.a}">${a.l}</button></div>`).join('')}</div></div>` : '';
-    const feed = lv.feed.slice(0, 60).map(x => `<li class="${x.sys ? 'sys' : x.run ? 'hl' : ''}"><span class="w">${x.w}</span><span>${esc(x.t)}</span></li>`).join('');
+    const feed = lv.feed.slice(0, 60).map(x => `<li class="${x.cm ? 'sys cm' : x.sys ? 'sys' : x.run ? 'hl' : ''}"><span class="w">${x.w}</span><span>${esc(x.t)}</span></li>`).join('');
     const ass = g.assign[us], lineup = g.L[us].map((x, i) => { const f2 = ass.find(a => a[0] === x); return `<tr><td class="n">${i + 1}</td><td class="l">${esc(nm(x))}</td><td class="l small muted">${f2 ? posName[f2[1]] : '지명'}</td></tr>`; }).join('');
     const dock = fin ? `<div class="r"><button class="primary" style="font-size:16px" data-act="liveFinish">경기 종료 · 결과 반영 (${KO[g.away]} ${g.score.away} : ${g.score.home} ${KO[g.home]})</button></div>`
       : `${adv.length ? `<div class="r chiprow" aria-label="추천 작전">${adv.slice(0, 2).map(x => `<button class="sm recchip" data-act="liveAdv" data-a="${x.a}">★ ${x.l}</button>`).join('')}</div>` : ''}<div class="r"><button class="primary" data-act="liveRun" data-a="pa">다음 타석</button><button data-act="liveRun" data-a="inning">이닝 끝까지</button><button data-act="liveRun" data-a="end">경기 끝까지</button></div><div class="r"><button data-act="liveSheet" data-a="tact">작전</button><button data-act="liveSheet" data-a="subs">교체</button><button data-act="liveAuto">${ctx.auto ? '자동 불펜 ON' : '자동 불펜 OFF'}</button></div>`;
     return `<div class="lvwrap"><div class="lvhead"><b style="font-family:var(--font-display);font-size:18px">${logo(g.away, 28)} ${KO[g.away]} @ ${logo(g.home, 28)} ${KO[g.home]}</b>${L.isRival(g.home, g.away) && (g.home === U() || g.away === U()) ? ` <span class="chip warn">${esc(L.rivalName(g.home, g.away))}</span>` : ''}<span class="muted small">${park(g.home)} · ${ctx.post ? '포스트시즌' : L.dateStr(L.S.day)}${ctx.prep.absent && ctx.prep.absent.length ? ` · 결장 ${ctx.prep.absent.map(a => esc(a.out.ko) + '→' + esc(a.in.ko)).join(', ')}` : ''}</span><span class="sp"></span>${fin ? '' : '<button class="warn sm" data-act="liveAbort">자동으로 끝내기</button>'}</div>
-      ${stick}<div class="livecols"><div style="display:flex;flex-direction:column;gap:12px;min-width:0">${fin ? '' : `<div class="card"><div class="row"><h3 style="margin:0">경기장</h3><span class="sp"></span><span class="small muted">주자·타자·투수를 눌러 지시</span></div>${fieldHtml(g, adv)}${chips}</div><div class="card">${matchup}</div>${momentCard(g, us, myBat, myField)}`}${advHtml}</div>
+      ${stick}<div class="livecols"><div style="display:flex;flex-direction:column;gap:12px;min-width:0">${fin ? '' : `<div class="card"><div class="row"><h3 style="margin:0">경기장</h3><span class="sp"></span><span class="small muted">주자·타자·투수를 눌러 지시</span></div>${fieldHtml(g, adv)}${chips}${ordersChips()}</div><div class="card">${matchup}</div>${momentCard(g, us, myBat, myField)}`}${advHtml}</div>
       <div style="display:flex;flex-direction:column;gap:12px;min-width:0"><details class="card" open><summary>경기 기록</summary><ul class="feed" style="margin-top:8px">${feed || '<li class="muted">경기를 시작하세요.</li>'}</ul></details><details class="card"><summary>내 라인업</summary><div class="tablewrap"><table><tbody>${lineup}</tbody></table></div></details></div></div></div>
       <div class="livedock">${dock}</div>${pickerHtml()}${fin ? '' : sheetsHtml()}`;
   }
@@ -1447,17 +1492,28 @@
     liveRun(a) { liveRun(a); },
     liveTac(a) { const lv = ui.live; if (a === 'pcOpen') { lv.pick = { t: 'pc' }; lv.sheet = null; render(); } else if (a === 'phOpen') { lv.pick = { t: 'ph' }; lv.sheet = null; render(); } else if (a === 'prOpen') { lv.pick = { t: 'pr', base: null }; lv.sheet = null; render(); } else if (a === 'dsOpen') { lv.pick = { t: 'ds', slot: null }; lv.sheet = null; render(); } else liveTactic(a); },
     liveSheet(a) { ui.live.sheet = a; render(); }, liveSheetClose() { ui.live.sheet = null; render(); }, sheetClose() { ui.sheet = null; render(); },
-    liveSet(a, b) { const lv = ui.live, us = lv.ctx.userSide; lv.ctx.live.setTactic(us, a, (a === 'inf' || a === 'hold') ? b === '1' : b); render(); },
+    liveSet(a, b) { const lv = lvOrders(ui.live), us = lv.ctx.userSide; if (a === 'bat') lv.batBase = b; lv.ctx.live.setTactic(us, a, (a === 'inf' || a === 'hold') ? b === '1' : b); render(); },
     liveAuto() { ui.live.ctx.auto = !ui.live.ctx.auto; render(); },
     livePrBase(a) { ui.live.pick.base = +a; render(); }, liveDsSlot(a) { ui.live.pick.slot = +a; render(); },
-    liveAdv(a) { const lv = ui.live, us = lv.ctx.userSide; if (a === 'pcOpen' || a === 'phOpen' || a === 'prOpen') A.liveTac(a); else if (a === 'ibb' || a === 'bunt' || a === 'har' || a === 'mv') liveTactic(a); else if (a === 'inf' || a === 'hold') { lv.ctx.live.setTactic(us, a, true); render(); } else { lv.ctx.live.setTactic(us, 'bat', a); render(); } },
+    liveAdv(a) { const lv = ui.live, us = lv.ctx.userSide; if (a === 'pcOpen' || a === 'phOpen' || a === 'prOpen') A.liveTac(a); else if (a === 'ibb' || a === 'bunt' || a === 'har' || a === 'mv') liveTactic(a); else if (a === 'inf' || a === 'hold') { lv.ctx.live.setTactic(us, a, true); render(); } else { lvOrders(lv); lv.batPlan[lv.ctx.live.batter.id] = a; applyOrders(); render(); } },
     livePickClose() { ui.live.pick = null; render(); },
     livePop(a) { ui.live.pop = a; render(); }, livePopClose() { ui.live.pop = null; render(); },
     popDo(a) {   // 팝업 지시 실행: 기존 작전과 같은 함수를 호출한다
       const lv = ui.live, [t, x, y] = a.split(':'); lv.pop = null;
+      lvOrders(lv); const g = lv.ctx.live, us = lv.ctx.userSide;
       if (t === 'tac') liveTactic(x); else if (t === 'po') liveTactic('po', x);
+      else if (t === 'set' && (x === 'bplan' || x === 'bbase')) { if (x === 'bplan') lv.batPlan[g.batter.id] = y; else { lv.batBase = y; } applyOrders(); render(); }
+      else if (t === 'set' && x === 'stopfat') { lv.stops.fat = +y; lv.pop = 'plan'; render(); }
+      else if (t === 'set' && x === 'stoprisp') { lv.stops.risp = y === '1'; lv.pop = 'plan'; render(); }
+      else if (t === 'rv') {
+        const q = n => (document.querySelector(`[data-sel="${n}"]`) || {}).value || lv.form[n];
+        if (x === 'del') lv.resv = lv.resv.filter(r => String(r.id) !== y);
+        else if (x === 'addpc') { const to = q('rvpcto'), thr = +q('rvpcpct') || 30; if (to) lv.resv.push({ id: ++lv.rvSeq || (lv.rvSeq = 1), kind: 'pc', thr, to }); }
+        else if (x === 'addph') { const bt = q('rvphbat'), to = q('rvphto'); if (bt && to) { if (bt === g.batter.id && g.batSide === us) toast('지금 타석에 선 타자입니다. 바로 대타를 쓰려면 타자 팝업의 대타를 누르세요.'); else lv.resv.push({ id: ++lv.rvSeq || (lv.rvSeq = 1), kind: 'ph', batter: bt, to }); } }
+        lv.pop = 'plan'; render();
+      }
       else if (t === 'set') A.liveSet(x, y);
-      else if (t === 'open') { if (x === 'pr') { lv.pick = { t: 'pr', base: +y }; render(); } else if (x === 'pc') { lv.pick = { t: 'pc' }; render(); } else if (x === 'ph') { lv.pick = { t: 'ph' }; render(); } }
+      else if (t === 'open') { if (x === 'plan') { lv.pop = 'plan'; render(); } else if (x === 'pr') { lv.pick = { t: 'pr', base: +y }; render(); } else if (x === 'pc') { lv.pick = { t: 'pc' }; render(); } else if (x === 'ph') { lv.pick = { t: 'ph' }; render(); } }
     },
     liveDo(a, b) { liveTactic(a, b); },
     liveAbort() { const lv = ui.live; lv.ctx.auto = true; const g = lv.ctx.live; L.playAuto(lv.ctx); lv.feed.unshift({ w: '', t: `경기 종료 ${KO[g.away]} ${g.score.away} : ${g.score.home} ${KO[g.home]}`, sys: true }); lv.sheet = null; lv.pick = null; render(); },
@@ -1500,6 +1556,7 @@
     if (sel === 'negrole') { ui.negRole = el.value; return; }
     if (sel === 'storyy') { ui.storyY = +el.value; render(); return; }
     if (sel === 'slotpick') { ui.slotPick = el.value; return; }
+    if (['rvpcpct', 'rvpcto', 'rvphbat', 'rvphto'].includes(sel)) { const lv = ui.live; if (lv) { lv.form = lv.form || {}; lv.form[sel] = el.value; } return; }
     if (sel === 'subcand') { ui.subCand = el.value; return; }
     if (sel === 'submo') { ui.subMo = +el.value; render(); return; }
     if (['lpl', 'lpos', 'pslot'].includes(sel)) L.pushUndo('편성 변경');
