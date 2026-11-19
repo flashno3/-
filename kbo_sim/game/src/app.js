@@ -65,10 +65,10 @@
   }
 
   /* ---------------- 공통 셸 ---------------- */
-  const NAV = [['home', '대시보드'], ['roster', '로스터'], ['farm', '2군'], ['lineup', '라인업'], ['pitching', '투수진'], ['train', '훈련'], ['schedule', '일정·결과'], ['standings', '순위·기록'], ['teams', '팀 정보'], ['story', '스토리'], ['mood', '분위기'], ['finance', '재정'], ['coach', '코치진'], ['market', '이적시장'], ['offseason', '오프시즌'], ['save', '저장·설정']];
+  const NAV = [['home', '대시보드'], ['roster', '로스터'], ['farm', '2군'], ['lineup', '라인업'], ['pitching', '투수진'], ['train', '훈련'], ['schedule', '일정·결과'], ['standings', '순위·기록'], ['teams', '팀 정보'], ['story', '스토리'], ['mood', '분위기'], ['finance', '재정'], ['coach', '코치진'], ['scout', '스카우팅'], ['market', '이적시장'], ['offseason', '오프시즌'], ['save', '저장·설정']];
   /* 메뉴를 5개 묶음으로 단순화: 대시보드 · 선수단 · 리그 · 운영 · 설정(+오프시즌). 묶음 안의 화면은 상단 탭으로 전환 */
-  const SCR = { home: '대시보드', roster: '로스터', farm: '2군', lineup: '라인업', pitching: '투수진', train: '훈련', schedule: '일정·결과', standings: '순위·기록', teams: '팀 정보', story: '스토리', mood: '분위기', finance: '재정', coach: '코치진', market: '이적시장', offseason: '오프시즌', save: '저장·설정' };
-  const GROUPS = [['home', '대시보드', ['home']], ['team', '선수단', ['roster', 'farm', 'lineup', 'pitching', 'train', 'mood']], ['league', '리그', ['schedule', 'standings', 'teams', 'story']], ['ops', '운영', ['finance', 'coach', 'market']], ['offseason', '오프시즌', ['offseason']], ['save', '설정', ['save']]];
+  const SCR = { home: '대시보드', roster: '로스터', farm: '2군', lineup: '라인업', pitching: '투수진', train: '훈련', schedule: '일정·결과', standings: '순위·기록', teams: '팀 정보', story: '스토리', mood: '분위기', finance: '재정', coach: '코치진', scout: '스카우팅', market: '이적시장', offseason: '오프시즌', save: '저장·설정' };
+  const GROUPS = [['home', '대시보드', ['home']], ['team', '선수단', ['roster', 'farm', 'lineup', 'pitching', 'train', 'mood']], ['league', '리그', ['schedule', 'standings', 'teams', 'story']], ['ops', '운영', ['finance', 'coach', 'scout', 'market']], ['offseason', '오프시즌', ['offseason']], ['save', '설정', ['save']]];
   function primary() {
     const S = L.S, st = L.standings(), my = st.find(x => x.team === U());
     if (S.phase === 'offseason') return { label: '오프시즌 진행', act: 'go', a: 'offseason' };
@@ -720,6 +720,45 @@
       <div><h3 style="margin:8px 0 4px">시상</h3><div class="tablewrap"><table><tbody>${aw}</tbody></table></div>${gg ? `<details open style="margin-top:8px"><summary><b>골든글러브</b> (포지션별)</summary><div class="tablewrap"><table><tbody>${gg}</tbody></table></div></details>` : ''}</div></div></div>`;
   }
   /* ---------------- 훈련 방침 · 내가 키운 선수 ---------------- */
+  /* ---------------- 스카우팅 ---------------- */
+  const gradeRange = e => e.lo === e.hi ? e.lo : `${e.hi}~${e.lo}`, confCls = c => c === '높음' ? 'in' : c === '낮음' ? 'warn' : '';
+  const estChips = p => { const e = L.scoutEst(p); return `${ovrChip(Math.max(20, Math.min(80, Math.round(e.o))))}<span class="chip ${e.ceil >= 57 ? 'in' : ''}" title="성장 상한 추정 ${e.ceil}±${e.ceilSd}">상한 ${gradeRange(e)}</span><span class="chip ${confCls(e.conf)}" title="추정 오차 ±${e.ceilSd}">확신도 ${e.conf}</span>`; };
+  const progLabel = p => p.type === 'B' ? posName[p.pos] : (p.role === 'SP' ? '선발형' : '구원형');
+  function prospectRow(p, mode) {
+    const e = L.scoutEst(p), w = L.scoutWatchList().find(x => x.id === p.id);
+    return `<div class="pli" data-act="scoutOpen" data-a="${p.id}"><div class="pl-main"><div class="pl-top"><b>${esc(p.ko)}</b> <span class="muted small">${progLabel(p)} · ${p.age}세 · ${esc(p.pro ? p.pro.school : '')}</span></div><div class="small">${estChips(p)}</div><div class="small muted">관찰 ${e.n}회 · 추정 ${e.ceil} ± ${e.ceilSd}</div></div><div class="pl-r" data-stop="1"><button class="sm ${w ? 'primary' : ''}" data-act="scoutWatchA" data-a="${p.id}">${w ? '관심 ✓' : '관심'}</button>${w ? `<button class="sm ${w.star ? 'primary' : ''}" data-act="scoutStarA" data-a="${p.id}" aria-label="우선 관찰">${w.star ? '★' : '☆'}</button>` : ''}</div></div>`;
+  }
+  function screenScout() {
+    const S = L.S, pr = L.ensureProspects(), scouts = L.scouts(), watch = L.scoutWatchList(), lim = L.scoutLimit();
+    const all = L.prospectList(), f = ui.scF || 'all', sk = ui.scS || 'score';
+    const flt = { all: () => true, B: p => p.type === 'B', SP: p => p.type === 'P' && p.role === 'SP', RP: p => p.type === 'P' && p.role !== 'SP', univ: p => p.pro && p.pro.univ, hs: p => p.pro && !p.pro.univ, watch: p => watch.some(w => w.id === p.id) };
+    const rows = all.filter(flt[f] || flt.all).map(p => ({ p, e: L.scoutEst(p) })).sort((a, b) => sk === 'unc' ? b.e.ceilSd - a.e.ceilSd : sk === 'age' ? a.p.age - b.p.age : b.e.score - a.e.score).slice(0, 60);
+    const weekly = scouts.reduce((a, s) => a + L.scoutCap(s), 0), season = S.phase === 'regular', mkt = S.scoutMkt || [];
+    const scRow = s => `<div class="slotrow"><div class="row" style="flex-wrap:nowrap"><div style="flex:1;min-width:0"><b>${esc(s.name)}</b> <span class="muted small">${s.age}세</span></div><span class="small muted">연봉 ${s.salary}억</span><button class="sm" data-act="scoutFireA" data-a="${s.id}">해임</button></div><div class="small">고교 <b>${s.high}</b>(${L.coachGrade(s.high)}) · 대학 <b>${s.univ}</b>(${L.coachGrade(s.univ)}) · 주 ${L.scoutCap(s)}건 관찰</div></div>`;
+    const mkRow = c => `<div class="slotrow"><div class="row" style="flex-wrap:nowrap"><div style="flex:1;min-width:0"><b>${esc(c.name)}</b> <span class="muted small">${c.age}세</span></div><span class="small muted">연봉 ${c.salary}억</span><button class="sm primary" data-act="scoutHireA" data-a="${c.id}" ${scouts.length >= lim ? 'disabled' : ''}>영입</button></div><div class="small">고교 <b>${c.high}</b>(${L.coachGrade(c.high)}) · 대학 <b>${c.univ}</b>(${L.coachGrade(c.univ)})</div></div>`;
+    const chips = [['all', '전체'], ['B', '타자'], ['SP', '선발형'], ['RP', '구원형'], ['hs', '고교'], ['univ', '대학'], ['watch', '관심']].map(([k, t]) => `<button class="sm" aria-pressed="${f === k}" data-act="scoutFilter" data-a="${k}">${t}</button>`).join('');
+    const sorts = [['score', '스카우트 점수'], ['unc', '불확실한 순'], ['age', '어린 순']].map(([k, t]) => `<button class="sm ${sk === k ? 'primary' : ''}" data-act="scoutSort" data-a="${k}">${t}</button>`).join('');
+    const log = (S.scoutLog || []).slice(0, 5);
+    return `<div class="card"><div class="row"><h2 style="margin:0">스카우팅</h2><span class="sp"></span><span class="small muted">${S.year} 드래프트 후보 ${all.length}명(가상 선수)</span></div>
+      <div class="kpis"><div class="kpi"><div class="l">스카우트</div><div class="v">${scouts.length}/${lim}</div></div><div class="kpi"><div class="l">주간 관찰</div><div class="v">${weekly}건</div></div><div class="kpi"><div class="l">관심 목록</div><div class="v">${watch.length}명</div></div></div>
+      <div class="small muted" style="margin-top:6px">스카우트를 고용하고 관심 목록에 후보를 올리면 시즌 중 매주 관찰해 성장 상한 추정의 오차가 줄어듭니다. 같은 스카우트가 여러 번 봐도 오차에는 바닥이 있고, 스카우트가 여러 명일수록 더 정확해집니다. 진짜 능력은 바뀌지 않으며 추정만 정교해집니다. 후보는 이 게임이 만든 가상 선수입니다.${season ? '' : ' 관찰은 정규시즌 중에만 진행됩니다.'}</div></div>
+      <div class="card"><div class="row"><h2 style="margin:0">스카우트 조직</h2><span class="sp"></span><span class="small muted">연봉은 팀 보수에 포함</span></div>${scouts.length ? scouts.map(scRow).join('') : '<div class="small muted">고용한 스카우트가 없습니다. 아래 후보에서 영입하세요.</div>'}
+        <div class="small" style="margin-top:8px"><b>영입 후보</b></div>${mkt.length ? mkt.map(mkRow).join('') : '<div class="small muted">영입 가능한 후보가 없습니다.</div>'}</div>
+      <div class="card"><div class="row"><h2 style="margin:0">관심 목록</h2><span class="sp"></span><button class="sm" data-act="scoutAuto">추천으로 채우기</button></div><div class="small muted">★ 표시한 후보는 두 배로 관찰합니다. 최대 24명.</div>
+        ${watch.length ? `<div class="plist">${watch.map(w => prospectRow(P(w.id))).join('')}</div>` : '<div class="small muted" style="margin-top:6px">관심 후보가 없습니다. "추천으로 채우기"는 상한이 높게 보이면서 아직 불확실한 후보를 올립니다.</div>'}
+        ${log.length ? `<div class="small muted" style="margin-top:8px">최근 관찰: ${log.map(x => `${L.dateStr(x.d)} ${x.n}건`).join(' · ')}</div>` : ''}</div>
+      <div class="card"><div class="row"><h2 style="margin:0">후보 풀</h2><span class="sp"></span><span class="small muted">${rows.length}명 표시</span></div><div class="chips wrap">${chips}</div><div class="row small" style="gap:6px">정렬 ${sorts}</div><div class="plist">${rows.map(x => prospectRow(x.p)).join('') || '<div class="small muted">해당하는 후보가 없습니다.</div>'}</div></div>`;
+  }
+  function scoutSheet() {
+    const id = ui.scoutId; if (!id || !L) return ''; const p = P(id); if (!p || p.team !== 'DRAFT') { ui.scoutId = null; return ''; }
+    const rp = L.scoutReport(p), e = rp.est, w = L.scoutWatchList().find(x => x.id === id), by = rp.by;
+    return `<div class="sheet-bg" data-act="scoutClose"><div class="sheet" data-stop="1" role="dialog" aria-label="스카우팅 리포트"><div class="grabber"></div>
+      <h2>${esc(p.ko)} <span class="muted small">${progLabel(p)} · ${p.age}세 · ${rp.hand}</span></h2><div class="small muted">${esc(rp.school)}${rp.univ ? '(대졸 예정)' : '(고졸 예정)'} · 가상 선수</div>
+      <div class="kpis" style="margin-top:8px"><div class="kpi"><div class="l">현재 능력 추정</div><div class="v">${Math.round(e.o)}</div><div class="small muted">± ${e.oSd}</div></div><div class="kpi"><div class="l">성장 상한 추정</div><div class="v">${e.ceil}</div><div class="small muted">± ${e.ceilSd} · ${gradeRange(e)}급(${esc(L.tierLabel(e.ceil))})</div></div><div class="kpi"><div class="l">확신도</div><div class="v"><span class="chip ${confCls(e.conf)}">${e.conf}</span></div><div class="small muted">관찰 ${e.n}회</div></div></div>
+      ${rp.detail ? `<div style="margin-top:8px"><div class="small"><b>강점</b> ${rp.strengths.length ? rp.strengths.map(x => `<span class="chip in">${esc(x)}</span>`).join(' ') : '<span class="muted">뚜렷하지 않음</span>'}</div><div class="small" style="margin-top:4px"><b>약점</b> ${rp.weaknesses.length ? rp.weaknesses.map(x => `<span class="chip bad">${esc(x)}</span>`).join(' ') : '<span class="muted">뚜렷하지 않음</span>'}</div><div class="small muted" style="margin-top:4px">세부 평가도 관찰이 쌓일수록 정확해집니다.</div></div>` : '<div class="small muted" style="margin-top:8px">관찰이 2회 이상 쌓이면 강점·약점이 공개됩니다.</div>'}
+      ${by.length ? `<div class="small muted" style="margin-top:6px">관찰: ${by.map(x => `${esc(x.name)} ${x.n}회`).join(' · ')}</div>` : ''}
+      <div class="row" style="margin-top:10px"><button class="sm ${w ? 'primary' : ''}" data-act="scoutWatchA" data-a="${id}">${w ? '관심 해제' : '관심 목록에 추가'}</button>${w ? `<button class="sm ${w.star ? 'primary' : ''}" data-act="scoutStarA" data-a="${id}">${w.star ? '★ 우선 관찰 중' : '☆ 우선 관찰'}</button>` : ''}<button class="sm" data-act="scoutClose">닫기</button></div></div></div>`;
+  }
   /* ---------------- 훈련 센터 ---------------- */
   function trainCard() {   // 2군 화면용 요약(설정은 선수단 ▸ 훈련 탭)
     const c = L.trainCfg(), fB = L.trainFocusInfo('B')[c.B.focus].n, fP = L.trainFocusInfo('P')[c.P.focus].n;
@@ -859,14 +898,15 @@
         <div class="row"><button class="primary big" data-act="toDraft">계약 확정 · 드래프트로</button></div>`;
     }
     if (cur === 'draft') {
-      const d = off.draft, onClock = L.draftOnClock(), mine = onClock === U(), pool = d.pool.map(id => P(id)).sort((a, b) => L.scoutScore(b) - L.scoutScore(a));
-      const pr = pool.slice(0, 60).map(p => `<tr><td class="l"><b>${esc(p.ko)}</b></td><td class="l">${p.type === 'B' ? posName[p.pos] : (p.role === 'SP' ? '선발형' : '구원형')}</td><td class="n">${p.age}</td><td>${ovrChip(Math.max(20, Math.min(80, p.scout.o)))}</td><td class="l"><span class="chip ${p.scout.ceil >= 57 ? 'in' : ''}" title="스카우트 추정 — 실제 정점은 ±15 정도 달라질 수 있습니다">${L.tierLabel(p.scout.ceil)}</span></td><td>${mine ? `<button class="sm primary" data-act="draftPick" data-a="${p.id}">지명</button>` : ''}</td></tr>`).join('');
+      const d = off.draft, onClock = L.draftOnClock(), mine = onClock === U(), pool = d.pool.map(id => P(id)).sort((a, b) => L.userScore(b) - L.userScore(a));
+      const pr = pool.slice(0, 60).map(p => `<tr><td class="l"><b>${esc(p.ko)}</b></td><td class="l">${p.type === 'B' ? posName[p.pos] : (p.role === 'SP' ? '선발형' : '구원형')}</td><td class="n">${p.age}</td><td>${ovrChip(Math.max(20, Math.min(80, Math.round(L.scoutEst(p).o))))}</td><td class="l"><span class="chip ${L.scoutEst(p).ceil >= 57 ? 'in' : ''}" title="스카우트 추정 ${L.scoutEst(p).ceil}±${L.scoutEst(p).ceilSd} — 실제 정점은 달라질 수 있습니다">${gradeRange(L.scoutEst(p))}급 ${L.tierLabel(L.scoutEst(p).ceil)}</span> <span class="chip ${confCls(L.scoutEst(p).conf)}">${L.scoutEst(p).conf}</span></td><td>${mine ? `<button class="sm primary" data-act="draftPick" data-a="${p.id}">지명</button>` : ''}</td></tr>`).join('');
       const picks = d.picks.slice(-14).reverse().map(x => `<tr><td class="l n">${x.pick}</td><td class="l">${teamTag(x.team)}</td><td class="l">${esc(P(x.id).ko)}</td></tr>`).join('');
       const myp = d.picks.filter(x => x.team === U()).map(x => esc(P(x.id).ko)).join(', ');
       const lastPk = d.picks[d.picks.length - 1], stage = lastPk ? `<div class="draftstage"><div class="small muted">${Math.ceil(lastPk.pick / 10)}라운드 ${((lastPk.pick - 1) % 10) + 1}순위 · ${KO[lastPk.team]}</div><div class="dname">${esc(P(lastPk.id).ko)}${lastPk.team === U() ? ' <span class="chip in">우리 구단 지명</span>' : ''}</div><div class="small">${esc(L.draftIntro(lastPk.id))}</div></div>` : '';
-      return `${bar}${stage}<div class="card"><div class="row"><h2>신인 드래프트</h2><span class="muted small">${d.pick}/${d.order.length}번째 지명 · ${onClock ? (mine ? '<b class="pos">내 차례</b>' : KO[onClock] + ' 차례') : '종료'}</span><span class="sp"></span>${onClock && !mine ? (ui.draftT ? '<button data-act="draftSkip">건너뛰기</button>' : '<button data-act="draftSim">발표 보기</button><button data-act="draftSkip">내 차례까지 바로</button>') : ''}${onClock ? '<button data-act="draftAuto">나머지 자동 지명</button>' : '<button class="primary" data-act="toFA">FA 시장으로</button>'}</div>
+      const topPk = mine ? `<div class="card"><h2>스카우트 추천</h2><div class="small muted">내 스카우트 추정 기준 상위 3명입니다. 확신도가 낮으면 실제와 크게 다를 수 있습니다(스카우팅 탭에서 관찰해 오차를 줄일 수 있습니다).</div>${pool.slice(0, 3).map(p => `<div class="row small" style="margin-top:6px"><b>${esc(p.ko)}</b> <span class="muted">${progLabel(p)} · ${p.age}세</span> ${estChips(p)}<span class="sp"></span><button class="sm primary" data-act="draftPick" data-a="${p.id}">지명</button></div>`).join('')}</div>` : '';
+      return `${bar}${stage}${topPk}<div class="card"><div class="row"><h2>신인 드래프트</h2><span class="muted small">${d.pick}/${d.order.length}번째 지명 · ${onClock ? (mine ? '<b class="pos">내 차례</b>' : KO[onClock] + ' 차례') : '종료'}</span><span class="sp"></span>${onClock && !mine ? (ui.draftT ? '<button data-act="draftSkip">건너뛰기</button>' : '<button data-act="draftSim">발표 보기</button><button data-act="draftSkip">내 차례까지 바로</button>') : ''}${onClock ? '<button data-act="draftAuto">나머지 자동 지명</button>' : '<button class="primary" data-act="toFA">FA 시장으로</button>'}</div>
         <p class="small muted" style="margin:6px 0">스카우트 평가(능력치·성장 상한 등급)는 오차가 있어 지명 순번이 높아도 크게 못 클 수 있고, 하위 지명에서 대성하기도 합니다. 지명 순서는 정규시즌 성적 역순이고 10라운드까지 진행합니다. 신인은 2군으로 들어옵니다. 내 지명: ${myp || '없음'}</p></div>
-        <div class="grid"><div class="card"><h2>지명 가능 선수</h2><div class="tablewrap" style="max-height:520px;overflow-y:auto"><table><thead><tr><th class="l">선수</th><th class="l">유형</th><th>나이</th><th>OVR(추정)</th><th>잠재력</th><th></th></tr></thead><tbody>${pr}</tbody></table></div></div>
+        <div class="grid"><div class="card"><h2>지명 가능 선수</h2><div class="tablewrap" style="max-height:520px;overflow-y:auto"><table><thead><tr><th class="l">선수</th><th class="l">유형</th><th>나이</th><th>OVR(추정)</th><th class="l">성장 상한·확신도</th><th></th></tr></thead><tbody>${pr}</tbody></table></div></div>
         <div class="card"><h2>최근 지명</h2><div class="tablewrap"><table><tbody>${picks || '<tr><td class="muted">아직 없습니다.</td></tr>'}</tbody></table></div></div></div>`;
     }
     return `${bar}${screenFA()}<div class="row"><button class="primary big" data-act="toSeason">FA 종료 · 새 시즌 시작</button></div>`;
@@ -1098,10 +1138,10 @@
     if (!L) { root.innerHTML = renderStart() + toastHtml(); return; }
     const scroll = window.scrollY;
     if (ui.live) { root.innerHTML = screenLive() + toastHtml(); window.scrollTo(0, scroll); return; }
-    const S = ui.screen, f = { home: () => goalCard() + pressCard() + screenHome() + evHistory(), roster: () => changeBar() + screenRoster(), farm: () => changeBar() + screenFarm(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, story: screenStory, mood: screenMood, train: screenTrain, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
+    const S = ui.screen, f = { home: () => goalCard() + pressCard() + screenHome() + evHistory(), roster: () => changeBar() + screenRoster(), farm: () => changeBar() + screenFarm(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, story: screenStory, mood: screenMood, train: screenTrain, scout: screenScout, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
     document.body.classList.toggle('modal-open', !!ui.modal);
     const keep = snapInner(root);   // 체크박스·버튼으로 다시 그려도 안쪽 스크롤 상자와 펼침 상태를 유지한다
-    root.innerHTML = shell((S === 'home' || S === 'market' || S === 'offseason' ? eventCards() : evBanner()) + f()) + (ui.modal ? modalPlayer(ui.modal) : '') + sheetHtml() + firedModal() + quickSheet() + swapSheet() + posPickSheet() + fslotSheet() + negView() + toastHtml();
+    root.innerHTML = shell((S === 'home' || S === 'market' || S === 'offseason' ? eventCards() : evBanner()) + f()) + (ui.modal ? modalPlayer(ui.modal) : '') + sheetHtml() + firedModal() + quickSheet() + swapSheet() + posPickSheet() + fslotSheet() + scoutSheet() + negView() + toastHtml();
     window.scrollTo(0, scroll); stackTables(root); restoreInner(root, keep);
     { const ch = root.querySelector('.neg-chat'); if (ch) ch.scrollTop = ch.scrollHeight; document.body.classList.toggle('modal-open', !!(ui.modal || (ui.negOpen && L.S.neg))); }
     const cur = root.querySelector('.side button[aria-current=true]'); if (cur && cur.scrollIntoView) { try { cur.scrollIntoView({ inline: 'center', block: 'nearest' }); } catch (e) { /* 일부 브라우저 */ } }
@@ -1221,6 +1261,13 @@
       else if (k === 'captain') { const e = L.setCaptain(id); if (e) toast(e); else { toast(L.S.captain === id ? `${p.ko} 주장 임명` : '주장 해임'); autosave(); } }
       else if (k === 'detail') ui.modal = id; render(); },
     captain(a) { const e = L.setCaptain(a); if (e) toast(e); else { toast(L.S.captain === a ? `${P(a).ko}을(를) 주장으로 임명했습니다.` : '주장을 해임했습니다.'); autosave(); } render(); },
+    scoutHireA(a) { const e = L.scoutHire(a); if (e) toast(e); else { toast('스카우트를 영입했습니다.'); autosave(); } render(); },
+    scoutFireA(a) { const e = L.scoutFire(a); if (e) toast(e); else autosave(); render(); },
+    scoutWatchA(a) { const e = L.scoutWatch(a); if (e) toast(e); else autosave(); render(); },
+    scoutStarA(a) { const e = L.scoutStar(a); if (e) toast(e); else autosave(); render(); },
+    scoutAuto() { const n = L.scoutAutoWatch(10); toast(n ? `${n}명을 관심 목록에 추가했습니다.` : '추가할 후보가 없거나 목록이 가득 찼습니다.'); autosave(); render(); },
+    scoutOpen(a) { ui.scoutId = a; render(); }, scoutClose() { ui.scoutId = null; render(); },
+    scoutFilter(a) { ui.scF = a; render(); }, scoutSort(a) { ui.scS = a; render(); },
     trainSide(a) { const [s, k, v] = a.split(':'); if (L.setTrainSide(s, k, v)) { autosave(); render(); } },
     trainPreset(a) { const e = L.applyTrainPreset(a); if (e) toast(e); else { toast('훈련 프리셋을 적용했습니다.'); autosave(); } render(); },
     trainPresetSave() { const e = L.saveTrainPreset(($('#presetName') || {}).value); if (e) toast(e); else { toast('현재 설정을 프리셋으로 저장했습니다.'); autosave(); } render(); },

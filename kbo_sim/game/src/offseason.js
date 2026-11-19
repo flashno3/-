@@ -2,7 +2,7 @@
  * 성장·노화·은퇴 → 계약 만료/재계약 → 신인 드래프트 → FA 시장 → 새 시즌. 트레이드는 시즌 중(마감 전)과 오프시즌에 가능.
  */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) { factory(require('./league.js'), require('../../web/src/engine.js')); require('./negotiate.js'); require('./world.js'); require('./training.js'); }
+  if (typeof module === 'object' && module.exports) { factory(require('./league.js'), require('../../web/src/engine.js')); require('./negotiate.js'); require('./world.js'); require('./training.js'); require('./scout.js'); }
   else factory(root.KBOLeague, root.KBOEngine);
 })(typeof self !== 'undefined' ? self : this, function (LG, Engine) {
   'use strict';
@@ -143,9 +143,9 @@
     opts = opts || {};
     const S = this.S, sc = S.calib.scale[type], lb = S.calib.lb, id = (type === 'B' ? 'B' : 'P') + (S.nextId++);
     const g = gauss(r, 0, 0.5), z = () => -1.1 + g + gauss(r, 0, 0.6);
-    if (!this._nameTaken || this._nameTakenS !== S) { this._nameTaken = new Set(Object.values(S.players).map(q => q.ko)); this._nameTakenS = S; }   // 이미 있는 모든 선수 이름과 겹치지 않게(가상 신인이 실제 선수와 같은 이름이 되어 중복처럼 보이는 것을 막는다)
+    const nPl = Object.keys(S.players).length; if (!this._nameTaken || this._nameTakenS !== S || this._nameTakenN !== nPl) { this._nameTaken = new Set(Object.values(S.players).map(q => q.ko)); this._nameTakenS = S; }   // 선수 수가 바뀌면(다른 경로로 생긴 선수 포함) 다시 모은다   // 이미 있는 모든 선수 이름과 겹치지 않게(가상 신인이 실제 선수와 같은 이름이 되어 중복처럼 보이는 것을 막는다)
     let name = opts.name; if (!name) for (let k = 0; k < 60; k++) { name = SURN[Math.floor(r.random() * SURN.length)] + GIV[Math.floor(r.random() * GIV.length)]; if (!this._nameTaken.has(name)) break; }
-    this._nameTaken.add(name);
+    this._nameTaken.add(name); this._nameTakenN = nPl + 1;
     const age = opts.age || 18 + Math.min(5, Math.floor(r.random() * r.random() * 6 + r.random() * 2));
     const p = { id, type, name, ko: name, team: 'DRAFT', age, rookie: S.year + 1, foreign: false, active: false, fat: 0, lastStart: -99, retired: false, pot: Math.max(0, gauss(r, 0.75, 0.5)), p: {} };
     if (type === 'B') {
@@ -316,8 +316,10 @@
 
   /* ---------- 드래프트 ---------- */
   proto.buildDraft = function () {
-    const S = this.S, r = rngFor(S.seed, S.year, 41), pool = [];
-    for (let i = 0; i < 120; i++) pool.push(this.makeRookie(r, i % 2 === 0 ? 'B' : 'P').id);
+    const S = this.S, r = rngFor(S.seed, S.year, 41); let pool = [];
+    const pr = this.ensureProspects ? this.ensureProspects() : null;   // 시즌 시작 때 미리 공개된 후보 풀(스카우팅 대상)을 그대로 사용
+    if (pr && pr.y === S.year) { pool = pr.ids.filter(id => S.players[id] && S.players[id].team === 'DRAFT'); S.prospects = null; S.prospectsDone = S.year; }
+    else for (let i = 0; i < 120; i++) pool.push(this.makeRookie(r, i % 2 === 0 ? 'B' : 'P').id);   // 구 저장 파일·예외 시 기존 방식
     const st = this.standings().slice().reverse().map(x => x.team), order = [], st1 = st.slice();
     for (const t of st) if (S.cbt && S.cbt.drop && S.cbt.drop[t]) { const i = st1.indexOf(t); st1.splice(i, 1); st1.splice(Math.min(i + 9, st1.length), 0, t); }   // 경쟁균형세 3회 연속 초과: 1라운드 지명 9단계 하락
     order.push(...st1); for (let k = 1; k < 10; k++) order.push(...st);
@@ -327,6 +329,7 @@
   proto._draftTake = function (t, id) {
     const S = this.S, d = S.off.draft, p = S.players[id]; d.pool = d.pool.filter(x => x !== id); p.team = t; p.contract = { salary: 0.3, years: 1 }; S.teams[t].ids.push(id);
     d.picks.push({ pick: d.pick + 1, team: t, id }); d.pick++; this.invalidate();
+    if (t === S.userTeam && this._scoutCarry) this._scoutCarry(p);
     if (t === S.userTeam) { p.myFrom = { y: S.year, how: `드래프트 ${Math.ceil(d.pick / 10)}라운드 지명` }; news(this, `드래프트 ${Math.ceil(d.pick / 10)}라운드: ${p.ko} 지명`); }
     if (S.teams[t].ids.length > ROSTER_MAX) { const worst = S.teams[t].ids.map(x => S.players[x]).filter(x => x.id !== id && !x.active).sort((a, b) => this.marketValue(a) - this.marketValue(b))[0]; if (worst) { if (t === S.userTeam) { /* 사용자 팀은 직접 정리 */ } else this._retireOrRelease(t, worst.id); } }
   };
@@ -341,7 +344,7 @@
   };
   proto.draftAutoRest = function () {   // 내 순서도 자동 지명(추천 순)
     const S = this.S, d = S.off.draft;
-    while (d.pick < d.order.length) { if (this.draftOnClock() === S.userTeam) { if (S.teams[S.userTeam].ids.length >= ROSTER_MAX) { d.pick++; continue; } const best = d.pool.map(id => ({ id, s: this.scoutScore(S.players[id]) })).sort((a, b) => b.s - a.s)[0]; this._draftTake(S.userTeam, best.id); } else this.draftAiUntilUser(); }
+    while (d.pick < d.order.length) { if (this.draftOnClock() === S.userTeam) { if (S.teams[S.userTeam].ids.length >= ROSTER_MAX) { d.pick++; continue; } const best = d.pool.map(id => ({ id, s: this.userScore ? this.userScore(S.players[id]) : this.scoutScore(S.players[id]) })).sort((a, b) => b.s - a.s)[0]; this._draftTake(S.userTeam, best.id); } else this.draftAiUntilUser(); }
   };
   proto.finishDraft = function () {
     const S = this.S, d = S.off.draft; for (const id of d.pool) { S.players[id].retired = true; S.players[id].team = 'RET'; } d.pool = [];
@@ -1222,6 +1225,7 @@
     const cap = S.calib.cap; S.calib.cap = cap;
     this._setGoals(); S.report = S.report;
     if (this._campApply) this._campApply();
+    S.prospectsDone = null; S.scWatch = []; S.scPtr = 0; if (this.ensureProspects) this.ensureProspects();   // 이번 시즌의 드래프트 후보 풀 공개
     news(this, `${S.year} 시즌 개막 준비`);
   };
 
@@ -1293,7 +1297,7 @@
   };
   proto._finGame = function (home, away) { if (!this.finReady()) return; const f = this.S.fin.teams[home]; if (!f) return; f.gate += this.finAtt(home) * f.price * f.pm * (this.isRival(home, away) ? 1.04 : 1); f.games++; };   // 라이벌전은 홈 관중 +4%
   proto.setTicketPolicy = function (t, pm) { if (!this.finReady() || !PRICE_PM.includes(pm)) return false; this.S.fin.teams[t].pm = pm; return true; };
-  proto.finPay = function (t) { return Math.round((this.payroll(t) + this.coachPayDelta(t) + this.deadNow(t) + this.S.teams[t].ids.reduce((a, id) => { const c = this.S.players[id].contract; return a + (c.amort && c.years > 0 ? c.amort : 0); }, 0)) * 10) / 10; };   // 선수단 보수 = 연봉 + 신규 FA 계약금 상각
+  proto.finPay = function (t) { return Math.round((this.payroll(t) + this.coachPayDelta(t) + (this.scoutPay ? this.scoutPay(t) : 0) + this.deadNow(t) + this.S.teams[t].ids.reduce((a, id) => { const c = this.S.players[id].contract; return a + (c.amort && c.years > 0 ? c.amort : 0); }, 0)) * 10) / 10; };   // 선수단 보수 = 연봉 + 신규 FA 계약금 상각
   proto.finAllowed = function (t) { const f = this.S.fin.teams[t]; return f.lastRev * LOSS * (0.5 + f.trust / 100); };
   proto.finBudget = function (t) { const f = this.S.fin.teams[t]; return Math.round((f.lastRev - f.opex + this.finAllowed(t) + (f.boardExtra || 0)) * 10) / 10; };   // 이사회 승인 추가 예산 포함
   proto.faRoom = function (t) { return this.finReady() ? Math.round((this.finBudget(t) - this.finPay(t)) * 10) / 10 : 1e9; };

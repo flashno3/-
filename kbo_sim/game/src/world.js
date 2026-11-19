@@ -192,7 +192,7 @@
       if (v.length < 2) continue; const foreign = v.filter(p => p.foreign);
       for (let i = 0; i < v.length; i++) for (let j = i + 1; j < v.length; j++) {
         const a = v[i], b = v[j], tm = q => q.team in S.teams ? q.team : (q.faInfo && q.faInfo.from) || q.milTeam || q.team, sameTeam = tm(a) === tm(b), dA = dhKey(a), dB = dhKey(b);
-        const distinct = (a.ns && b.ns) || (a.fpid && b.fpid && a.fpid !== b.fpid) || (dA && dB && dA !== dB) || (a.birth && b.birth && a.birth !== b.birth) || Math.abs(a.age - b.age) >= 3 || (a.foreign && b.foreign && a.name !== b.name) || (!!a.foreign !== !!b.foreign);
+        const grp = q => q.type !== 'B' ? null : q.pos === 'C' ? 'C' : ['1B', '2B', '3B', 'SS'].includes(q.pos) ? 'IF' : ['LF', 'CF', 'RF'].includes(q.pos) ? 'OF' : null, distinct = (grp(a) && grp(b) && grp(a) !== grp(b)) || (a.ns && b.ns) || (a.fpid && b.fpid && a.fpid !== b.fpid) || (dA && dB && dA !== dB) || (a.birth && b.birth && a.birth !== b.birth) || Math.abs(a.age - b.age) >= 3 || (a.foreign && b.foreign && a.name !== b.name) || (!!a.foreign !== !!b.foreign);
         if (a.birth && b.birth && a.birth === b.birth) E('dup-person', `${a.ko}: 생년월일(${a.birth})이 같은 선수가 둘 있습니다(${KO[a.team] || a.team}·${KO[b.team] || b.team}).`, [a.id, b.id]);
         else if (sameTeam && !distinct) E('dup-name', `${KO[a.team] || a.team}에 이름·유형·나이가 같은 ${a.ko}이(가) 두 명 있습니다. 개명·중복 가능성이 있습니다.`, [a.id, b.id]);
         else if (sameTeam && distinct && !(a.ns && b.ns) && !(dA && dB) && !(a.birth && b.birth) && Math.abs(a.age - b.age) < 5) W('namesake', `${KO[a.team] || a.team}의 동명이인 ${a.ko}(${a.age}세·${b.age}세)가 나이 차이만으로 구분됩니다. 같은 사람이면 한 명을 정리해야 합니다.`, [a.id, b.id]);

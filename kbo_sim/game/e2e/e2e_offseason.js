@@ -9,6 +9,7 @@ const sweep=async tag=>{const t=await pg.evaluate(()=>document.body.innerText);c
 const nav=async(g,s)=>{await pg.evaluate(n=>{const b=[...document.querySelectorAll('nav button')].find(b=>b.innerText.includes(n));if(b)b.click()},g);await pg.waitForTimeout(100);if(s){await pg.evaluate(n=>{const b=[...document.querySelectorAll('.tabs.sub button')].find(b=>b.innerText.trim()===n);if(b)b.click()},s);await pg.waitForTimeout(120)}};
 await pg.goto(FILE);await pg.waitForTimeout(400);await pg.click('text=KIA');await pg.click('text=감독 시작');await pg.waitForTimeout(1200);
 await nav('운영','이적시장');await click('button[data-act="mtab"][data-a="fa"]');await click('button[data-act="faClose"]');
+await nav('운영','스카우팅');await click('button[data-act="scoutHireA"]');await click('button[data-act="scoutHireA"]');await click('button[data-act="scoutAuto"]');await click('button[data-act="scoutStarA"]');
 const year0=await pg.evaluate(()=>document.body.innerText.match(/20\d\d/)[0]);
 for(let season=0;season<2;season++){
   // 시즌 끝까지 자동
@@ -31,7 +32,7 @@ for(let season=0;season<2;season++){
   await click('button[data-act="negExit"]');await click('button[data-act="resignAll"]');await sweep('재계약후');
   // 드래프트 연출
   await click('button[data-act="toDraft"]');await pg.waitForTimeout(700);ok(!!(await pg.$('.draftstage'))||!!(await pg.$('button[data-act="draftPick"]')),`드래프트 연출${season}`);await sweep('드래프트');
-  let w=0;while(!(await pg.$('button[data-act="draftPick"]'))&&w++<80)await pg.waitForTimeout(300);ok(!!(await pg.$('button[data-act="draftPick"]')),`내 차례 도달${season}`);
+  let w=0;while(!(await pg.$('button[data-act="draftPick"]'))&&w++<80)await pg.waitForTimeout(300);ok(await pg.evaluate(()=>/스카우트 추천/.test(document.body.innerText)&&/확신도|낮음|보통|높음/.test(document.body.innerText)),`드래프트 화면 스카우트 추천·확신도${season}`);ok(!!(await pg.$('button[data-act="draftPick"]')),`내 차례 도달${season}`);
   await pg.evaluate(()=>window.scrollTo(0,0));await sweep('내 차례');
   for(let k=0;k<2;k++){if(await click('button[data-act="draftPick"]')){await pg.waitForTimeout(900);let q=0;while(!(await pg.$('button[data-act="draftPick"]'))&&!(await pg.$('button[data-act="toFA"]'))&&q++<60)await pg.waitForTimeout(250)}}
   await click('button[data-act="draftAuto"]');await pg.waitForTimeout(300);await sweep('드래프트 종료');

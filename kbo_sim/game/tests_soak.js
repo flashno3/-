@@ -16,7 +16,9 @@ function invariants(L,tag){
     const a=L._trainAcc();ok(Number.isFinite(a.total)&&a.total>=0,`${tag} 훈련 누적`);for(const sd of ['B','P'])for(const v of Object.values(a[sd]))ok(Number.isFinite(v)&&v>=0,`${tag} 누적값`);
     for(const p of L.players(S.userTeam).slice(0,40)){const e=L._trainEff(p);ok(Number.isFinite(e.mult)&&e.mult>=1&&e.mult<=1.6&&Object.values(e.w).every(v=>Number.isFinite(v)&&v>=1&&v<=2.2),`${tag} 훈련 효과 범위 ${p.ko} ${e.mult}`);const inj=L._trainInjFor(p);ok(inj>=0.8&&inj<=1.2,`${tag} 훈련 부상 위험 범위 ${inj}`)}
     const pv=L.trainPreview();ok(Number.isFinite(pv.B.bonus)&&Number.isFinite(pv.P.bonus),`${tag} 예상 성장`);}
-  if(L.integrity){const ir=L.integrity();ok(ir.errors.length===0,`${tag} 데이터 무결성 오류: ${ir.errors.map(e=>e.text).join(' | ')}`)}
+  if(L.scoutEst){const sc=L.scouts();ok(sc.length<=L.scoutLimit(),`${tag} 스카우트 한도`);ok(Number.isFinite(L.scoutPay(S.userTeam))&&Math.abs(L.scoutPay(S.userTeam)-sc.reduce((a,x)=>a+x.salary,0))<0.11,`${tag} 스카우트 연봉`);const w=L.scoutWatchList();ok(w.length<=24&&new Set(w.map(x=>x.id)).size===w.length,`${tag} 관심 목록`);
+    const pl=L.prospectList();ok(pl.length===0||pl.length>=60&&pl.length<=120,`${tag} 후보 풀 ${pl.length}`);for(const p of pl.slice(0,40)){const e=L.scoutEst(p);ok(e&&Number.isFinite(e.ceil)&&Number.isFinite(e.o)&&e.ceilSd>=3&&e.ceilSd<=16.01&&e.ceil>=25&&e.ceil<=85,`${tag} 추정 범위 ${p.id} ${JSON.stringify(e)}`);ok(!(p.sc&&Object.values(p.sc.by).some(b=>!(b.n>0)||!Number.isFinite(b.mc))),`${tag} 관찰 기록 형식`)}}
+  if(L.integrity){const ir=L.integrity();ok(ir.errors.length===0,`${tag} 데이터 무결성 오류: ${ir.errors.map(e=>e.text+' '+JSON.stringify((e.ids||[]).map(id=>{const p=S.players[id];return p?{id,age:p.age,type:p.type,pos:p.pos||p.role,rookie:p.rookie,draft:p.draft,pro:p.pro,from:p.myFrom,src:p.src,fpid:p.fpid,dh:p.dh&&p.dh.y,team:p.team,faInfo:p.faInfo&&p.faInfo.from}:id}))).join(' | ')}`)}
   const rp=L.reputation();ok(rp.score>=10&&rp.score<=95,`${tag} 평판 ${rp.score}`);
   ok((S.story||[]).every(e=>e.text&&!/undefined|NaN/.test(e.text)&&e.imp>=0),`${tag} 스토리 형식`);ok((S.press||[]).every(e=>e.head&&!/undefined|NaN|\{[a-z]+\}/.test(e.head+(e.fan||''))),`${tag} 언론 형식`);
   const v=L.validateEntry?L.validateEntry():[];ok(Array.isArray(v),`${tag} validateEntry`);
@@ -61,6 +63,12 @@ function randTrain(L,R,tag){
   if(S.phase==='offseason'&&R()<0.5){const sd=R()<0.5?'B':'P',ks=L.trainFocusKeys(sd).filter(k=>k!=='none');L.setCamp(sd,ks[Math.floor(R()*ks.length)],Math.floor(R()*4))}
   invariants(L,tag+'train');
 }
+function randScout(L,R,tag){
+  const S=L.S,x=R();
+  if(x<0.2&&S.scoutMkt&&S.scoutMkt.length)L.scoutHire(S.scoutMkt[Math.floor(R()*S.scoutMkt.length)].id);else if(x<0.3){const sc=L.scouts();if(sc.length)L.scoutFire(sc[Math.floor(R()*sc.length)].id)}
+  else if(x<0.6){L.scoutAutoWatch(1+Math.floor(R()*10))}else if(x<0.8){const ps=L.prospectList();if(ps.length)L.scoutWatch(ps[Math.floor(R()*ps.length)].id)}else if(x<0.9){const w=L.scoutWatchList();if(w.length)L.scoutStar(w[Math.floor(R()*w.length)].id)}
+  invariants(L,tag+'scout');
+}
 function run(seed,team,seasons,actSeed,detail){
   const L=League.create(base,team,seed),S=L.S,R=rng(actSeed);const log=[];let negs=0,deals=0;
   for(let y=0;y<seasons;y++){
@@ -69,7 +77,7 @@ function run(seed,team,seasons,actSeed,detail){
     L.faAdvance(75);L.closeFA();invariants(L,`Y${y}closeFA`);
     // 시즌: 20일 단위 진행하며 면담·연장
     let guard=0;while(S.phase!=='offseason'&&S.day<260&&guard++<30){const r=L.advance(10,false);invariants(L,`Y${y}d${S.day}`);if(R()<0.6)negs+=randomNeg(L,R,`Y${y}d${S.day}ext`,R()<0.5?'extend':'meeting')?1:0;
-      randTrain(L,R,`Y${y}d${S.day}`);
+      randTrain(L,R,`Y${y}d${S.day}`);randScout(L,R,`Y${y}d${S.day}`);
       // 이벤트 무작위 처리
       for(const e of L.eventsOpen().slice(0,2)){const ch=e.choices[Math.floor(R()*e.choices.length)];L.resolveEvent(e.id,ch.k)}
       if(r&&r.status==='userGame'){const ctx=L.startUserGame(r.game,r.idx);L.playAuto(ctx);L.finishUserGame(ctx)}}
@@ -78,7 +86,7 @@ function run(seed,team,seasons,actSeed,detail){
     for(const id of off.rep.expiring.slice()){const p=S.players[id];if(L.negBlock(id,'resign')===null&&R()<0.7){negs+=randomNeg(L,R,`Y${y}resign`,'resign')?1:0}}
     for(const id of off.rep.expiring.slice()){const p=S.players[id];if(!p.foreign&&L.ovr(p)>=48)L.resign(id)}
     L.finishContracts();const d=L.buildDraft();let steps=0;for(;;){const r=L.draftAiStep();if(r.done||r.userTurn)break;if(steps++>400)break}
-    let gg=0;while(L.draftOnClock()&&gg++<200){if(L.draftOnClock()===S.userTeam){const b=d.pool.map(i=>S.players[i]).sort((a,b)=>L.scoutScore(b)-L.scoutScore(a))[0];if(!b||L.draftPick(b.id))break}for(;;){const r=L.draftAiStep();if(r.done||r.userTurn)break}if(d.pick>=d.order.length)break}
+    let gg=0;while(L.draftOnClock()&&gg++<200){if(L.draftOnClock()===S.userTeam){const b=d.pool.map(i=>S.players[i]).sort((a,b)=>L.userScore(b)-L.userScore(a))[0];if(!b||L.draftPick(b.id))break}for(;;){const r=L.draftAiStep();if(r.done||r.userTurn)break}if(d.pick>=d.order.length)break}
     L.finishDraft();invariants(L,`Y${y}draft`);
     L.startNewSeason();invariants(L,`Y${y}newSeason`);
     // 중간 저장/불러오기 동일성

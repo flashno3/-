@@ -53,8 +53,13 @@ async function run(vp,label,team){
   ok(await pg.evaluate(()=>[...document.querySelectorAll('button[data-act="campSet"]')].every(b=>b.disabled)),`${label}: 시즌 중 캠프 비활성`);
   await click('button[data-act="slotRemoveA"]');await click('button[data-act="trainPresetDel"]');await click('button[data-act="undo"]');await sweep('훈련 되돌리기');
   await nav('선수단','2군');ok(await pg.evaluate(()=>/훈련 센터 열기/.test(document.body.innerText)),`${label}: 2군 화면 훈련 요약 카드`);
+  // 4-3) 스카우팅: 스카우트 고용·관심 목록·리포트·필터
+  await nav('운영','스카우팅');await sweep('스카우팅');ok(await pg.evaluate(()=>/스카우트 조직/.test(document.body.innerText)&&/관심 목록/.test(document.body.innerText)&&/후보 풀/.test(document.body.innerText)),`${label}: 스카우팅 구성`);
+  ok(await click('button[data-act="scoutHireA"]'),`${label}: 스카우트 영입`);await click('button[data-act="scoutHireA"]');await click('button[data-act="scoutAuto"]');await sweep('관심 추가');
+  for(const f of ['B','SP','RP','hs','univ','watch','all'])await click(`button[data-act="scoutFilter"][data-a="${f}"]`);for(const k of ['unc','age','score'])await click(`button[data-act="scoutSort"][data-a="${k}"]`);await sweep('후보 필터');
+  await pg.evaluate(()=>{const r=document.querySelector('.pli[data-act="scoutOpen"]');if(r)r.click()});await pg.waitForTimeout(150);ok(!!(await pg.$('[aria-label="스카우팅 리포트"]')),`${label}: 리포트 시트`);ok(await pg.evaluate(()=>!/peak/.test(document.body.innerText)),`${label}: 리포트에 숨은 값 노출 없음`);await sweep('리포트');await click('button[data-act="scoutStarA"]');await click('button[data-act="scoutClose"]');await click('button[data-act="scoutFireA"]');
   // 5) 전 화면 순회
-  const groups=[['대시보드',[]],['선수단',['로스터','2군','라인업','투수진','훈련','분위기']],['리그',['일정·결과','순위·기록','팀 정보','스토리']],['운영',['재정','코치진','이적시장']],['설정',[]]];
+  const groups=[['대시보드',[]],['선수단',['로스터','2군','라인업','투수진','훈련','분위기']],['리그',['일정·결과','순위·기록','팀 정보','스토리']],['운영',['재정','코치진','스카우팅','이적시장']],['설정',[]]];
   for(const [g,subs] of groups){await nav(g);await sweep(g);for(const s of subs){await nav(g,s);await sweep(g+'/'+s)}}
   // 스토리 탭
   await nav('리그','스토리');for(const t of ['top','line','press','chal','hist']){await click(`button[data-act="storyTab"][data-a="${t}"]`);await sweep('스토리'+t)}
