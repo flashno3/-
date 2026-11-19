@@ -31,18 +31,40 @@
     return { score, tag, items };
   };
 
-  /* ---------------- 동료 관계(같은 학교·입단 동기) ---------------- */
+  /* ---------------- 동료 관계 ----------------
+     관계(선수당 최대 3명, 외국인 제외): 같은 학교 동기(3) · 같은 학교 선후배(2) · 같은 해 같은 구단 지명 동기(1.5) · 우리 구단이 같은 해 지명한 동기(1.5) · 멘토-제자(1.2: 경력 8년 이상·31세 이상 베테랑 ↔ 24세 이하, 같은 포지션 그룹)
+     발동(우리 구단 선수 P에게 일어난 일 → P의 친한 동료 Q): 긍정 = 면담 성공·재계약·비FA 다년계약·약속 이행·1군 승격·기록 달성·시즌 활약(수상 상위)·부상 복귀 / 부정 = 면담 실패·약속 불이행·방출(근속 3년↑ 또는 OVR 50↑)·트레이드로 내보냄·장기 부상(30일↑)
+     효과(같은 Q는 10일에 한 번): 충성도 보정 ±1 × 성격 가중(P가 리더형 ×1.5, Q가 소심형 ×1.3, Q가 자유분방형이고 부정이면 ×1.3) + 컨디션 ±1(긍정 8일·부정 10일, 기존 컨디션 보정과 합산, ±3 한도).
+     회복: 충성도 보정은 30일마다 0 쪽으로 1, 새 시즌 시작 때 2 줄어든다. */
   proto.bonds = function (p) {
-    if (!p || p.foreign || !(p.team in this.S.teams)) return []; const dh = p.dh || {}, out = [];
+    const S = this.S; if (!p || p.foreign || !(p.team in S.teams)) return []; const dh = p.dh || {}, out = new Map(), add = (id, w, why) => { const o = out.get(id); if (!o || o.w < w) out.set(id, { id, w, why }); };
+    const grp = q => q.type === 'P' ? (q.role === 'SP' ? 'SP' : 'RP') : q.pos === 'C' ? 'C' : ['1B', '2B', '3B', 'SS'].includes(q.pos) ? 'IF' : ['LF', 'CF', 'RF'].includes(q.pos) ? 'OF' : 'DH';
+    const vet = q => q.age >= 31 && ((q.tn || 0) >= 8 || (q.dh && q.dh.ss >= 8)), rook = q => q.age <= 24, my = p.myFrom && /^드래프트/.test(p.myFrom.how) ? p.myFrom.y : null;
     for (const q of this.players(p.team)) { if (q.id === p.id || q.foreign) continue; const qd = q.dh || {};
-      if (dh.school && qd.school === dh.school) out.push({ id: q.id, w: dh.y && dh.y === qd.y ? 3 : 2, why: dh.y && dh.y === qd.y ? '같은 학교 동기' : '같은 학교 선후배' });
-      else if (dh.y && qd.y === dh.y && dh.dt && dh.dt === qd.dt) out.push({ id: q.id, w: 1.5, why: '입단 동기' }); }
-    return out.sort((a, b) => b.w - a.w || (a.id < b.id ? -1 : 1)).slice(0, 3);
+      if (dh.school && qd.school === dh.school) add(q.id, dh.y && dh.y === qd.y ? 3 : 2, dh.y && dh.y === qd.y ? '같은 학교 동기' : '같은 학교 선후배');
+      else if (dh.y && qd.y === dh.y && dh.dt && dh.dt === qd.dt) add(q.id, 1.5, '입단 동기');
+      if (my !== null && q.myFrom && /^드래프트/.test(q.myFrom.how) && q.myFrom.y === my) add(q.id, 1.5, '입단 동기(우리 지명)');
+      if (p.type === q.type && grp(p) === grp(q) && ((vet(p) && rook(q)) || (rook(p) && vet(q)))) add(q.id, 1.2, vet(p) ? '제자' : '멘토'); }
+    return [...out.values()].sort((a, b) => b.w - a.w || (a.id < b.id ? -1 : 1)).slice(0, 3);
   };
-  proto._bondShift = function (p, dir, cause, list) {   // 친한 동료의 일에 영향을 받는다(충성도 ±1, 같은 선수 10일에 1번)
-    const S = this.S, t = S.userTeam, bl = list || this.bonds(p);
-    for (const b of bl) { const q = S.players[b.id]; if (!q || q.team !== t || q.foreign || q.id === p.id) continue; if (q.bondAt !== undefined && q.bondAt <= S.day && S.day - q.bondAt < 10) continue; q.bondAt = S.day; q.loyAdj = clamp((q.loyAdj || 0) + (dir > 0 ? 1 : -1), -15, 15);
-      (S.bondLog = S.bondLog || []).unshift({ y: S.year, d: S.day, text: `${q.ko}: ${b.why}인 ${p.ko}의 ${cause} 소식에 ${dir > 0 ? '기분이 좋아졌습니다' : '마음이 불편합니다'} (충성도 ${dir > 0 ? '+1' : '−1'})` }); if (S.bondLog.length > 30) S.bondLog.pop(); }
+  const BOND_NEWS = ['방출', '트레이드', '장기 부상', '약속 불이행'];
+  proto._bondShift = function (p, dir, cause, list) {
+    const S = this.S, t = S.userTeam, bl = list || this.bonds(p), srcLead = this.traitOf(p) === 'leader', hit = [];
+    for (const b of bl) {
+      const q = S.players[b.id]; if (!q || q.team !== t || q.foreign || q.id === p.id) continue; if (q.bondAt !== undefined && q.bondAt <= S.day && S.day - q.bondAt < 10) continue; q.bondAt = S.day;
+      const qt = this.traitOf(q); let f = 1; if (srcLead) f *= 1.5; if (qt === 'shy') f *= 1.3; if (qt === 'free' && dir < 0) f *= 1.3;
+      const d = r1((dir > 0 ? 1 : -1) * f); q.loyAdj = clamp(r1((q.loyAdj || 0) + d), -15, 15);
+      const cur = q.mood && S.day < q.mood.until ? q.mood : null; q.mood = { v: clamp((cur ? cur.v : 0) + (dir > 0 ? 1 : -1), -3, 3), until: Math.max(cur ? cur.until : 0, S.day + (dir > 0 ? 8 : 10)) };   // 컨디션 ±1
+      hit.push(q); (S.bondLog = S.bondLog || []).unshift({ y: S.year, d: S.day, text: `${q.ko}: ${b.why}인 ${p.ko}의 ${cause} 소식에 ${dir > 0 ? '기분이 좋아졌습니다' : '마음이 불편합니다'} (충성도 ${d > 0 ? '+' : '−'}${Math.abs(d)} · 컨디션 ${dir > 0 ? '+1' : '−1'})` }); if (S.bondLog.length > 30) S.bondLog.pop();
+    }
+    if (hit.length) { this.invalidate(); if (BOND_NEWS.includes(cause)) { const text = `분위기: ${p.ko}의 ${cause} — ${hit.map(x => x.ko).join('·')} 선수가 동요합니다`; S.news.unshift({ year: S.year, day: S.day, text }); if (S.news.length > 120) S.news.length = 120; this.story('bond', text, 1); } }
+    return hit.length;
+  };
+  proto._loyDecay = function (n) {   // 충성도 보정(최근 대우)이 시간이 지나며 0 쪽으로 회복
+    for (const p of this.players(this.S.userTeam)) if (p.loyAdj) p.loyAdj = r1(p.loyAdj > 0 ? Math.max(0, p.loyAdj - n) : Math.min(0, p.loyAdj + n));
+  };
+  proto.bondPreview = function () {   // 영향 관계가 많은 선수(주전급 우선) — 이 선수에게 일이 생기면 누가 영향받는지
+    const t = this.S.userTeam; return this.players(t).filter(p => !p.foreign).map(p => ({ p, b: this.bonds(p) })).filter(x => x.b.length).sort((a, b) => b.b.length - a.b.length || this.ovr(b.p) - this.ovr(a.p)).slice(0, 8);
   };
   proto.clubhouseBoard = function () {
     const S = this.S, t = S.userTeam, ps = this.players(t).filter(p => !p.foreign), groups = {};
@@ -203,7 +225,7 @@
       if (p.team in S.teams) { const c = p.contract || {}; if (!(c.salary >= 0.3) || !(c.years >= 0 && c.years <= 12) || !Number.isFinite(c.salary)) E('contract', `${p.ko}의 계약(${JSON.stringify(c)})이 올바르지 않습니다.`, [p.id]); }
       if (!Number.isFinite(p.age) || p.age < 16 || p.age > 50) E('age', `${p.ko}의 나이(${p.age})가 올바르지 않습니다.`, [p.id]);
     }
-    for (const t of Object.keys(S.teams)) { const fo = this.foreignOf(t), gen = fo.filter(p => !p.aq), aq = fo.filter(p => p.aq); if (gen.length > 3 || aq.length > 1) E('foreign-slot', `${KO[t] || t} 외국인 슬롯 초과(일반 ${gen.length}/3, AQ ${aq.length}/1)`); if (S.teams[t].ids.length > LG.ROSTER_MAX + 6) E('roster', `${KO[t] || t} 보유 선수 ${S.teams[t].ids.length}명이 한도를 크게 넘습니다.`); }
+    for (const t of Object.keys(S.teams)) { const fo = this.foreignOf(t), gen = fo.filter(p => !p.aq), aq = fo.filter(p => p.aq); if (gen.length > 3 || aq.length > 1) E('foreign-slot', `${KO[t] || t} 외국인 보유 한도 초과(일반 ${gen.length}/3, AQ ${aq.length}/1)`); if (S.teams[t].ids.length > LG.ROSTER_MAX + 6) E('roster', `${KO[t] || t} 보유 선수 ${S.teams[t].ids.length}명이 한도를 크게 넘습니다.`); }
     return { errors, warns, checked: all.length };
   };
 });

@@ -31,13 +31,13 @@
   };
   proto.ensureProspects = function () {
     const S = this.S; if (S.prospectsDone === S.year) { this._ensureClass2(); return null; }
-    if (S.prospects && S.prospects.y === S.year) { this._ensureClass2(); return S.prospects; }
+    if (S.prospects && S.prospects.y === S.year) { this._ensureClass2(); this.ensureForeignPool(); return S.prospects; }
     if (S.prospects && S.prospects.ids) for (const id of S.prospects.ids) { const p = S.players[id]; if (p && p.team === 'DRAFT') { p.retired = true; p.team = 'RET'; } }   // 지난 시즌 후보 중 미지명자 정리
     if (S.prospects2 && S.prospects2.y === S.year) {   // 지난해 미리 공개한 '내년 후보'가 올해 후보가 된다(관찰 기록 유지)
       S.prospects = { y: S.year, ids: S.prospects2.ids.slice() }; S.prospects2 = null;
       for (const id of S.prospects.ids) { const p = S.players[id]; if (p) { p.rookie = S.year + 1; if (p.pro) p.pro.cls = 1; } }
     } else S.prospects = this._genClass(S.year);
-    this._ensureClass2(); this._scoutMarket(); return S.prospects;
+    this._ensureClass2(); this._scoutMarket(); this.ensureForeignPool(); return S.prospects;
   };
   proto._ensureClass2 = function () { const S = this.S; if (!S.prospects2 || S.prospects2.y !== S.year + 1) S.prospects2 = this._genClass(S.year + 1); return S.prospects2; };
   proto.prospectList2 = function () { const pr = this._ensureClass2(); return pr.ids.map(id => this.S.players[id]).filter(p => p && p.team === 'DRAFT'); };
@@ -101,7 +101,7 @@
   proto.userScore = function (p) { if (!p.sc || !p.sc.by || !Object.keys(p.sc.by).length) return this.scoutScore(p); return this.scoutEst(p).score; };   // 관찰이 없으면 기존 점수 그대로
 
   /* ---------------- 주간 관찰 ---------------- */
-  proto._scoutDay = function () { const S = this.S; if (S.phase !== 'regular' || !S.scouts || !S.scouts.length || !S.day || S.day % 7 !== 0) return; this._scoutWeek(); };
+  proto._scoutDay = function () { const S = this.S; if (S.phase !== 'regular' || !S.scouts || !S.scouts.length || !S.day || S.day % 7 !== 0) return; this._scoutWeek(); S.scoutObs = (S.scoutObs || 0) + this._scoutWeekForeign(); };
   proto._scoutObserve = function (id, sc, week, idx) {
     const S = this.S, p = S.players[id]; if (!p || p.team !== 'DRAFT') return false; const rating = p.pro && p.pro.univ ? sc.univ : sc.high, se = clamp(16 - 0.17 * (rating - 40), 7, 16) * (p.pro && p.pro.cls === 2 ? 1.25 : 1);   // 내년 후보는 더 어려서 관찰 잡음 ×1.25
     const si = idn(sc.id), rb = rngFor(S.seed, S.year, idn(id) * 997 + si, 7410), bc = gauss(rb, 0, BIAS_C), bo = gauss(rb, 0, BIAS_O);   // 스카우트×선수 고정 편향
@@ -157,20 +157,23 @@
   };
 
   /* ---------------- 외국인 스카우팅 ---------------- */
-  proto.hiddenForeign = function (p) { return !!(p && p.foreign && p.virtual && p.team === 'FA'); };   // 가상 능력치 외국인(KBO 기록 없음)이 FA 시장에 있는 동안은 능력이 불확실
+  proto.hiddenForeign = function (p) { return !!(p && p.foreign && p.virtual && (p.team === 'FA' || p.fpool)); };   // 가상 능력치 외국인(KBO 기록 없음)이 FA 시장에 있는 동안은 능력이 불확실
   proto.fEst = function (p) {
     if (!this.hiddenForeign(p)) return { exact: true, o: this.ovr(p), sd: 0, n: 0 };
     const S = this.S; if (!p.fsc) p.fsc = { o: Math.round(this.ovr(p) + gauss(rngFor(S.seed, 0, idn(p.id), 7500), 0, FSD0)), by: {} };
     let prec = 1 / (FSD0 * FSD0), num = p.fsc.o * prec, n = 0;
-    for (const id of Object.keys(p.fsc.by)) { const b = p.fsc.by[id]; if (!b.n) continue; n += b.n; const v = FBIAS * FBIAS + b.se * b.se / b.n; prec += 1 / v; num += (b.m / b.n) / v; }
+    for (const id of Object.keys(p.fsc.by)) { const b = p.fsc.by[id]; if (!b.n) continue; n += b.n; const se2 = b.v2 !== undefined ? b.v2 / b.n : b.se * b.se, v = FBIAS * FBIAS + se2 / b.n; prec += 1 / v; num += (b.m / b.n) / v; }
     const o = num / prec, sd = Math.sqrt(1 / prec); return { exact: false, o: r1(o), sd: r1(sd), n, conf: sd >= 5 ? '낮음' : sd >= 3.5 ? '보통' : '높음' };
   };
-  proto.scoutForeign = function (id, scoutId) {
-    const S = this.S, p = S.players[id]; if (!this.hiddenForeign(p)) return '조사가 필요 없는 선수입니다(KBO 기록이 있거나 이미 영입했습니다).'; const sc = (S.scouts || []).find(x => x.id === scoutId); if (!sc) return '조사를 맡을 스카우트를 고르세요.';
-    this.fEst(p); const old = p.fsc.by[scoutId]; if (old && old.n >= 1) return '이 스카우트가 이미 조사했습니다.';
-    const bad = spend(this, PROBE_COST); if (bad) return bad;
-    const ab = sc.abroad === undefined ? 45 : sc.abroad, se = clamp(8 - 0.07 * (ab - 40), 3, 8), rn = rngFor(S.seed, S.year, idn(id) * 29 + idn(scoutId) % 997, 7520);
-    const m = this.ovr(p) + gauss(rn, 0, FBIAS) + gauss(rn, 0, se); p.fsc.by[scoutId] = { n: 1, m, se: Math.round(se * 10) / 10 }; return null;
+  proto._fObs = function (p, sc, seMul, idx, manual) {   // 외국인 후보 1회 관찰: 진짜 능력 + 스카우트×선수 고정 편향 + 관찰 잡음
+    const S = this.S; this.fEst(p); const ab = sc.abroad === undefined ? 45 : sc.abroad, se = clamp(8 - 0.07 * (ab - 40), 3, 8) * seMul, si = idn(sc.id) % 997;
+    const bias = gauss(rngFor(S.seed, 0, idn(p.id) * 29 + si, 7525), 0, FBIAS), noise = gauss(rngFor(S.seed, S.year, idn(p.id) * 31 + si * 7 + idx, 7520), 0, se);
+    const b = p.fsc.by[sc.id] = p.fsc.by[sc.id] || { n: 0, m: 0, se: Math.round(se * 10) / 10 }; if (b.v2 === undefined) b.v2 = b.n * b.se * b.se; b.n++; b.m += this.ovr(p) + bias + noise; b.v2 += se * se; b.se = Math.round(se * 10) / 10; if (manual) b.manual = true; return true;
+  };
+  proto.scoutForeign = function (id, scoutId) {   // 집중 조사(조사비 0.3억, 스카우트별 1회): 일반 관찰보다 잡음이 40% 작다
+    const S = this.S, p = S.players[id]; if (!this.hiddenForeign(p)) return '조사가 필요 없는 선수입니다(KBO 기록이 있거나 이미 계약했습니다).'; const sc = (S.scouts || []).find(x => x.id === scoutId); if (!sc) return '조사를 맡을 스카우트를 고르세요.';
+    this.fEst(p); const old = p.fsc.by[scoutId]; if (old && old.manual) return '이 스카우트가 이미 집중 조사했습니다.';
+    const bad = spend(this, PROBE_COST); if (bad) return bad; this._fObs(p, sc, 0.6, 99, true); return null;
   };
   proto.fReport = function (p) {   // 조사한 외국인의 세부 능력(관찰 수가 적으면 잡음이 큼). 조사 전에는 null
     const e = this.fEst(p); if (e.exact) return { exact: true, sub: this.sub(p) }; if (!e.n) return null; const S = this.S, sub = this.sub(p), sd = 8 / Math.sqrt(1 + e.n), out = {};
@@ -185,4 +188,50 @@
   };
   proto.aiScoutScore = function (t, p) { const q = this.aiScoutQ(t), ceil = p.scout.ceil + q * (p.peak - p.scout.ceil), o = p.scout.o + q * (this.ovr(p) - p.scout.o); return 0.35 * o + 0.65 * ceil; };
   proto.scoutRanking = function () { const S = this.S; return Engine.TEAMS.map(t => ({ t, q: t === S.userTeam ? null : this.aiScoutQ(t) })).sort((a, b) => a.q === null ? -1 : b.q === null ? 1 : b.q - a.q); };
+
+  /* ---------------- 해외 후보군(외국인·아시아쿼터) ----------------
+     시즌 시작 때 그해 오프시즌에 FA 시장에 나올 가상 외국인 후보를 미리 공개한다(일반 18명 + 아시아쿼터 10명). 해외 스카우트가 매주 관찰해 오차를 줄이고,
+     시즌이 끝나 계약이 정리되면(finishContracts) 외국인 FA 시장에 합류한다(AI 구단도 같은 시장에서 고른다). */
+  const FOR_SUR = ['카르', '로페', '미첼', '스미', '브라', '윌슨', '존슨', '해리', '터너', '로저', '필립', '데이', '콜린', '다니', '레이', '헤이', '모리', '샌더', '프레', '그랜', '페레', '곤잘', '마르', '디아', '알바', '로드'], FOR_GIV = ['스', '슨', '즈', '트', '드', '로', '닐', '크', '또', '츠'];
+  const AQ_SUR = ['이와타', '코마츠', '나카야마', '하시모토', '마에다', '스즈키', '오가와', '후지이', '타나카', '사토', '야마다', '요시다', '미야자와', '기무라', '천', '린', '장', '왕', '맥도널', '켈리', '산토스', '리'], AQ_GIV = ['유토', '켄지', '쇼타', '하루토', '류세이', '소마', '타쿠미', '웨이', '밍', '제이크', '라이언', '루카스'];
+  const FPOOL_G = [11, 7], FPOOL_A = [7, 3];   // 일반(투수·타자) · 아시아쿼터(투수·타자)
+  proto._foreignName = function (r, aq, taken) {
+    for (let k = 0; k < 80; k++) { const nm = aq ? AQ_SUR[Math.floor(r.random() * AQ_SUR.length)] + ' ' + AQ_GIV[Math.floor(r.random() * AQ_GIV.length)] : FOR_SUR[Math.floor(r.random() * FOR_SUR.length)] + FOR_GIV[Math.floor(r.random() * FOR_GIV.length)]; if (!taken.has(nm)) { taken.add(nm); return nm; } }
+    let nm, k = 2; do { nm = (aq ? '이와타 ' : '카르') + k++; } while (taken.has(nm)); taken.add(nm); return nm;
+  };
+  proto.ensureForeignPool = function () {
+    const S = this.S; if (S.fpool && S.fpool.y === S.year) return S.fpool;
+    const r = rngFor(S.seed, S.year, 7700), taken = new Set(Object.values(S.players).map(q => q.ko)), ids = [];
+    for (const [aq, cnt] of [[false, FPOOL_G], [true, FPOOL_A]]) for (const [ti, n] of [['P', cnt[0]], ['B', cnt[1]]].map(x => x)) for (let i = 0; i < n; i++) {
+      const p = this.makeForeign(r, ti, aq, { name: this._foreignName(r, aq, taken) }); p.team = 'DRAFT'; p.fpool = true; p.fpy = S.year; p.active = false; p.virtual = true; ids.push(p.id);
+    }
+    S.fpool = { y: S.year, ids, released: false }; return S.fpool;
+  };
+  proto.foreignPoolList = function () { const fp = this.ensureForeignPool(); return fp.released ? [] : fp.ids.map(id => this.S.players[id]).filter(p => p && p.fpool && p.team === 'DRAFT'); };
+  proto._releaseForeignPool = function () {   // 계약 정리 시점: 후보군이 외국인 FA 시장에 합류. 지난해 후보 중 계약 못 한 선수는 정리
+    const S = this.S; for (const id of S.fa || []) { const q = S.players[id]; if (q && q.fpy && q.fpy < S.year && q.team === 'FA' && !q.pool27) { q.retired = true; q.team = 'RET'; } }
+    S.fa = (S.fa || []).filter(id => S.players[id] && S.players[id].team === 'FA');
+    const fp = S.fpool; if (!fp || fp.y !== S.year || fp.released) return 0; let n = 0;
+    for (const id of fp.ids) { const q = S.players[id]; if (!q || q.team !== 'DRAFT') continue; q.team = 'FA'; q.fpool = false; q.active = false; (S.fa = S.fa || []).push(id); n++; }
+    fp.released = true; S.fWatch = []; if (n) { S.news.unshift({ year: S.year, day: S.day, text: `해외 후보군 ${n}명이 외국인 선수 시장에 나왔습니다(일반 외국인·아시아쿼터).` }); if (S.news.length > 120) S.news.length = 120; } return n;
+  };
+  /* 해외 후보 관심 목록(최대 8명)과 주간 관찰 */
+  const FWATCH_MAX = 8;
+  proto.foreignWatchList = function () { const S = this.S; return (S.fWatch || []).filter(w => S.players[w.id] && S.players[w.id].fpool && S.players[w.id].team === 'DRAFT'); };
+  proto.foreignWatch = function (id) {
+    const S = this.S, p = S.players[id]; if (!p || !p.fpool || p.team !== 'DRAFT') return '관찰할 수 있는 해외 후보가 아닙니다.'; S.fWatch = this.foreignWatchList(); const i = S.fWatch.findIndex(w => w.id === id);
+    if (i >= 0) { S.fWatch.splice(i, 1); return null; } if (S.fWatch.length >= FWATCH_MAX) return `해외 후보 관심 목록은 ${FWATCH_MAX}명까지입니다.`; S.fWatch.push({ id, star: false }); return null;
+  };
+  proto.foreignStar = function (id) { const w = this.foreignWatchList().find(x => x.id === id); if (!w) return '관심 목록에 없습니다.'; w.star = !w.star; this.S.fWatch = this.foreignWatchList(); return null; };
+  proto.foreignAutoWatch = function (n) {
+    const S = this.S; S.fWatch = this.foreignWatchList(); const have = new Set(S.fWatch.map(w => w.id)); let added = 0;
+    for (const x of this.foreignPoolList().filter(p => !have.has(p.id)).map(p => ({ p, v: this.fEst(p).o + 0.8 * this.fEst(p).sd })).sort((a, b) => b.v - a.v)) { if (S.fWatch.length >= FWATCH_MAX || added >= (n || 4)) break; S.fWatch.push({ id: x.p.id, star: false }); added++; } return added;
+  };
+  proto.scoutFCap = function (s) { return clamp(1 + Math.floor(((s.abroad === undefined ? 45 : s.abroad) - 40) / 15), 1, 3); };   // 스카우트의 주간 해외 관찰 수(해외 능력 기준)
+  proto._scoutWeekForeign = function () {
+    const S = this.S, watch = this.foreignWatchList(); if (!watch.length) return 0; const order = []; for (const w of watch) { order.push(w.id); if (w.star) order.push(w.id); }
+    const week = Math.floor(S.day / 7); let k = (S.fPtr || 0) % order.length, total = 0;
+    (S.scouts || []).forEach(sc => { for (let i = 0; i < this.scoutFCap(sc); i++) { const p = S.players[order[k % order.length]]; k++; if (p && p.fpool) { this._fObs(p, sc, 1, week * 5 + i, false); total++; } } });
+    S.fPtr = k % order.length; return total;
+  };
 });

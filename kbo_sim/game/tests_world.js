@@ -8,7 +8,7 @@ const offseason=L=>{const S=L.S,off=L.startOffseason();for(const id of off.rep.e
 // 1) 동료 관계
 {const L=startSeason(21),S=L.S,t=S.userTeam;let pair=null;for(const p of L.players(t)){const b=L.bonds(p);if(b.length){pair=[p,b[0]];break}}
  ok(pair,'동료 관계가 있는 선수');const [p,b]=pair,q=S.players[b.id];ok(L.bonds(q).some(x=>x.id===p.id),'관계는 양방향');ok(b.w>=1.5&&b.why,'관계 사유');
- const l0=q.loyAdj||0;L._bondShift(p,-1,'방출');ok((q.loyAdj||0)===l0-1,'동료 충성도 −1');ok(S.bondLog.length>=1,'관계 로그');L._bondShift(p,-1,'방출');ok((q.loyAdj||0)===l0-1,'같은 선수 10일 쿨다운');
+ const l0=q.loyAdj||0;L._bondShift(p,-1,'방출');const l1=q.loyAdj||0;ok(l1<=l0-0.5&&l1>=l0-2,'동료 충성도 하락(성격 가중 ×1~1.95)');ok(S.bondLog.length>=1,'관계 로그');L._bondShift(p,-1,'방출');ok((q.loyAdj||0)===l1,'같은 선수 10일 쿨다운');
  const bd=L.clubhouseBoard();ok(Array.isArray(bd.groups)&&Array.isArray(bd.unhappy)&&bd.club,'분위기 보드 구조');}
 // 2) 감독 평판 → 협상 호감도
 {const L=League.create(base,U,22),S=L.S;const r0=L.reputation();ok(r0.score===50&&r0.tag,'초기 평판 50');

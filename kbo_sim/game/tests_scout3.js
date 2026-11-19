@@ -1,0 +1,39 @@
+const fs=require('fs'),assert=require('assert');
+const {League}=require(__dirname+'/src/league.js');require(__dirname+'/src/offseason.js');
+const base=JSON.parse(fs.readFileSync(__dirname+'/src/gamedata.json'));let n=0;const ok=(c,m)=>{n++;if(!c)throw new assert.AssertionError({message:m})};
+const mk=(seed,team)=>{const L=League.create(base,team||'Lions',seed);L.faAdvance(75);L.closeFA();return L};
+const season=L=>{L.advance(300,false);const P=L.startPostseason();let g=0;while(!P.done&&g++<100){if(L.userInPost()){const c=L.startUserPostGame();c.live.playToEnd();L.finishUserPostGame(c)}else L.simPostGame()}};
+// 1) 해외 후보군 생성
+{const L=League.create(base,'Lions',5),S=L.S;const fp=L.foreignPoolList();ok(fp.length===28,'후보군 28명 '+fp.length);ok(fp.filter(p=>!p.aq).length===18&&fp.filter(p=>p.aq).length===10,'일반 18·아시아쿼터 10');ok(fp.filter(p=>!p.aq&&p.type==='P').length===11&&fp.filter(p=>!p.aq&&p.type==='B').length===7&&fp.filter(p=>p.aq&&p.type==='P').length===7,'투수·타자 구성');
+ ok(fp.every(p=>p.team==='DRAFT'&&p.fpool&&p.foreign&&p.virtual&&p.age>=22&&p.contract),'후보 속성');ok(new Set(fp.map(p=>p.ko)).size===28,'후보 이름 유일');const names=new Set(Object.values(S.players).filter(p=>!p.fpool).map(p=>p.ko));ok(fp.every(p=>!names.has(p.ko)),'기존 선수와 이름 겹침 없음');
+ ok(fp.every(p=>L.hiddenForeign(p)&&!L.fEst(p).exact&&L.fEst(p).sd===6&&L.fEst(p).n===0),'후보는 능력이 불확실');ok(L.integrity().errors.length===0,'후보 포함 무결성');ok(L.ensureForeignPool()===S.fpool,'후보군은 한 번만 생성');
+ ok(!S.faMkt||L.faList().every(p=>!p.fpool),'후보군은 아직 FA 시장에 없음');ok(L.faList().length>=0,'FA 목록 정상');
+ const e0=fp.map(p=>Math.abs(L.fEst(p).o-L.ovr(p)));ok(e0.reduce((a,b)=>a+b,0)/e0.length<9,'기본 오차 크기');
+ const A=League.create(base,'Lions',5),B=League.create(base,'Lions',5);ok(JSON.stringify(A.foreignPoolList().map(p=>[p.ko,p.age,p.type,p.aq]))===JSON.stringify(B.foreignPoolList().map(p=>[p.ko,p.age,p.type,p.aq])),'같은 시드 → 같은 후보군');}
+// 2) 관심 목록·주간 관찰(해외 능력 기반)
+{const L=mk(6),S=L.S;const fp=L.foreignPoolList();ok(L.foreignWatch(fp[0].id)===null&&L.foreignWatchList().length===1,'관심 추가');ok(L.foreignWatch(fp[0].id)===null&&L.foreignWatchList().length===0,'관심 해제');ok(L.foreignWatch('B1')!==null&&L.foreignWatch(L.prospectList()[0].id)!==null,'잘못된 대상 거부');
+ for(let i=0;i<8;i++)L.foreignWatch(fp[i].id);ok(L.foreignWatch(fp[9].id)!==null,'관심 8명 한도');L.foreignWatch(fp[0].id);const ab=S.scoutMkt.slice().sort((a,b)=>b.abroad-a.abroad);L.scoutHire(ab[0].id);const sc=L.scouts()[0];sc.abroad=70;ok(L.scoutFCap(sc)===3,'해외 70 → 주 3건');sc.abroad=40;ok(L.scoutFCap(sc)===1,'해외 40 → 주 1건');sc.abroad=25;ok(L.scoutFCap(sc)===1,'하한 1건');sc.abroad=70;
+ L.foreignAutoWatch(8);ok(L.foreignWatchList().length===8,'추천으로 채우기');const ids=L.foreignWatchList().map(w=>w.id);L.advance(70,false);const es=ids.map(id=>L.fEst(S.players[id]));ok(es.every(e=>e.n>=3&&e.sd<6&&e.sd>=2),'10주 관찰 후 오차 감소·바닥 '+es.map(e=>e.n+':'+e.sd).join(','));
+ const out=fp.find(p=>!ids.includes(p.id));ok(L.fEst(out).n===0,'관심 밖 후보는 관찰 없음');
+ // ★ 우선
+ const c=mk(7),CS=c.S;const ab2=CS.scoutMkt.slice().sort((a,b)=>b.abroad-a.abroad)[0];c.scoutHire(ab2.id);const fp2=c.foreignPoolList().slice(0,5);for(const p of fp2)c.foreignWatch(p.id);c.foreignStar(fp2[0].id);c.advance(70,false);ok(c.fEst(fp2[0]).n>c.fEst(fp2[3]).n,'★ 우선 관찰 '+c.fEst(fp2[0]).n+'>'+c.fEst(fp2[3]).n);
+ // 결정성
+ const A=mk(8),B=mk(8);for(const X of [A,B]){X.scoutHire(X.S.scoutMkt[0].id);X.foreignAutoWatch(5);X.advance(50,false)}ok(JSON.stringify(A.foreignWatchList().map(w=>A.S.players[w.id].fsc))===JSON.stringify(B.foreignWatchList().map(w=>B.S.players[w.id].fsc)),'같은 입력 → 같은 관찰');}
+// 3) 통계: 관찰하면 진짜 능력에 가까워진다(여러 시드 합산)
+{let E0=[],E1=[];for(const sd of [11,12,13,14]){const L=mk(sd),S=L.S;const ab=S.scoutMkt.slice().sort((a,b)=>b.abroad-a.abroad);for(let i=0;i<2;i++)L.scoutHire(ab[i].id);const fp=L.foreignPoolList();L.S.fWatch=fp.slice(0,8).map(p=>({id:p.id,star:false}));for(const p of fp.slice(0,8))E0.push(Math.abs(L.fEst(p).o-L.ovr(p)));L.advance(150,false);for(const p of fp.slice(0,8))E1.push(Math.abs(L.fEst(p).o-L.ovr(p)))}
+ const m=a=>a.reduce((x,y)=>x+y,0)/a.length;ok(E0.length===32&&m(E1)<m(E0)*0.85,'후보군 평균 오차 감소 '+m(E0).toFixed(2)+' → '+m(E1).toFixed(2));}
+// 4) 시즌 종료: 계약 정리 때 외국인 시장에 합류(관찰 정보 유지), AI는 같은 시장에서 선택, 지난해 후보는 정리
+{const L=mk(15),S=L.S;const ab=S.scoutMkt.slice().sort((a,b)=>b.abroad-a.abroad);L.scoutHire(ab[0].id);L.foreignAutoWatch(6);const watched=L.foreignWatchList().map(w=>w.id),pool=L.foreignPoolList().map(p=>p.id);season(L);const off=L.startOffseason();ok(L.foreignPoolList().length===28,'계약 정리 전에는 후보군');
+ const nobs=Object.fromEntries(watched.map(id=>[id,JSON.stringify(S.players[id].fsc.by)]));L.finishContracts();ok(S.fpool.released&&L.foreignPoolList().length===0,'후보군 합류 처리');
+ const fa=L.faList();ok(pool.every(id=>S.players[id].team==='FA'&&!S.players[id].fpool&&fa.includes(S.players[id])),'28명 모두 FA 시장으로');ok(S.news.some(x=>/해외 후보군 28명/.test(x.text)),'합류 소식');ok(watched.every(id=>JSON.stringify(S.players[id].fsc.by)===nobs[id]&&L.hiddenForeign(S.players[id])),'관찰 기록 유지·여전히 불확실');ok(S.fWatch.length===0,'관심 목록 초기화');
+ const d=L.buildDraft();L.draftAutoRest();L.finishDraft();const leftBefore=L.faList().filter(p=>p.foreign&&pool.includes(p.id)).length;L.faAdvance(75);L.closeFA();const signed=pool.filter(id=>S.players[id].team!=='FA'&&S.players[id].team!=='RET');ok(signed.every(id=>S.players[id].foreign&&Object.keys(S.teams).includes(S.players[id].team)),'후보군에서 계약한 선수는 구단 소속(AI는 시장 전체에서 가치순으로 고름: '+signed.length+'명)');ok(Object.keys(S.teams).filter(t=>t!==S.userTeam).every(t=>L.foreignOf(t).filter(p=>!p.aq).length===3&&L.foreignOf(t).filter(p=>p.aq).length===1),'AI 구단 외국인 보유 한도 충족');ok(pool.every(id=>['FA','RET'].includes(S.players[id].team)||Object.keys(S.teams).includes(S.players[id].team)),'후보 상태 유효');
+ L.startNewSeason();ok(S.fpool.y===S.year&&L.foreignPoolList().length===28&&L.foreignPoolList().every(p=>!pool.includes(p.id)),'새 시즌: 새 후보군 28명');
+ ok(L.integrity().errors.length===0,'무결성');
+ // 다음 해 계약 정리 때 지난해 후보 중 계약 못한 선수는 정리
+ season(L);L.startOffseason();const stale=pool.filter(id=>S.players[id]&&S.players[id].team==='FA');L.finishContracts();ok(stale.every(id=>!S.players[id]||S.players[id].team==='RET'||S.players[id].retired),'지난해 미계약 후보 정리 '+stale.length);ok(L.faList().every(p=>!p.retired),'FA 목록에 정리된 선수 없음');}
+// 5) 협상 연동: 합류한 후보와 협상할 때 진짜 능력은 비공개, 영입 후 공개
+{const L=mk(16),S=L.S;season(L);L.startOffseason();L.finishContracts();const c=L.faList().filter(p=>L.hiddenForeign(p)&&p.fpy===S.year&&L.foreignOK(S.userTeam,p))[0];ok(c,'협상 가능한 합류 후보');const r=L.negStart(c.id,'foreign');ok(r.ok&&S.neg.kind==='foreign','외국인 협상 시작');const b=L.negBest(c.id);if(b&&b.salary<=L._negTerms(c,'foreign').cap){const res=L.negOffer(b);if(res.signed){ok(L.fEst(c).exact&&L.fEst(c).o===L.ovr(c)&&c.team===S.userTeam,'계약 후 진짜 능력 공개');ok(c.reg1,'1군 등록 대상');}}L.negClose();}
+// 6) 구 저장 파일: 후보군이 없으면 필요할 때 생성
+{const L0=mk(17);const J=JSON.parse(L0.save());delete J.fpool;delete J.fWatch;for(const id of Object.keys(J.players))if(J.players[id].fpool)delete J.players[id];const L=League.load(JSON.stringify(J));ok(L.foreignPoolList().length===28,'구 저장 파일에서 후보군 생성');L.ensureProspects();ok(L.integrity().errors.length===0,'무결성');
+ const L2=League.load(L.save());L.foreignAutoWatch(4);L.scoutHire(L.S.scoutMkt[0].id);L.advance(30,false);ok(Object.keys(L.S.players).length>1000,'진행 정상');const L3=League.load(L.save());ok(JSON.stringify(L3.S.fWatch)===JSON.stringify(L.S.fWatch)&&JSON.stringify(L3.S.fpool)===JSON.stringify(L.S.fpool),'저장/불러오기 보존');}
+console.log('scout3 tests ok',n);

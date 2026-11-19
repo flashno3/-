@@ -54,7 +54,7 @@ const txt=neg=>neg.log.map(x=>x.text).join('\n');
 {const L=mkRS(13),S=L.S;ok(!S.story||Array.isArray(S.story),'story 배열');L._news('트레이드: A ↔ B');ok(S.story[0].kind==='trade'&&S.press[0].kind==='trade','뉴스→스토리·언론');L._news('부상: X — 약 45일');ok(S.story[0].imp===3,'장기 부상 중요도');const top=L.storyTop(S.year,5);ok(top.length>=1,'올해의 이야기');}
 // 10) 외국인 교체 영입: 슬롯이 가득 차 있어도 기존 외국인을 내보내는 조건으로 협상, 성사 시에만 방출
 {const L=mkFA(14,'Lions'),S=L.S,t=S.userTeam;const gen=L.foreignOf(t).filter(x=>!x.aq);ok(gen.length===3,'일반 외국인 3명 보유');const cand=L.faList().find(x=>x.foreign&&!x.aq&&!L.foreignOK(t,x));ok(cand,'슬롯 부족 후보');
- ok(L.negBlock(cand.id,'foreign')&&/슬롯/.test(L.negBlock(cand.id,'foreign')),'교체 없이는 불가');const rep=gen.find(g=>{L._replacing=g.id;const k=L.foreignOK(t,cand);L._replacing=null;return k});ok(rep,'교체 가능한 선수');
+ ok(L.negBlock(cand.id,'foreign')&&/슬롯|보유 한도/.test(L.negBlock(cand.id,'foreign')),'교체 없이는 불가');const rep=gen.find(g=>{L._replacing=g.id;const k=L.foreignOK(t,cand);L._replacing=null;return k});ok(rep,'교체 가능한 선수');
  ok(L.negBlock(cand.id,'foreign',rep.id)===null,'교체 조건이면 협상 가능');const r=L.negStart(cand.id,'foreign',{replace:rep.id});ok(r.ok&&S.neg.replace===rep.id,'교체 협상 시작');
  L.negOffer({years:1,salary:0.3});ok(rep.team===t,'결렬·미충족 시 방출되지 않음');const tm=L._negTerms(cand,'foreign'),b=L.negBest(cand.id);
  if(b.salary<=tm.cap){const res=L.negOffer(b);if(res.signed){ok(cand.team===t&&rep.team==='FA','교체 성사: 신규 영입·기존 방출');ok(L.foreignOf(t).filter(x=>!x.aq).length===3&&L.foreignOf(t).every(x=>x.reg1),'슬롯 3명 유지');}}}

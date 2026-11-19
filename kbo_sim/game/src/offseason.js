@@ -246,6 +246,9 @@
     if (this.faRoom(t) < o.salary + o.bonus / o.years + this.faCompCost(p, t)) return null;   // 외부 FA 영입 시 보상금도 예산에 반영
     return Object.assign({ per, tm }, o);
   };
+  proto._fromText = function (p) {   // 기록 소식에 붙는 '내가 데려온 선수' 표기
+    const h = p.myFrom && p.myFrom.how; if (!h) return ''; if (/^드래프트/.test(h)) return ` (내가 ${h})`; if (/^트레이드/.test(h)) return ` (내가 ${h}로 데려옴)`; if (h === 'FA 영입') return ' (내가 FA로 영입)'; if (h === '외국인 선수 계약') return ' (내가 계약한 외국인)'; return ` (${h})`;
+  };
   proto.release = function (t, id, exercise) {
     const S = this.S, p = S.players[id]; if (!p || p.team !== t) return;
     p.faInfo = { from: t, grade: exercise && !p.foreign ? this.faGrade(p, t) : null, prev: p.contract.salary };   // FA 자격이 있으면 등급·보상 정보를 남긴다
@@ -310,7 +313,8 @@
   };
   proto.resignAll = function () { const off = this.S.off; if (!off) return 0; let n = 0; for (const id of off.rep.expiring.slice()) { const p = this.S.players[id]; if (p.foreign) continue; if (!this.resign(id)) n++; } return n; };   // 외국인을 제외한 전원을 1년 재계약
   proto.finishContracts = function () {   // 재계약하지 않은 선수는 FA 시장으로
-    const S = this.S, off = S.off; for (const id of off.rep.expiring.slice()) this.release(S.userTeam, id, true);
+    const S = this.S, off = S.off; if (this._releaseForeignPool) this._releaseForeignPool();   // 해외 후보군도 외국인 FA 시장에 합류
+    for (const id of off.rep.expiring.slice()) this.release(S.userTeam, id, true);
     off.rep.expiring = []; off.fa = S.fa; this._priceClass(true); this.invalidate();   // 이번 FA 풀의 시장가 확정
   };
 
@@ -486,7 +490,7 @@
   /* 공통 영입 처리: 팀 이동·계약·FA 행사(재취득 연수 리셋)·보상 */
   proto._doSign = function (t, p, years, ask, bonus) {
     const S = this.S, info = p.faInfo, graded = info && info.grade, comp = graded && info.from !== t ? graded : null;
-    S.fa = (S.fa || []).filter(x => x !== p.id); p.team = t; p.active = false; S.teams[t].ids.push(p.id); if (t === S.userTeam) p.myFrom = { y: S.year, how: p.foreign ? '외국인 영입' : 'FA 영입' };
+    S.fa = (S.fa || []).filter(x => x !== p.id); p.team = t; p.active = false; S.teams[t].ids.push(p.id); if (t === S.userTeam) p.myFrom = { y: S.year, how: p.foreign ? '외국인 선수 계약' : 'FA 영입' };
     ask = Math.round(ask * 10) / 10; bonus = Math.round((bonus || 0) * 10) / 10; p.contract = this._newContract(p, ask, p.foreign || !graded ? 1 : years, p.foreign || !graded ? 0 : bonus); p.salHist = (p.salHist || []).slice(-2).concat([Math.round(((p.contract.bonus || 0) / p.contract.years + ask) * 10) / 10]);
     if (t === S.userTeam && this._contractNote) this._contractNote(p, p.foreign ? '외국인' : graded ? 'FA' : '재계약');
     if (graded && p.fa) { p.fa.used += 1; p.fa.last = graded; p.fa.svc = 0; p.fa.rem = 0; }
@@ -609,7 +613,7 @@
       if (offer && typeof offer === 'object') { const ev = this._negEval(p, Object.assign({ years: 1, bonus: 0 }, offer), 'foreign'); if (!ev.ok) return ev.msg; ask = ev.sal; }   // 협상 테이블: 호감도로 낮춘 요구액 이상·상한 이하
       else ask = Math.min(this.askSalary(p), this.foreignCap(p, t));
       this._doSign(t, p, 1, ask, 0); this._foreignJoin(p);
-      news(this, `FA ${p.ko} 영입 (${ask}억, 1년)`); return null;
+      news(this, `${p.aq ? '아시아쿼터' : '외국인'} 선수 ${p.ko} 계약 (${ask}억, 1년)`); return null;
     }
     if (typeof offer !== 'object' || offer === null) offer = this.faDefaultOffer(p, t, typeof offer === 'number' ? offer : undefined);   // 숫자만 주면 요구 조건에 맞춘 기본 제시
     const ev = this.faEvaluate(p, offer, t); if (!ev.ok) return ev.msg;
@@ -826,7 +830,7 @@
     const S = this.S, t = S.userTeam, f = S.fin && S.fin.teams[t]; if (!f || S.phase !== 'regular' && S.phase !== 'preseason') return; if (S.phase === 'preseason' && d < 1) return;
     const r = rngFor(S.seed, S.year, d, 8800), E = S.events = S.events || { seq: 0, list: [] };
     { let ch = S.teamMood && S.teamMood.until === d; for (const p of this.players(t)) if (p.mood && p.mood.until === d) ch = true; if (ch) this.invalidate(); }   // 컨디션 효과 종료일에 엔진 입력 갱신
-    if (this._promiseTick) this._promiseTick(d);
+    if (this._promiseTick) this._promiseTick(d); if (this._loyDecay && d > 0 && d % 30 === 0) this._loyDecay(1);   // 충성도 보정 회복(30일마다 1)
     // 만료 → 기본 처리
     for (const e of this.eventsOpen()) if (d >= e.exp) this.resolveEvent(e.id, e.def || (e.choices[e.choices.length - 1] || {}).k, true);
     const open = this.eventsOpen().length; if (open >= 3) return;
@@ -1033,7 +1037,7 @@
       const dy = gs.youth.ok ? 2 : 0; res.push({ k: 'youth', label: `25세 이하 ${gs.youth.goal}명 이상 출전(100타석·50이닝)`, got: `${gs.youth.cur}명`, ok: gs.youth.ok, d: dy }); d += dy;
       f.trust = clamp(Math.round((f.trust + d) * 10) / 10, 0, 100);
     }
-    (S.awardsHist = S.awardsHist || []).push({ year: S.year, awards: aw });
+    (S.awardsHist = S.awardsHist || []).push({ year: S.year, awards: aw }); for (const m of mine.slice(0, 3)) if (S.players[m.id]) this._bondShift(S.players[m.id], 1, '시즌 활약');
     S.report = { year: S.year, rank: me.rank, w: me.w, l: me.l, d: me.d, champion: S.post ? S.post.champion : null, awards: aw, mine, goals: res, goalTrust: d, trust: f.trust };
     if (res.length) news(this, `시즌 목표 평가: ${res.map(x => `${x.label} ${x.ok ? '달성' : '미달'}`).join(' · ')} → 이사회 신뢰도 ${d >= 0 ? '+' : ''}${d} (현재 ${f.trust})`);
     if (f.trust <= 12) { S.fired = { year: S.year, trust: f.trust, done: false }; news(this, `이사회가 감독 해임을 결정했습니다 (신뢰도 ${f.trust}).`); }
@@ -1113,8 +1117,8 @@
     const S = this.S, t = S.userTeam;
     for (const p of this.players(t)) {
       p.ms = p.ms && p.ms.y === S.year ? p.ms : { y: S.year, d: {} };
-      if (p.type === 'B') { const c = S.stats.bat[p.id]; if (!c) continue; const v = { H: c['1B'] + c['2B'] + c['3B'] + c.HR, HR: c.HR, RBI: c.RBI, SB: c.SB || 0 }; for (const [k, n, lab] of MS_B) { const key = k + n; if (v[k] >= n && !p.ms.d[key]) { p.ms.d[key] = S.day; news(this, `기록 달성: ${p.ko} 시즌 ${n}${lab}${p.myFrom ? ` (내가 ${p.myFrom.how})` : ''}`); } } }
-      else { const c = S.stats.pit[p.id]; if (!c) continue; const v = { K: c.K, IP: Math.floor(c.outs / 3) }; for (const [k, n, lab] of [['K', 100, '탈삼진'], ['K', 150, '탈삼진'], ['K', 200, '탈삼진'], ['IP', 100, '이닝'], ['IP', 150, '이닝']]) { const key = k + n; if (v[k] >= n && !p.ms.d[key]) { p.ms.d[key] = S.day; news(this, `기록 달성: ${p.ko} 시즌 ${n}${lab}${p.myFrom ? ` (내가 ${p.myFrom.how})` : ''}`); } } }
+      if (p.type === 'B') { const c = S.stats.bat[p.id]; if (!c) continue; const v = { H: c['1B'] + c['2B'] + c['3B'] + c.HR, HR: c.HR, RBI: c.RBI, SB: c.SB || 0 }; for (const [k, n, lab] of MS_B) { const key = k + n; if (v[k] >= n && !p.ms.d[key]) { p.ms.d[key] = S.day; news(this, `기록 달성: ${p.ko} 시즌 ${n}${lab}${this._fromText(p)}`); this._bondShift(p, 1, '기록 달성'); this._bondShift(p, 1, '기록 달성'); } } }
+      else { const c = S.stats.pit[p.id]; if (!c) continue; const v = { K: c.K, IP: Math.floor(c.outs / 3) }; for (const [k, n, lab] of [['K', 100, '탈삼진'], ['K', 150, '탈삼진'], ['K', 200, '탈삼진'], ['IP', 100, '이닝'], ['IP', 150, '이닝']]) { const key = k + n; if (v[k] >= n && !p.ms.d[key]) { p.ms.d[key] = S.day; news(this, `기록 달성: ${p.ko} 시즌 ${n}${lab}${this._fromText(p)}`); this._bondShift(p, 1, '기록 달성'); } } }
     }
   };
   /* ---------------- 라이벌 · 경기 프리뷰 · 리캡 ----------------
@@ -1224,7 +1228,7 @@
     this.newSeasonSetup(false); this.repairSettings(S.userTeam);
     const cap = S.calib.cap; S.calib.cap = cap;
     this._setGoals(); S.report = S.report;
-    if (this._campApply) this._campApply();
+    if (this._campApply) this._campApply(); if (this._loyDecay) this._loyDecay(2);   // 새 시즌: 오래된 불만·기쁨이 가라앉는다
     S.prospectsDone = null; S.scWatch = []; S.scPtr = 0; if (this.ensureProspects) this.ensureProspects();   // 이번 시즌의 드래프트 후보 풀 공개
     news(this, `${S.year} 시즌 개막 준비`);
   };
@@ -1345,7 +1349,7 @@
     const S = this.S, now = this.todayN(), r = rngFor(S.seed, S.year, d, 7000), changed = new Set(), user = S.userTeam, back = {}, out = {};
     for (const t of TEAMS) for (const p of this.players(t)) {
       if (p.inj && p.inj.apply !== false && !this.isInj(p)) {   // 복귀
-        if (t === user) { news(this, `부상 복귀: ${p.ko} (${p.inj.dx}) — 2군에서 대기 중`); if (!p.foreign || true) this._returnEvent(p); }
+        if (t === user) { news(this, `부상 복귀: ${p.ko} (${p.inj.dx}) — 2군에서 대기 중`); this._bondShift(p, 1, '부상 복귀'); if (!p.foreign || true) this._returnEvent(p); }
         if (p.inj.generated) delete p.inj; else p.inj.apply = false; changed.add(t); (back[t] = back[t] || []).push(p);
       }
     }
@@ -1358,7 +1362,7 @@
       const retN = now + days, rd = new Date(retN * 864e5);
       p.inj = { dx: u >= 0.97 ? part.replace('통증', '손상 → 수술') : part, since: `${S.year}-${String(new Date(now * 864e5).getUTCMonth() + 1).padStart(2, '0')}-${String(new Date(now * 864e5).getUTCDate()).padStart(2, '0')} 발생`, ret: rd.toISOString().slice(0, 10), retN, basis: '시즌 중 발생한 부상(확률 모델)', apply: true, generated: true };
       p.active = false; changed.add(t); (out[t] = out[t] || []).push(p);
-      if (t === user) news(this, `부상: ${p.ko} — ${p.inj.dx}${sev}, 약 ${days}일 (복귀 예정 ${this.injDateStr(p)})`);
+      if (t === user) { news(this, `부상: ${p.ko} — ${p.inj.dx}${sev}, 약 ${days}일 (복귀 예정 ${this.injDateStr(p)})`); if (days >= 30) this._bondShift(p, -1, '장기 부상'); }
     }
     {   // 부상으로 1군이 최소 인원(타자 10·투수 8) 아래가 되면 건강한 2군 선수를 자동 등록(경기 진행 불가 방지)
       const a = this.players(user).filter(p => p.active), nb = a.filter(p => p.type === 'B').length, np = a.filter(p => p.type === 'P').length;

@@ -189,7 +189,7 @@
     if (kind === 'foreign') {
       if (rep) { const r = S.players[rep]; if (!r || r.team !== t || !r.foreign) return '교체할 외국인 선수를 찾을 수 없습니다.'; }
       this._replacing = rep || null; const okSlot = this.foreignOK(t, p); this._replacing = null;
-      if (!okSlot) return p.aq ? '아시아쿼터는 구단당 1명입니다. 현재 아시아쿼터 선수를 정리해야 합니다.' : '일반 외국인은 3명까지이며 같은 포지션 3명은 안 됩니다. 먼저 외국인 슬롯을 비워야 합니다.';
+      if (!okSlot) return p.aq ? '아시아쿼터 선수는 구단당 1명입니다. 보유 한도가 찼으니 기존 아시아쿼터 선수와 교체해야 합니다.' : '일반 외국인 선수는 3명까지이고 같은 포지션 3명은 안 됩니다. 보유 한도가 찼으니 기존 선수와 교체해야 합니다.';
     }
     if (kind === 'resign') { const off = S.off; if (!off || !off.rep.expiring.includes(id)) return '재계약 대상이 아닙니다.'; }
     if (kind === 'extend') { if (p.team !== t) return '우리 팀 선수가 아닙니다.'; if (p.foreign) return '외국인은 비FA 다년계약 대상이 아닙니다.'; if (p.rookie === S.year) return '이번 시즌 입단한 신인은 대상이 아닙니다.'; if (p.contract.years > 2) return `계약이 ${p.contract.years}년 남아 있어 아직 연장 대상이 아닙니다(잔여 2년 이하부터).`; if (S.off && S.off.rep.expiring.includes(id)) return '재계약 협상으로 진행하세요.'; if (p.extAt && p.extAt.y === S.year) return '올해 이미 연장 계약을 맺었습니다.'; }
@@ -216,7 +216,7 @@
     const pr = neg.prios[0], pool = OPEN[pr] || OPEN.money, c = this._nCtx(neg), tonePool = neg.speaker === 'ag' ? AG_TONE[agent] : TONE[tr], pre = tonePool[Math.floor(r.random() * tonePool.length)];
     this._nSay(neg, neg.speaker, (kind === 'foreign' ? '' : kp) + (r.random() < 0.6 ? pre : '') + fill(this._nPick(neg, 'open', pool), c));
     if (kind === 'extend' || kind === 'resign') this._nSys(neg, tm.multi ? `${p.ko}의 희망 계약은 ${tm.pref}년 안팎입니다. 비FA 다년계약은 1~${tm.maxY}년까지 가능합니다.` : `${tm.label}입니다. FA 자격이 있거나 외국인은 1년 계약만 가능합니다.`);
-    if (neg.replace) { const old = S.players[neg.replace], rc = this.releaseCost(neg.replace); this._nSys(neg, `교체 영입: 계약이 성사되면 ${old.ko}을(를) 방출합니다(위약금 ${rc.total}억).`, 'warn'); }
+    if (neg.replace) { const old = S.players[neg.replace], rc = this.releaseCost(neg.replace); this._nSys(neg, `교체 계약: 합의되면 ${old.ko}와의 계약을 해지(방출)합니다(위약금 ${rc.total}억).`, 'warn'); }
     if (kind === 'foreign') this._nSys(neg, `외국인 연봉 상한 ${tm.cap}억(약 ${Math.round(tm.cap / (1335 / 1e8) / 1e4)}만$). 호감도가 낮아 요구액이 상한을 넘으면 계약할 수 없습니다.`);
     if (bids.length) this._nSys(neg, `경쟁 구단 ${bids.length}곳이 입찰 중입니다. 협상이 길어지면 다른 구단과 계약할 수 있습니다.`, 'warn');
     return { ok: true, neg };
@@ -237,10 +237,10 @@
     const S = this.S, p = S.players[neg.id], t = S.userTeam; neg.state = 'broke';
     const pool = why === 'walk' ? BREAK.walk : why === 'leave' ? BREAK.leave : (neg.agent === 'hard' ? BREAK.hard : BREAK.timeout);
     this._nP(neg, 'break' + why, pool); this._nSys(neg, `${p.ko}과(와)의 협상이 결렬되었습니다.${neg.kind === 'fa' || neg.kind === 'foreign' ? ' 선수는 시장에 남아 있으며 며칠 뒤 다시 협상할 수 있습니다.' : ''}`, 'bad');
-    this._repBump('negBroke'); this.note(p, `${({ fa: 'FA', foreign: '외국인', resign: '재계약', extend: '비FA 다년계약' })[neg.kind]} 협상 결렬`);
+    this._repBump('negBroke'); this.note(p, `${({ fa: 'FA 계약', foreign: neg.aqLabel || '외국인 선수 계약', resign: '재계약', extend: '비FA 다년계약' })[neg.kind]} 협상 결렬`);
     p.negLock = { until: this._negClock() + (neg.kind === 'fa' || neg.kind === 'foreign' ? 3 : 10), team: t };
     if (neg.kind !== 'foreign' && p.team === t) p.loyAdj = clamp((p.loyAdj || 0) - (why === 'walk' ? 3 : 1), -15, 15);
-    this.story('neg', `${p.ko}과(와) ${({ fa: 'FA', foreign: '외국인', resign: '재계약', extend: '비FA 다년계약' })[neg.kind]} 협상 결렬`, 2);
+    this.story('neg', `${p.ko}과(와) ${({ fa: 'FA 계약', foreign: p.aq ? '아시아쿼터 선수 계약' : '외국인 선수 계약', resign: '재계약', extend: '비FA 다년계약' })[neg.kind]} 협상 결렬`, 2);
     this._press('break', { p, neg });
     this.invalidate();
   };
@@ -291,9 +291,9 @@
   proto._negSigned = function (neg, p, offer) {
     const S = this.S, t = S.userTeam, tot = r1(offer.bonus + offer.salary * offer.years);
     this._repBump('negOk'); if (neg.kind === 'extend') this._repBump('ext'); if (neg.kind !== 'foreign') p.loyAdj = clamp((p.loyAdj || 0) + clamp(Math.round((neg.mood - 50) / 12), -1, 3), -15, 15);
-    this.note(p, `${({ fa: 'FA 영입', foreign: '외국인 영입', resign: '재계약', extend: '비FA 다년계약' })[neg.kind]}: ${offer.years}년 총 ${tot}억(호감도 ${Math.round(neg.mood)})`);
+    this.note(p, `${({ fa: 'FA 영입', foreign: p.aq ? '아시아쿼터 선수 계약' : '외국인 선수 계약', resign: '재계약', extend: '비FA 다년계약' })[neg.kind]}: ${offer.years}년 총 ${tot}억(호감도 ${Math.round(neg.mood)})`);
     if (neg.promises && neg.promises.length) p.promise = neg.promises[neg.promises.length - 1];
-    { const txt = `${p.ko} ${({ fa: 'FA 영입', foreign: '외국인 영입', resign: '재계약', extend: '비FA 다년계약' })[neg.kind]} — ${offer.years}년 총 ${tot}억`, imp = offer.years >= 3 || tot >= 30 ? 3 : 2, top = (S.story || [])[0];
+    { const txt = `${p.ko} ${({ fa: 'FA 영입', foreign: p.aq ? '아시아쿼터 선수 계약' : '외국인 선수 계약', resign: '재계약', extend: '비FA 다년계약' })[neg.kind]} — ${offer.years}년 총 ${tot}억`, imp = offer.years >= 3 || tot >= 30 ? 3 : 2, top = (S.story || [])[0];
       if (top && top.kind === 'deal' && top.d === S.day && top.text.includes(p.ko)) { top.text = txt; top.imp = Math.max(top.imp, imp); } else this.story('deal', txt, imp); }   // 같은 계약의 뉴스 기반 항목이 있으면 합친다
     this._press(neg.kind === 'fa' ? 'sign' : neg.kind, { p, offer, tot, neg });
     this.invalidate();
@@ -360,13 +360,13 @@
     const ev = this._negEval(p, offer, 'resign'); if (!ev.ok) return ev.msg;
     if (ev.y >= 2) { const b = this._dealBudget(p, { salary: ev.sal, bonus: ev.bon, years: ev.y }, false); if (b) return b; }
     p.contract = this._newContract(p, ev.sal, ev.y, ev.bon); p.salHist = (p.salHist || []).slice(-2).concat([r2(ev.per)]); off.rep.expiring = off.rep.expiring.filter(x => x !== id);
-    p.myExt = { y: S.year, how: '재계약' }; this._contractNote(p, '재계약'); this._news(`${p.ko} 재계약 (${ev.y}년 총 ${r1(ev.per * ev.y)}억${ev.bon ? ' = 계약금 ' + ev.bon + ' + 연봉 ' + ev.sal + '×' + ev.y : ''})`); this.invalidate(); return null;
+    p.myExt = { y: S.year, how: '재계약' }; this._contractNote(p, '재계약'); this._bondShift(p, 1, '재계약'); this._news(`${p.ko} 재계약 (${ev.y}년 총 ${r1(ev.per * ev.y)}억${ev.bon ? ' = 계약금 ' + ev.bon + ' + 연봉 ' + ev.sal + '×' + ev.y : ''})`); this.invalidate(); return null;
   };
   proto.extendDeal = function (id, offer) {
     const S = this.S, p = S.players[id]; const bl = this.negBlock(id, 'extend'); if (bl && !/방금 협상/.test(bl)) return bl;
     const ev = this._negEval(p, offer, 'extend'); if (!ev.ok) return ev.msg;
     const b = this._dealBudget(p, { salary: ev.sal, bonus: ev.bon, years: ev.y }, true); if (b) return b;
-    p.contract = this._newContract(p, ev.sal, ev.y, ev.bon); p.salHist = (p.salHist || []).slice(-2).concat([r2(ev.per)]); p.extAt = { y: S.year, day: S.day }; this._contractNote(p, '비FA 다년');
+    p.contract = this._newContract(p, ev.sal, ev.y, ev.bon); p.salHist = (p.salHist || []).slice(-2).concat([r2(ev.per)]); p.extAt = { y: S.year, day: S.day }; this._contractNote(p, '비FA 다년'); this._bondShift(p, 1, '비FA 다년계약');
     this._news(`${p.ko} 비FA 다년계약 (${ev.y}년 총 ${r1(ev.per * ev.y)}억${ev.bon ? ' = 계약금 ' + ev.bon + ' + 연봉 ' + ev.sal + '×' + ev.y : ''})`); this.invalidate(); return null;
   };
   proto._news = function (text) { const S = this.S; S.news.unshift({ year: S.year, day: S.day, text }); if (S.news.length > 120) S.news.length = 120; this._storyFromNews(text); };
@@ -375,7 +375,7 @@
   proto._promiseTick = function (d) {
     const S = this.S, t = S.userTeam; if (d % 5 !== 0) return;
     for (const p of this.players(t)) {
-      const pr = p.promise; if (!pr) continue; if (pr.y < S.year - 1 || (pr.y === S.year - 1 && S.phase === 'regular' && d > 60)) { p.promise = undefined; this._repBump('kept'); this.note(p, `${pr.label} 약속을 지킴`); p.keptP = (p.keptP || 0) + 1; p.loyAdj = clamp((p.loyAdj || 0) + 2, -15, 15); this.story('promise', `${p.ko}에게 한 ${pr.label} 약속을 지켰습니다`, 2); continue; }
+      const pr = p.promise; if (!pr) continue; if (pr.y < S.year - 1 || (pr.y === S.year - 1 && S.phase === 'regular' && d > 60)) { p.promise = undefined; this._bondShift(p, 1, '약속 이행'); this._repBump('kept'); this.note(p, `${pr.label} 약속을 지킴`); p.keptP = (p.keptP || 0) + 1; p.loyAdj = clamp((p.loyAdj || 0) + 2, -15, 15); this.story('promise', `${p.ko}에게 한 ${pr.label} 약속을 지켰습니다`, 2); continue; }
       if (S.phase !== 'regular' || d - (pr.y === S.year ? pr.day : 0) < 25 || this.isInj(p)) continue;
       const set = S.teams[t].set; let kept = true;
       if (pr.kind === 'starter') kept = p.active && set.lineup.some(x => x.id === p.id); else if (pr.kind === 'rotation') kept = set.rotation.includes(p.id); else if (pr.kind === 'closer') kept = set.bullpen.closer === p.id; else if (pr.kind === 'setup') kept = (set.bullpen.setup || []).includes(p.id) || set.bullpen.closer === p.id;
@@ -451,7 +451,7 @@
   proto.storyTop = function (y, n) { const l = this.storyYear(y), top = l.slice().sort((a, b) => b.imp - a.imp || a.d - b.d).slice(0, n || 6); return top.sort((a, b) => (a.ph === 'offseason' ? 0 : 1) - (b.ph === 'offseason' ? 0 : 1) || a.d - b.d); };
   const HEAD = {
     sign: ['{team}, {p} 영입…{tot}억 승부수', '{p}, {team} 유니폼 입는다 — {yrs}년 총 {tot}억', '{team}이 선택한 {p}, 계약 완료', '[FA] {p} 새 둥지는 {team}…{yrs}년 계약'],
-    foreign: ['{team}, 새 외국인 {p} 영입', '{p}, {team}과 계약…KBO 도전', '{team} 외국인 {p} 합류 — 연봉 {sal}억'],
+    foreign: ['{team}, 새 외국인 {p}와 계약', '{p}, {team}과 계약…KBO 도전', '{team} 외국인 {p} 합류 — 연봉 {sal}억'],
     resign: ['{team}, {p}와 재계약', '{p} 잔류…{yrs}년 총 {tot}억', '{team}이 붙잡았다, {p}'],
     extend: ['{team}, {p}와 비FA 다년계약…{yrs}년 총 {tot}억', '{p}, {team}에 {yrs}년 더 남는다', '{team}의 장기 투자 — {p} 다년계약'],
     break: ['{p}, {team}과 협상 결렬', '{team}-{p} 협상 평행선…결국 불발', '{p} 협상 무산, {team}의 선택은?'],
