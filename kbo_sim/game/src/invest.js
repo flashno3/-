@@ -7,7 +7,7 @@
  *   훈련 시설      훈련으로 얻는 성장 보정(_trainEff) ×1.05 / ×1.10 / ×1.15
  *   의무·재활 센터  내 선수 부상 복귀 기간 ×0.95 / ×0.90 / ×0.85, 부상 발생 확률 ×0.96 / ×0.92 / ×0.88
  *   스카우팅·데이터  스카우트 고용 한도 +1 / +2 / +2(그리고 3단계는 스카우트 주간 관찰 +1건)
- *   육성 시설      내 선수 성장 계산의 '출전 비중'에 +0.04 / +0.08 / +0.12 (경기에 못 나온 젊은 선수의 성장 둔화를 완화), 완공 후 1·2·3년차 30·50·75%, 4년차부터 100%
+ *   육성 시설      내 선수 성장 계산의 '출전 비중'에 +0.04 / +0.08 / +0.12 (경기에 못 나온 젊은 선수의 성장 둔화를 완화), 완공 후 1·2년차 0%, 3년차 40%, 4년차 70%, 5년차부터 100%(시차 T+3 이후 점진 발현)
  *   팬 경험(구장·마케팅) 시즌 기본 관중 +0.7% / +1.4% / +2.2% (구장 수용 한계까지만 반영)
  *  비용(억): 훈련·의무·스카우팅·육성 8/16/28, 팬 경험 10/20/34 — 착공 시 한 번에 올해 행사 비용(evCost)으로 계상 → 구단 손익(목표·이사회 평가)에 반영.
  *  연 유지비: 완공된 단계에 낸 누적 투자액의 5%를 매 시즌 개막 때 행사 비용으로 계상.
@@ -26,16 +26,16 @@
     train: { n: '훈련 시설', icon: '🏋️', cost: [8, 16, 28], desc: '훈련 센터의 효과를 키웁니다. 훈련으로 얻는 연말 성장 보정이 커집니다.', eff: ['없음', '훈련 효과 ×1.05', '훈련 효과 ×1.10', '훈련 효과 ×1.15'] },
     med: { n: '의무·재활 센터', icon: '🩺', cost: [8, 16, 28], desc: '전용 재활·치료 시설로 부상 복귀 기간을 줄이고 재발·신규 부상 확률을 낮춥니다.', eff: ['없음', '복귀 기간 −5% · 부상 확률 −4%', '복귀 기간 −10% · 부상 확률 −8%', '복귀 기간 −15% · 부상 확률 −12%'] },
     scout: { n: '스카우팅·데이터 센터', icon: '🔭', cost: [8, 16, 28], desc: '스카우트를 더 많이 둘 수 있고, 3단계에서는 스카우트당 주간 관찰이 늘어납니다.', eff: ['없음', '스카우트 한도 +1', '스카우트 한도 +2', '스카우트 한도 +2 · 주간 관찰 +1건'] },
-    farm: { n: '육성 시설(2군·유소년)', icon: '🌱', cost: [8, 16, 28], desc: '경기에 못 나온 젊은 선수의 성장 둔화를 완화합니다. 실제 사례처럼 완공 3~5년 뒤에 효과가 뚜렷해집니다(완공 후 1·2·3년차 30·50·75%, 4년차부터 100%).', eff: ['없음', '출전 비중 +0.04', '출전 비중 +0.08', '출전 비중 +0.12'] },
+    farm: { n: '육성 시설(2군·유소년)', icon: '🌱', cost: [8, 16, 28], desc: '경기에 못 나온 젊은 선수의 성장 둔화를 완화합니다. 실제 사례처럼 효과가 늦게 나타납니다(완공 후 1·2년차 0%, 3년차 40%, 4년차 70%, 5년차부터 100%).', eff: ['없음', '출전 비중 +0.04', '출전 비중 +0.08', '출전 비중 +0.12'] },
     fan: { n: '팬 경험(구장·마케팅)', icon: '🏟️', cost: [10, 20, 34], desc: '시즌 기본 관중을 늘립니다. 구장이 이미 꽉 차 있으면 효과가 줄어듭니다.', eff: ['없음', '기본 관중 +0.7%', '기본 관중 +1.4%', '기본 관중 +2.2%'] },
   };
-  const ORDER = ['train', 'med', 'scout', 'farm', 'fan'], MULT = { train: [1, 1.05, 1.10, 1.15], med: [1, 0.96, 0.92, 0.88] }, DUR = [1, 0.95, 0.90, 0.85], RAMP = [0.3, 0.5, 0.75, 1], FARM = [0, 0.04, 0.08, 0.12], FAN = [0, 0.007, 0.014, 0.022], SLOTS = [0, 1, 2, 2];
+  const ORDER = ['train', 'med', 'scout', 'farm', 'fan'], MULT = { train: [1, 1.05, 1.10, 1.15], med: [1, 0.96, 0.92, 0.88] }, DUR = [1, 0.95, 0.90, 0.85], RAMP = [0, 0, 0.4, 0.7, 1], FARM = [0, 0.04, 0.08, 0.12], FAN = [0, 0.007, 0.014, 0.022], SLOTS = [0, 1, 2, 2];
   proto.investProjects = function () { return PROJ; };
   proto._inv = function (create) { const S = this.S; if (!S.invest && create) S.invest = { eff: {}, queue: {}, paid: {}, spent: {}, log: [] }; return S.invest || null; };
   proto.investLv = function (k) { const I = this._inv(false); return I && I.eff[k] ? I.eff[k] : 0; };
   proto.investMult = function (k) { return MULT[k] ? MULT[k][this.investLv(k)] : 1; };
   proto.investDur = function () { return DUR[this.investLv('med')]; };
-  proto.investRamp = function (k) { const I = this._inv(false); if (!I || !I.eff[k]) return 0; const since = I.since && I.since[k]; if (since === undefined) return 1; const s = Math.max(1, this.S.year - since + 1); return RAMP[Math.min(s, 4) - 1]; };   // 완공 후 몇 번째 시즌인지에 따른 도달률(육성 시설)
+  proto.investRamp = function (k) { const I = this._inv(false); if (!I || !I.eff[k]) return 0; const since = I.since && I.since[k]; if (since === undefined) return 1; const s = Math.max(1, this.S.year - since + 1); return RAMP[Math.min(s, 5) - 1]; };   // 완공 후 몇 번째 시즌인지에 따른 도달률(육성 시설)
   proto.investFarm = function () { return FARM[this.investLv('farm')] * this.investRamp('farm'); };
   proto.investSlots = function () { return SLOTS[this.investLv('scout')]; };
   proto.investObs = function () { return this.investLv('scout') >= 3 ? 1 : 0; };

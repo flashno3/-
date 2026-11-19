@@ -24,7 +24,7 @@ const toNewSeason=L=>{const S=L.S;const off=L.startOffseason();for(const id of o
  for(const k of ['train','med','scout','farm','fan'])ok(L.investBuy(k)===null,'착공 '+k);const paid=8*4+10;ok(Math.abs(Object.values(S.invest.paid).reduce((a,b)=>a+b,0)-paid)<1e-9,'누적 납입 '+paid);
  season(L);toNewSeason(L);const f2=S.fin.teams[S.userTeam];
  ok(['train','med','scout','farm','fan'].every(k=>L.investLv(k)===1)&&Object.keys(S.invest.queue).length===0,'새 시즌에 1단계 완공');
- ok(L.investMult('train')===1.05&&L.investMult('med')===0.96&&L.investDur()===0.95&&Math.abs(L.investFarm()-0.04*0.3)<1e-12&&L.investSlots()===1&&L.investObs()===0&&Math.abs(L.investFan()-0.007)<1e-12,'효과 값(육성 시설은 완공 첫 시즌 30%) '+L.investFarm());
+ ok(L.investMult('train')===1.05&&L.investMult('med')===0.96&&L.investDur()===0.95&&L.investFarm()===0&&L.investSlots()===1&&L.investObs()===0&&Math.abs(L.investFan()-0.007)<1e-12,'효과 값(육성 시설은 완공 후 1~2년차 0%) '+L.investFarm());
  ok(L.scoutLimit()===4,'스카우트 한도 4');ok(Math.abs(L.investUpkeep()-paid*0.05)<1e-9,'연 유지비 5%');ok(Math.abs((f2.evCost||0)-paid*0.05)<1e-6,'개막 때 유지비 계상 '+f2.evCost);
  ok(Math.abs((f2.attMult||1)-1.007)<1e-9,'관중 보정 ×1.007 '+f2.attMult);
  ok(L.integrity().errors.filter(e=>e.code!=='dup-name').length===0,'무결성');
@@ -48,8 +48,8 @@ const toNewSeason=L=>{const S=L.S;const off=L.startOffseason();for(const id of o
 {const L=mk(11,'Lions',30),S=L.S;S.invest={eff:{train:2},queue:{},paid:{train:24},spent:{},log:[]};const t2=Object.keys(S.teams).find(x=>x!==S.userTeam);L.takeOverTeam(t2);ok(!S.invest,'다른 구단 취임 시 투자 기록 초기화');ok(L.investMult('train')===1,'중립');}
 // 7) 무결성 검사가 잘못된 상태를 잡음
 {const L=mk(12,'Lions',10),S=L.S;S.invest={eff:{train:5},queue:{med:3},paid:{farm:-1},spent:{},log:[]};const e=L.integrity().errors.map(x=>x.code);ok(e.includes('invest-lv')&&e.includes('invest-queue')&&e.includes('invest-paid'),'잘못된 투자 상태 감지');}
-// 8) 육성 시설 도달률: 완공 후 1·2·3년차 30·50·75%, 4년차부터 100%
-{const L=mk(13,'Lions',5),S=L.S;S.invest={eff:{farm:2},queue:{},paid:{farm:24},spent:{},log:[],since:{farm:S.year}};const want=[0.3,0.5,0.75,1,1,1];for(let k=0;k<6;k++){S.year=2027+k;S.invest.since.farm=2027;ok(Math.abs(L.investRamp('farm')-want[k])<1e-12&&Math.abs(L.investFarm()-0.08*want[k])<1e-12,`도달률 ${k+1}년차`)}ok(L.investRamp('train')===0,'미완공 프로젝트는 0');}
+// 8) 육성 시설 도달률(T+3 시차): 완공 후 1·2년차 0%, 3년차 40%, 4년차 70%, 5년차부터 100%
+{const L=mk(13,'Lions',5),S=L.S;S.invest={eff:{farm:2},queue:{},paid:{farm:24},spent:{},log:[],since:{farm:S.year}};const want=[0,0,0.4,0.7,1,1];for(let k=0;k<6;k++){S.year=2027+k;S.invest.since.farm=2027;ok(Math.abs(L.investRamp('farm')-want[k])<1e-12&&Math.abs(L.investFarm()-0.08*want[k])<1e-12,`도달률 ${k+1}년차`)}ok(L.investRamp('train')===0,'미완공 프로젝트는 0');}
 // 9) 의무·재활 센터: 복귀 기간만 따로 줄임(부상 확률은 같게 두고 같은 부상의 기간 비교)
 {const A=mk(14,'Lions',0),B=mk(14,'Lions',0);B.S.invest={eff:{med:3},queue:{},paid:{med:52},spent:{},log:[]};B.investMult=function(k){return k==='med'?1:1};   // 확률 보정만 끄고 기간 보정만 남김
  A.advance(150,false);B.advance(150,false);const st=p=>{const m=/(\d{4})-(\d{2})-(\d{2})/.exec(p.inj.since);return Math.floor(Date.UTC(+m[1],+m[2]-1,+m[3])/864e5)};let cmp=0;for(const p of A.players(A.S.userTeam)){const q=B.S.players[p.id];if(p.inj&&p.inj.generated&&q.inj&&q.inj.generated&&p.inj.since===q.inj.since){const da=p.inj.retN-st(p),db=q.inj.retN-st(q);ok(db===Math.max(1,Math.round(da*0.85)),`복귀 기간 ${da} → ${db}`);cmp++}}ok(cmp>=3,'비교한 부상 '+cmp);
