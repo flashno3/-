@@ -216,4 +216,57 @@
     if (cost > 0 && S.fin && S.fin.teams && S.fin.teams[S.userTeam]) { const f = S.fin.teams[S.userTeam]; f.evCost = Math.round(((f.evCost || 0) + cost) * 10) / 10; this._trainLog(`비시즌 캠프 종료: 훈련 누적 +${days}일, 비용 ${r1(cost)}억`); this.story('train', `비시즌 캠프 진행(비용 ${r1(cost)}억)`, 1); }
     S.camp = null;
   };
+
+  /* ================= 스프링캠프 소식(오프시즌 FA 시장 기간) =================
+   * FA 시장 28·38·50·62일차에 코칭스태프 소식이 생긴다. 어떤 선택도 새 시즌 개막 때 한 번만 반영되고, 기본값(결정하지 않으면)은 '변화 없음'이다.
+   * 효과는 기존 장치만 쓴다(⚠ 크기는 가정값): 팀/개별 훈련 누적 일수(비시즌 캠프와 같은 방식), 개막 후 부상 위험 완화(restUntil, 일일 휴식과 같은 효과),
+   * 개막 후 팀 컨디션 ±1(tmood와 같은 방식), 행사 비용 0.2억(evCost). 선수 능력치·재정 규칙·경기 엔진은 직접 바꾸지 않는다. */
+  const CAMP_DAYS_AT = { theme: 28, prospect: 38, intensity: 50, vet: 62 };
+  proto.campEv = function () { const S = this.S; if (!S.campEv || S.campEv.y !== S.year) S.campEv = { y: S.year, B: 0, P: 0, p: {}, rest: 0, tmood: 0, cost: 0, log: [] }; return S.campEv; };
+  proto._campEvents = function (day) {
+    const S = this.S, t = S.userTeam; if (S.phase !== 'offseason') return; const kind = Object.keys(CAMP_DAYS_AT).find(k => CAMP_DAYS_AT[k] === day); if (!kind) return;
+    S.events = S.events || { seq: 0, list: [] }; if (S.events.list.some(e => e.type === 'camp' && e.data && e.data.y === S.year && e.data.kind === kind)) return;
+    const ps = this.players(t), avg = a => (a.length ? Math.round(a.reduce((x, p) => x + this.ovr(p), 0) / a.length) : 0), B = ps.filter(p => p.type === 'B' && p.active), P = ps.filter(p => p.type === 'P' && p.active);
+    const add = (title, text, choices, def, rec, data) => { const e = this._evAdd({ type: 'camp', title, ttl: 9999, text, choices, def, rec, data: Object.assign({ y: S.year, kind }, data || {}) }); e.exp = 1e9; };   // 만료 없음: 새 시즌 개막 때 기본값으로 처리
+    if (kind === 'theme') {
+      const gb = this.coachGrade(this.coachRating(t, 'contact')), gp = this.coachGrade(this.coachRating(t, 'stuff'));
+      add('스프링캠프: 중점 과제 회의', `코칭스태프가 캠프 중점 과제를 묻습니다. 1군 타자 평균 OVR ${avg(B)}(타격 코치 ${gb}), 1군 투수 평균 OVR ${avg(P)}(투수 코치 ${gp}). 선택한 쪽에 새 시즌 훈련 누적 +3일이 더해집니다(비시즌 캠프와 같은 방식).`,
+        [{ k: 'bat', label: '타자 중점 (+3일)', hint: '타자 훈련 누적 +3일' }, { k: 'pit', label: '투수 중점 (+3일)', hint: '투수 훈련 누적 +3일' }, { k: 'skip', label: '그대로 (변화 없음)', hint: '기본 캠프 일정' }], 'skip', avg(B) <= avg(P) ? 'bat' : 'pit');
+    } else if (kind === 'prospect') {
+      const y = ps.filter(p => p.age <= 23 && !this.isInj(p)).sort((a, b) => this.ovr(b) - this.ovr(a))[0]; if (!y) return;
+      add(`스프링캠프: 유망주 ${y.ko} 지도`, `${y.ko}(${y.age}세 · ${y.type === 'P' ? (y.role === 'SP' ? '선발' : '구원') : y.pos} · OVR ${this.ovr(y)})은 내 팀 23세 이하 가운데 가장 높습니다. 캠프에서 어떻게 지도할까요? 개별 훈련 누적은 새 시즌 개막 때 반영됩니다.`,
+        [{ k: 'mentor', label: '베테랑 멘토 (+3일)', hint: '개별 훈련 누적 +3일, 비용 없음' }, { k: 'focus', label: '집중 지도 (+5일, 0.2억)', hint: '개별 훈련 누적 +5일, 행사 비용 0.2억' }, { k: 'skip', label: '그대로 (변화 없음)', hint: '팀 훈련만 따라갑니다' }], 'skip', 'mentor', { pid: y.id });
+    } else if (kind === 'intensity') {
+      const old = ps.filter(p => p.age >= 33).length;
+      add('스프링캠프: 훈련 강도 점검', `캠프 막바지입니다. 33세 이상 선수가 ${old}명입니다. 강도를 낮추면 개막 후 14일간 부상 위험이 −30%(일일 '휴식 배려'와 같은 효과), 높이면 팀 훈련 누적 +2일(타자·투수 각각)입니다.`,
+        [{ k: 'ease', label: '강도 낮춤 (개막 후 14일 부상 위험 −30%)', hint: '개막 직후 14일 부상 위험 완화' }, { k: 'push', label: '강도 높임 (훈련 +2일)', hint: '타자·투수 훈련 누적 각 +2일' }, { k: 'skip', label: '그대로 (변화 없음)', hint: '기본 강도' }], 'skip', old >= 8 ? 'ease' : 'skip');
+    } else if (kind === 'vet') {
+      const v = ps.filter(p => p.age >= 33).sort((a, b) => (b.tn || 0) - (a.tn || 0) || this.ovr(b) - this.ovr(a))[0]; if (!v) return;
+      add(`스프링캠프: 베테랑 ${v.ko} 면담`, `${v.ko}(${v.age}세 · 팀 ${v.tn || 0}시즌)이 새 시즌을 앞두고 면담을 청했습니다. 선수단의 중심이 되는 베테랑입니다. 면담하면 개막 후 10일간 팀 컨디션 +1이 적용됩니다.`,
+        [{ k: 'talk', label: '면담 (개막 후 10일 팀 컨디션 +1)', hint: '충성도 +1, 개막 후 10일 팀 컨디션 +1' }, { k: 'skip', label: '다음에 (변화 없음)', hint: '' }], 'skip', 'talk', { pid: v.id });
+    }
+  };
+  proto._campEvResolve = function (e, k) {
+    const S = this.S, c = this.campEv(), D = e.data || {}; let res = '';
+    if (D.y !== S.year) return '지난 캠프 소식입니다.';
+    if (D.kind === 'theme') { if (k === 'bat') { c.B += 3; res = '타자 중점 캠프: 새 시즌 타자 훈련 누적 +3일.'; } else if (k === 'pit') { c.P += 3; res = '투수 중점 캠프: 새 시즌 투수 훈련 누적 +3일.'; } else res = '기본 캠프 일정을 유지합니다.'; }
+    else if (D.kind === 'prospect') { const p = S.players[D.pid]; if (!p || p.team !== S.userTeam) res = '선수가 팀을 떠났습니다.'; else if (k === 'mentor') { c.p[p.id] = (c.p[p.id] || 0) + 3; res = `${p.ko}에게 베테랑 멘토를 붙입니다: 개별 훈련 누적 +3일.`; } else if (k === 'focus') { c.p[p.id] = (c.p[p.id] || 0) + 5; c.cost = r1(c.cost + 0.2); res = `${p.ko} 집중 지도: 개별 훈련 누적 +5일, 행사 비용 0.2억.`; } else res = `${p.ko}은(는) 팀 훈련을 따라갑니다.`; }
+    else if (D.kind === 'intensity') { if (k === 'ease') { c.rest = 14; res = '캠프 강도를 낮췄습니다: 개막 후 14일간 부상 위험 −30%.'; } else if (k === 'push') { c.B += 2; c.P += 2; res = '캠프 강도를 높였습니다: 타자·투수 훈련 누적 각 +2일.'; } else res = '기본 강도를 유지합니다.'; }
+    else if (D.kind === 'vet') { const p = S.players[D.pid]; if (!p || p.team !== S.userTeam) res = '선수가 팀을 떠났습니다.'; else if (k === 'talk') { p.loyAdj = clamp((p.loyAdj || 0) + 1, -15, 15); c.tmood = 1; res = `${p.ko}와 면담했습니다: 충성도 +1, 개막 후 10일 팀 컨디션 +1.`; } else res = `${p.ko} 면담은 다음 기회로 미뤘습니다.`; }
+    c.log.push(res); return res;
+  };
+  proto._campEvClose = function () {   // 새 시즌 개막 직전: 결정하지 않은 캠프 소식을 기본으로 처리
+    const S = this.S; for (const e of this.eventsOpen().filter(x => x.type === 'camp')) this.resolveEvent(e.id, e.def, true);
+  };
+  proto._campEvApply = function () {   // 새 시즌 개막 때 한 번만 반영
+    const S = this.S, c = S.campEv; if (!c || c.y !== S.year - 1) { S.campEv = null; return; }
+    const a = this._trainAcc(); let n = 0;
+    for (const side of ['B', 'P']) if (c[side] > 0) { a.total += c[side]; a[side].all = (a[side].all || 0) + c[side]; n += c[side]; }
+    for (const id of Object.keys(c.p)) { const p = S.players[id]; if (!p || p.team !== S.userTeam || p.retired) continue; this._slotTrack(p); p.tr.total += c.p[id]; p.tr.acc.all = (p.tr.acc.all || 0) + c.p[id]; n += c.p[id]; }
+    if (c.rest > 0) S.restUntil = Math.max(S.restUntil || 0, S.day + c.rest);
+    if (c.tmood) S.teamMood = { v: c.tmood, until: S.day + 10 };
+    const f = S.fin && S.fin.teams && S.fin.teams[S.userTeam]; if (c.cost > 0 && f) f.evCost = Math.round(((f.evCost || 0) + c.cost) * 10) / 10;
+    if (c.log.length) { this._trainLog(`스프링캠프 소식 반영: ${c.log.length}건`); this.story('train', `스프링캠프 결과 — ${c.log.join(' / ')}`, 1); }
+    S.campEv = null; this.invalidate();
+  };
 });

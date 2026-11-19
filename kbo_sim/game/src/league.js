@@ -447,7 +447,7 @@
         if (this.isInj(p)) return `${p.ko}은(는) 부상자 명단입니다(${p.inj.dx}, 복귀 예정 ${this.injDateStr(p)}).`;
         if (A.length >= ACTIVE_MAX) return `1군 엔트리는 ${ACTIVE_MAX}명까지입니다. 먼저 한 명을 2군으로 내리세요.`;
         if (locking && S.day < (p.lockUntil || 0)) return `${p.ko}은(는) 2군 말소 후 10경기일이 지나야 1군에 등록할 수 있습니다. (${p.lockUntil - S.day}일 남음)`;
-        p.active = true; if (this._bondShift && (S.phase === 'regular' || S.phase === 'preseason')) this._bondShift(p, 1, '1군 승격');
+        p.active = true; if (t === S.userTeam && !p.debut1 && S.phase === 'regular') p.debut1 = { y: S.year, d: S.day }; if (this._bondShift && (S.phase === 'regular' || S.phase === 'preseason')) this._bondShift(p, 1, '1군 승격');
       } else {
         const same = A.filter(x => x.type === p.type).length;
         if (p.type === 'B' && same <= 10) return '1군에는 타자가 최소 10명 필요합니다.';

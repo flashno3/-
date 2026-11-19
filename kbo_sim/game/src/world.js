@@ -338,4 +338,41 @@
     todo.sort((a, b) => b.sev - a.sev);
     return { todo, deadlines, inj, tired, faElig, farm: farm.slice(0, 4), fin, foreign: { gen: gen.length, aq: aq.length, swap: this.fSwapInfo ? this.fSwapInfo() : null, room: this.foreignRoom ? this.foreignRoom(t) : null }, scouts: (S.scouts || []).length, watch: this.scoutWatchList ? this.scoutWatchList().length : 0 };
   };
+
+  /* ================= 연말 성장 공개 · 유망주 성장 서사 (읽기 전용: 이미 일어난 일을 보여 줄 뿐 결과를 바꾸지 않는다) ================= */
+  const gTag = d => (d >= 5 ? '급성장' : d >= 2 ? '성장' : d >= -1 ? '유지' : d >= -4 ? '하락' : '급락');
+  const ageBand = a => (a <= 22 ? '성장기 초반' : a <= 26 ? '성장기' : a <= 30 ? '전성기' : a <= 33 ? '노화 시작' : '노화 구간');
+  proto.growthTag = gTag;
+  proto.growthReveal = function () {
+    const S = this.S, off = S.off; if (!off || !off.rep || !off.rep.prog) return null;
+    const list = [];
+    for (const x of off.rep.prog) {
+      const p = S.players[x.id]; if (!p || p.retired || p.team !== S.userTeam) continue;
+      const o1 = this.ovr(p), o0 = x.o0 !== undefined ? x.o0 : o1 - x.d, d = o1 - o0, s1 = this.sub(p), s0 = x.s0 || null, a1 = p.age, a0 = x.a0 !== undefined ? x.a0 : a1 - 1;
+      const factors = [`만 ${a1}세 · ${ageBand(a1)}`]; if (x.ps !== undefined) factors.push(`올해 출전 비중 ${x.ps}%`); if (x.trd) factors.push(`개별 훈련 누적 ${x.trd}일`);
+      list.push({ id: p.id, name: p.ko, pos: p.type === 'P' ? (p.role === 'SP' ? '선발' : '구원') : p.pos, type: p.type, o0, o1, d, a0, a1, s0, s1, tag: gTag(d), factors, prospect: a1 <= 24, known: x.o0 !== undefined });
+    }
+    const reveal = list.filter(x => Math.abs(x.d) >= 2).sort((a, b) => Math.abs(a.d) - Math.abs(b.d) || a.d - b.d).slice(-15);   // 변화가 큰 선수일수록 뒤에(마지막이 가장 극적)
+    const up = list.filter(x => x.d > 0), down = list.filter(x => x.d < 0), best = list.slice().sort((a, b) => b.d - a.d)[0] || null, worst = list.slice().sort((a, b) => a.d - b.d)[0] || null;
+    return { list, reveal, summary: { n: list.length, up: up.length, down: down.length, same: list.length - up.length - down.length, avg: list.length ? Math.round(list.reduce((a, x) => a + x.d, 0) / list.length * 10) / 10 : 0, best, worst }, year: S.year };
+  };
+  proto.prospectNote = function (p) {
+    const S = this.S; if (!p || p.team !== S.userTeam) return null;
+    const hist = (p.ovrHist || []).map(h => ({ y: h.y, o: h.o })), cur = this.ovr(p), facts = [], dh = p.dh && p.dh.y ? p.dh : null;
+    if (p.myFrom && p.myFrom.how) facts.push(`${p.myFrom.y} ${p.myFrom.how}`); else if (dh) facts.push(`${dh.y} 드래프트${dh.round ? ' ' + dh.round + '라운드' : ''}${dh.school ? ' · ' + dh.school : ''}`);
+    const sl = this.trainCfg().slots.find(x => x.id === p.id); if (sl) facts.push('개별 훈련 중');
+    if (p.debut1) facts.push(`${p.debut1.y}년 ${this.dateStr(p.debut1.d)} 1군 데뷔`);
+    const st = p.type === 'B' ? S.stats.bat[p.id] : S.stats.pit[p.id], used = p.type === 'B' ? (st && st.PA ? `1군 ${st.PA}타석` : null) : (st && st.outs ? `1군 ${Math.floor(st.outs / 3)}이닝` : null); if (used) facts.push(`올해 ${used}`);
+    const pts = hist.slice(); if (!pts.length || pts[pts.length - 1].o !== cur || pts[pts.length - 1].y !== S.year + (S.phase === 'offseason' ? 1 : 0)) pts.push({ y: S.year + (S.phase === 'offseason' ? 1 : 0), o: cur });
+    const last = pts.length >= 2 ? pts[pts.length - 1].o - pts[pts.length - 2].o : null, first = pts[0].o, total = cur - first, next = Math.ceil((cur + 1) / 5) * 5;
+    const parts = [];
+    if (last !== null) parts.push(last >= 5 ? `지난 시즌 OVR ${last >= 0 ? '+' : ''}${last} 급성장` : last >= 2 ? `지난 시즌 OVR +${last} 성장` : last <= -2 ? `지난 시즌 OVR ${last} 하락` : '지난 시즌은 제자리');
+    if (pts.length >= 3 && pts.every((x, i) => i === 0 || x.o > pts[i - 1].o)) parts.push(`${pts.length - 1}년 연속 상승`);
+    if (pts.length >= 2 && Math.abs(total) >= 3) parts.push(`입단 후 ${total >= 0 ? '+' : ''}${total}`);
+    if (p.debut1 && p.debut1.y === S.year) parts.push('올해 1군 데뷔');
+    else if (!p.active && p.age <= 23) parts.push('2군에서 성장 중');
+    parts.push(`다음 목표: OVR ${next} (+${next - cur})`);
+    return { id: p.id, name: p.ko, age: p.age, pos: p.type === 'P' ? (p.role === 'SP' ? '선발' : '구원') : p.pos, ovr: cur, spark: pts, facts, line: parts.join(' · '), active: !!p.active };
+  };
+  proto.prospectNotes = function (n) { return this.players(this.S.userTeam).filter(p => p.age <= 24 && !p.foreign).sort((a, b) => this.ovr(b) - this.ovr(a)).slice(0, n || 6).map(p => this.prospectNote(p)); };
 });

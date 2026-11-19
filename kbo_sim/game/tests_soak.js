@@ -85,6 +85,7 @@ function run(seed,team,seasons,actSeed,detail){
   for(let y=0;y<seasons;y++){
     // FA 기간
     for(let d=0;d<75&&S.faMkt&&!S.faMkt.closed;d+=Math.floor(R()*10)+3){const kinds=['fa','fa','foreign','meeting'];const k=kinds[Math.floor(R()*kinds.length)];negs+=randomNeg(L,R,`Y${y}FA${d}${k}`,k)?1:0;L.faAdvance(Math.floor(R()*8)+1);invariants(L,`Y${y}FA-adv`)}
+    for(const e of L.eventsOpen().filter(e=>e.type==='camp')){if(R()<0.7){const c=e.choices[Math.floor(R()*e.choices.length)];const r=L.resolveEvent(e.id,c.k);ok(r.ok,`Y${y} 캠프 소식 처리 ${e.data.kind}:${c.k}`)}}
     L.faAdvance(75);L.closeFA();invariants(L,`Y${y}closeFA`);
     // 시즌: 20일 단위 진행하며 면담·연장
     let guard=0;while(S.phase!=='offseason'&&S.day<260&&guard++<30){const r=L.advance(10,false);invariants(L,`Y${y}d${S.day}`);if(R()<0.6)negs+=randomNeg(L,R,`Y${y}d${S.day}ext`,R()<0.5?'extend':'meeting')?1:0;
@@ -93,7 +94,7 @@ function run(seed,team,seasons,actSeed,detail){
       for(const e of L.eventsOpen().slice(0,2)){const ch=e.choices[Math.floor(R()*e.choices.length)];L.resolveEvent(e.id,ch.k)}
       if(r&&r.status==='userGame'){const ctx=L.startUserGame(r.game,r.idx);L.playAuto(ctx);L.finishUserGame(ctx)}}
     L.advance(300,false);const P=L.startPostseason();let g=0;while(!P.done&&g++<100){if(L.userInPost()){const c=L.startUserPostGame();c.live.playToEnd();L.finishUserPostGame(c)}else L.simPostGame()}
-    const off=L.startOffseason();invariants(L,`Y${y}offseason`);for(let k=0;k<4;k++)randTrain(L,R,`Y${y}off${k}`);
+    const off=L.startOffseason();invariants(L,`Y${y}offseason`);{const gr=L.growthReveal();ok(gr&&gr.list.every(x=>x.d===x.o1-x.o0&&Number.isFinite(x.o1)),`Y${y} 성장 공개 일관성`);ok(gr.reveal.length<=15,`Y${y} 공개 개수`);const pn=L.prospectNotes(8);ok(pn.every(x=>x.age<=24&&Number.isFinite(x.ovr)&&x.spark.length>=1&&x.line.length>0),`Y${y} 유망주 노트`)}for(let k=0;k<4;k++)randTrain(L,R,`Y${y}off${k}`);
     for(const id of off.rep.expiring.slice()){const p=S.players[id];if(L.negBlock(id,'resign')===null&&R()<0.7){negs+=randomNeg(L,R,`Y${y}resign`,'resign')?1:0}}
     for(const id of off.rep.expiring.slice()){const p=S.players[id];if(!p.foreign&&L.ovr(p)>=48)L.resign(id)}
     L.finishContracts();const d=L.buildDraft();let steps=0;for(;;){const r=L.draftAiStep();if(r.done||r.userTurn)break;if(steps++>400)break}

@@ -24,9 +24,15 @@ for(let season=0;season<2;season++){
   if(!(await pg.$('button[data-act="toOff"]')))break;
   await click('button[data-act="toOff"]');await pg.waitForTimeout(300);await sweep(`오프시즌${season}`);
   // 비시즌 캠프 설정
-  await nav('선수단','훈련');await sweep(`훈련 센터(오프시즌${season})`);ok(await pg.evaluate(()=>[...document.querySelectorAll('button[data-act="campSet"]')].some(b=>!b.disabled)),`오프시즌 캠프 활성${season}`);
+  await nav('선수단','훈련');await sweep(`훈련 센터(오프시즌${season})`);ok(await pg.evaluate(()=>/유망주 노트/.test(document.body.innerText)),`훈련 센터 유망주 노트${season}`);ok(await pg.evaluate(()=>[...document.querySelectorAll('button[data-act="campSet"]')].some(b=>!b.disabled)),`오프시즌 캠프 활성${season}`);
   await click('button[data-act="campSet"][data-a^="B:power:"]:not([data-a$=":0"])');await click('button[data-act="campSet"][data-a^="B:"][data-a$=":2"]');await click('button[data-act="campSet"][data-a^="P:"][data-a$=":1"]');await sweep('캠프 설정');ok(await pg.evaluate(()=>/예약 비용/.test(document.body.innerText)),`캠프 예약 비용 표시${season}`);
   await nav('선수단','로스터');await click('button[data-act="go"][data-a="offseason"]');await pg.evaluate(()=>{const b=[...document.querySelectorAll('nav button')].find(b=>b.innerText.includes('오프시즌'));if(b)b.click()});await pg.waitForTimeout(200);
+  // 연말 성장 공개
+  ok(await pg.evaluate(()=>/성장 공개/.test(document.body.innerText)),`성장 공개 배너${season}`);await sweep('성장 배너');
+  if(await click('button[data-act="grOpen"]')){await pg.waitForTimeout(100);ok(!!(await pg.$('.sheet.growth')),`성장 공개 시트${season}`);ok(await pg.evaluate(()=>/\?\?/.test(document.querySelector('.gnum').innerText)),`공개 전에는 결과 숨김${season}`);await sweep('성장 공개(전)');
+    await click('button[data-act="grShow"]');await pg.waitForTimeout(150);ok(await pg.evaluate(()=>!/\?\?/.test(document.querySelector('.gnum').innerText)&&/[▲▼]|급성장|성장|유지|하락|급락/.test(document.querySelector('.gcard').innerText)),`공개 후 결과 표시${season}`);await sweep('성장 공개(후)');
+    let st=0;while(await pg.$('.sheet.growth')&&st++<40){await click('button[data-act="grShow"]');await click('button[data-act="grNext"]')}
+    ok(await pg.evaluate(()=>/성장 요약/.test(document.body.innerText)),`성장 요약${season}`);await sweep('성장 요약');await click('button[data-act="grClose"]');ok(await pg.evaluate(()=>/다시 보기/.test(document.body.innerText)),`공개 후 다시 보기${season}`)}
   // 재계약 협상
   if(await pg.evaluate(()=>{const b=[...document.querySelectorAll('button[data-act="negOpen"]')].find(b=>/\|resign$/.test(b.dataset.a));if(b){b.click();return true}return false})){await pg.waitForTimeout(250);ok(!!(await pg.$('.negwin')),`재계약 협상창${season}`);await sweep('재계약협상');await click('button[data-act="negFill"]');await click('button[data-act="negSend"]');await sweep('재계약제안');await click('button[data-act="negDone"]')||await click('button[data-act="negExit"]');await pg.waitForTimeout(150)}
   await click('button[data-act="negExit"]');await click('button[data-act="resignAll"]');await sweep('재계약후');
@@ -37,7 +43,8 @@ for(let season=0;season<2;season++){
   for(let k=0;k<2;k++){if(await click('button[data-act="draftPick"]')){await pg.waitForTimeout(900);let q=0;while(!(await pg.$('button[data-act="draftPick"]'))&&!(await pg.$('button[data-act="toFA"]'))&&q++<60)await pg.waitForTimeout(250)}}
   await click('button[data-act="draftAuto"]');await pg.waitForTimeout(300);await sweep('드래프트 종료');
   ok(!!(await pg.$('button[data-act="toFA"]')),`FA로 이동 가능${season}`);await click('button[data-act="toFA"]');await pg.waitForTimeout(300);await sweep('FA 시작');
-  for(let d=0;d<4;d++){await click('button[data-act="faDay"][data-a="7"]');await pg.waitForTimeout(150)}
+  for(let d=0;d<6;d++){await click('button[data-act="faDay"][data-a="7"]');await pg.waitForTimeout(150)}
+  ok(await pg.evaluate(()=>/스프링캠프/.test(document.body.innerText)),`스프링캠프 소식 표시${season}`);await sweep('캠프 소식');if(await click('button[data-act="evChoice"][data-a$="|bat"]')||await click('button[data-act="evChoice"][data-a$="|pit"]')){await pg.waitForTimeout(150);await sweep('캠프 소식 선택')}
   await sweep('FA 진행');ok(await pg.evaluate(()=>/시장 속보/.test(document.body.innerText)),`시장 속보 표시${season}`);
   if(await pg.evaluate(()=>{const b=[...document.querySelectorAll('button[data-act="negOpen"]')].find(b=>/\|fa$/.test(b.dataset.a));if(b){b.click();return true}return false})){await pg.waitForTimeout(250);await click('button[data-act="negFill"]');await click('button[data-act="negSend"]');await sweep('FA협상');await click('button[data-act="negExit"]')}
   await click('button[data-act="toSeason"]');await pg.waitForTimeout(600);ok((await pg.evaluate(()=>scrollY))===0,`새 시즌 시작 시 스크롤 0 (${season})`);await sweep('새 시즌');

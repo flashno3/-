@@ -276,9 +276,11 @@
     // 1) 성장·노화
     for (const id in S.players) {
       const p = S.players[id]; if (p.retired || p.team === 'DRAFT') continue;
-      const d = this.progress(p, rngFor(S.seed, S.year, 32, parseInt(id.slice(1))), this.playShare(p));
-      if (p.team === user) { rep.prog.push({ id, d }); (p.ovrHist = p.ovrHist || []).push({ y: S.year + 1, o: this.ovr(p) }); if (p.ovrHist.length > 8) p.ovrHist.shift(); }
+      const share = this.playShare(p), pre = p.team === user ? { o0: this.ovr(p), s0: this.sub(p), a0: p.age, ps: Math.round(share * 100), trd: p.tr && p.tr.y === S.year ? p.tr.total : null } : null;   // 성장 공개 연출용 '성장 전' 기록(읽기 전용)
+      const d = this.progress(p, rngFor(S.seed, S.year, 32, parseInt(id.slice(1))), share);
+      if (p.team === user) { rep.prog.push(Object.assign({ id, d }, pre)); (p.ovrHist = p.ovrHist || []).push({ y: S.year + 1, o: this.ovr(p) }); if (p.ovrHist.length > 8) p.ovrHist.shift(); }
     }
+    for (const x of rep.prog) { const p = S.players[x.id]; if (p && p.age <= 24 && x.d >= 5) this.story('train', `유망주 급성장: ${p.ko}(${p.age}세) OVR ${x.o0}→${this.ovr(p)} (+${x.d})`, 2); }
     // 2) 은퇴
     for (const id in S.players) {
       const p = S.players[id]; if (p.retired || p.team === 'DRAFT') continue;
@@ -760,7 +762,7 @@
   /* FA 시장 n일 진행(1월 1일 기준). 반환: 진행한 일수 */
   proto.faAdvance = function (n) {
     const m = this.S.faMkt; if (!m || m.closed) return 0; let k = 0;
-    while (k < n && m.day < FA_END) { this._postBids(m.day); this._resolveBids(m.day, false); m.day++; k++; }
+    while (k < n && m.day < FA_END) { this._postBids(m.day); this._resolveBids(m.day, false); if (this._campEvents) this._campEvents(m.day); m.day++; k++; }
     this.invalidate(); return k;
   };
   /* FA 마감(개막 전): 입찰 중인 계약을 확정하고 AI가 남은 FA·로스터를 정리한다 */
@@ -966,6 +968,8 @@
       const D = e.data;
       if (k !== 'accept') res = '제안을 거절했습니다.';
       else { const ev = this.executeTrade(D.t, [D.give], [D.get]); res = ev.ok ? `트레이드 성사: ${S.players[D.get].ko} 영입(2군 등록), ${S.players[D.give].ko} 이적.` : `성사되지 않았습니다(${ev.why || ev.msg || '조건 변경'}).`; }
+    } else if (e.type === 'camp') {
+      res = this._campEvResolve(e, k);
     } else if (e.type === 'comp') {
       const D = e.data, fa = S.players[D.fa], pid = k && k.startsWith('p:') ? k.slice(2) : null, pl = pid ? S.players[pid] : null, valid = pl && pl.team === D.signer;
       for (const id of D.cands || []) if (S.players[id]) delete S.players[id].compHold;
@@ -1225,6 +1229,7 @@
     this.invalidate();
   };
   proto.startNewSeason = function () {
+    if (this._campEvClose) this._campEvClose();   // 결정하지 않은 캠프 소식은 기본(변화 없음)으로 처리
     const S = this.S; S.year += 1; S.off = null; S.faMkt = null; S.teamMood = null; S.restUntil = 0; S.trainAcc = { total: 0, B: {}, P: {} }; S.trainTrack = []; for (const id in S.players) if (S.players[id].tr) delete S.players[id].tr; for (const id in S.players) if (S.players[id].mood) delete S.players[id].mood; if (S.events) for (const e of (S.events.list || [])) if (e.status === 'open') { e.status = 'done'; e.result = '시즌 종료로 자동 종결'; } S.fa = (S.fa || []);
     for (const id in S.players) if (S.players[id].retired || S.players[id].team === 'RET') delete S.players[id];   // 은퇴·이탈 선수 정리(저장 용량)
     this.finishFA === undefined; const adj = this.normalizeTalent(); S.lastAdj = adj;
@@ -1234,7 +1239,7 @@
     this.newSeasonSetup(false); this.repairSettings(S.userTeam);
     const cap = S.calib.cap; S.calib.cap = cap;
     this._setGoals(); S.report = S.report;
-    if (this._campApply) this._campApply(); if (this._loyDecay) this._loyDecay(2);   // 새 시즌: 오래된 불만·기쁨이 가라앉는다
+    if (this._campApply) this._campApply(); if (this._campEvApply) this._campEvApply(); if (this._loyDecay) this._loyDecay(2);   // 새 시즌: 오래된 불만·기쁨이 가라앉는다
     S.prospectsDone = null; S.scWatch = []; S.scPtr = 0; if (this.ensureProspects) this.ensureProspects();   // 이번 시즌의 드래프트 후보 풀 공개
     news(this, `${S.year} 시즌 개막 준비`);
   };
