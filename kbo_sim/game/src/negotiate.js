@@ -188,6 +188,7 @@
     if (kind === 'fa') { const info = p.faInfo, ext = info && info.grade && info.from !== t; if (ext && this._faCount(t) >= 3) return '외부 FA는 한 시즌에 3명까지만 영입할 수 있습니다.'; }
     if (kind === 'foreign') {
       if (rep) { const r = S.players[rep]; if (!r || r.team !== t || !r.foreign) return '교체할 외국인 선수를 찾을 수 없습니다.'; }
+      if (this.fSwapBlock && this.fSwapBlock()) return this.fSwapBlock();
       this._replacing = rep || null; const okSlot = this.foreignOK(t, p); this._replacing = null;
       if (!okSlot) return p.aq ? '아시아쿼터 선수는 구단당 1명입니다. 보유 한도가 찼으니 기존 아시아쿼터 선수와 교체해야 합니다.' : '일반 외국인 선수는 3명까지이고 같은 포지션 3명은 안 됩니다. 보유 한도가 찼으니 기존 선수와 교체해야 합니다.';
     }

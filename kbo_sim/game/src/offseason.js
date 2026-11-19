@@ -251,6 +251,7 @@
   };
   proto.release = function (t, id, exercise) {
     const S = this.S, p = S.players[id]; if (!p || p.team !== t) return;
+    if (p.sub) delete p.sub; if (p.rehab) delete p.rehab;
     p.faInfo = { from: t, grade: exercise && !p.foreign ? this.faGrade(p, t) : null, prev: p.contract.salary };   // FA 자격이 있으면 등급·보상 정보를 남긴다
     S.teams[t].ids = S.teams[t].ids.filter(x => x !== id); p.active = false; p.team = 'FA'; p.contract = { salary: this.askSalary(p), years: 1 };
     S.fa = S.fa || []; S.fa.push(id); this.invalidate(); if (t === S.userTeam) this.repairSettings(t);
@@ -259,6 +260,7 @@
 
   proto.startOffseason = function () {
     const S = this.S, r = rngFor(S.seed, S.year, 31), user = S.userTeam, rep = { prog: [], retired: [], expiring: [] };
+    if (this._subEnd) this._subEnd();   // 시즌이 끝나면 부상 대체 계약은 종료(FA 공시)
     const st = this.standings(); S.history.push({ year: S.year, champion: S.post ? S.post.champion : null, runnerUp: S.post ? S.post.runnerUp : null, userRank: st.find(x => x.team === user).rank, userRec: st.find(x => x.team === user), top: st.slice(0, 5).map(x => x.team) });
     this.mergeTracking(); if (this._careerSnapshot) this._careerSnapshot();
     // 0) 경쟁균형세 정산(시즌 종료 시점 연봉 기준)
@@ -429,7 +431,7 @@
   /* 외국인 슬롯: 팀당 일반 3명(같은 포지션 3명 불가) + 아시아쿼터 1명. 넘치는 선수는 시장(자유계약)으로 */
   proto.foreignOf = function (t) { return this.players(t).filter(p => p.foreign); };
   proto.foreignOK = function (t, p) {
-    const f = this.foreignOf(t).filter(x => x.id !== this._replacing); if (p.aq) return f.filter(x => x.aq).length < 1;   // _replacing: 교체 영입 시 내보낼 선수는 제외하고 계산
+    const f = this.foreignOf(t).filter(x => x.id !== this._replacing && !x.sub); if (p.aq) return f.filter(x => x.aq).length < 1;   // _replacing: 교체 영입 시 내보낼 선수는 제외하고 계산
     const g = f.filter(x => !x.aq); if (g.length >= 3) return false; return !(g.length === 2 && g.every(x => x.type === p.type));
   };
   /* 2027 시작 상태: 뉴스로 계약이 확정된 외국인만 반영하고(foreign_2027.csv), 나머지 선수는 시장으로 보낸 뒤
@@ -462,7 +464,9 @@
   };
   proto.foreignCap = function (p, t) {
     const k = p.aq ? 'aq' : 'gen', base = FOREIGN_NEW[k];
-    return p.faInfo && p.faInfo.from === t ? Math.max(base, (p.faInfo.prev || 0) + FOREIGN_RAISE[k]) : base;
+    let cap = p.faInfo && p.faInfo.from === t ? Math.max(base, (p.faInfo.prev || 0) + FOREIGN_RAISE[k]) : base;
+    if (!p.aq && t === this.S.userTeam && this.foreignRoom) cap = Math.min(cap, this.foreignRoom(t, p.id));   // 일반 외국인 3명 합산 상한(400만$ ≈ 56억, 내 구단에만 적용)
+    return cap;
   };
   /* 가상 외국인: 능력치 분포는 2026 실제 외국인(일반 투수 중앙값 OVR 51·타자 57·AQ 44, 표준편차 ≈8·8·5)에 맞춘다 */
   proto.makeForeign = function (r, type, aq, opts) {
@@ -479,7 +483,7 @@
     const S = this.S;
     for (const aq of initial ? [false] : [false, true]) for (let k = 0; k < 4; k++) {   // 최초 상태에서는 아시아쿼터 슬롯을 비워 시장 경쟁(FA 협상 기간)에 맡긴다
       const have = this.foreignOf(t).filter(x => !!x.aq === aq).length; if (have >= (aq ? 1 : 3)) break;
-      const pool = this.faList().filter(x => x.foreign && !!x.aq === aq && this.foreignOK(t, x)).sort((a, b) => ((b.faInfo && b.faInfo.from === t) ? 1000 : 0) + this.war(b) - (((a.faInfo && a.faInfo.from === t) ? 1000 : 0) + this.war(a)));
+      const pool = this.faList().filter(x => x.foreign && !x.deep && !!x.aq === aq && this.foreignOK(t, x)).sort((a, b) => ((b.faInfo && b.faInfo.from === t) ? 1000 : 0) + this.war(b) - (((a.faInfo && a.faInfo.from === t) ? 1000 : 0) + this.war(a)));
       let cand = pool[0];
       if (!cand) { const tp = aq ? (r.random() < 0.7 ? 'P' : 'B') : (this.foreignOf(t).filter(x => !x.aq && x.type === 'P').length >= 2 ? 'B' : (this.foreignOf(t).filter(x => !x.aq && x.type === 'B').length >= 1 ? 'P' : (r.random() < 0.75 ? 'P' : 'B'))); cand = this.makeForeign(r, tp, aq); cand.team = 'FA'; (S.fa = S.fa || []).push(cand.id); }
       if (!this.foreignOK(t, cand)) break;
@@ -609,10 +613,11 @@
     if (ext && this._faCount(t) >= EXT_LIMIT) return `외부 FA는 한 시즌에 ${EXT_LIMIT}명까지만 영입할 수 있습니다.`;
     if (p.foreign) {
       if (!this.foreignOK(t, p)) return p.aq ? '아시아쿼터는 구단당 1명입니다.' : '일반 외국인은 3명까지이며 같은 포지션 3명은 안 됩니다.';
+      if (this.fSwapBlock && this.fSwapBlock()) return this.fSwapBlock();
       let ask;
       if (offer && typeof offer === 'object') { const ev = this._negEval(p, Object.assign({ years: 1, bonus: 0 }, offer), 'foreign'); if (!ev.ok) return ev.msg; ask = ev.sal; }   // 협상 테이블: 호감도로 낮춘 요구액 이상·상한 이하
       else ask = Math.min(this.askSalary(p), this.foreignCap(p, t));
-      this._doSign(t, p, 1, ask, 0); this._foreignJoin(p);
+      this._doSign(t, p, 1, ask, 0); this._foreignJoin(p); if (this._foreignIn) this._foreignIn(p);
       news(this, `${p.aq ? '아시아쿼터' : '외국인'} 선수 ${p.ko} 계약 (${ask}억, 1년)`); return null;
     }
     if (typeof offer !== 'object' || offer === null) offer = this.faDefaultOffer(p, t, typeof offer === 'number' ? offer : undefined);   // 숫자만 주면 요구 조건에 맞춘 기본 제시

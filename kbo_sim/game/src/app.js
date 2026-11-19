@@ -544,6 +544,28 @@
     const btns = sc.map(s => { const done = p.fsc && p.fsc.by[s.id] && p.fsc.by[s.id].n >= 1; return `<button class="sm" data-act="scoutFor" data-a="${p.id}:${s.id}" ${done ? 'disabled' : ''} title="${esc(s.name)} 해외 ${s.abroad === undefined ? 45 : s.abroad} · 조사비 ${L.scoutProbeCost()}억">${esc(s.name)}${done ? ' ✓' : ''}</button>`; }).join(' ');
     return `<div class="small muted">KBO 기록이 없는 선수라 능력이 불확실합니다(조사 ${e.n}회 · 확신도 ${e.conf}).</div>${rp ? `<span class="sub">${Object.entries(rp.sub).map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join('')}</span><div class="small muted">세부 능력 ±${rp.sd}</div>` : ''}${sc.length ? `<div class="chips wrap" style="margin-top:4px">${btns}</div>` : '<div class="small muted">스카우트를 고용하면 조사할 수 있습니다(운영 ▸ 스카우팅).</div>'}`;
   }
+  function subCard() {   // 부상 대체 외국인(정규시즌 · 일반 외국인 · 6주 이상 부상)
+    const S = L.S, el = L.subEligible(), subs = L.subList(), sw = L.fSwapInfo(), dl = L.postDeadline();
+    const head = `<div class="row"><h2 style="margin:0">부상 대체 외국인</h2><span class="sp"></span><span class="small muted">시즌 중 교체 ${sw.n}/${sw.max}회 · 포스트시즌 등록 마감 ${dl.str.slice(5).replace('-', '월 ')}일${dl.passed ? '(지남)' : ''}</span></div>`;
+    const rule = `<div class="small muted" style="margin:4px 0">일반 외국인이 6주(42일) 이상 치료가 필요한 부상이면 재활 선수명단에 올리고 대체 선수를 월 최대 10만 달러(1.4억)에 계약할 수 있습니다. 교체 횟수는 차감되지 않으며 3명 한도 밖에 둡니다. 선수가 복귀하면 7일 안에 대체 선수를 해지하거나 정식 전환(교체 1회 차감, 기존 선수 웨이버)해야 합니다. 비용은 계약 시 올해 비용으로 확정되며, 계약이 끝나면 즉시 FA로 공시됩니다. 8월 15일 이후 계약한 선수는 포스트시즌에 나갈 수 없습니다. 아시아쿼터는 대상이 아닌 것으로 가정했습니다(⚠).</div>`;
+    const rowEl = x => `<div class="slotrow"><div class="row" style="flex-wrap:nowrap"><div style="flex:1;min-width:0"><button class="linkbtn" data-act="player" data-a="${x.p.id}"><b>${esc(x.p.ko)}</b></button> <span class="muted small">${pos(x.p)} · ${esc(x.p.inj ? x.p.inj.dx : '부상')} · 총 ${x.days}일 · 복귀 ${esc(L.injDateStr(x.p))}</span></div><button class="sm primary" data-act="subOpen" data-a="${x.p.id}">대체 선수 영입</button></div></div>`;
+    const rowSub = x => { const c = x.p, o = x.orig, bk = !!c.sub.back, left = bk ? Math.max(0, 7 - (S.day - c.sub.back)) : null;
+      return `<div class="slotrow"><div class="row" style="flex-wrap:nowrap"><div style="flex:1;min-width:0"><b>${esc(c.ko)}</b> <span class="muted small">${pos(c)} · OVR ${L.ovr(c)} · ${c.sub.mo}개월(~${L.dateStr(c.sub.end)}) · ${c.sub.cost}억</span><div class="small">${o ? `대체 대상 ${esc(o.ko)} ${bk ? '<span class="chip in">복귀 — ' + left + '일 안에 결정</span>' : '<span class="chip warn">재활 중</span>'}` : ''}</div></div></div>
+        <div class="chips">${bk ? '' : `<button class="sm" data-act="subExtendA" data-a="${c.id}">1개월 연장(+${L.subCost(1)}억)</button>`}<button class="sm" data-act="subDecideA" data-a="${c.id}:release">계약 해지</button>${bk ? `<button class="sm primary" data-act="subDecideA" data-a="${c.id}:convert" ${sw.n >= sw.max ? 'disabled' : ''} title="기존 선수 웨이버 · 교체 1회 차감">정식 전환</button>` : ''}</div></div>`; };
+    if (S.phase !== 'regular' && !subs.length) return `<div class="card">${head}${rule}<div class="small muted">정규시즌에만 이용할 수 있습니다.</div></div>`;
+    return `<div class="card">${head}${rule}${subs.map(rowSub).join('')}${el.map(rowEl).join('')}${!subs.length && !el.length ? '<div class="small muted">지금 대체 대상이 없습니다(6주 이상 부상인 일반 외국인이 없음).</div>' : ''}</div>`;
+  }
+  function subSheet() {
+    const id = ui.subFor; if (!id || !L) return ''; const o = P(id), el = L.subEligible().find(x => x.p.id === id); if (!o || !el) { ui.subFor = null; return ''; }
+    const cands = L.subCands().map(c => ({ c, e: L.fEst(c) })).sort((a, b) => b.e.o - a.e.o).slice(0, 40), mx = L.subMaxMonths(), mo = Math.min(mx, ui.subMo || Math.min(2, mx)), cur = ui.subCand && cands.some(x => x.c.id === ui.subCand) ? ui.subCand : (cands[0] ? cands[0].c.id : ''), dl = L.postDeadline();
+    return `<div class="sheet-bg" data-act="subClose"><div class="sheet" data-stop="1" role="dialog" aria-label="부상 대체 외국인 영입"><div class="grabber"></div>
+      <h2>${esc(o.ko)} 대체 선수 영입</h2><div class="small muted">${esc(o.inj ? o.inj.dx : '부상')} · 총 ${el.days}일 · 복귀 예정 ${esc(L.injDateStr(o))} · 재활 선수명단에 등재됩니다.</div>
+      <div class="row" style="margin-top:8px"><select data-sel="subcand" style="flex:1;min-width:0">${cands.map(x => `<option value="${x.c.id}" ${x.c.id === cur ? 'selected' : ''}>${esc(x.c.ko)} · ${x.c.type === 'P' ? (x.c.role === 'SP' ? '선발' : '구원') : posName[x.c.pos]} · ${x.c.age}세 · 추정 ${Math.round(x.e.o)}${x.e.exact ? '' : '±' + x.e.sd}${x.c.team === 'DRAFT' ? ' · 해외 후보' : ' · FA'}</option>`).join('')}</select>
+        <select data-sel="submo">${Array.from({ length: mx }, (_, i) => i + 1).map(v => `<option value="${v}" ${v === mo ? 'selected' : ''}>${v}개월</option>`).join('')}</select></div>
+      <div class="small" style="margin-top:6px">비용 <b>${L.subCost(mo)}억</b>(월 1.4억 × ${mo}개월) · FA 여유자금 ${L.faRoom(U()).toFixed(1)}억${dl.passed ? ' · <span class="chip warn">8월 15일 이후라 포스트시즌 출전 불가</span>' : ''}</div>
+      <div class="small muted" style="margin-top:4px">해외 후보는 스카우트 관찰로 능력 추정이 정교해집니다. 계약하면 올해 비용이 바로 확정됩니다.</div>
+      <div class="row" style="margin-top:10px"><button class="sm primary" data-act="subSignA" data-a="${id}" ${cands.length ? '' : 'disabled'}>계약</button><button class="sm" data-act="subClose">닫기</button></div></div></div>`;
+  }
   function screenFAForeign(aq, all) {
     const t = U(), mine = L.foreignOf(t), gen = mine.filter(x => !x.aq), aqs = mine.filter(x => x.aq), room = L.faRoom(t);
     const list = all.filter(p => p.foreign && !!p.aq === aq).sort((a, b) => ui.faSort === 'ovr' ? L.fEst(b).o - L.fEst(a).o : ui.faSort === 'age' ? a.age - b.age : L.fSortKey(b) - L.fSortKey(a));   // 가상 외국인은 추정만으로 정렬(진짜 값 비노출)
@@ -551,8 +573,8 @@
     const rule = aq ? '아시아쿼터는 구단당 1명, 신규 연봉 상한 2.8억(20만 달러), 재계약 시 직전 연봉 +1.4억까지, 1년 계약입니다.' : '일반 외국인은 구단당 3명(같은 포지션 3명 불가), 신규 연봉 상한 14억(100만 달러 수준), 원소속 재계약은 직전 연봉 +7억까지, 1년 계약입니다.';
     const rows = list.map(p => { const ask = Math.min(L.askSalary(p), L.foreignCap(p, t)), ok = L.foreignOK(t, p), from = p.faInfo && p.faInfo.from;
       return `<tr><td class="l"><b>${esc(p.ko)}</b>${from === t ? ' <span class="chip in">원소속</span>' : ''}</td><td class="l">${pos(p)}</td><td class="n">${p.age}</td><td>${foreignOvr(p)}</td><td class="l small">${from ? KO[from] || '' : '-'}${p.faInfo && p.faInfo.prev ? ` · 직전 ${f1(p.faInfo.prev)}억` : ''}</td><td class="l">${foreignSub(p)}</td><td class="n">${money(ask)}<div class="small muted">상한 ${money(L.foreignCap(p, t))}</div></td><td>${ok ? `<button class="sm primary" data-act="negOpen" data-a="${p.id}|foreign" ${room >= ask ? '' : 'disabled'} title="${room >= ask ? '에이전트와 협상합니다' : '예산 부족'}">협상</button>` : `<button class="sm" data-act="foreignSlot" data-a="${p.id}" title="보유 한도가 가득 차 기존 선수와 교체해야 합니다">교체 계약</button>`}</td></tr>`; }).join('');
-    return `<div class="card"><div class="row"><h2>${aq ? '아시아쿼터 선수' : '외국인 선수'} 시장</h2><span class="muted small">${slot} · FA 여유자금 ${room.toFixed(1)}억 · 현재 보유: ${mine.map(x => esc(x.ko) + (x.aq ? '(AQ)' : '')).join(', ') || '없음'}</span><span class="sp"></span><select data-sel="fasort"><option value="war" ${ui.faSort === 'war' ? 'selected' : ''}>가치순</option><option value="ovr" ${ui.faSort === 'ovr' ? 'selected' : ''}>능력치순</option><option value="age" ${ui.faSort === 'age' ? 'selected' : ''}>나이순</option></select></div>
-      <div class="small muted" style="margin:6px 0">${rule} FA 등급·보상·계약금·경쟁 입찰이 없으며, 개막 전 FA 마감 때 AI 구단이 빈 자리를 채웁니다.</div>
+    return `${aq ? '' : subCard()}<div class="card"><div class="row"><h2>${aq ? '아시아쿼터 선수' : '외국인 선수'} 시장</h2><span class="muted small">${slot} · FA 여유자금 ${room.toFixed(1)}억 · 현재 보유: ${mine.map(x => esc(x.ko) + (x.aq ? '(AQ)' : '')).join(', ') || '없음'}</span><span class="sp"></span><select data-sel="fasort"><option value="war" ${ui.faSort === 'war' ? 'selected' : ''}>가치순</option><option value="ovr" ${ui.faSort === 'ovr' ? 'selected' : ''}>능력치순</option><option value="age" ${ui.faSort === 'age' ? 'selected' : ''}>나이순</option></select></div>
+      <div class="small muted" style="margin:6px 0">${rule} FA 등급·보상·계약금·경쟁 입찰이 없으며, 개막 전 FA 마감 때 AI 구단이 빈 자리를 채웁니다.${aq ? '' : ` 일반 외국인 3명의 연봉 합산 상한은 56억(400만 달러)이고 지금 남은 여유는 ${L.foreignRoom(t).toFixed(1)}억입니다. 시즌 중 교체 영입은 연 ${L.fSwapInfo().max}회까지입니다(사용 ${L.fSwapInfo().n}회).`}</div>
       ${list.length ? `<div class="tablewrap"><table><thead><tr><th class="l">선수</th><th class="l">포지션</th><th>나이</th><th>OVR</th><th class="l">직전 구단</th><th class="l">세부 능력</th><th>요구 연봉</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="muted">시장에 나온 선수가 없습니다.</p>'}</div>`;
   }
   /* ---------------- 라이벌전 · 이 순간 · 경기 되짚기 ---------------- */
@@ -767,11 +789,11 @@
   function foreignCard() {
     const S = L.S, all = L.foreignPoolList(), f = ui.fF || 'all', fw = L.foreignWatchList(), cap = L.scouts().reduce((x, s) => x + L.scoutFCap(s), 0);
     const flt = { all: () => true, G: p => !p.aq, A: p => p.aq, P: p => p.type === 'P', B: p => p.type === 'B', watch: p => fw.some(w => w.id === p.id) };
-    const rows = all.filter(flt[f] || flt.all).map(p => ({ p, e: L.fEst(p) })).sort((a, b) => b.e.o - a.e.o);
+    const rows = all.filter(flt[f] || flt.all).map(p => ({ p, e: L.fEst(p) })).sort((a, b) => b.e.o - a.e.o), shown = rows.slice(0, 40), out = L.foreignOut();
     const chips = [['all', '전체'], ['G', '일반 외국인'], ['A', '아시아쿼터'], ['P', '투수'], ['B', '타자'], ['watch', '관심']].map(([k, t]) => `<button class="sm" aria-pressed="${f === k}" data-act="foreignFilter" data-a="${k}">${t}</button>`).join('');
     return `<div class="card"><div class="row"><h2 style="margin:0">해외 후보군</h2><span class="sp"></span><button class="sm" data-act="foreignAuto">추천으로 채우기</button></div>
       <div class="small muted" style="margin:4px 0">${S.year} 시즌이 끝나면 외국인 선수 시장(일반 외국인·아시아쿼터)에 나올 가상 후보입니다. 해외 능력이 높은 스카우트가 매주 관찰하면 능력 추정의 오차가 줄고(스카우트의 해외 능력에 따라 주 1~3건), 시장에서 협상할 때 진짜 가치를 미리 알 수 있습니다. 관심 목록은 8명까지, ★는 2배로 관찰합니다. 관심 ${fw.length}명 · 주간 관찰 ${cap}건</div>
-      ${all.length ? `<div class="chips wrap">${chips}</div><div class="plist">${rows.map(x => foreignRow(x.p)).join('') || '<div class="small muted">해당하는 후보가 없습니다.</div>'}</div>` : '<div class="small muted">후보군이 시장에 합류했습니다. 이적시장 ▸ FA ▸ 외국인·아시아쿼터에서 조사하고 협상하세요.</div>'}</div>`;
+      ${all.length ? `<div class="chips wrap">${chips}</div><div class="small muted" style="margin-top:4px">실질 영입 후보 ${all.length}명 중 ${shown.length}명 표시(추정 능력 순) · 관찰·협상 대상으로 올라오지 못한 1차 모수 ${out.rows.length}명 포함 총 ${out.total}명</div><div class="plist">${shown.map(x => foreignRow(x.p)).join('') || '<div class="small muted">해당하는 후보가 없습니다.</div>'}</div><details style="margin-top:8px"><summary class="small">시장에서 빠진 선수 ${out.rows.length}명 보기</summary><div class="small muted" style="margin:4px 0">관찰 대상이었지만 신규 상한(일반 100만$·아시아쿼터 20만$)이나 자격 때문에 협상 테이블에 올라오지 못한 선수입니다(가상 선수 · ⚠ 비율은 가정).</div>${Object.entries(out.by).map(([k, v]) => `<div class="small">${esc(k)} <b>${v}명</b></div>`).join('')}<div class="small muted" style="margin-top:4px">예: ${out.rows.slice(0, 6).map(x => `${esc(x.name)}(${esc(x.lg)})`).join(' · ')}</div></details>` : '<div class="small muted">후보군이 시장에 합류했습니다. 이적시장 ▸ FA ▸ 외국인·아시아쿼터에서 조사하고 협상하세요.</div>'}</div>`;
   }
   function foreignSheet(p) {
     const e = L.fEst(p), rp = L.fReport(p), w = L.foreignWatchList().find(x => x.id === p.id), sc = L.scouts();
@@ -1177,7 +1199,7 @@
     const S = ui.screen, f = { home: () => goalCard() + pressCard() + screenHome() + evHistory(), roster: () => changeBar() + screenRoster(), farm: () => changeBar() + screenFarm(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, story: screenStory, mood: screenMood, train: screenTrain, scout: screenScout, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
     document.body.classList.toggle('modal-open', !!ui.modal);
     const keep = snapInner(root);   // 체크박스·버튼으로 다시 그려도 안쪽 스크롤 상자와 펼침 상태를 유지한다
-    root.innerHTML = shell((S === 'home' || S === 'market' || S === 'offseason' ? eventCards() : evBanner()) + f()) + (ui.modal ? modalPlayer(ui.modal) : '') + sheetHtml() + firedModal() + quickSheet() + swapSheet() + posPickSheet() + fslotSheet() + scoutSheet() + negView() + toastHtml();
+    root.innerHTML = shell((S === 'home' || S === 'market' || S === 'offseason' ? eventCards() : evBanner()) + f()) + (ui.modal ? modalPlayer(ui.modal) : '') + sheetHtml() + firedModal() + quickSheet() + swapSheet() + posPickSheet() + fslotSheet() + scoutSheet() + subSheet() + negView() + toastHtml();
     window.scrollTo(0, scroll); stackTables(root); restoreInner(root, keep);
     { const ch = root.querySelector('.neg-chat'); if (ch) ch.scrollTop = ch.scrollHeight; document.body.classList.toggle('modal-open', !!(ui.modal || (ui.negOpen && L.S.neg))); }
     const cur = root.querySelector('.side button[aria-current=true]'); if (cur && cur.scrollIntoView) { try { cur.scrollIntoView({ inline: 'center', block: 'nearest' }); } catch (e) { /* 일부 브라우저 */ } }
@@ -1309,6 +1331,10 @@
     foreignStarA(a) { const e = L.foreignStar(a); if (e) toast(e); else autosave(); render(); },
     foreignAuto() { const n = L.foreignAutoWatch(4); toast(n ? `${n}명을 관심 목록에 추가했습니다.` : '추가할 후보가 없거나 목록이 가득 찼습니다.'); autosave(); render(); },
     foreignFilter(a) { ui.fF = a; render(); },
+    subOpen(a) { ui.subFor = a; ui.subCand = null; ui.subMo = null; render(); }, subClose() { ui.subFor = null; render(); },
+    subSignA(a) { const e = L.subSign(a, ui.subCand || ($('[data-sel="subcand"]') || {}).value, ui.subMo || +($('[data-sel="submo"]') || {}).value || 1); if (e) toast(e); else { toast('대체 외국인을 영입했습니다.'); ui.subFor = null; autosave(); } render(); },
+    subExtendA(a) { const e = L.subExtend(a, 1); if (e) toast(e); else { toast('계약을 1개월 연장했습니다.'); autosave(); } render(); },
+    subDecideA(a) { const [id, ch] = a.split(':'); const e = L.subDecide(id, ch); if (e) toast(e); else { toast(ch === 'convert' ? '정식 외국인으로 전환했습니다.' : '대체 계약을 해지했습니다.'); autosave(); } render(); },
     scoutOpen(a) { ui.scoutId = a; render(); }, scoutClose() { ui.scoutId = null; render(); },
     scoutFilter(a) { ui.scF = a; render(); }, scoutSort(a) { ui.scS = a; render(); },
     trainSide(a) { const [s, k, v] = a.split(':'); if (L.setTrainSide(s, k, v)) { autosave(); render(); } },
@@ -1393,6 +1419,8 @@
     if (sel === 'negrole') { ui.negRole = el.value; return; }
     if (sel === 'storyy') { ui.storyY = +el.value; render(); return; }
     if (sel === 'slotpick') { ui.slotPick = el.value; return; }
+    if (sel === 'subcand') { ui.subCand = el.value; return; }
+    if (sel === 'submo') { ui.subMo = +el.value; render(); return; }
     if (['lpl', 'lpos', 'pslot'].includes(sel)) L.pushUndo('편성 변경');
     const set = L.team(U()).set;
     if (sel === 'rsort') { ui.rf.s = el.value; render(); }

@@ -384,6 +384,7 @@
     setActive(t, id, on) {
       const p = this.S.players[id]; if (!p || p.team !== t) return '선수를 찾을 수 없습니다.';
       if (on && this.isInj(p)) return `${p.ko}은(는) 부상자 명단입니다.`;
+      if (on && this.S.phase === 'post' && p.noPost === this.S.year) return `${p.ko}은(는) 8월 15일 이후 영입해 포스트시즌에 나갈 수 없습니다.`;
       if (on && this.players(t).filter(x => x.active).length >= ACTIVE_MAX) return `1군 엔트리는 ${ACTIVE_MAX}명까지입니다.`;
       p.active = !!on; this._engDirty = true; if (t === this.S.userTeam) this.repairSettings(t); return null;
     }
@@ -847,7 +848,7 @@
     startPostseason() {
       const S = this.S, st = this.standings(), seeds = st.slice(0, 5).map(x => x.team), T = i => seeds[i];
       S.post = { seeds, rounds: [], cur: null, stage: 0, done: false, champion: null };
-      S.phase = 'post'; this._mkSeries(0); this.invalidate(); return S.post;
+      S.phase = 'post'; if (this._postElig) this._postElig(); this._mkSeries(0); this.invalidate(); return S.post;
     }
     _mkSeries(stage) {
       const P = this.S.post, T = i => P.seeds[i];
