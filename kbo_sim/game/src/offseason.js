@@ -683,6 +683,7 @@
      - 내 제시 점수가 최고 입찰 이상이면 즉시 계약, 아니면 5일간 보류(매일 재평가). AI 입찰은 1일 이상 경과하면 확률적으로 수락된다. */
   proto.faDateStr = function (day) { const d = new Date(Date.UTC(2001, 0, 1 + day)); return `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`; };
   proto.openFAMarket = function () { this.S.faMkt = { day: 0, bids: {}, pend: {}, closed: false }; };
+  proto.tradeDeadlineDay = function () { return LIM_DEADLINE; };
   proto.faDaysLeft = function () { const m = this.S.faMkt; return m ? FA_END - m.day : 0; };
   proto._offerScore = function (p, t, y, sal, bon) {
     const tm = this.faTerms(p, t), tot = bon + sal * y, per = tot / y, share = tot > 0 ? bon / tot : 0, home = p.faInfo && p.faInfo.from === t;

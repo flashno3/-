@@ -64,6 +64,17 @@ async function run(vp,label,team){
   await click('button[data-act="fatab"][data-a="for"]');await pg.waitForTimeout(150);ok(await pg.evaluate(()=>/부상 대체 외국인/.test(document.body.innerText)&&/합산 상한은 56억/.test(document.body.innerText)),`${label}: 부상 대체·합산 상한 안내`);await sweep('부상 대체 카드');
   await nav('운영','스카우팅');ok(await pg.evaluate(()=>/1차 모수/.test(document.body.innerText)&&/시장에서 빠진 선수/.test(document.body.innerText)&&/116명 중 40명 표시/.test(document.body.innerText)),`${label}: 해외 후보군 규모·1차 모수`);
   await click('button[data-act="fatab"][data-a="dom"]');
+  // 4-5) 전역 검색 · 선수 비교 · 확정 전 요약 · 프런트 데스크
+  await nav('대시보드');await pg.evaluate(()=>document.activeElement&&document.activeElement.blur());await pg.keyboard.press('/');await pg.waitForTimeout(100);ok(!!(await pg.$('#gsq')),`${label}: '/' 단축키로 검색 열기`);
+  await pg.fill('#gsq','ㅇ');await pg.waitForTimeout(100);ok(await pg.evaluate(()=>document.querySelectorAll('#gsres .srow').length>0),`${label}: 초성 검색 결과`);await sweep('검색');
+  await pg.fill('#gsq','삼성');await pg.waitForTimeout(80);ok(await pg.evaluate(()=>/팀/.test(document.getElementById('gsres').innerText)&&/선수/.test(document.getElementById('gsres').innerText)),`${label}: 팀명 검색은 팀·선수 모두`);
+  await pg.fill('#gsq','김');await pg.waitForTimeout(80);await click('#gsres .srow button[data-act="cmpAdd"]');await pg.evaluate(()=>{const b=[...document.querySelectorAll('#gsres .srow button[data-act="cmpAdd"]')];if(b[1])b[1].dispatchEvent(new MouseEvent('click',{bubbles:true}))});await pg.waitForTimeout(80);
+  await pg.keyboard.press('Escape');await pg.waitForTimeout(80);ok(!(await pg.$('#gsq')),`${label}: Esc로 검색 닫기`);ok(await click('.cmptray button[data-act="cmpOpen"]'),`${label}: 비교 열기`);await pg.waitForTimeout(100);
+  ok(await pg.evaluate(()=>!!document.querySelector('table.cmpt')&&document.querySelectorAll('table.cmpt tbody tr').length>8),`${label}: 비교 표`);await sweep('비교');await click('.sheet.cmp button[data-act="cmpClear"]');ok(!(await pg.$('.cmptray')),`${label}: 비교 비우기`);
+  await nav('대시보드','프런트 데스크');ok(await pg.evaluate(()=>/오늘 처리할 일/.test(document.body.innerText)&&/선수단 점검/.test(document.body.innerText)&&/계약·재정/.test(document.body.innerText)),`${label}: 프런트 데스크`);await sweep('프런트 데스크');
+  await nav('선수단','로스터');await pg.evaluate(()=>{const r=document.querySelector('tr[data-act="player"]');if(r)r.click()});await pg.waitForTimeout(150);
+  if(await click('button[data-act="releaseAsk"]')){await pg.waitForTimeout(100);ok(await pg.evaluate(()=>/위약금 합계/.test(document.body.innerText)&&/방출 후 로스터/.test(document.body.innerText)),`${label}: 방출 확정 요약`);await sweep('방출 요약');await click('.sheet button[data-act="cfClose"]');ok(!(await pg.$('table.cf')),`${label}: 요약 취소`)}
+  await click('button[data-act="closeModal"]');
   // 5) 전 화면 순회
   const groups=[['대시보드',[]],['선수단',['로스터','2군','라인업','투수진','훈련','분위기']],['리그',['일정·결과','순위·기록','팀 정보','스토리']],['운영',['재정','코치진','스카우팅','이적시장']],['설정',[]]];
   for(const [g,subs] of groups){await nav(g);await sweep(g);for(const s of subs){await nav(g,s);await sweep(g+'/'+s)}}

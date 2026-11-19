@@ -265,11 +265,12 @@
     return this.foreignOf(t).filter(x => !x.aq && !x.sub && x.id !== excl && x.id !== rep).reduce((a, x) => a + x.contract.salary + (x.contract.amort && x.contract.years > 0 ? x.contract.amort : 0), 0);
   };
   proto.foreignRoom = function (t, excl) { return Math.max(0, r1(FOREIGN_TOTAL - this.foreignGenPay(t, excl))); };
-  proto.fSwapInfo = function () { const S = this.S; if (!S.fSwap || S.fSwap.y !== S.year) S.fSwap = { y: S.year, n: 0 }; return { n: S.fSwap.n, max: SWAP_MAX }; };
+  proto._fSwapInit = function () { const S = this.S; if (!S.fSwap || S.fSwap.y !== S.year) S.fSwap = { y: S.year, n: 0 }; return S.fSwap; };
+  proto.fSwapInfo = function () { const S = this.S; return { n: S.fSwap && S.fSwap.y === S.year ? S.fSwap.n : 0, max: SWAP_MAX }; };   // 읽기 전용
   proto.fSwapBlock = function () { const S = this.S; if (S.phase !== 'regular') return null; const i = this.fSwapInfo(); return i.n >= i.max ? `올 시즌 외국인 교체 ${i.max}회를 모두 사용했습니다(부상 대체 영입은 제외).` : null; };
   proto.postDeadline = function () { const S = this.S; return { n: todayAug15(S), str: `${S.year}-08-15`, passed: S.phase === 'regular' && this.todayN() > todayAug15(S) }; };
   proto._foreignIn = function (p) {   // 시즌 중 외국인 영입: 교체 횟수 +1, 8/15 이후면 포스트시즌 출전 불가
-    const S = this.S; if (S.phase !== 'regular') return; this.fSwapInfo(); S.fSwap.n++; if (this.postDeadline().passed) p.noPost = S.year;
+    const S = this.S; if (S.phase !== 'regular') return; this._fSwapInit(); S.fSwap.n++; if (this.postDeadline().passed) p.noPost = S.year;
   };
   proto._postElig = function () {   // 포스트시즌 시작: 8/15 이후 영입한 외국인은 출전 불가
     const S = this.S, t = S.userTeam; let ch = false;
@@ -336,15 +337,20 @@
     for (const p of this.players(t).filter(x => x.rehab)) if (!S.players[p.rehab.sub] || S.players[p.rehab.sub].team !== t) delete p.rehab;
   };
   proto._subEnd = function () { const S = this.S, t = S.userTeam; for (const p of this.players(t).filter(x => x.sub)) this._subDrop(p, '시즌 종료'); for (const p of this.players(t).filter(x => x.rehab)) delete p.rehab; };
+  proto.subConvertPreview = function (subId) {   // 정식 전환 시 새 계약·위약금·교체 횟수(읽기 전용)
+    const S = this.S, t = S.userTeam, c = S.players[subId]; if (!c || c.team !== t || !c.sub) return null; const o = S.players[c.sub.for];
+    const rem = Math.max(0.5, (Math.floor(Date.UTC(S.year, 10, 30) / 864e5) - this.todayN()) / 30.4), sal = r1(Math.max(0.3, SUB_MONTHLY * rem));
+    return { ok: !!(o && o.team === t), c, o, rem, sal, rel: o ? this.releaseCost(o.id) : null, sw: this.fSwapInfo() };
+  };
   proto.subDecide = function (subId, choice) {
     const S = this.S, t = S.userTeam, c = S.players[subId]; if (!c || c.team !== t || !c.sub) return '대체 선수를 찾을 수 없습니다.';
     if (choice === 'release') { this._subDrop(c, '계약 해지'); return null; }
     if (choice !== 'convert') return '알 수 없는 선택입니다.';
     const o = S.players[c.sub.for]; if (S.phase !== 'regular') return '정규시즌 중에만 전환할 수 있습니다.'; if (!o || o.team !== t) return '원래 선수가 팀에 없습니다.';
     const bl = this.fSwapBlock(); if (bl) return bl;
-    const remM = Math.max(0.5, (Math.floor(Date.UTC(S.year, 10, 30) / 864e5) - this.todayN()) / 30.4), sal = r1(Math.max(0.3, SUB_MONTHLY * remM));   // 잔여 개월 × 10만$(월 1.4억) 한도
+    const pv = this.subConvertPreview(subId), sal = pv.sal;   // 잔여 개월 × 10만$(월 1.4억) 한도
     const rel = this.releasePlayer(o.id); if (!rel.ok) return rel.msg;   // 기존 선수 웨이버(위약금 규정은 일반 방출과 같게 처리 ⚠)
-    delete c.sub; c.contract = { salary: sal, years: 1 }; this.fSwapInfo(); S.fSwap.n++; this.invalidate();
+    delete c.sub; c.contract = { salary: sal, years: 1 }; this._fSwapInit(); S.fSwap.n++; this.invalidate();
     this._news(`외국인 정식 전환: ${c.ko}(잔여 계약 ${sal}억) — ${o.ko}는 웨이버, 교체 ${S.fSwap.n}/${SWAP_MAX}회`); return null;
   };
 });

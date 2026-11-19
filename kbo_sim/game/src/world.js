@@ -270,4 +270,72 @@
     for (const t of Object.keys(S.teams)) { const fo = this.foreignOf(t), gen = fo.filter(p => !p.aq && !p.sub), aq = fo.filter(p => p.aq); if (gen.length > 3 || aq.length > 1) E('foreign-slot', `${KO[t] || t} 외국인 보유 한도 초과(일반 ${gen.length}/3, AQ ${aq.length}/1)`); if (S.teams[t].ids.length > LG.ROSTER_MAX + 6) E('roster', `${KO[t] || t} 보유 선수 ${S.teams[t].ids.length}명이 한도를 크게 넘습니다.`); }
     return { errors, warns, checked: all.length };
   };
+
+  /* ================= 전역 검색 · 선수 비교 · 프런트 데스크(관리 허브) ================= (모두 읽기 전용: 게임 상태를 바꾸지 않는다) */
+  const CHO = [...'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ'];
+  const chosung = s => [...String(s || '')].map(ch => { const c = ch.charCodeAt(0); return c >= 0xAC00 && c <= 0xD7A3 ? CHO[Math.floor((c - 0xAC00) / 588)] : ch; }).join('');
+  const POSK = { C: '포수', '1B': '1루수 내야수', '2B': '2루수 내야수', '3B': '3루수 내야수', SS: '유격수 내야수', LF: '좌익수 외야수', CF: '중견수 외야수', RF: '우익수 외야수', DH: '지명타자' };
+  proto.chosung = chosung;
+  /* 검색어: 이름 일부·초성(ㅇㅅㅈ)·영문 이름·팀명·포지션(투수/포수/내야수…)·태그(외국인/FA/2군)를 공백으로 섞어 쓸 수 있다. 숨은 능력은 노출하지 않는다 */
+  proto.searchPlayers = function (q, limit) {
+    const S = this.S, toks = String(q || '').trim().toLowerCase().split(/\s+/).filter(Boolean); if (!toks.length) return [];
+    const res = [];
+    for (const p of Object.values(S.players)) {
+      if (!p || p.retired || p.team === 'RET' || p.team === 'DRAFT') continue; if (!(p.team in S.teams) && p.team !== 'FA') continue;
+      const tn = (KO[p.team] || (p.team === 'FA' ? 'FA 자유계약' : p.team)).toLowerCase(), ko = String(p.ko || '').toLowerCase(), cho = chosung(ko), en = String(p.name || '').toLowerCase();
+      const tags = [p.type === 'P' ? '투수' : '타자 야수', p.type === 'P' ? (p.role === 'SP' ? '선발' : '구원') : (POSK[p.pos] || ''), p.foreign ? '외국인' : '', p.aq ? '아시아쿼터 aq' : '', p.team === 'FA' ? 'fa 자유계약' : '', p.team in S.teams && !p.active ? '2군' : '', p.team in S.teams && p.active ? '1군' : '', p.team === S.userTeam ? '우리 내 팀' : '', this.isInj(p) ? '부상' : ''].join(' ').toLowerCase();
+      let score = 0, okAll = true, nameHit = false;
+      for (const t of toks) {
+        const isCho = /^[ㄱ-ㅎ]+$/.test(t);
+        if (!isCho && ko === t) { score += 100; nameHit = true; } else if (!isCho && ko.startsWith(t)) { score += 80; nameHit = true; } else if (!isCho && ko.includes(t)) { score += 60; nameHit = true; }
+        else if (isCho && cho.includes(t)) { score += cho.startsWith(t) ? 58 : 50; nameHit = true; }
+        else if (en && en.includes(t)) { score += 45; nameHit = true; }
+        else if (tn.includes(t) || tags.includes(t)) score += 20;
+        else { okAll = false; break; }
+      }
+      if (!okAll) continue; if (p.team === S.userTeam) score += 5; score += (this.hiddenForeign && this.hiddenForeign(p) ? 0 : this.ovr(p)) / 100;
+      res.push({ p, score, nameHit });
+    }
+    res.sort((a, b) => b.score - a.score || a.p.ko.localeCompare(b.p.ko)); return res.slice(0, limit || 40);
+  };
+  proto.compareRows = function (ids) {
+    const S = this.S, ps = ids.map(id => S.players[id]).filter(Boolean); if (ps.length < 2) return null;
+    const hid = p => !!(this.hiddenForeign && this.hiddenForeign(p)), allB = ps.every(p => p.type === 'B'), allP = ps.every(p => p.type === 'P');
+    const f3 = v => (v >= 1 ? v.toFixed(3) : v.toFixed(3).replace(/^0/, '')), r1 = v => Math.round(v * 10) / 10;
+    const bat = p => { const c = S.stats.bat[p.id]; if (!c || !c.PA) return null; const ab = c.PA - c.BB - c.HBP - c.SF, h = c['1B'] + c['2B'] + c['3B'] + c.HR; return { avg: ab ? h / ab : 0, hr: c.HR, rbi: c.RBI, pa: c.PA }; };
+    const pit = p => { const c = S.stats.pit[p.id]; if (!c || !c.outs) return null; return { ra9: c.R * 27 / c.outs, ip: c.outs / 3, k: c.K }; };
+    const rows = [], add = (label, get, o) => { o = o || {}; const vals = ps.map(p => { const v = get(p); return v === null || v === undefined || Number.isNaN(v) ? { v: null, txt: '-' } : { v, txt: o.fmt ? o.fmt(v) : String(v) }; }); const nums = vals.map(x => x.v); let best = -1; if (o.dir) { const live = nums.filter(x => x !== null); if (live.length >= 2) { const m = o.dir > 0 ? Math.max(...live) : Math.min(...live); if (live.filter(x => x === m).length === 1) best = nums.indexOf(m); } } rows.push({ label, vals, best, group: o.group || '' }); };
+    add('OVR', p => hid(p) ? Math.round(this.fEst(p).o) : this.ovr(p), { dir: 1, group: '종합' });
+    add('나이', p => p.age, { group: '종합' });
+    add('가치(억)', p => hid(p) ? null : this.marketValue(p), { dir: 1, fmt: v => v.toFixed(1), group: '종합' });
+    add('연봉(억)', p => (p.team in S.teams ? p.contract.salary : null), { fmt: v => v.toFixed(1), group: '계약' });
+    add('계약 잔여(년)', p => (p.team in S.teams ? p.contract.years : null), { group: '계약' });
+    if (allB) for (const k of ['컨택', '선구', '파워', '타구질', '장타', '주력', '수비']) add(k, p => (hid(p) ? null : this.sub(p)[k]), { dir: 1, group: '능력' });
+    if (allP) for (const k of ['구위', '제구', '피홈런', '타구억제', '체력']) add(k, p => (hid(p) ? null : this.sub(p)[k]), { dir: 1, group: '능력' });
+    if (allB) { add('타율', p => (bat(p) || {}).avg, { dir: 1, fmt: f3, group: '올 시즌' }); add('홈런', p => (bat(p) || {}).hr, { dir: 1, group: '올 시즌' }); add('타점', p => (bat(p) || {}).rbi, { dir: 1, group: '올 시즌' }); }
+    if (allP) { add('RA9', p => (pit(p) || {}).ra9, { dir: -1, fmt: v => v.toFixed(2), group: '올 시즌' }); add('이닝', p => (pit(p) || {}).ip, { fmt: v => r1(v).toFixed(1), group: '올 시즌' }); add('탈삼진', p => (pit(p) || {}).k, { dir: 1, group: '올 시즌' }); }
+    add('부상', p => (this.isInj(p) ? this.injLeft(p) : 0), { dir: -1, fmt: v => (v ? `${v}일` : '없음'), group: '상태' });
+    return { cols: ps.map(p => ({ id: p.id, name: p.ko, team: p.team, pos: p.type === 'P' ? (p.role === 'SP' ? '선발' : '구원') : p.pos, age: p.age, hidden: hid(p), foreign: !!p.foreign })), rows, mixed: !allB && !allP };
+  };
+  proto.deskInfo = function () {
+    const S = this.S, t = S.userTeam, ps = this.players(t), todo = [], deadlines = [];
+    const ev = this.eventsOpen(); if (ev.length) todo.push({ sev: 2, text: `결정이 필요한 소식 ${ev.length}건`, act: 'go', a: 'home' });
+    const warns = this.validateEntry(); for (const w of warns.slice(0, 3)) todo.push({ sev: 2, text: String(w.text || w), act: 'go', a: 'lineup' });
+    if (S.neg && S.neg.state === 'open') todo.push({ sev: 2, text: `진행 중인 협상: ${(S.players[S.neg.id] || {}).ko || ''}`, act: 'negOpen', a: `${S.neg.id}|${S.neg.kind}` });
+    if (this.subList) for (const x of this.subList()) if (x.sub.back) todo.push({ sev: 3, text: `대체 외국인 ${x.p.ko}: ${Math.max(0, 7 - (S.day - x.sub.back))}일 안에 해지/정식 전환을 결정`, act: 'openFAMarket' });
+    if (this.subEligible) for (const x of this.subEligible()) todo.push({ sev: 1, text: `${x.p.ko} ${x.days}일 부상 — 대체 외국인 영입 가능`, act: 'openFAMarket' });
+    if (S.faMkt && !S.faMkt.closed) { const d = this.faDaysLeft(); deadlines.push({ label: 'FA 협상 마감', days: d }); }
+    if (S.phase === 'regular') { const td = this.tradeDeadlineDay() - S.day; if (td >= 0 && this.canTrade()) deadlines.push({ label: '트레이드 마감', days: td }); if (this.postDeadline) { const pd = this.postDeadline(); if (!pd.passed) deadlines.push({ label: '포스트시즌 외국인 등록 마감(8/15)', days: pd.n - this.todayN() }); } }
+    const inj = ps.filter(p => this.isInj(p)).map(p => ({ p, left: this.injLeft(p), ret: this.injDateStr(p) })).sort((a, b) => b.left - a.left);
+    const tired = ps.filter(p => p.type === 'P' && p.active && !this.isInj(p)).map(p => ({ p, r: this.restInfo(p) })).filter(x => x.r.level === 'low').sort((a, b) => a.r.left - b.r.left);
+    const faElig = ps.filter(p => this.faEligible(p)).map(p => ({ p, sal: p.contract.salary, ovr: this.ovr(p), grade: this.faGrade ? this.faGrade(p, t) : null })).sort((a, b) => b.ovr - a.ovr);   // 올 시즌 후 FA 자격을 얻는 선수(비FA 계약은 모두 1년이라 만료 인원 전체는 의미가 없다)
+    const weakest = ty => Math.min(...ps.filter(p => p.active && p.type === ty).map(p => this.ovr(p)).concat([99]));
+    const farm = ps.filter(p => !p.active && !this.isInj(p) && !p.sub).map(p => ({ p, ovr: this.ovr(p), gap: this.ovr(p) - weakest(p.type) })).filter(x => x.gap > 0).sort((a, b) => b.gap - a.gap);
+    const fin = this.finReady() ? { room: this.faRoom(t), pay: this.finPay(t) } : null;
+    const gen = this.foreignOf(t).filter(p => !p.aq && !p.sub), aq = this.foreignOf(t).filter(p => p.aq);
+    if (inj.length) todo.push({ sev: 1, text: `부상자 ${inj.length}명 (가장 긴 복귀: ${inj[0].p.ko} ${inj[0].left}일)`, act: 'go', a: 'roster' });
+    if (tired.length) todo.push({ sev: 1, text: `피로가 높은 투수 ${tired.length}명: ${tired.slice(0, 3).map(x => x.p.ko).join(', ')}`, act: 'go', a: 'pitching' });
+    todo.sort((a, b) => b.sev - a.sev);
+    return { todo, deadlines, inj, tired, faElig, farm: farm.slice(0, 4), fin, foreign: { gen: gen.length, aq: aq.length, swap: this.fSwapInfo ? this.fSwapInfo() : null, room: this.foreignRoom ? this.foreignRoom(t) : null }, scouts: (S.scouts || []).length, watch: this.scoutWatchList ? this.scoutWatchList().length : 0 };
+  };
 });
