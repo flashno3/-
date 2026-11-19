@@ -6,7 +6,7 @@ const BAD=/undefined|NaN|\[object|\{[a-z]+\}|Infinity/;
 async function run(vp,label,team){
   const b=await chromium.launch();const ctx=await b.newContext({viewport:vp,hasTouch:vp.width<600,isMobile:vp.width<600});const pg=await ctx.newPage();pg.setDefaultTimeout(15000);
   const errs=[];pg.on('pageerror',e=>errs.push('PAGEERR '+e.message));pg.on('console',m=>{if(m.type()==='error')errs.push('CONSOLE '+m.text())});
-  const click=async s=>pg.evaluate(s=>{const e=document.querySelector(s);if(e&&!e.disabled){e.click();return true}return false},s);
+  const click=async s=>pg.evaluate(s=>{const e=document.querySelector(s);if(e&&!e.disabled){e.dispatchEvent(new MouseEvent('click',{bubbles:true}));return true}return false},s);
   const text=async()=>pg.evaluate(()=>document.body.innerText);
   const sweep=async(tag)=>{const t=await text();const m=t.match(BAD);ok(!m,`${label} ${tag}: 화면에 오류 문자열 ${m?m[0]:''}`);const w=await pg.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);ok(w<=2,`${label} ${tag}: 가로 넘침 ${w}px`)};
   const nav=async(g,s)=>{await pg.evaluate(n=>{const b=[...document.querySelectorAll('nav button, .side button')].find(b=>b.innerText.includes(n));if(b)b.click()},g);await pg.waitForTimeout(120);if(s){await pg.evaluate(n=>{const b=[...document.querySelectorAll('.tabs.sub button')].find(b=>b.innerText.trim()===n);if(b)b.click()},s);await pg.waitForTimeout(150)}};
@@ -74,7 +74,7 @@ async function run(vp,label,team){
   if(await click('.plist button[data-act="toggleActive"]')){await pg.waitForTimeout(200);await sweep('콜업시트');await click('button[data-act="swapClose"]')}
   // 7) 시즌 진행(자동) + 이벤트 처리 + 라이브 경기
   await nav('대시보드');await pg.evaluate(()=>{const e=document.querySelector('#playMode');if(e){e.value='highlight';e.dispatchEvent(new Event('change',{bubbles:true}))}});
-  let liveDone=0,reviewSeen=false,momentSeen=false,fbw=[],feedAll='';
+  let liveDone=0,reviewSeen=false,momentSeen=false,fbw=[],feedAll='',tapDone=false,tapDone2=false;
   for(let i=0;i<70&&liveDone<2;i++){
     for(let k=0;k<4;k++)await click('button[data-act="evChoice"]');
     const act=await pg.evaluate(()=>{const b=document.querySelector('button.primary[data-act="adv"],button[data-act="adv"],button[data-act="advMoment"]');return b?b.dataset.act:null});
@@ -85,6 +85,11 @@ async function run(vp,label,team){
         if(await pg.$('button[data-act="liveFinish"]')){await sweep('라이브종료');await click('button[data-act="liveFinish"]');await pg.waitForTimeout(250);if(await pg.evaluate(()=>/내 결정 되짚기/.test(document.body.innerText)))reviewSeen=true;await sweep('결과시트');await confirm();liveDone++;break}
         if(st===3){await click('button[data-act="liveAdv"][data-a="pcOpen"]');await click('button[data-act="liveDo"][data-a="pc"]')}
         if(st===6&&!(await click('button[data-act="liveAdv"][data-a="bunt"]'))){}
+        if(!tapDone&&await pg.$('.fieldsvg')){const hb=await pg.$('.fieldsvg g.tap[data-a="b0"], .fieldsvg g.tap[data-a="b1"], .fieldsvg g.tap[data-a="b2"]');if(hb){
+          await click('.fieldsvg g.tap[data-a="b0"], .fieldsvg g.tap[data-a="b1"], .fieldsvg g.tap[data-a="b2"]');ok(!!(await pg.$('.sheet.pop')),`${label}: 주자를 누르면 지시 팝업`);await sweep('주자 팝업');
+          const did=await click('.sheet.pop button[data-act="popDo"][data-a="tac:steal"]')||await click('.sheet.pop button[data-act="popDo"][data-a^="po:"]')||await click('.sheet.pop button[data-act="popDo"][data-a^="set:hold"]');
+          ok(did,`${label}: 팝업에서 지시 실행`);ok(!(await pg.$('.sheet.pop')),`${label}: 지시 후 팝업 닫힘`);tapDone=true}}
+        if(!tapDone2&&await pg.$('.fieldsvg')){await click('.fieldsvg g.tap[data-a="pit"]');ok(!!(await pg.$('.sheet.pop')),`${label}: 투수 카드 팝업`);await sweep('투수 팝업');await click('.sheet.pop button[data-act="livePopClose"]');await click('.fieldsvg g.tap[data-a="bat"]');ok(!!(await pg.$('.sheet.pop')),`${label}: 타자 팝업`);await sweep('타자 팝업');await click('.sheet.pop button[data-act="livePopClose"]');ok(!(await pg.$('.sheet.pop')),`${label}: 팝업 닫기`);tapDone2=true}
         {const w=await pg.evaluate(()=>{const i=document.querySelector('.fbar i');return i?parseFloat(i.style.width):null});if(w!==null)fbw.push(w)}
         feedAll+=await pg.evaluate(()=>[...document.querySelectorAll('.feed li')].map(l=>l.innerText).join('\n'))+'\n';
         await click('button[data-act="liveRun"][data-a="pa"]');if(st%25===0)await sweep('라이브'+st)}
