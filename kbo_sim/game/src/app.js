@@ -31,6 +31,13 @@
   /* ---------------- 저장 ---------------- */
   let saveTimer = null;
   function autosave() { clearTimeout(saveTimer); saveTimer = setTimeout(() => { if (L) store.set(SAVE_KEY, L.save()); }, 300); }
+  /* 터치로 스크롤하는 동안에는 화면을 다시 그리지 않는다(드래프트 발표처럼 주기적으로 다시 그리면 손가락 스크롤이 계속 끊긴다) */
+  let touchAt = 0, scrollAt = 0, softT = null;
+  document.addEventListener('touchstart', () => { touchAt = Date.now(); }, { passive: true });
+  ['touchend', 'touchcancel'].forEach(ev => document.addEventListener(ev, () => { touchAt = 0; scrollAt = Date.now(); }, { passive: true }));
+  window.addEventListener('scroll', () => { scrollAt = Date.now(); }, { passive: true });
+  const busyScrolling = () => (touchAt && Date.now() - touchAt < 8000) || Date.now() - scrollAt < 350;
+  function softRender() { if (busyScrolling()) { if (!softT) softT = setTimeout(() => { softT = null; softRender(); }, 250); return; } render(); }
   function toast(msg) { ui.toast = msg; render(); clearTimeout(toast.t); toast.t = setTimeout(() => { ui.toast = null; const t = $('.toast'); if (t) t.remove(); }, 3800); }
 
   /* ---------------- 통계 문자열 ---------------- */
@@ -1483,9 +1490,9 @@
   }
   function render() {
     const root = $('#root'); applyTheme();
-    if (!L) { root.innerHTML = renderStart() + toastHtml(); return; }
+    if (!L) { document.body.classList.remove('modal-open'); root.innerHTML = renderStart() + toastHtml(); return; }
     const scroll = window.scrollY;
-    if (ui.live) { root.innerHTML = screenLive() + toastHtml(); window.scrollTo(0, scroll); return; }
+    if (ui.live) { document.body.classList.remove('modal-open'); root.innerHTML = screenLive() + toastHtml(); window.scrollTo(0, scroll); return; }   // 경기 화면에서는 이전 화면의 스크롤 잠금이 남지 않게 푼다
     const S = ui.screen, f = { invest: screenInvest, desk: screenDesk, home: () => goalCard() + pressCard() + screenHome() + evHistory(), roster: () => changeBar() + screenRoster(), farm: () => changeBar() + screenFarm(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, story: screenStory, mood: screenMood, train: screenTrain, scout: screenScout, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
     document.body.classList.toggle('modal-open', !!ui.modal);
     const keep = snapInner(root);   // 체크박스·버튼으로 다시 그려도 안쪽 스크롤 상자와 펼침 상태를 유지한다
@@ -1676,7 +1683,7 @@
     foreignSlot(a) { ui.fslot = a; render(); }, fslotClose() { ui.fslot = null; render(); },
     resign(a) { const e = L.resign(a); if (e) toast(e); else autosave(); render(); },
     toDraft() { L.finishContracts(); L.buildDraft(); L.S.off.step = 'draft'; autosave(); render(); A.draftRun(); },
-    draftRun() { clearInterval(ui.draftT); ui.draftT = setInterval(() => { const off = L && L.S.off; if (!off || !off.draft || off.step !== 'draft') { clearInterval(ui.draftT); ui.draftT = null; return; } const r = L.draftAiStep(); if (r.done || r.userTurn) { clearInterval(ui.draftT); ui.draftT = null; autosave(); } render(); }, 550); render(); },
+    draftRun() { clearInterval(ui.draftT); ui.draftT = setInterval(() => { const off = L && L.S.off; if (!off || !off.draft || off.step !== 'draft') { clearInterval(ui.draftT); ui.draftT = null; return; } const r = L.draftAiStep(); if (r.done || r.userTurn) { clearInterval(ui.draftT); ui.draftT = null; autosave(); } softRender(); }, 550); render(); },
     draftSkip() { clearInterval(ui.draftT); ui.draftT = null; L.draftAiUntilUser(); autosave(); render(); },
     draftPick(a) { const e = L.draftPick(a); if (e) toast(e); else { autosave(); render(); A.draftRun(); return; } render(); },
     draftSim() { A.draftRun(); },

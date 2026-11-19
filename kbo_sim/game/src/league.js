@@ -674,7 +674,8 @@
 
     /* ------------------------------------------------------------ 내 경기 */
     _fatigueOk(p) { return (p.fat || 0) < 35; }
-    _decayFatigue() { for (const p of this.players(this.S.userTeam)) if (p.type === 'P') p.fat = Math.max(0, (p.fat || 0) - 8); }
+    /* 피로 회복: 구원은 하루 8(1이닝 20 → 약 2.5일), 선발은 하루 20(한 경기 최대 약 95 → 5일 로테이션 안에 전부 회복). 선발의 회복이 8이면 등판마다 피로가 쌓여 계속 지쳐 보였다. 피로는 0~100 */
+    _decayFatigue() { for (const p of this.players(this.S.userTeam)) if (p.type === 'P') p.fat = Math.max(0, Math.min(100, p.fat || 0) - (p.role === 'SP' ? 20 : 8)); }
     /* 내 경기 준비: 결장 선수, 선발 투수, 라인업 */
     prepareUserGame(g, idx) {
       const S = this.S, t = S.userTeam, set = S.teams[t].set, d = S.day, r = rngFor(S.seed, S.year, d, 4000 + idx);
@@ -836,7 +837,7 @@
       const rh = live.score.home, ra = live.score.away, E = ctx.E;
       // 투수 피로·선발 기록
       const tr = E.tracking().pit, trB = E.tracking().bat || {};   // 이 경기 기록(리캡용)
-      for (const p of this.pitchers(t)) { const c = tr[p.id]; if (c && c.outs > 0) p.fat = (p.fat || 0) + 5 + 5 * c.outs; }   // 1이닝(3아웃) = 20, 3일 연투하면 휴식 필요
+      for (const p of this.pitchers(t)) { const c = tr[p.id]; if (c && c.outs > 0) p.fat = Math.min(100, (p.fat || 0) + 5 + 5 * c.outs); }   // 1이닝(3아웃) = 20, 3일 연투하면 휴식 필요
       for (const x of ctx.prep.spec) { const q = S.players[x.id]; if (q) this.learnPosition(q, x.pos); }
       const sp = ctx.prep.sp; sp.lastStart = d; const set = S.teams[t].set; set.rotIdx = (ctx.prep.rotIdx + 1) % set.rotation.length;
       this.mergeTracking();
