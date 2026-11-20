@@ -1343,6 +1343,20 @@
     const keys = ['wcL', 'jpoL', 'poL']; P.rounds.forEach((r, i) => { if (r && r.winner) { if (i < 3) add(lose(r), pool * PS_SHARE[keys[i]]); else { add(r.winner, pool * PS_SHARE.ks); add(lose(r), pool * PS_SHARE.ksL); } } });
     return { gate, games, pool, alloc, champion: P.done ? P.champion : null, runnerUp: P.done ? P.runnerUp : null };
   };
+  /* 연도별 성장(재정 성장 가정, league.js econ() 참조): 다음 시즌 객단가·MD/기타·모기업 광고·운영비를 올리고, 예산 기준 매출(lastRev)에도 확정된 성장분을 더한다
+   * (안 더하면 '작년 매출 − 올해 운영비'가 되어 성장 속도만큼 예산이 줄어든다). 중계권은 2027~2031 균등 분배 144억 고정. */
+  const r1e = x => Math.round(x * 10) / 10;
+  proto.priceGrowth = function (t, y) {   // 명목 객단가 인상률(해당 연도 대비 전년)
+    const E = this.econ(); if (t === 'Twins' || t === 'Bears') { if (y >= 2028 && y <= 2031) return E.priceJam; if (y === 2032) return (1 + E.jamJump) * this.finPriceMult(t, 2031) / this.finPriceMult(t, 2032) - 1; }   // 2032 돔 개장 +30%(임시 구장 ×1.12 해제분 보상)
+    return E.price;
+  };
+  proto._econStep = function (t, f, v, att0Old) {
+    const S = this.S, E = this.econ(), y = S.year + 1, gP = this.priceGrowth(t, y), gEff = (1 + gP) * this.finPriceMult(t, y) / this.finPriceMult(t, S.year) - 1, gMD = (t === 'Twins' || t === 'Bears') && y >= 2028 && y <= 2031 ? E.priceJam : E.price, attG = att0Old ? f.att0 / att0Old - 1 : 0;
+    const oldOther = f.other, oldPar = f.parAds, k = 1 + E.cost;   // MD·기타는 일반 객단가 인상률(gMD)에 연동한다(신구장 개장 같은 일회성 가격 점프는 MD에 반영하지 않음)
+    f.price *= 1 + gP; f.other = r1e(f.other * (1 + attG) * (1 + E.mdK * gMD)); f.parAds = r1e(f.parAds * (1 + E.par)); f.opex = r1e(f.opex * k);
+    if (f.parts) for (const key of Object.keys(f.parts)) if (typeof f.parts[key] === 'number') f.parts[key] = r1e(f.parts[key] * k);
+    f.lastRev = r1e(f.lastRev + (f.other - oldOther) + (f.parAds - oldPar) + v.gate * ((1 + attG) * (1 + gEff) - 1));
+  };
   proto.settleFinance = function () {
     const S = this.S; if (!this.finReady()) return; const row = { year: S.year, teams: {} }, ps = this._psSettle(), st = this.standings();
     row.ps = ps ? { gate: Math.round(ps.gate * 10) / 10, games: ps.games, pool: Math.round(ps.pool * 10) / 10 } : null;
@@ -1355,7 +1369,8 @@
       const trust = clamp(Math.round(f.trust + d), 0, 100);
       row.teams[t] = { gate: Math.round(v.gate * 10) / 10, par: f.parAds, other: f.other, bc: v.bc, rev: Math.round((v.rev + div + bonus) * 10) / 10, ps: Math.round(div * 10) / 10, bonus: Math.round(bonus * 10) / 10, prize: Math.round(prize * 10) / 10, pay: Math.round(v.pay * 10) / 10, opex: f.opex, cbt: Math.round(v.cbt * 100) / 100, op: Math.round(op * 10) / 10, att: v.att, trust, dTrust: trust - f.trust, rank };
       f.lastRev = v.rev - (f.evRev || 0); f.trust = trust; f.evRev = 0; f.evCost = 0; f.attMult = 1; f.promo = null; f.boardExtra = 0; f.pers = null; f.snap = []; f.dead = (f.dead || []).filter(x => x.year > S.year);   // 시즌 한정 이벤트 효과 정리·지난 위약금 소멸
-      f.att0 = Math.min(Math.max(this.finCap(t, S.year + 1), f.cap), Math.round(f.att0 * clamp(1 + 0.35 * (wp - 0.5) + (champ ? 0.03 : 0), 0.92, 1.1)));   // 성적이 좋으면 다음 해 기준 관중 상승(수요는 임시 구장의 좌석 축소로 사라지지 않게 처음 수용량 이내로만 제한)
+      const att0Old = f.att0; f.att0 = Math.min(Math.max(this.finCap(t, S.year + 1), f.cap), Math.round(f.att0 * clamp(1 + 0.35 * (wp - 0.5) + (champ ? 0.03 : 0), 0.92, 1.1)));   // 성적이 좋으면 다음 해 기준 관중 상승(수요는 임시 구장의 좌석 축소로 사라지지 않게 처음 수용량 이내로만 제한)
+      if (this.econ().on) this._econStep(t, f, v, att0Old);   // 연도별 가격·수익·비용 성장
       f.gate = 0; f.games = 0;
     }
     S.fin.hist.push(row); if (S.fin.hist.length > 20) S.fin.hist.shift();

@@ -177,7 +177,11 @@
       if (p.type === 'B') return Math.max(0, (this._runsB(p) + 12) / 10);
       return Math.max(0, (this._runsP(p) + 9) / 10 * (p.role === 'SP' ? 1 : 0.42));
     }
-    price(p) { return Math.round((0.3 + 0.9 * Math.pow(this.war(p), 1.35) * (this.S.calib.salK || 1)) * 10) / 10; }   // 최저연봉 0.3억 + 가치분(실제 KBO 연봉 규모로 환산)
+    /* 재정 성장 가정(사용자 제공 실측·프록시, ⚠ 중간값 가정): 객단가 연 +5.75%(잠실 2028~2031 +2.75%, 2032 돔 개장 +30%), 모기업 광고 +2.5%, MD·기타 (1+관중 증가율)×(1+1.3×객단가 인상률)−1,
+     * 비용 쪽 운영비 +5%, 시장 연봉 +5%(2028년부터; 경쟁균형세 상한 증액 5%와 같은 속도). S.econ 으로 조정·끄기(on:false = 이전과 동일). */
+    econ() { return Object.assign({ on: true, price: 0.0575, priceJam: 0.0275, jamJump: 0.30, par: 0.025, cost: 0.05, sal: 0.05, mdK: 1.3 }, this.S.econ || {}); }
+    salInfl() { const E = this.econ(); if (!E.on) return 1; const y = this.S.phase === 'offseason' ? this.S.year + 1 : this.S.year; return Math.pow(1 + E.sal, Math.max(0, y - 2027)); }   // 시장 연봉 물가(오프시즌에는 다음 시즌 기준)
+    price(p) { return Math.round((0.3 + 0.9 * Math.pow(this.war(p), 1.35) * (this.S.calib.salK || 1) * this.salInfl()) * 10) / 10; }   // 최저연봉 0.3억 + 가치분(실제 KBO 연봉 규모로 환산)
     /* 시장 가치(억 원 환산): 나이·잠재력 반영 */
     marketValue(p) {
       let v = this.price(p); const a = p.age;
