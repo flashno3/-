@@ -103,6 +103,7 @@
     const i = arr[Math.floor(this._nRng(neg, key.length).random() * arr.length)]; neg.used.push(key + ':' + i); if (neg.used.length > 160) neg.used.shift(); return pool[i];
   };
   proto._nCtx = function (neg, extra) {
+    this._negRangeSync(neg);
     const S = this.S, p = S.players[neg.id], sp = neg.speaker === 'ag', n = p ? p.ko : '', lo = neg.range ? neg.range[0] : 0, hi = neg.range ? neg.range[1] : 0;
     const last = (S.history || []).slice(-1)[0], loy = p ? this.loyalty(p, S.userTeam) : null;
     return Object.assign({ n, I: sp ? n + ' 선수는' : '저는', my: sp ? n + ' 선수의' : '제', me: sp ? n + ' 선수를' : '저를', team: KO[S.userTeam] || '', lo: lo.toFixed(1), hi: hi.toFixed(1), pref: neg.pref, rank: last ? last.userRank : '-', tn: p && p.tnTeam === S.userTeam ? p.tn || 0 : (loy && loy.items[0] ? loy.items[0][0] : 0), opp: neg.opp ? KO[neg.opp] : '다른 구단' }, extra || {});
@@ -144,6 +145,13 @@
     if (tm.cap && req > tm.cap + 1e-9) return { ok: false, msg: `선수 요구액이 상한(${tm.cap}억)을 넘어 계약할 수 없습니다. 호감도를 높여 요구액을 낮춰야 합니다.`, per, req, over: true };
     if (per + 1e-9 < req) return { ok: false, msg: `제시 연평균 ${per.toFixed(1)}억이 요구액 ${req.toFixed(1)}억에 못 미칩니다.`, per, req };
     return { ok: true, per, req, y, sal, bon };
+  };
+  /* 선수 기대 연봉 범위(추정): 호감도가 오르내리면 요구액도 따라 변하므로 현재 호감도 기준으로 다시 계산한다(시작 때 값으로 고정되어 '호감도를 올려도 안 내려가는 것처럼' 보이던 문제 수정) */
+  proto._negRangeSync = function (neg) {
+    const S = this.S, p = S.players[neg.id]; if (!p || neg.kind === 'meeting' || neg.rj === undefined) return;
+    const tm = this._negTerms(p, neg.kind), j = neg.rj, adj = 1 - clamp((neg.mood - 50) / 50, -1, 1) * 0.07, req = tm.req(tm.pref) * adj;
+    neg.range = [Math.floor(req * (0.93 + 0.03 * j) * 10) / 10, Math.ceil(req * (1.03 + 0.03 * (1 - j)) * 10) / 10];
+    if (neg.agent === 'hard') neg.range[0] = Math.floor(req * 0.99 * 10) / 10;
   };
   proto._negMin = function (p, kind, years, shareBonus) {   // 요구액을 충족하는 최소 제시(계약금 비율은 현재 구조 유지)
     const tm = this._negTerms(p, kind), t = this.S.userTeam, y = clamp(years || tm.pref, tm.minY, tm.maxY), req = tm.req(y) * this._negAdj(p, t), total = req * y;
@@ -211,8 +219,7 @@
     const bids = S.faMkt && kind === 'fa' ? (S.faMkt.bids[id] || []) : [];
     neg.max = clamp(6 + (agent === 'hard' ? -1 : agent === 'warm' ? 1 : 0) + (kind === 'resign' || kind === 'extend' ? 1 : 0) - (bids.length >= 2 ? 1 : 0), 4, 8);
     S.neg = neg; const req = tm.req(tm.pref) * this._negAdj(p, t), j = r.random();
-    neg.range = [Math.floor(req * (0.93 + 0.03 * j) * 10) / 10, Math.ceil(req * (1.03 + 0.03 * (1 - j)) * 10) / 10];
-    if (agent === 'hard') neg.range[0] = Math.floor(req * 0.99 * 10) / 10;
+    neg.rj = j; this._negRangeSync(neg);
     const ko = KIND_OPEN[kind] || [''], kp = ko[Math.floor(r.random() * ko.length)];
     const pr = neg.prios[0], pool = OPEN[pr] || OPEN.money, c = this._nCtx(neg), tonePool = neg.speaker === 'ag' ? AG_TONE[agent] : TONE[tr], pre = tonePool[Math.floor(r.random() * tonePool.length)];
     this._nSay(neg, neg.speaker, (kind === 'foreign' ? '' : kp) + (r.random() < 0.6 ? pre : '') + fill(this._nPick(neg, 'open', pool), c));

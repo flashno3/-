@@ -512,7 +512,7 @@
     p.faInfo = undefined; this.invalidate();
   };
   proto._foreignJoin = function (p) {   // 외국인은 영입 즉시 1군 엔트리에 등록한다(자리가 없으면 2군 대기)
-    const S = this.S, t = S.userTeam; p.reg1 = true; p.lockUntil = 0; if (this.players(t).filter(x => x.active).length < ACTIVE_MAX) p.active = true; if (this.repairSettings) this.repairSettings(t); this.invalidate();
+    const S = this.S, t = S.userTeam; p.reg1 = true; p.lockUntil = 0; if (this.players(t).filter(x => x.active).length < ACTIVE_MAX && !this.isInj(p)) p.active = true; if (this.repairSettings) this.repairSettings(t); this.invalidate();   // 부상 중인 외국인은 영입해도 부상자 명단(2군) 대기
   };
   proto._faCount = function (t, d) { const S = this.S, k = S.off ? S.off.year : S.year; S.faSign = S.faSign && S.faSign.k === k ? S.faSign : { k, c: {} }; if (d) S.faSign.c[t] = (S.faSign.c[t] || 0) + d; return S.faSign.c[t] || 0; };
   /* 보상: 보호선수(A 20명·B 25명)를 뺀 가장 가치 높은 선수 또는 보상금. 원소속 구단이 선수가 쓸 만하면 선수, 아니면 보상금(옵션2) */

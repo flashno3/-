@@ -667,6 +667,7 @@
   const NEG_KIND = { fa: 'FA 계약', foreign: '외국인 선수 계약', resign: '재계약', extend: '비FA 다년계약', meeting: '면담' };
   const negMoodBar = (v, d0) => { const lv = v >= 60 ? 'good' : v >= 35 ? 'mid' : 'low', dd = Math.round(v - d0); return `<span class="gauge ${lv}"><span class="gbar"><i style="width:${Math.max(3, v)}%"></i></span><span class="gtxt">호감도 ${Math.round(v)}${dd ? ` (${dd > 0 ? '+' : ''}${dd})` : ''}</span></span>`; };
   function negPanelOffer(n, p) {
+    L._negRangeSync(n);   // 호감도가 바뀌면 선수 기대 연봉 범위도 함께 갱신
     const tm = L._negTerms(p, n.kind), inn = ui.negIn || L.negBest(n.id), y = inn.years, bon = inn.bonus || 0, tot = Math.round((bon + inn.salary * y) * 10) / 10, per = Math.round(tot / y * 100) / 100, bi = n.kind === 'fa' && L.S.faMkt ? L.faBidInfo(n.id) : null;
     const opts = Array.from({ length: tm.maxY - tm.minY + 1 }, (_, i) => tm.minY + i).map(v => `<option value="${v}" ${v === y ? 'selected' : ''}>${v}년</option>`).join('');
     const bo = n.budgetOffer ? L.boardOdds(n.id, n.budgetOffer) : null, board = bo && bo.ok && bo.need > 0 ? `<div class="neg-counter"><span>예산 ${bo.need.toFixed(1)}억 초과 — 이사회 설득 성공 확률 <b>${Math.round(bo.prob * 100)}%</b></span><button class="sm primary" data-act="negBoard" ${bo.left > 0 ? 'disabled' : ''}>이사회 설득</button></div>` : '';
