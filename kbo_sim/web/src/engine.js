@@ -80,7 +80,7 @@
   const PARKNAME = { Bears: '잠실', Twins: '잠실', Heroes: '고척', Landers: '문학', Wiz: '수원', Eagles: '대전', Tigers: '광주', Giants: '사직', Dinos: '창원', Lions: '대구' };
   const ORDER = ['C', 'SS', 'CF', '2B', '3B', '1B', 'LF', 'RF'];
   const WD = { '2B': .18, 'SS': .22, '3B': .16, '1B': .07, 'LF': .10, 'CF': .17, 'RF': .10 };
-  const ENV = { gdp: 0.185, sf: 0.40, adv13: 0.33, sc2on1: 0.65, sc1on2: 0.48, roe: 0.016, wp: 0.0215, sb_mult: 1.6, prod: 0.30 };
+  const ENV = { gdp: 0.185, sf: 0.40, adv13: 0.33, sc2on1: 0.65, sc1on2: 0.48, roe: 0.016, hrs: 0.9, wp: 0.0215, sb_mult: 1.6, prod: 0.30 };
   const K2 = 0.004, BOFF = -0.001;
   // 좌우 매치업(플래툰). 단위 u: 타자 입장에서 유리할수록 +. 타자 유형별 평균 노출(투수 우투 약 72%)을 빼서 리그 평균은 변하지 않게 맞춘다.
   const PL = { dk: -0.07, dbb: 0.035, dhr: 0.16, dbabip: 0.02 };
@@ -190,7 +190,7 @@
 
     function pa(b, p, rng, dm, mod) {
       const bp = b.p, pp = p.p;
-      let k = comb(bp.k, pp.k, LB.k), bb = comb(bp.bb, pp.bb, LB.bb); const hbp = comb(bp.hbp, pp.hbp, LB.hbp); let hr = comb(bp.hr, pp.hr, LB.hr) * CURPF.hr;
+      let k = comb(bp.k, pp.k, LB.k), bb = comb(bp.bb, pp.bb, LB.bb); const hbp = comb(bp.hbp, pp.hbp, LB.hbp); let hr = comb(bp.hr, pp.hr, LB.hr) * CURPF.hr * ENV.hrs;
       const pm = M.platoon ? platoonMod(b, p) : null;
       if (pm) { k *= pm.k; bb *= pm.bb; hr *= pm.hr; }
       if (mod) { if (mod.k) k *= mod.k; if (mod.bb) bb *= mod.bb; if (mod.hr) hr *= mod.hr; }
@@ -215,7 +215,7 @@
       const save = CURPF; if (home && PFS[home]) CURPF = PFS[home];
       try {
         const bp = b.p, pp = p.p;
-        let k = comb(bp.k, pp.k, LB.k), bb = comb(bp.bb, pp.bb, LB.bb); const hbp = comb(bp.hbp, pp.hbp, LB.hbp); let hr = comb(bp.hr, pp.hr, LB.hr) * CURPF.hr;
+        let k = comb(bp.k, pp.k, LB.k), bb = comb(bp.bb, pp.bb, LB.bb); const hbp = comb(bp.hbp, pp.hbp, LB.hbp); let hr = comb(bp.hr, pp.hr, LB.hr) * CURPF.hr * ENV.hrs;
         const pm = M.platoon ? platoonMod(b, p) : null;
         if (pm) { k *= pm.k; bb *= pm.bb; hr *= pm.hr; }
         if (mod) { if (mod.k) k *= mod.k; if (mod.bb) bb *= mod.bb; if (mod.hr) hr *= mod.hr; }
