@@ -301,7 +301,7 @@
       }
       const o = this.ovr(p), elig = !p.foreign && this.faEligible(p);
       // 모든 비FA 계약은 1년. FA 자격자는 약 20~30%가 FA를 신청하고(가치가 높을수록 신청), 나머지는 1년 재계약. 미자격자·외국인은 구단이 재계약을 우선한다
-      const decl = elig ? clamp(0.12 + 0.07 * Math.max(0, this.war(p)) - (p.age >= 36 ? 0.05 : 0), 0.08, 0.5) : 0, keepBase = p.foreign ? clamp(0.25 + (o - 40) * 0.025 - (p.age >= 34 ? 0.25 : 0), 0.08, 0.72) : (elig ? 1 : 0.9);
+      const decl = elig ? clamp(0.12 + 0.07 * Math.max(0, this.war(p)) - (p.age >= 36 ? 0.05 : 0), 0.08, 0.5) : 0, keepBase = p.foreign ? clamp(0.25 + (o - 40) * 0.025 - (p.age >= 34 ? 0.25 : 0), 0.08, 0.72) : 1;   // FA 자격이 없는 선수는 시장에 나갈 수 없으므로 구단이 항상 재계약(보유권)
       const keep = r.random() >= decl && r.random() < keepBase;
       let ask = p.foreign ? this.askSalary(p) : this.resignAsk(p); if (p.foreign) ask = Math.min(ask, p.faInfo ? 1e9 : Math.max(FOREIGN_NEW[p.aq ? 'aq' : 'gen'], p.contract.salary + FOREIGN_RAISE[p.aq ? 'aq' : 'gen']));
       const inc = Math.max(0, ask - this.cbtVal(p) * (S.calib.cbtK || 1)), over = inc > 0.05 && this.cbtPay(t, true) + inc > this.cbtCap() * 0.97;   // AI 구단은 상한을 넘기게 되는 증액 재계약은 하지 않는다(증액이 없으면 재계약)
@@ -320,7 +320,13 @@
   proto.resignAll = function () { const off = this.S.off; if (!off) return 0; let n = 0; for (const id of off.rep.expiring.slice()) { const p = this.S.players[id]; if (p.foreign) continue; if (!this.resign(id)) n++; } return n; };   // 외국인을 제외한 전원을 1년 재계약
   proto.finishContracts = function () {   // 재계약하지 않은 선수는 FA 시장으로
     const S = this.S, off = S.off; if (this._releaseForeignPool) this._releaseForeignPool();   // 해외 후보군도 외국인 FA 시장에 합류
-    for (const id of off.rep.expiring.slice()) this.release(S.userTeam, id, true);
+    for (const id of off.rep.expiring.slice()) {
+      const p = S.players[id];
+      if (p && !p.foreign && !this.faEligible(p)) {   // FA 자격(등록일수)이 없는 선수는 구단 보유권이 있어 시장에 나갈 수 없다 → 재계약하지 않았어도 시장 요구액으로 1년 자동 재계약
+        const a = this._blendAsk(p); p.contract = this._newContract(p, a, 1); p.salHist = (p.salHist || []).slice(-2).concat([a]); off.rep.auto = (off.rep.auto || 0) + 1; continue;
+      }
+      this.release(S.userTeam, id, true);
+    }
     off.rep.expiring = []; off.fa = S.fa; this._priceClass(true); this.invalidate();   // 이번 FA 풀의 시장가 확정
   };
 
