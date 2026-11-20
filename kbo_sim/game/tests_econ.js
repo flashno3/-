@@ -35,5 +35,5 @@ const nextSeason=L=>{const S=L.S,off=L.startOffseason();for(const id of off.rep.
   const off=S.off;for(const id of off.rep.expiring.slice()){const p=S.players[id];if(!p.foreign&&L.ovr(p)>=48)L.resign(id)}L.finishContracts();L.buildDraft();L.draftAutoRest();L.finishDraft();L.openFAMarket();L.faAdvance(75);L.closeFA();L.startNewSeason();ok(L.integrity().errors.filter(e=>e.code!=='dup-name').length===0,`${S.year} 무결성`)}
  for(const t of Object.keys(hist)){const a=hist[t];const g=Math.pow(a[8].rev/a[0].rev,1/8)-1;ok(g>-0.02&&g<0.12,`${t} 9시즌 연평균 매출 성장률 ${(g*100).toFixed(1)}%`)}
  const ts=hist.Twins;ok(ts[5].rev>ts[4].rev*1.08,'2032 잠실돔 개장 매출 점프(가격 +30%·수용량 확대) '+ts[4].rev+' → '+ts[5].rev);
- const l2=hist.Landers;ok(l2[1].rev>l2[0].rev*1.10,'2028 청라돔 객단가 상향이 SSG 매출에 반영 '+l2[0].rev+' → '+l2[1].rev);}
+ const l2=hist.Landers;ok(l2[1].rev>l2[0].rev*1.03,'2028 청라돔 객단가 상향(×1.15)이 SSG 매출에 반영 '+l2[0].rev+' → '+l2[1].rev);}
 console.log('econ tests ok '+n);

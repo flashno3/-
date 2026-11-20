@@ -1306,9 +1306,9 @@
   proto.finBC = function (year) { return (year || this.S.year) >= 2027 ? BC_NEXT : BC_BASE; };   // KBOP 중계권 균등 분배: 2024~2026 연 990억/10 = 99억, 2027~2031 연 1,440억/10 = 144억
   proto.finReady = function () { const F = this.S.fin; return !!(F && F.v === 3 && F.teams && F.teams.Lions); };
   /* 구장 계획(사용자 제공 2차 자료, ⚠ 수치 일부 가정): 잠실(LG·두산) 2027~2031 올림픽주경기장 임시 이전 — 정규시즌 1~2층 약 18,000석(일반 경기, finCap), 빅매치는 3층 추가 개방으로 최대 3만 석 이상(3만~3만 4천 → 30,000석으로 가정),
-   * 포스트시즌 홈경기도 3층 개방 30,000석, 객단가 ×1.12. 2032~ 잠실돔 30,673석(객단가는 자료 없음 → 1.0 가정). SSG는 2028 청라돔 이전으로 객단가 +35~45%(중간 ×1.40 가정, 좌석 수 동일).
+   * 포스트시즌 홈경기도 3층 개방 30,000석, 객단가 ×1.12. 2032~ 잠실돔 30,673석(객단가는 자료 없음 → 1.0 가정). SSG는 2028 청라돔 이전으로 객단가 +35~45%라는 자료가 있으나 한 구단만 튀어 사용자 요청으로 ×1.15(리그 최대 연 인상폭 +13.6%(2025) 수준의 일회성 점프)로 낮춰 반영(좌석 수 동일).
    * 빅매치 = 잠실 라이벌전(LG–두산) + 홈 개막전 + 어린이날(5/5) 홈경기(연간 경기 수는 공식 미확정 — 자료가 거론한 라이벌전·개막전 + 가정, ≈10경기). '주말 인기 매치'는 기준이 없어 미반영. 포스트시즌 입장 수입은 기존 PS 객단가(45,000원)를 유지하고 수용량만 바꾼다(자료의 ×1.25는 정규 객단가 대비 값인데 게임의 PS 객단가가 이미 더 높다). */
-  const STADIUM = { Twins: { tier: [2027, 2031], bigCap: 30000, psCap: 30000, price: [[2027, 1.12], [2032, 1]] }, Bears: { tier: [2027, 2031], bigCap: 30000, psCap: 30000, price: [[2027, 1.12], [2032, 1]] }, Landers: { price: [[2028, 1.40]] } }, BIG_SHARE = 10 / 72;
+  const STADIUM = { Twins: { tier: [2027, 2031], bigCap: 30000, psCap: 30000, price: [[2027, 1.12], [2032, 1]] }, Bears: { tier: [2027, 2031], bigCap: 30000, psCap: 30000, price: [[2027, 1.12], [2032, 1]] }, Landers: { price: [[2028, 1.15]] } }, BIG_SHARE = 10 / 72;
   proto.finTier = function (t, year) { const s = STADIUM[t], y = year || this.S.year; return s && s.tier && y >= s.tier[0] && y <= s.tier[1] ? s : null; };
   proto.finPriceMult = function (t, year) { const s = STADIUM[t], y = year || this.S.year; let m = 1; if (s && s.price) for (const [yy, v] of s.price) if (y >= yy) m = v; return m; };
   proto.isBigMatch = function (home, away) { if (!this.finTier(home)) return false; if (this.isRival(home, away)) return true; const fin = this.S.fin && this.S.fin.teams[home]; if (fin && fin.games === 0) return true;   // 홈 개막전(그 팀의 첫 홈경기)

@@ -11,7 +11,7 @@ for(const [y,cap,tier] of [[2027,18000,true],[2031,18000,true],[2032,30673,false
 S.year=2030;ok(L.finCapPS('Twins')===30000&&L.finCapPS('Bears')===30000,'잠실 포스트시즌 3층 개방 30,000');ok(L.finCapPS('Lions')===24000&&L.finCapPS('Eagles')===20000,'다른 구단 포스트시즌은 일반 수용량(한화 2028 증축 반영)');S.year=2032;ok(L.finCapPS('Twins')===30673,'2032 이후는 잠실돔 수용량');
 S.year=2027;ok(L.finCapPS('Twins')===30000,'2027 포스트시즌');
 // 객단가 배율
-for(const [t,y,m] of [['Twins',2027,1.12],['Twins',2031,1.12],['Twins',2032,1],['Bears',2029,1.12],['Landers',2027,1],['Landers',2028,1.4],['Landers',2035,1.4],['Lions',2030,1],['Eagles',2028,1]]){S.year=y;ok(Math.abs(L.finPriceMult(t)-m)<1e-12,`객단가 ${t} ${y}`)}
+for(const [t,y,m] of [['Twins',2027,1.12],['Twins',2031,1.12],['Twins',2032,1],['Bears',2029,1.12],['Landers',2027,1],['Landers',2028,1.15],['Landers',2035,1.15],['Lions',2030,1],['Eagles',2028,1]]){S.year=y;ok(Math.abs(L.finPriceMult(t)-m)<1e-12,`객단가 ${t} ${y}`)}
 // 빅매치: 잠실 라이벌전 + 홈 개막전 + 어린이날 홈경기, 일반 경기는 아님
 S.year=2027;const day5=(()=>{for(let d=0;d<S.schedule.length;d++){const dt=L.dateOf(d);if(dt.getUTCMonth()===4&&dt.getUTCDate()===5)return d}return -1})();
 ok(L.isBigMatch('Twins','Bears')&&L.isBigMatch('Bears','Twins'),'라이벌전은 빅매치');{const f=S.fin.teams.Twins,g0=f.games;f.games=5;ok(!L.isBigMatch('Twins','Lions')&&!L.isBigMatch('Lions','Twins'),'일반 경기·다른 구단 홈은 빅매치 아님');f.games=0;ok(L.isBigMatch('Twins','Lions'),'홈 개막전(그 팀의 첫 홈경기)은 빅매치');ok(!L.isBigMatch('Lions','Twins'),'다른 구단의 개막전은 아님');f.games=g0}
