@@ -26,4 +26,7 @@ for(const [seed,team] of [[5,'Lions'],[9,'Tigers']]){const L=League.create(base,
  const hurt=[];for(const t of Object.keys(S.teams))for(const p of L.players(t).filter(q=>q.active).slice(0,3)){p.inj={dx:'테스트 부상',ret:(S.year+1)+'-04-10',retN:Math.floor(Date.UTC(S.year+1,3,10)/864e5),apply:true};hurt.push(p)}
  L.startNewSeason();const bad=hurt.filter(p=>p.active&&L.isInj(p));ok(bad.length===0,`개막 때 부상자 1군: ${bad.map(p=>p.ko).join(',')}`);
  for(const t of Object.keys(S.teams))ok(L.players(t).filter(p=>p.active&&L.isInj(p)).length===0,t+' 1군 부상자 없음');ok(L.players(S.userTeam).filter(p=>p.active).length>=18,'1군 인원 유지')}
+// 입단 경로 표기: 어색한 '내가 외국인 선수 계약' 대신 짧고 자연스러운 표현
+{const L=League.create(base,'Lions',5);const f=(how,aq)=>L.fromLabel({myFrom:{y:2027,how},aq});
+ ok(f('드래프트 2라운드 지명')==='2라운드 지명','지명');ok(f('FA 영입')==='FA 영입','FA');ok(f('외국인 선수 계약')==='외국인 영입','옛 표기 변환');ok(f('외국인 선수 계약',true)==='아시아쿼터 영입','아시아쿼터');ok(f('트레이드(KIA)')==='트레이드 영입(KIA)','트레이드');ok(f('부상 대체 외국인')==='대체 외국인 영입','대체');ok(L.fromLabel({})==='','없음')}
 console.log('fares tests ok',n);

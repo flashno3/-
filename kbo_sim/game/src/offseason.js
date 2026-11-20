@@ -255,9 +255,13 @@
     if (room < cost) { if (!star || cost - room > 0.45 * cost) return null; return Object.assign({ per, tm, special: Math.round((cost - room) * 10) / 10 }, o); }   // 프랜차이즈 스타: 이사회 특별 승인(예산 초과 허용)
     return Object.assign({ per, tm }, o);
   };
-  proto._fromText = function (p) {   // 기록 소식에 붙는 '내가 데려온 선수' 표기
-    const h = p.myFrom && p.myFrom.how; if (!h) return ''; if (/^드래프트/.test(h)) return ` (내가 ${h})`; if (/^트레이드/.test(h)) return ` (내가 ${h}로 데려옴)`; if (h === 'FA 영입') return ' (내가 FA로 영입)'; if (h === '외국인 선수 계약') return ' (내가 계약한 외국인)'; return ` (${h})`;
+  /* 입단 경로를 사람이 읽기 쉬운 짧은 표현으로(예: 2라운드 지명 · FA 영입 · 외국인 영입 · 트레이드 영입(KIA)). 옛 저장 파일의 표기('외국인 선수 계약')도 변환 */
+  proto.fromLabel = function (p) {
+    const h = p.myFrom && p.myFrom.how; if (!h) return ''; const m = /^드래프트 (\d+)라운드 지명$/.exec(h); if (m) return `${m[1]}라운드 지명`;
+    if (/^트레이드\(/.test(h)) return h.replace(/^트레이드\((.*)\)$/, '트레이드 영입($1)'); if (h === '외국인 선수 계약') return p.aq ? '아시아쿼터 영입' : '외국인 영입'; if (h === '부상 대체 외국인') return '대체 외국인 영입'; return h;
   };
+  proto._fromText = function (p) { const l = this.fromLabel(p); return l ? ` (${l})` : ''; };   // 기록 소식에 붙는 입단 경로 표기
+
   proto.release = function (t, id, exercise) {
     const S = this.S, p = S.players[id]; if (!p || p.team !== t) return;
     if (p.sub) delete p.sub; if (p.rehab) delete p.rehab;
@@ -511,7 +515,7 @@
   /* 공통 영입 처리: 팀 이동·계약·FA 행사(재취득 연수 리셋)·보상 */
   proto._doSign = function (t, p, years, ask, bonus) {
     const S = this.S, info = p.faInfo, graded = info && info.grade, comp = graded && info.from !== t ? graded : null;
-    S.fa = (S.fa || []).filter(x => x !== p.id); p.team = t; p.active = false; S.teams[t].ids.push(p.id); if (t === S.userTeam) p.myFrom = { y: S.year, how: p.foreign ? '외국인 선수 계약' : 'FA 영입' };
+    S.fa = (S.fa || []).filter(x => x !== p.id); p.team = t; p.active = false; S.teams[t].ids.push(p.id); if (t === S.userTeam) p.myFrom = { y: S.year, how: p.foreign ? (p.aq ? '아시아쿼터 영입' : '외국인 영입') : 'FA 영입' };
     ask = Math.round(ask * 10) / 10; bonus = Math.round((bonus || 0) * 10) / 10; p.contract = this._newContract(p, ask, p.foreign || !graded ? 1 : years, p.foreign || !graded ? 0 : bonus); p.salHist = (p.salHist || []).slice(-2).concat([Math.round(((p.contract.bonus || 0) / p.contract.years + ask) * 10) / 10]);
     if (t === S.userTeam && this._contractNote) this._contractNote(p, p.foreign ? '외국인' : graded ? 'FA' : '재계약');
     if (graded && p.fa) { p.fa.used += 1; p.fa.last = graded; p.fa.svc = 0; p.fa.rem = 0; }

@@ -358,7 +358,7 @@
   proto.prospectNote = function (p) {
     const S = this.S; if (!p || p.team !== S.userTeam) return null;
     const hist = (p.ovrHist || []).map(h => ({ y: h.y, o: h.o })), cur = this.ovr(p), facts = [], dh = p.dh && p.dh.y ? p.dh : null;
-    if (p.myFrom && p.myFrom.how) facts.push(`${p.myFrom.y} ${p.myFrom.how}`); else if (dh) facts.push(`${dh.y} 드래프트${dh.round ? ' ' + dh.round + '라운드' : ''}${dh.school ? ' · ' + dh.school : ''}`);
+    if (p.myFrom && p.myFrom.how) facts.push(`${p.myFrom.y} ${this.fromLabel(p)}`); else if (dh) facts.push(`${dh.y} 드래프트${dh.round ? ' ' + dh.round + '라운드' : ''}${dh.school ? ' · ' + dh.school : ''}`);
     const sl = this.trainCfg().slots.find(x => x.id === p.id); if (sl) facts.push('개별 훈련 중');
     if (p.debut1) facts.push(`${p.debut1.y}년 ${this.dateStr(p.debut1.d)} 1군 데뷔`);
     const st = p.type === 'B' ? S.stats.bat[p.id] : S.stats.pit[p.id], used = p.type === 'B' ? (st && st.PA ? `1군 ${st.PA}타석` : null) : (st && st.outs ? `1군 ${Math.floor(st.outs / 3)}이닝` : null); if (used) facts.push(`올해 ${used}`);

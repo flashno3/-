@@ -245,10 +245,10 @@
     const S = this.S, p = S.players[neg.id], t = S.userTeam; neg.state = 'broke';
     const pool = why === 'walk' ? BREAK.walk : why === 'leave' ? BREAK.leave : (neg.agent === 'hard' ? BREAK.hard : BREAK.timeout);
     this._nP(neg, 'break' + why, pool); this._nSys(neg, `${p.ko}과(와)의 협상이 결렬되었습니다.${neg.kind === 'fa' || neg.kind === 'foreign' ? ' 선수는 시장에 남아 있으며 며칠 뒤 다시 협상할 수 있습니다.' : ''}`, 'bad');
-    this._repBump('negBroke'); this.note(p, `${({ fa: 'FA 계약', foreign: neg.aqLabel || '외국인 선수 계약', resign: '재계약', extend: '비FA 다년계약' })[neg.kind]} 협상 결렬`);
+    this._repBump('negBroke'); this.note(p, `${({ fa: 'FA 계약', foreign: neg.aqLabel || '외국인 영입', resign: '재계약', extend: '비FA 다년계약' })[neg.kind]} 협상 결렬`);
     p.negLock = { until: this._negClock() + (neg.kind === 'fa' || neg.kind === 'foreign' ? 3 : 10), team: t };
     if (neg.kind !== 'foreign' && p.team === t) p.loyAdj = clamp((p.loyAdj || 0) - (why === 'walk' ? 3 : 1), -15, 15);
-    this.story('neg', `${p.ko}과(와) ${({ fa: 'FA 계약', foreign: p.aq ? '아시아쿼터 선수 계약' : '외국인 선수 계약', resign: '재계약', extend: '비FA 다년계약' })[neg.kind]} 협상 결렬`, 2);
+    this.story('neg', `${p.ko}과(와) ${({ fa: 'FA 계약', foreign: p.aq ? '아시아쿼터 영입' : '외국인 영입', resign: '재계약', extend: '비FA 다년계약' })[neg.kind]} 협상 결렬`, 2);
     this._press('break', { p, neg });
     this.invalidate();
   };
@@ -299,9 +299,9 @@
   proto._negSigned = function (neg, p, offer) {
     const S = this.S, t = S.userTeam, tot = r1(offer.bonus + offer.salary * offer.years);
     this._repBump('negOk'); if (neg.kind === 'extend') this._repBump('ext'); if (neg.kind !== 'foreign') p.loyAdj = clamp((p.loyAdj || 0) + clamp(Math.round((neg.mood - 50) / 12), -1, 3), -15, 15);
-    this.note(p, `${({ fa: 'FA 영입', foreign: p.aq ? '아시아쿼터 선수 계약' : '외국인 선수 계약', resign: '재계약', extend: '비FA 다년계약' })[neg.kind]}: ${offer.years}년 총 ${tot}억(호감도 ${Math.round(neg.mood)})`);
+    this.note(p, `${({ fa: 'FA 영입', foreign: p.aq ? '아시아쿼터 영입' : '외국인 영입', resign: '재계약', extend: '비FA 다년계약' })[neg.kind]}: ${offer.years}년 총 ${tot}억(호감도 ${Math.round(neg.mood)})`);
     if (neg.promises && neg.promises.length) p.promise = neg.promises[neg.promises.length - 1];
-    { const txt = `${p.ko} ${({ fa: 'FA 영입', foreign: p.aq ? '아시아쿼터 선수 계약' : '외국인 선수 계약', resign: '재계약', extend: '비FA 다년계약' })[neg.kind]} — ${offer.years}년 총 ${tot}억`, imp = offer.years >= 3 || tot >= 30 ? 3 : 2, top = (S.story || [])[0];
+    { const txt = `${p.ko} ${({ fa: 'FA 영입', foreign: p.aq ? '아시아쿼터 영입' : '외국인 영입', resign: '재계약', extend: '비FA 다년계약' })[neg.kind]} — ${offer.years}년 총 ${tot}억`, imp = offer.years >= 3 || tot >= 30 ? 3 : 2, top = (S.story || [])[0];
       if (top && top.kind === 'deal' && top.d === S.day && top.text.includes(p.ko)) { top.text = txt; top.imp = Math.max(top.imp, imp); } else this.story('deal', txt, imp); }   // 같은 계약의 뉴스 기반 항목이 있으면 합친다
     this._press(neg.kind === 'fa' ? 'sign' : neg.kind, { p, offer, tot, neg });
     this.invalidate();

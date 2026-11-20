@@ -305,7 +305,7 @@
     const cost = this.subCost(months), room = this.finReady() ? this.faRoom(t) : 1e9; if (room < cost) return `예산 부족: 대체 계약 ${cost}억(월 ${SUB_MONTHLY}억 × ${months}개월)이 여유자금 ${room.toFixed(1)}억을 넘습니다.`;
     const f = S.fin && S.fin.teams[t]; if (!f && this.finReady()) return '재정 정보가 없습니다.';
     if (c.team === 'FA') S.fa = (S.fa || []).filter(x => x !== candId); else if (S.fpool) { S.fpool.ids = S.fpool.ids.filter(x => x !== candId); S.fWatch = (S.fWatch || []).filter(w => w.id !== candId); }
-    c.fpool = false; c.deep = false; c.team = t; c.active = false; S.teams[t].ids.push(candId); c.contract = { salary: 0, years: 1 }; c.myFrom = { y: S.year, how: '부상 대체 외국인' };
+    c.fpool = false; c.deep = false; c.team = t; c.active = false; S.teams[t].ids.push(candId); c.contract = { salary: 0, years: 1 }; c.myFrom = { y: S.year, how: '대체 외국인 영입' };
     c.sub = { for: origId, mo: months, monthly: SUB_MONTHLY, start: S.day, end: S.day + Math.round(months * 30.4), cost, back: null }; orig.rehab = { sub: candId, day: S.day };
     if (f) { f.dead = (f.dead || []).concat([{ year: this._finYear(), amt: cost, who: `${c.ko}(대체 계약 ${months}개월)` }]); }
     this._foreignJoin(c); if (this.postDeadline().passed) c.noPost = S.year; this.invalidate();

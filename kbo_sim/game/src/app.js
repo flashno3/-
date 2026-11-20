@@ -674,7 +674,7 @@
       ${c.bonds.length ? `<div class="card" style="margin:8px 0"><b>친한 동료</b><div class="chips">${c.bonds.map(b => `<button class="sm" data-act="player" data-a="${b.id}">${esc(P(b.id).ko)} <span class="muted">${esc(b.why)}</span></button>`).join('')}</div></div>` : ''}`;
   }
   /* ---------------- 협상 테이블 · 면담 ---------------- */
-  const NEG_KIND = { fa: 'FA 계약', foreign: '외국인 선수 계약', resign: '재계약', extend: '비FA 다년계약', meeting: '면담' };
+  const NEG_KIND = { fa: 'FA 계약', foreign: '외국인 영입', resign: '재계약', extend: '비FA 다년계약', meeting: '면담' };
   const negMoodBar = (v, d0) => { const lv = v >= 60 ? 'good' : v >= 35 ? 'mid' : 'low', dd = Math.round(v - d0); return `<span class="gauge ${lv}"><span class="gbar"><i style="width:${Math.max(3, v)}%"></i></span><span class="gtxt">호감도 ${Math.round(v)}${dd ? ` (${dd > 0 ? '+' : ''}${dd})` : ''}</span></span>`; };
   function negPanelOffer(n, p) {
     L._negRangeSync(n);   // 호감도가 바뀌면 선수 기대 연봉 범위도 함께 갱신
@@ -709,7 +709,7 @@
       const sign = n.state === 'signed' || n.state === 'done';
       panel = `<div class="neg-result ${n.state === 'broke' ? 'bad' : 'good'}"><b>${n.state === 'signed' ? '계약 체결' : n.state === 'done' ? '면담 종료' : '협상 종료'}</b><div class="small">${meet ? esc(n.msg || '') : n.state === 'signed' ? `${n.final.years}년 · 연봉 ${n.final.salary}억${n.final.bonus ? ' + 계약금 ' + n.final.bonus + '억' : ''}` : '선수는 시장에 남아 있습니다. 며칠 뒤 다시 협상할 수 있습니다.'}${n.evMsg ? '<br>' + esc(n.evMsg) : ''}</div></div><div class="row"><button class="primary" data-act="negDone">닫기</button></div>`;
     }
-    return `<div class="neg-bg"><div class="negwin" role="dialog" aria-label="협상 테이블" data-stop="1"><div class="neg-head"><div class="row" style="flex-wrap:nowrap"><button class="sm" data-act="negExit" aria-label="목록으로 돌아가기">← 돌아가기</button><b style="flex:1;text-align:center;min-width:0">${esc(p.ko)}</b><span class="chip in">${n.kind === 'foreign' && p.aq ? '아시아쿼터 선수 계약' : NEG_KIND[n.kind]}</span></div>
+    return `<div class="neg-bg"><div class="negwin" role="dialog" aria-label="협상 테이블" data-stop="1"><div class="neg-head"><div class="row" style="flex-wrap:nowrap"><button class="sm" data-act="negExit" aria-label="목록으로 돌아가기">← 돌아가기</button><b style="flex:1;text-align:center;min-width:0">${esc(p.ko)}</b><span class="chip in">${n.kind === 'foreign' && p.aq ? '아시아쿼터 영입' : NEG_KIND[n.kind]}</span></div>
       <div class="row" style="justify-content:center;gap:6px"><span class="chip">${pos(p)}</span><span class="chip">${p.age}세</span>${foreignOvr(p)}${L.hiddenForeign(p) ? '' : moodChip(p) + traitChip(p)}</div>
       <div class="row" style="justify-content:space-between">${negMoodBar(n.mood, n.mood0)}<span class="small muted">${meet ? TOPIC_KO[n.topic] || '면담' : `${open ? `라운드 ${Math.min(n.round + 1, n.max)}/${n.max}` : '종료'}`} ${dots}</span></div>${pr}${fac}</div>
       <div class="neg-chat" aria-live="polite">${chat}</div>${negTabs}<div class="neg-panel">${panel}</div></div></div>`;
@@ -892,7 +892,7 @@
       <div class="card"><h2>코치 담당표</h2><div class="tablewrap"><table><thead><tr><th class="l">훈련</th><th class="l">담당 코치</th><th>능력</th><th>효과</th></tr></thead><tbody>${coachTable}</tbody></table></div><div class="small muted">효과 = 1 + 0.006 × (코치 능력 − 60), 0.8~1.25배. 코치는 운영 ▸ 코치진에서 영입·해임합니다.</div></div>
       <div class="card"><h2>훈련 이력</h2>${log.length ? log.map(x => `<div class="small"><span class="muted">${x.ph === 'offseason' ? '오프시즌' : L.dateStr(x.d)}</span> ${esc(x.text)}</div>`).join('') : '<div class="small muted">변경 이력이 없습니다.</div>'}</div>`;
   }
-  const myChip = p => p.myFrom ? ` <span class="chip in" title="${esc(p.myFrom.y + ' · ' + p.myFrom.how)}">내가 ${p.myFrom.how.replace(/ 지명|영입/g, m => m === ' 지명' ? ' 지명' : ' 영입').slice(0, 12)}</span>` : '';
+  const myChip = p => p.myFrom ? ` <span class="chip in" title="${esc(p.myFrom.y + ' · ' + L.fromLabel(p))}">${esc(L.fromLabel(p))}</span>` : '';   // 입단 경로 칩(예: 2라운드 지명 · FA 영입 · 외국인 영입)
   function ovrTrend(p) {
     const h = (p.ovrHist || []).slice(); if (!h.length) return ''; const cur = L.ovr(p), pts = h.map(x => ({ y: x.y, o: x.o })); if (!pts.length || pts[pts.length - 1].o !== cur || pts[pts.length - 1].y !== L.S.year) pts.push({ y: L.S.year, o: cur });
     if (pts.length < 2) return ''; const w = 220, ht = 44, lo = Math.min(...pts.map(x => x.o)) - 2, hi = Math.max(...pts.map(x => x.o)) + 2, X = i => 6 + i * (w - 12) / (pts.length - 1), Y = o => ht - 6 - (o - lo) / Math.max(1, hi - lo) * (ht - 12);
