@@ -4,7 +4,7 @@ const base=JSON.parse(fs.readFileSync(__dirname+'/src/gamedata.json'));let n=0;c
 const mk=(seed,team)=>{const L=League.create(base,team||'Lions',seed);L.faAdvance(75);L.closeFA();return L};
 const userGame=(L,away)=>{for(let i=0;i<80;i++){const rd=L.S.schedule[L.S.day],g=rd&&rd.find(x=>x[0]===L.S.userTeam||x[1]===L.S.userTeam);if(g&&(!away||g[1]===L.S.userTeam))return g;const r=L.advance(1,true);if(r.status==='userGame'){const c=L.startUserGame(r.game,r.idx);L.playAuto(c);L.finishUserGame(c)}}return null};
 // 1) 확률식: 합 1, 엔진의 첫 타석 빈도와 일치
-{const L=mk(4,'Lions'),E=L.engine();const g=userGame(L,true);ok(g,'원정 경기 찾기');const pg=L.preGame();ok(pg&&pg.oppSp&&pg.cur.length===9&&pg.sug.length===9,'구성');
+{const L=mk(4,'Lions'),E=L.engine();const g=userGame(L,true);ok(g,'원정 경기 찾기');const pg=L.preGame({spAll:true});ok(pg&&pg.oppSp&&pg.cur.length===9&&pg.sug.length===9,'구성');
  const c=L.startUserGame(g,pg.idx),live=c.live,home=live.home,away=live.away,spId=pg.oppSp.id,S=L.S;
  for(const u of pg.cur){const pr=E.paProbs(E.batById[u.id],E.pitById[spId],live.dm.home,home);const s=Object.values(pr).reduce((a,x)=>a+x,0);ok(Math.abs(s-1)<1e-9,'확률 합 '+s);ok(Object.values(pr).every(x=>x>=0),'음수 없음')}
  const spec=pg.cur.map(x=>({id:x.id,pos:x.pos})),ul=E.makeLineup(spec),ol={L:live.L.home.slice(),assign:live.assign.home.map(x=>x.slice())},cnt={},N=5000;
@@ -18,6 +18,9 @@ const userGame=(L,away)=>{for(let i=0;i<80;i++){const rd=L.S.schedule[L.S.day],g
   const gm=new E.LiveGame({home,away,lineups:{away:E.makeLineup(sp),home:ol},staff:st,rng:r,maxInn:9,penal:{away:true},fatigue:false});let k=0;while(!gm.finished&&k++<4000)gm.step();gm.inns.slice(0,9).forEach(x=>tot+=x[0])}return tot/M};
  const m1=mc(spec);E.env.sb_mult=envSave.sb;E.env.wp=envSave.wp;ok(E.env.sb_mult===envSave.sb,'환경 복원');
  ok(Math.abs(m1-pg.curExp)<0.12,`기대 득점 모델 ${pg.curExp.toFixed(3)} vs 엔진 ${m1.toFixed(3)}`);
+ {const pb=L.preGame();E.env.sb_mult=0;E.env.wp=0;let tot=0,M=6000;for(let i=0;i<M;i++){const r=rngFor(77,i,1,2),st={away:new E.StaffState(E.staff(away,1+S.day),r,E.pitById[c.prep.sp.id]),home:new E.StaffState(E.staff(home,1+S.day),r,E.pitById[spId])};
+  const gm=new E.LiveGame({home,away,lineups:{away:E.makeLineup(spec),home:ol},staff:st,rng:r,maxInn:9,penal:{away:true},fatigue:false});let k=0;while(!gm.finished&&k++<4000)gm.step();gm.inns.slice(0,9).forEach(x=>tot+=x[0])}
+  E.env.sb_mult=envSave.sb;E.env.wp=envSave.wp;ok(Math.abs(tot/M-pb.curExp)<0.16,`선발+불펜 모델 ${pb.curExp.toFixed(3)} vs 엔진 ${(tot/M).toFixed(3)}`);ok(pb.spInn>=3&&pb.spInn<=8,'선발 이닝 '+pb.spInn)}
  ok(pg.sugExp>=pg.curExp-1e-9,'제안은 현재보다 나쁘지 않다(모델 기준)');ok(new Set(pg.sug.map(x=>x.id)).size===9&&pg.sug.every(x=>pg.cur.some(c2=>c2.id===x.id&&c2.pos===x.pos)),'같은 9명·같은 포지션의 재배열');}
 // 3) 브리핑 = 실제: 경기 직전(날짜 처리 후) 계산한 상대 선발·상대 타순이 경기 시작 때와 같은가, 미리보기가 시뮬레이션을 바꾸지 않는다
 {let bad=0,tot=0,hash=[];const A=mk(7,'Tigers'),B=mk(7,'Tigers');
