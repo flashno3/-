@@ -799,8 +799,28 @@
     if (m && !m.closed) { this._resolveBids(m.day, true); this.finishFA(); for (const t of TEAMS) if (t !== S.userTeam && S.phase !== 'offseason' && this.players(t).filter(p => p.active).length !== ACTIVE_MAX) this.ensureActive(t); m.closed = true; for (const id in m.pend) delete m.pend[id]; this.invalidate(); }
     else if (!m) this.finishFA();
     if (S.phase !== 'offseason') S.faMkt = null;
+    this._excAtFAEnd();
   };
 
+  /* ---------------- 래리 버드 룰: FA 계약이 모두 끝난 시점의 예외 선수 지정 안내 ----------------
+     FA 시장이 닫히면(내년 시즌 로스터 확정) 내 팀의 자격 선수(7시즌 이상 등록) 중 보수가 가장 높은 선수를 예외 선수로 지정하고, 지정 내용을 안내한다.
+     플레이어는 안내 카드에서 다른 자격 선수로 바꾸거나 그대로 확정할 수 있다(확정 전에도 추천 선수로 적용되어 있고, 새 시즌이 시작되면 안내는 사라진다). AI 구단은 같은 기준으로 자동 지정. */
+  proto._excAtFAEnd = function () {
+    const S = this.S, t = S.userTeam; if (S.phase !== 'offseason' || S.year < 2026) return;
+    S.cbt = S.cbt || { over: {}, under: {}, drop: {}, fees: {}, log: [] }; const c = S.cbt; c.exc = c.exc || {};
+    const el = this.players(t).filter(p => this.excEligible(p, t)).sort((a, b) => this.cbtVal(b) - this.cbtVal(a)); c.excPrompt = null;
+    for (const q of TEAMS) if (q !== t) c.exc[q] = null;   // AI 구단은 FA가 끝난 현재 로스터 기준으로 다시 자동 지정
+    if (!el.length) { news(this, '래리 버드 룰: 내년 예외 선수 자격(우리 구단 7시즌 이상 등록)을 갖춘 선수가 없습니다.'); return; }
+    const prev = c.exc[t] && S.players[c.exc[t]], pay0 = this.cbtPay(t, true); c.exc[t] = el[0].id; c.excManual = c.excManual || {}; c.excManual[t] = false;
+    const pay1 = this.cbtPay(t, true); c.excPrompt = { y: S.year + 1, id: el[0].id, prev: prev ? prev.id : null, pay0, pay1 };
+    news(this, `래리 버드 룰: FA 계약이 끝나 예외 선수로 ${el[0].ko}(보수 ${this.cbtVal(el[0]).toFixed(1)}억, 소속 ${el[0].tn}시즌)을 지정했습니다. 경쟁균형세 산정액 ${pay0} → ${pay1}억. 대시보드 안내에서 다른 선수로 바꿀 수 있습니다.`);
+  };
+  proto.confirmExc = function (id) {   // 안내 카드에서 확정/변경
+    const S = this.S, c = S.cbt; if (!c || !c.excPrompt) return '확인할 안내가 없습니다.';
+    if (id && id !== c.exc[S.userTeam]) { const e = this.setCbtExc(id); if (e) return e; const p = S.players[id]; news(this, `래리 버드 룰: 예외 선수를 ${p.ko}(으)로 변경했습니다. 경쟁균형세 산정액 ${this.cbtPay(S.userTeam, true)}억.`); }
+    else news(this, `래리 버드 룰: 예외 선수 ${S.players[c.exc[S.userTeam]].ko} 지정을 확정했습니다.`);
+    c.excPrompt = null; this.invalidate(); return null;
+  };
   /* ---------------- 방출 위약금 ----------------
      방출해도 계약은 남는다: 이번 시즌 잔여 연봉(남은 경기 비율) + 계약금 상각 + 이후 보장 연수의 연봉·계약금 상각이 구단 보수(재정·FA 예산)에 계속 잡힌다.
      고액 방출은 이사회 신뢰도를 깎고, 오래 뛴 핵심 선수(충성도 70+)는 팬·선수단 반응으로 추가 하락. */
@@ -1265,6 +1285,7 @@
     for (const t of TEAMS) if (t === S.userTeam) this.ensureActive(t);
     this.topUpWhales();
     this.returnMilitary(S.year * 12 + 2);   // 새 시즌 개막(3월) 전까지 전역한 선수 복귀
+    if (S.cbt && S.cbt.excPrompt) S.cbt.excPrompt = null;   // 확인하지 않아도 추천 선수로 적용된 상태로 새 시즌 시작
     this.newSeasonSetup(false);
     for (const t of TEAMS) {   // 1군 편성은 오프시즌 달력(11월 20일) 기준으로 이뤄졌으므로, 개막일 기준 부상자(복귀가 3~4월 이후인 선수)를 1군에서 내리고 건강한 선수로 채운다
       let ch = false; for (const p of this.players(t)) if (p.active && this.isInj(p)) { p.active = false; ch = true; }

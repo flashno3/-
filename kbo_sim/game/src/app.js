@@ -342,6 +342,16 @@
   /* 경쟁균형세 표시: 상위 40명 합계(신인·외국인 제외) / 상한 */
   function salCell(p) { const c = p.contract; return c.amort ? `${money(c.salary)}<div class="muted small">+ 계약금 ${c.amort}억/년 (총 ${c.bonus}억)</div>` : money(c.salary); }
   function cbtText(t) { const v = L.cbtPreview(t), fl = v.fl !== null ? ` · 하한 ${v.fl.toFixed(1)}` : ''; return `연봉(상위 40) ${v.pay} / 상한 ${v.cap.toFixed(1)}억${fl}${v.kind === 'over' ? ` ⚠ 초과 시 기금 ${v.fee.toFixed(1)}억` : v.kind === 'under' ? ` ⚠ 하한 미달 시 기금 ${v.fee.toFixed(1)}억` : ''}`; }
+  /* 래리 버드 룰 안내: FA가 끝난 시점에 추천(보수 최고 자격 선수) 지정 내용을 알리고 확정·변경 */
+  function excPromptCard() {
+    const c = L.S.cbt, pr = c && c.excPrompt; if (!pr || !L.S.off) return ''; const t = U(), cur = P(c.exc[t]); if (!cur) return '';
+    const el = L.players(t).filter(p => L.excEligible(p, t)).sort((a, b) => L.cbtVal(b) - L.cbtVal(a));
+    return `<div class="card" style="border-color:var(--accent,#2a7)"><div class="row"><h2 style="margin:0">래리 버드 룰 — 예외 선수 지정 안내</h2></div>
+      <div class="small" style="margin-top:6px">FA 계약이 모두 끝났습니다. 우리 구단 7시즌 이상 등록 선수 중 <b>보수가 가장 높은 ${esc(P(pr.id).ko)}</b>(${L.cbtVal(P(pr.id)).toFixed(1)}억 · 소속 ${P(pr.id).tn}시즌)${c.exc[t] === pr.id ? '을(를) 예외 선수로 지정했습니다' : '이(가) 추천되었으나 현재 ' + esc(cur.ko) + '(으)로 바꿔 두었습니다'}. 이 선수 보수의 <b>50%</b>가 경쟁균형세 산정에서 제외됩니다.</div>
+      <div class="small muted" style="margin-top:4px">내년 경쟁균형세 산정액(상위 40명) ${pr.pay0} → <b>${L.cbtPay(t, true)}</b>억 · 상한 ${L.cbtCap(L.S.year + 1).toFixed(1)}억${pr.prev && pr.prev !== pr.id && P(pr.prev) ? ` · 기존 지정: ${esc(P(pr.prev).ko)}` : ''}</div>
+      <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap"><select data-sel="excprompt">${el.slice(0, 40).map(p => `<option value="${p.id}" ${c.exc[t] === p.id ? 'selected' : ''}>${esc(p.ko)} · ${L.cbtVal(p).toFixed(1)}억 · ${p.tn}시즌</option>`).join('')}</select><button class="primary" data-act="excConfirm">이 선수로 확정</button></div>
+      <div class="small muted" style="margin-top:4px">확정하지 않아도 위 선수로 적용된 채 새 시즌이 시작됩니다.</div></div>`;
+  }
   function cbtCard() {
     const S = L.S, rows = TEAMS.map(t => ({ t, v: L.cbtPreview(t), fee: (S.cbt.fees || {})[t] || 0 })).sort((a, b) => b.v.pay - a.v.pay), cap = rows[0].v.cap;
     const last = (S.cbt.log || []).filter(x => x.team === U()).slice(-3).reverse();
@@ -1536,7 +1546,7 @@
     const S = ui.screen, f = { invest: screenInvest, desk: screenDesk, home: () => goalCard() + pressCard() + screenHome() + evHistory(), roster: () => changeBar() + screenRoster(), farm: () => changeBar() + screenFarm(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, story: screenStory, mood: screenMood, train: screenTrain, scout: screenScout, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
     document.body.classList.toggle('modal-open', !!ui.modal);
     const keep = snapInner(root);   // 체크박스·버튼으로 다시 그려도 안쪽 스크롤 상자와 펼침 상태를 유지한다
-    root.innerHTML = shell((S === 'home' || S === 'market' || S === 'offseason' ? eventCards() : evBanner()) + f()) + (ui.modal ? modalPlayer(ui.modal) : '') + sheetHtml() + firedModal() + quickSheet() + swapSheet() + posPickSheet() + fslotSheet() + scoutSheet() + growthSheet() + subSheet() + confirmSheet() + cmpSheet() + searchSheet() + cmpTray() + negView() + toastHtml();
+    root.innerHTML = shell((S === 'home' || S === 'market' || S === 'offseason' ? eventCards() + excPromptCard() : evBanner()) + f()) + (ui.modal ? modalPlayer(ui.modal) : '') + sheetHtml() + firedModal() + quickSheet() + swapSheet() + posPickSheet() + fslotSheet() + scoutSheet() + growthSheet() + subSheet() + confirmSheet() + cmpSheet() + searchSheet() + cmpTray() + negView() + toastHtml();
     window.scrollTo(0, scroll); stackTables(root); restoreInner(root, keep);
     { const ch = root.querySelector('.neg-chat'); if (ch) ch.scrollTop = ch.scrollHeight; document.body.classList.toggle('modal-open', !!(ui.modal || (ui.negOpen && L.S.neg))); }
     const cur = root.querySelector('.side button[aria-current=true]'); if (cur && cur.scrollIntoView) { try { cur.scrollIntoView({ inline: 'center', block: 'nearest' }); } catch (e) { /* 일부 브라우저 */ } }
@@ -1590,6 +1600,7 @@
     devPlan(a) { const [id, pl] = a.split('|'), e = L.setDevPlan(id, pl); if (e) toast(e); else { toast(`${P(id).ko}: 육성 방향 ${L.planName(pl)}`); autosave(); } render(); },
     hireCoach(a) { const e = L.hireCoach(a); if (e) toast(e); else { toast('코치를 영입했습니다.'); autosave(); } render(); },
     fireCoach(a) { const e = L.fireCoach(a); if (e) toast(e); else autosave(); render(); },
+    excConfirm() { const el = $('[data-sel="excprompt"]'); const e = L.confirmExc(el ? el.value : null); if (e) toast(e); else { toast('예외 선수를 확정했습니다.'); autosave(); } render(); },
     setExc() { const el = $('[data-sel="excsel"]'); if (!el) return; const e = L.setCbtExc(el.value); if (e) toast(e); else { toast('예외 선수를 지정했습니다.'); autosave(); } render(); },
     ticket(a) { if (L.setTicketPolicy(U(), +a)) { toast(`티켓 가격 ${+a === 1 ? '유지' : (+a > 1 ? '+' : '') + Math.round((+a - 1) * 100) + '%'}`); autosave(); render(); } },
     goG(a) { ui.sel = null; const g = GROUPS.find(x => x[0] === a); ui.last = ui.last || {}; ui.screen = ui.last[a] && g[2].includes(ui.last[a]) ? ui.last[a] : g[2][0]; ui.modal = null; render(); window.scrollTo(0, 0); },
