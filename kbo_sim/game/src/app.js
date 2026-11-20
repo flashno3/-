@@ -1573,7 +1573,7 @@
       const r = L.negStart(id, kind, { topic: topic || undefined, evId: evId || undefined, replace: rep || undefined }); if (!r.ok) { toast(r.msg); return; } if (!ui.negBack) ui.negBack = { scroll: window.scrollY, screen: ui.screen, market: ui.market, faTab: ui.faTab, modal: ui.modal }; ui.negOpen = true; ui.negTab = kind === 'meeting' ? 'cards' : 'offer'; ui.negIn = kind === 'meeting' ? null : L.negBest(id); ui.negRole = null; ui.modal = null; autosave(); render(); },
     negBoard() { const r = L.negBoard(); if (!r.ok && r.msg) toast(r.msg); autosave(); render(); },
     fslotPick(a) { const [cid, rid] = a.split('|'); ui.fslot = null; A.negOpen(`${cid}|foreign|||${rid}`); },
-    negTab(a) { ui.negTab = a; render(); },
+    negTab(a) { ui.negTab = a; render(); const pn = document.querySelector('.neg-panel'); if (pn) pn.scrollTop = 0; },
     negFill() { const n = L.S.neg; if (!n) return; ui.negIn = L._negMin(P(n.id), n.kind, (ui.negIn || {}).years); render(); },
     negSend() { const n = L.S.neg; if (!n) return; const r = L.negOffer(ui.negIn || L.negBest(n.id)); if (!r.ok && r.msg && !r.rejected) toast(r.msg); if (r.signed) buzz(); ui.negIn = n.state === 'open' ? (ui.negIn || L.negBest(n.id)) : ui.negIn; autosave(); render(); },
     negCounter() { const r = L.negCounter(); if (!r.ok && r.msg) toast(r.msg); autosave(); render(); },
