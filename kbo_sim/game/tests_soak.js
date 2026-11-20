@@ -8,7 +8,7 @@ function invariants(L,tag){
   const S=L.S;
   for(const t of Object.keys(S.teams)){const ids=S.teams[t].ids;ok(ids.length<=ROSTER_MAX+6,`${tag} ${t} 로스터 ${ids.length}`);ok(new Set(ids).size===ids.length,`${tag} 중복 선수`);for(const id of ids){const p=S.players[id];ok(p&&p.team===t,`${tag} 소속 불일치 ${id}`)}}
   const t=S.userTeam,mine=L.players(t);const act=mine.filter(p=>p.active);ok(act.length<=ACTIVE_MAX,`${tag} 1군 초과 ${act.length}`);
-  const fo=L.foreignOf(t),gen=fo.filter(p=>!p.aq),aq=fo.filter(p=>p.aq);ok(gen.length<=3&&aq.length<=1,`${tag} 외국인 슬롯 ${gen.length}/${aq.length}`);ok(!(gen.length===3&&gen.every(p=>p.type===gen[0].type)),`${tag} 같은 포지션 3명`);
+  const fo=L.foreignOf(t).filter(p=>!p.sub),gen=fo.filter(p=>!p.aq),aq=fo.filter(p=>p.aq);ok(gen.length<=3&&aq.length<=1,`${tag} 외국인 슬롯 ${gen.length}/${aq.length}`);ok(!(gen.length===3&&gen.every(p=>p.type===gen[0].type)),`${tag} 같은 포지션 3명`);
   for(const p of mine){finite(p.contract.salary,tag+' 연봉');ok((p.contract.salary>=0.3||(p.sub&&p.contract.salary===0))&&p.contract.years>=0&&p.contract.years<=6,`${tag} 계약 범위 ${p.ko} ${JSON.stringify(p.contract)} cHist=${JSON.stringify(p.cHist)} ext=${JSON.stringify(p.extAt)} myExt=${JSON.stringify(p.myExt)} age=${p.age} notes=${JSON.stringify((p.notes||[]).slice(-3))} myFrom=${JSON.stringify(p.myFrom)} mil=${p.milReturn} rookie=${p.rookie} src=${p.src} act=${p.active} tn=${p.tn} sal=${p.sal} fa=${JSON.stringify(p.faInfo)} inTeams=${Object.keys(S.teams).filter(t=>S.teams[t].ids.includes(p.id)).join(',')} dupInUser=${S.teams[S.userTeam].ids.filter(x=>x===p.id).length} id=${p.id} off=${JSON.stringify(S.off&&S.off.rep&&S.off.rep.expiring.includes(p.id))}`);if(p.contract.bonus)ok(p.contract.bonus>=0&&p.contract.amort>=0,`${tag} 계약금`);if(p.loyAdj!==undefined)ok(p.loyAdj>=-15&&p.loyAdj<=15,`${tag} loyAdj ${p.loyAdj}`);if(p.promise)ok(p.promise.kind&&p.promise.label,`${tag} 약속 형식`)}
   const n=S.neg;if(n){ok(n.mood>=0&&n.mood<=100,`${tag} 호감도 범위 ${n.mood}`);ok(n.round<=n.max,`${tag} 라운드 ${n.round}/${n.max}`);ok(['open','paused','signed','broke','done'].includes(n.state),`${tag} 상태 ${n.state}`);ok(n.log.every(x=>typeof x.text==='string'&&x.text.length>0&&!/undefined|NaN|\{[a-z]+\}/.test(x.text)),`${tag} 대사 오류: `+n.log.filter(x=>/undefined|NaN|\{[a-z]+\}/.test(x.text)).map(x=>x.text).join('|'))}
   if(L.finReady&&L.finReady()){finite(L.faRoom(t),tag+' faRoom');finite(L.payroll(t),tag+' payroll')}
@@ -98,7 +98,13 @@ function run(seed,team,seasons,actSeed,detail){
       randTrain(L,R,`Y${y}d${S.day}`);randScout(L,R,`Y${y}d${S.day}`);randSub(L,R,`Y${y}d${S.day}`);randInvest(L,R,`Y${y}d${S.day}`);
       // 이벤트 무작위 처리
       for(const e of L.eventsOpen().slice(0,2)){const ch=e.choices[Math.floor(R()*e.choices.length)];L.resolveEvent(e.id,ch.k)}
-      if(r&&r.status==='userGame'){const ctx=L.startUserGame(r.game,r.idx);L.playAuto(ctx);L.finishUserGame(ctx)}}
+      if(r&&r.status==='userGame'){const ctx=L.startUserGame(r.game,r.idx);L.playAuto(ctx);L.finishUserGame(ctx)}
+      // 경기 전 브리핑·오늘 타순 무작위: 경기 직전까지 진행 → 브리핑 → 제안/무작위 재배열 적용 → 경기 → 정리·저장 라인업 불변
+      if(R()<0.5&&S.phase==='regular'&&S.day<S.schedule.length-2){const r2=L.advance(3,true);if(r2.status==='userGame'){const set=S.teams[S.userTeam].set,saved=JSON.stringify(set.lineup),pg=L.preGame();
+        if(!pg)throw new Error('브리핑 없음');let order=pg.sug.map(x=>({id:x.id,pos:x.pos}));if(R()<0.4)order=order.slice().sort(()=>R()-0.5);
+        const e=R()<0.85?L.applyTonight(order):(L.clearTonight(),null);if(e)throw new Error('적용 실패 '+e);
+        const c2=L.startUserGame(r2.game,r2.idx);if(L.tonightOf()&&c2.live.L[c2.userSide].map(b=>b.id).join()!==L.tonightOf().lineup.map(x=>x.id).join())throw new Error('타순 불일치');
+        L.playAuto(c2);L.finishUserGame(c2);if(S.tonight)throw new Error('오늘 타순 정리 안 됨');if(JSON.stringify(set.lineup)!==saved)throw new Error('저장 라인업 변경');}}}
     L.advance(300,false);const P=L.startPostseason();let g=0;while(!P.done&&g++<100){if(L.userInPost()){const c=L.startUserPostGame();c.live.playToEnd();L.finishUserPostGame(c)}else L.simPostGame()}
     const off=L.startOffseason();invariants(L,`Y${y}offseason`);for(let q=0;q<3;q++)randInvest(L,()=>0.01+R()*0.04,`Y${y}off-inv${q}`);{const gr=L.growthReveal();ok(gr&&gr.list.every(x=>x.d===x.o1-x.o0&&Number.isFinite(x.o1)),`Y${y} 성장 공개 일관성`);ok(gr.reveal.length<=15,`Y${y} 공개 개수`);const pn=L.prospectNotes(8);ok(pn.every(x=>x.age<=24&&Number.isFinite(x.ovr)&&x.spark.length>=1&&x.line.length>0),`Y${y} 유망주 노트`)}for(let k=0;k<4;k++)randTrain(L,R,`Y${y}off${k}`);
     for(const id of off.rep.expiring.slice()){const p=S.players[id];if(L.negBlock(id,'resign')===null&&R()<0.7){negs+=randomNeg(L,R,`Y${y}resign`,'resign')?1:0}}

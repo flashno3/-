@@ -396,4 +396,99 @@
     const ranked = mine.filter(x => x.rank !== null), avg = ranked.length ? Math.round(ranked.reduce((a, x) => a + x.rank, 0) / ranked.length * 10) / 10 : null, best = ranked.slice().sort((a, b) => b.diff - a.diff)[0] || null;
     return { mine, avgRank: avg, best, steals: ranked.filter(x => x.kind === 'steal').length, reaches: ranked.filter(x => x.kind === 'reach').length, first: d.picks.slice(0, per).map(x => ({ pick: x.pick, team: x.team, id: x.id, name: S.players[x.id].ko })) };
   };
+  /* ---------------- 경기 전 브리핑: 상대 선발 대응 타순 제안 ----------------
+     상대 선발(경기 때 실제로 나오는 투수 — 시드 고정)과 상대 수비·구장 보정으로 우리 타자 9명의 타석 결과 확률을 구하고(engine.paProbs, 경기 계산식과 동일),
+     타순별 기대 득점을 이닝 단위 마르코프 연쇄(아웃×주자 24상태, 경기 엔진의 주자 진루 규칙·확률과 동일)로 계산한다.
+     ⚠ 근사: 상대 선발이 9이닝 내내 던진다고 가정(불펜·교체 무시), 도루·폭투·작전·연장·말 공격 생략 → 기대 득점 '차이'를 보는 참고용 추정치이며 경기 결과를 보장하지 않는다.
+     제안은 같은 9명·같은 수비 포지션의 순서만 바꾼다(교체 없음). 적용은 오늘 경기에만 유효하고 저장 라인업은 바뀌지 않는다. */
+  const EVK = ['K', 'BB', 'HBP', 'HR', '1B', '2B', '3B', 'ROE', 'OUT'], bitc = m => (m & 1) + ((m >> 1) & 1) + ((m >> 2) & 1);
+  function evTrans(e, o, m, EN) {   // → [[확률, 아웃 증가, 새 주자(비트마스크 1/2/3루), 득점]]
+    const b0 = m & 1, b1 = (m >> 1) & 1, b2 = (m >> 2) & 1;
+    if (e === 'K') return [[1, 1, m, 0]];
+    if (e === 'BB' || e === 'HBP') return [[1, 0, 1 | ((b0 || b1) ? 2 : 0) | ((b0 && b1) || b2 ? 4 : 0), (b0 && b1 && b2) ? 1 : 0]];
+    if (e === 'HR') return [[1, 0, 0, 1 + bitc(m)]];
+    if (e === '3B') return [[1, 0, 4, bitc(m)]];
+    if (e === '2B') { const r = b2 + b1; return b0 ? [[EN.sc1on2, 0, 2, r + 1], [1 - EN.sc1on2, 0, 2 | 4, r]] : [[1, 0, 2, r]]; }
+    if (e === '1B' || e === 'ROE') {
+      const out = []; for (const [p1, n3a, r1] of b1 ? [[EN.sc2on1, 0, 1], [1 - EN.sc2on1, 1, 0]] : [[1, 0, 0]]) {
+        const base = b2 + r1;
+        if (b0) { if (n3a === 0) { out.push([p1 * EN.adv13, 0, 1 | 4, base]); out.push([p1 * (1 - EN.adv13), 0, 1 | 2, base]); } else out.push([p1, 0, 1 | 2 | 4, base]); }
+        else out.push([p1, 0, 1 | (n3a ? 4 : 0), base]);
+      } return out;
+    }
+    // OUT(땅볼/뜬공 아웃)
+    const res = []; let w = 1;
+    if (b0 && o < 2) {
+      const g = EN.gdp; w = 1 - g;
+      if (o + 2 >= 3) res.push([g, 2, 0, 0]); else res.push([g, 2, b1 ? 4 : 0, b2]);
+    }
+    if (o + 1 >= 3) { res.push([w, 1, m, 0]); return res; }
+    let rest = w;
+    if (b2) { res.push([w * EN.sf, 1, m & ~4, 1]); rest = w * (1 - EN.sf); }
+    const pr = EN.prod, st = [[rest, m]];
+    const s1 = []; for (const [p, mm] of st) { if (((mm >> 1) & 1) && !((mm >> 2) & 1)) { s1.push([p * pr, (mm & ~2) | 4]); s1.push([p * (1 - pr), mm]); } else s1.push([p, mm]); }
+    for (const [p, mm] of s1) { if ((mm & 1) && !((mm >> 1) & 1)) { res.push([p * pr * 0.7, 1, (mm & ~1) | 2, 0]); res.push([p * (1 - pr * 0.7), 1, mm, 0]); } else res.push([p, 1, mm, 0]); }
+    return res;
+  }
+  /* 타자별 전이표(평탄화): 상태 o*8+m(24=이닝 종료)에서 (확률, 다음 상태, 득점) 목록을 배열로 보관 */
+  function buildTrans(probs, EN) {
+    return probs.map(pb => { const off = new Int32Array(25), P = [], N = [], R = [];
+      for (let o = 0; o < 3; o++) for (let m = 0; m < 8; m++) {
+        const acc = new Map();
+        for (const e of EVK) { const pe = pb[e]; if (!(pe > 0)) continue; for (const [p, dout, nm, rr] of evTrans(e, o, m, EN)) { const no = o + dout, ns = no >= 3 ? 24 : no * 8 + nm, key = ns * 8 + rr; acc.set(key, (acc.get(key) || 0) + pe * p); } }
+        off[o * 8 + m] = P.length; for (const [k, v] of acc) { P.push(v); N.push(k >> 3); R.push(k & 7); } off[o * 8 + m + 1] = P.length; }
+      return { off, P: Float64Array.from(P), N: Int32Array.from(N), R: Int32Array.from(R) }; });
+  }
+  const LAYERS = 18;   // 한 이닝 최대 타석 수(초과 확률은 무시할 만큼 작음 — 이후 정규화)
+  function expRuns(order, TR, innings) {   // order: 타자 인덱스 9개(타순). 반환: innings 이닝 기대 득점
+    const R = new Float64Array(9), NX = new Float64Array(81); let cur = new Float64Array(24), nxt = new Float64Array(24);
+    for (let s = 0; s < 9; s++) {
+      cur.fill(0); cur[0] = 1; let er = 0;
+      for (let k = 0; k < LAYERS; k++) {
+        nxt.fill(0); const T = TR[order[(s + k) % 9]], endB = (s + k + 1) % 9; let any = 0;
+        for (let st = 0; st < 24; st++) { const pm = cur[st]; if (pm < 1e-10) continue; any += pm; for (let j = T.off[st], je = T.off[st + 1]; j < je; j++) { const q = pm * T.P[j]; er += q * T.R[j]; const ns = T.N[j]; if (ns === 24) NX[s * 9 + endB] += q; else nxt[ns] += q; } }
+        const tmp = cur; cur = nxt; nxt = tmp; if (!any) break;
+      }
+      R[s] = er; let tot = 0; for (let j = 0; j < 9; j++) tot += NX[s * 9 + j]; if (tot > 0) for (let j = 0; j < 9; j++) NX[s * 9 + j] /= tot;
+    }
+    let P = new Float64Array(9); P[0] = 1; let total = 0;
+    for (let inn = 0; inn < innings; inn++) { const Q = new Float64Array(9); for (let s = 0; s < 9; s++) { if (!P[s]) continue; total += P[s] * R[s]; for (let j = 0; j < 9; j++) Q[j] += P[s] * NX[s * 9 + j]; } P = Q; }
+    return total;
+  }
+  function bestOrder(start, TR, innings) {
+    let seed = 12345; const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    const hill = o0 => { let o = o0.slice(), v = expRuns(o, TR, innings), imp = true;
+      while (imp) { imp = false;
+        for (let i = 0; i < 9; i++) for (let j = i + 1; j < 9; j++) { const o2 = o.slice(); [o2[i], o2[j]] = [o2[j], o2[i]]; const v2 = expRuns(o2, TR, innings); if (v2 > v + 1e-9) { o = o2; v = v2; imp = true; } }
+        for (let i = 0; i < 9; i++) for (let j = 0; j < 9; j++) if (i !== j) { const o2 = o.slice(), [x] = o2.splice(i, 1); o2.splice(j, 0, x); const v2 = expRuns(o2, TR, innings); if (v2 > v + 1e-9) { o = o2; v = v2; imp = true; } } }
+      return [o, v]; };
+    let best = hill(start);
+    for (let k = 0; k < 5; k++) { const o = start.slice(); for (let i = 8; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [o[i], o[j]] = [o[j], o[i]]; } const r = hill(o); if (r[1] > best[1] + 1e-9) best = r; }
+    return best;
+  }
+  /* 경기 전 브리핑(읽기 전용): 오늘 경기가 있을 때만. 경기 시작 때 쓰이는 것과 같은 방식으로 상대 선발·수비를 정하고 타순을 평가한다. */
+  proto.preGame = function () {
+    const S = this.S, g = this.userGameToday(); if (!g) return null;
+    const rd = S.schedule[S.day], idx = rd.indexOf(g), E = this.engine(), t = S.userTeam, home = g[0], away = g[1], userSide = home === t ? 'home' : 'away', oppSide = userSide === 'home' ? 'away' : 'home', opp = userSide === 'home' ? away : home;
+    const ctx = this.startUserGame(g, idx), live = ctx.live, osp = live.staff[oppSide].sp; if (!osp) return null;
+    const dm = live.dm[oppSide], pf = (E.pfs && E.pfs[home]) || null;
+    const tn = this.tonightOf(), spec = ctx.prep.spec, src = tn ? 'tonight' : ctx.prep.presetUsed ? 'preset' : 'set';
+    const batters = spec.map(x => E.batById[x.id]), probs = batters.map(b => E.paProbs(b, osp, dm, home));
+    const EN = E.env, TR = buildTrans(probs, EN), INN = 9;
+    const cur = [0, 1, 2, 3, 4, 5, 6, 7, 8], vCur = expRuns(cur, TR, INN), [bo, vBest] = bestOrder(cur, TR, INN);
+    const unit = i => { const pb = probs[i], b = batters[i], pl = S.players[spec[i].id]; const pu = Engine.platoonUnit(b.hand, osp.hand); return { id: spec[i].id, ko: pl ? pl.ko : b.name, pos: spec[i].pos, hand: pl && pl.bats || b.hand || null, plat: pu === null ? '' : pu >= 0.25 ? 'good' : pu <= -0.3 ? 'bad' : 'even', ob: pb.BB + pb.HBP + pb['1B'] + pb['2B'] + pb['3B'] + pb.HR + pb.ROE, hr: pb.HR, k: pb.K }; };
+    const units = spec.map((_, i) => unit(i));
+    const gain = vBest - vCur, same = bo.every((x, i) => x === i), spl = S.players[osp.id], st = (S.stats && S.stats.pit && S.stats.pit[osp.id]) || null;
+    const oppL = live.L[oppSide].map((b, i) => { const pl = S.players[b.id]; return { id: b.id, ko: pl ? pl.ko : b.name, hand: pl && pl.bats || b.hand || null }; });
+    return { day: S.day, idx, g, home, opp, userSide, isHome: userSide === 'home', park: pf ? { hr: pf.hr, runs: pf.runs || 1 } : null,
+      oppSp: { id: osp.id, ko: spl ? spl.ko : osp.name, hand: osp.hand || (spl && spl.throws) || null, ovr: spl ? this.ovr(spl) : null, line: st && st.outs ? { ip: Math.floor(st.outs / 3) + (st.outs % 3 ? ' ' + st.outs % 3 + '/3' : ''), ra9: Math.round(st.R * 27 / st.outs * 100) / 100, k9: Math.round(st.K * 27 / st.outs * 10) / 10, bb9: Math.round(st.BB * 27 / st.outs * 10) / 10, hr9: Math.round(st.HR * 27 / st.outs * 100) / 100 } : null },
+      oppLineup: oppL, source: src, preset: ctx.prep.presetUsed || '', absent: (ctx.prep.absent || []).map(a => ({ out: a.out.ko, in: a.in.ko, pos: a.pos })),
+      cur: units, curExp: vCur, sug: bo.map(i => units[i]), sugExp: vBest, sugIdx: bo, gain, keep: same || gain < 0.02, innings: INN };
+  };
+  /* 오늘 경기에만 타순 적용(저장 라인업·프리셋은 그대로). order: preGame().sug 처럼 [{id,pos}] 9개. 프리셋과 겹치면 이 타순이 우선한다. */
+  proto.applyTonight = function (order) {
+    const S = this.S, pg = this.preGame(); if (!pg) return '오늘은 경기가 없습니다.';
+    const cur = new Set(pg.cur.map(x => x.id)); if (!order || order.length !== 9 || !order.every(x => cur.has(x.id) && pg.cur.find(c => c.id === x.id).pos === x.pos) || new Set(order.map(x => x.id)).size !== 9) return '오늘 출전 9명의 순서만 바꿀 수 있습니다.';
+    if (!this.setTonight(order)) return '타순을 적용할 수 없습니다.'; return null;
+  };
 });

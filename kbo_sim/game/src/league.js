@@ -696,7 +696,9 @@
       let sp = null, tried = 0, ri = set.rotIdx % set.rotation.length;
       while (tried < set.rotation.length) { const p = S.players[set.rotation[ri]]; if (d - p.lastStart >= 4) { sp = p; break; } ri = (ri + 1) % set.rotation.length; tried++; }
       if (!sp) sp = S.players[set.rotation[set.rotIdx % set.rotation.length]];
-      return { spec, absent, sp, rotIdx: ri };
+      // 오늘만 적용한 타순(경기 전 브리핑): 결장 대체까지 반영된 9인을 재배열한 것이므로 그대로 쓴다(저장 라인업은 그대로)
+      const tn = this.tonightOf(); if (tn) return { spec: tn.lineup.map(x => ({ ...x })), absent, sp, rotIdx: ri, override: true };
+      return { spec, absent, sp, rotIdx: ri, override: false };
     }
     startUserGame(g, idx) {
       const S = this.S, E = this.engine(), t = S.userTeam, home = g[0], away = g[1], userSide = home === t ? 'home' : 'away', oppSide = userSide === 'home' ? 'away' : 'home';
@@ -704,7 +706,7 @@
       let ul = E.makeLineup(prep.spec); const ol = E.lineup(opp, 1 + d, r, false);
       const userStaff = new E.StaffState(this.pitchers(t, true).map(p => E.pitById[p.id]), r, E.pitById[prep.sp.id]);
       const oppStaff = new E.StaffState(E.staff(opp, 1 + d), r, null);
-      { const pr = S.presets; if (pr && pr.on && oppStaff.sp) { const hd = oppStaff.sp.hand === 'L' ? 'L' : 'R', pl = pr[hd]; if (this._presetOk(pl)) { prep.spec = pl.map(x => ({ ...x })); ul = E.makeLineup(prep.spec); prep.presetUsed = hd === 'L' ? '좌투 상대' : '우투 상대'; } } }   // 상대 선발 손에 맞춘 프리셋 라인업
+      { const pr = S.presets; if (!prep.override && pr && pr.on && oppStaff.sp) { const hd = oppStaff.sp.hand === 'L' ? 'L' : 'R', pl = pr[hd]; if (this._presetOk(pl)) { prep.spec = pl.map(x => ({ ...x })); ul = E.makeLineup(prep.spec); prep.presetUsed = hd === 'L' ? '좌투 상대' : '우투 상대'; } } }   // 상대 선발 손에 맞춘 프리셋 라인업
       const lineups = {}, staff = {}, penal = {}; lineups[userSide] = ul; lineups[oppSide] = { L: ol[0], assign: ol[1] }; staff[userSide] = userStaff; staff[oppSide] = oppStaff; penal[userSide] = true;
       const ctx = { auto: true, userSide, league: this, prep, g, idx };
       const live = new E.LiveGame({ home, away, lineups, staff, rng: r, maxInn: 11, penal, fatigue: true, hook: { [userSide]: (game, ss) => { ss.o += 3; } } });
@@ -788,6 +790,10 @@
       this.invalidate(); this.repairSettings(e.t);
     }
     /* 라인업 프리셋: 상대 선발 좌/우투에 따라 저장해 둔 라인업을 자동 적용 */
+    /* 오늘 경기 한정 타순(경기 전 브리핑 제안). {day, lineup:[{id,pos}]} — 같은 날·유효한 9인일 때만 인정, 프리셋보다 우선 */
+    tonightOf() { const S = this.S, tn = S.tonight; if (!tn || tn.day !== S.day || !this._presetOk(tn.lineup)) return null; return tn; }
+    setTonight(order) { const S = this.S; if (!this.userGameToday() || !this._presetOk(order)) return false; S.tonight = { day: S.day, lineup: order.map(x => ({ id: x.id, pos: x.pos })) }; return true; }
+    clearTonight() { delete this.S.tonight; return true; }
     savePreset(hand) { const S = this.S, set = S.teams[S.userTeam].set; if (!['L', 'R'].includes(hand) || set.lineup.length !== 9) return false; S.presets = Object.assign({ on: false }, S.presets, { [hand]: set.lineup.map(x => ({ id: x.id, pos: x.pos })) }); return true; }
     clearPreset(hand) { const S = this.S; if (S.presets) delete S.presets[hand]; return true; }
     setPresetOn(on) { const S = this.S; S.presets = Object.assign({ on: false }, S.presets, { on: !!on }); return true; }
@@ -847,7 +853,7 @@
       this.mergeTracking();
       this.commit(live.home, live.away, rh, ra, { user: true, inns: live.inns, spH: live.staff.home.sp.name, spA: live.staff.away.sp.name, subs: { home: live.subs.home.length, away: live.subs.away.length } });
       const recap = this._recap ? this._recap(ctx, rh, ra, tr, trB) : null;
-      S.pendingDay = null; S.day++; if (S.day >= S.schedule.length) S.phase = 'regular_done';
+      delete S.tonight; S.pendingDay = null; S.day++; if (S.day >= S.schedule.length) S.phase = 'regular_done';
       return { recap, home: live.home, away: live.away, rh, ra, win: (live.home === t ? rh > ra : ra > rh), tie: rh === ra, inns: live.inns };
     }
 

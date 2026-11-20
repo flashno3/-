@@ -209,6 +209,25 @@
       return 'OUT';
     }
 
+    /* 타석 결과 확률(읽기 전용): pa()와 같은 식으로 계산한 K·BB·HBP·HR·1B·2B·3B·ROE·OUT 확률. 감독 모드의 경기 전 타순 제안에 쓴다(경기 결과 계산에는 쓰이지 않는다).
+     * dm: 수비 보정(defMods 결과 [babip 보정, 실책 비율, 도루저지]), home: 경기를 치르는 홈 구단(구장 효과), mod: 작전 보정(선택) */
+    function paProbs(b, p, dm, home, mod) {
+      const save = CURPF; if (home && PFS[home]) CURPF = PFS[home];
+      try {
+        const bp = b.p, pp = p.p;
+        let k = comb(bp.k, pp.k, LB.k), bb = comb(bp.bb, pp.bb, LB.bb); const hbp = comb(bp.hbp, pp.hbp, LB.hbp); let hr = comb(bp.hr, pp.hr, LB.hr) * CURPF.hr;
+        const pm = M.platoon ? platoonMod(b, p) : null;
+        if (pm) { k *= pm.k; bb *= pm.bb; hr *= pm.hr; }
+        if (mod) { if (mod.k) k *= mod.k; if (mod.bb) bb *= mod.bb; if (mod.hr) hr *= mod.hr; }
+        const pK = Math.min(1, k), pBB = Math.min(1 - pK, bb), pHBP = Math.min(1 - pK - pBB, hbp), pHR = Math.min(1 - pK - pBB - pHBP, hr), inplay = Math.max(0, 1 - pK - pBB - pHBP - pHR);
+        let babip = comb(bp.babip, pp.babip, LB.babip); babip = comb(babip, LB.babip + dm[0] + BOFF, LB.babip);
+        if (pm) babip *= pm.babip;
+        if (mod && mod.babip) babip *= mod.babip;
+        const xb = bp.xbh, tr = bp.tri, p1 = babip * (1 - xb) * CURPF.b1, p2 = babip * xb * (1 - tr) * CURPF.b2, p3 = babip * xb * tr * CURPF.b3, rest = Math.max(0, 1 - p1 - p2 - p3), roe = Math.min(1, ENV.roe * dm[1]);
+        return { K: pK, BB: pBB, HBP: pHBP, HR: pHR, '1B': inplay * p1, '2B': inplay * p2, '3B': inplay * p3, ROE: inplay * rest * roe, OUT: inplay * rest * (1 - roe) };
+      } finally { CURPF = save; }
+    }
+
     class StaffState {
       constructor(S, rng, sp) {
         const st = S.filter(p => p.GS > 0); let rel = S.filter(p => p.relief_ip > 1); this.rel = rel.length ? rel : S;
@@ -611,7 +630,7 @@
       TEAMS, PARKNAME, PyRandom, Season, playPostseason, leaders, game, newStats,
       parkRuns: () => PARKR, teamOf: t => t,
       bats: () => bats, pits: () => pits,
-      LiveGame, StaffState, liveAI, makeLineup, defMods, staff, lineup, batById, pitById, pfs: PFS,
+      LiveGame, StaffState, liveAI, makeLineup, defMods, staff, lineup, batById, pitById, pfs: PFS, paProbs, env: ENV,
       tracking: () => ({ bat: PLAYER, pit: PITCH }), resetTracking: () => { PLAYER = {}; PITCH = {}; }
     };
   }

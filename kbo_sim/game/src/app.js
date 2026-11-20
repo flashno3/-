@@ -1284,6 +1284,36 @@
         <div class="seg" style="flex-direction:column;align-items:stretch"><button class="big" data-act="liveTac" data-a="pcOpen" ${myField ? '' : 'disabled'}>투수 교체</button><button class="big" data-act="liveTac" data-a="phOpen" ${myBat ? '' : 'disabled'}>대타</button><button class="big" data-act="liveTac" data-a="prOpen" ${myBat && runners ? '' : 'disabled'}>대주자</button><button class="big" data-act="liveTac" data-a="dsOpen">수비 교체 · 위치 변경</button></div><p class="help">투수 교체는 내 수비 중, 대타·대주자는 내 공격 중에 쓸 수 있습니다. 교체된 선수는 다시 나올 수 없습니다.</p></div></div>`;
     return '';
   }
+  /* ---------------- 경기 전 브리핑: 상대 선발·상대 타순·상성, 타순 제안(타순만, 이번 경기만) ---------------- */
+  const HAND = { L: '좌', R: '우', S: '양' };
+  function screenPre() {
+    const pre = ui.pre; if (!pre.pg) pre.pg = L.preGame(); const pg = pre.pg;
+    if (!pg) { ui.pre = null; return ''; }
+    const sp = pg.oppSp, tn = pg.source === 'tonight', pf = pg.park || {}, ln = sp.line;
+    const platChip = u => u.plat === 'good' ? '<span class="chip in">유리</span>' : u.plat === 'bad' ? '<span class="chip warn">불리</span>' : '';
+    const pct = v => (v * 100).toFixed(1) + '%', ob = v => v.toFixed(3).replace(/^0/, '');
+    const hs = x => x.hand ? `<span class="muted small">${HAND[x.hand] || ''}타</span>` : '';
+    const sugList = pg.sug, curIdx = new Map(pg.cur.map((u, i) => [u.id, i]));
+    const move = (u, i) => { const d = curIdx.get(u.id) - i; return d > 0 ? `<span class="pos small">▲${d}</span>` : d < 0 ? `<span class="neg small">▼${-d}</span>` : '<span class="muted small">-</span>'; };
+    const lhn = pg.cur.filter(u => u.plat === 'good').length, bad = pg.cur.filter(u => u.plat === 'bad').length;
+    const srcNote = pg.source === 'preset' ? `<div class="small muted" style="margin-top:6px">기본 라인업: 프리셋(${esc(pg.preset)}) · 오늘 타순을 적용하면 프리셋 대신 이 타순이 쓰입니다.</div>` : tn ? `<div class="small" style="margin-top:6px"><span class="chip in">오늘 타순 적용 중</span> <span class="muted">이번 경기에만 적용 — 저장된 라인업·프리셋은 그대로입니다.</span></div>` : '';
+    const abs = pg.absent.length ? `<div class="small muted" style="margin-top:6px">컨디션 난조 결장: ${pg.absent.map(a => `${esc(a.out)} → ${esc(a.in)}`).join(', ')} (이미 반영됨)</div>` : '';
+    const tbl = `<div class="tablewrap"><table><thead><tr><th>#</th><th class="l">선수</th><th>손</th><th>상성</th><th>출루</th><th>홈런</th><th>삼진</th></tr></thead><tbody>${pg.cur.map((u, i) => `<tr><td class="n">${i + 1}</td><td class="l"><b>${esc(u.ko)}</b> <span class="muted small">${esc(posName[u.pos] || u.pos)}</span></td><td>${hs(u)}</td><td>${platChip(u)}</td><td class="n">${ob(u.ob)}</td><td class="n">${pct(u.hr)}</td><td class="n">${pct(u.k)}</td></tr>`).join('')}</tbody></table></div>`;
+    const cmp = pg.keep ? `<div class="small" style="margin-top:8px">현재 타순이 상대 선발 기준으로 거의 최적입니다 <span class="muted">(제안 효과 ${pg.gain >= 0 ? '+' : ''}${pg.gain.toFixed(2)}점/경기 — 의미 있는 차이 없음)</span></div>`
+      : `<div style="margin-top:10px"><b>제안 타순</b> <span class="muted small">같은 9명·같은 수비 위치, 순서만 변경 · 기대 득점 ${pg.curExp.toFixed(2)} → <b class="pos">${pg.sugExp.toFixed(2)}</b> (+${pg.gain.toFixed(2)}/경기)</span></div>
+        <div class="tablewrap"><table><thead><tr><th>#</th><th class="l">현재</th><th class="l">제안</th><th></th></tr></thead><tbody>${sugList.map((u, i) => `<tr><td class="n">${i + 1}</td><td class="l muted">${esc(pg.cur[i].ko)}</td><td class="l"><b>${esc(u.ko)}</b> ${platChip(u)}</td><td>${move(u, i)}</td></tr>`).join('')}</tbody></table></div>
+        <button class="primary" style="width:100%;min-height:48px;margin-top:8px" data-act="preApply">이번 경기만 제안 타순 적용</button>`;
+    const note = `<div class="small muted" style="margin-top:8px">⚠ 기대 득점은 모델 추정입니다 — 경기 엔진과 같은 확률식·진루 규칙으로 계산하되 상대 선발이 ${pg.innings}이닝을 던진다고 가정하고(불펜·교체·도루·폭투 제외) 비교용으로만 씁니다. 실제 경기 결과를 보장하지 않습니다.</div>`;
+    return `<div class="lvwrap"><div class="lvhead"><b style="font-family:var(--font-display);font-size:18px">경기 전 브리핑</b><span class="muted small">${L.dateStr(pg.day)} · ${pg.isHome ? '홈' : '원정'} · ${esc(park(pg.home))}</span></div>
+      <div class="card"><div class="row"><h2 style="margin:0">${teamTag(pg.opp)}</h2><span class="sp"></span>${pf.hr ? `<span class="muted small">${pf.hr >= 1.08 ? '타자 친화' : pf.hr <= 0.85 ? '투수 친화' : '중립'} 구장 (홈런 ${pf.hr.toFixed(2)})</span>` : ''}</div>
+        <div style="margin-top:8px"><b>상대 선발</b> <b>${esc(sp.ko)}</b> <span class="muted small">${sp.hand ? (HAND[sp.hand] || '') + '투' : ''}${sp.ovr !== null ? ' · OVR ' + sp.ovr : ''}</span></div>
+        <div class="small muted">${ln ? `올 시즌 ${ln.ip}이닝 · 9이닝당 실점 ${ln.ra9} · 탈삼진 ${ln.k9} · 볼넷 ${ln.bb9} · 피홈런 ${ln.hr9}` : '올 시즌 기록 없음'}</div>
+        <div class="small" style="margin-top:6px">상성: 유리 ${lhn}명 · 불리 ${bad}명 <span class="muted">(좌/우·양타 상성, 엔진의 플래툰 보정과 동일)</span></div>${srcNote}${abs}
+        <div class="small muted" style="margin-top:8px">상대 타순: ${pg.oppLineup.map(x => `${esc(x.ko)}${x.hand ? `<span class="small">(${HAND[x.hand] || ''})</span>` : ''}`).join(' · ')}</div></div>
+      <div class="card"><h2>우리 타순 — 상대 선발 기준</h2><div class="small muted">출루·홈런·삼진은 이 상대 선발에게 각 타자가 낼 타석당 확률입니다(구장·상대 수비 반영).</div>${tbl}${cmp}${tn ? `<button style="width:100%;min-height:44px;margin-top:8px" data-act="preUndo">오늘 타순 적용 취소</button>` : ''}${note}</div>
+      <div class="card"><div class="row"><button class="primary big" style="flex:1" data-act="preStart">경기 시작</button></div>
+        <label class="row small" style="gap:6px;margin-top:8px"><input type="checkbox" data-act="preSkip" ${pref('briefSkip', '0') === '1' ? 'checked' : ''}>다음부터 경기 전 브리핑 건너뛰기 <span class="muted">(설정은 이 기기에 저장)</span></label></div></div>`;
+  }
   function screenLive() {
     const lv = ui.live, ctx = lv.ctx, g = ctx.live, us = ctx.userSide, myBat = g.batSide === us, myField = g.fldSide === us, fin = g.finished, E = ctx.E, T = g.tact[us];
     const b = g.batter, pt = g.pitcher, bp = P(b.id), pp = P(pt.id), tr = E.tracking().pit[pt.id] || { outs: 0, R: 0, K: 0 }, f = g.pitchFatigue(g.fldSide);
@@ -1499,6 +1529,7 @@
     const root = $('#root'); applyTheme();
     if (!L) { document.body.classList.remove('modal-open'); root.innerHTML = renderStart() + toastHtml(); return; }
     const scroll = window.scrollY;
+    if (ui.pre && !ui.live) { document.body.classList.remove('modal-open'); root.innerHTML = screenPre() + confirmSheet() + toastHtml(); window.scrollTo(0, scroll); return; }   // 경기 전 브리핑(날짜 처리 끝, 경기 시작 전)
     if (ui.live) { document.body.classList.remove('modal-open'); root.innerHTML = screenLive() + toastHtml(); window.scrollTo(0, scroll); return; }   // 경기 화면에서는 이전 화면의 스크롤 잠금이 남지 않게 푼다
     const S = ui.screen, f = { invest: screenInvest, desk: screenDesk, home: () => goalCard() + pressCard() + screenHome() + evHistory(), roster: () => changeBar() + screenRoster(), farm: () => changeBar() + screenFarm(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, story: screenStory, mood: screenMood, train: screenTrain, scout: screenScout, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
     document.body.classList.toggle('modal-open', !!ui.modal);
@@ -1513,8 +1544,9 @@
   const toastHtml = () => (ui.toast ? `<div class="toast" role="status">${esc(ui.toast)}</div>` : '');
 
   /* ---------------- 액션 ---------------- */
+  function startPlay(g, idx) { if (ui.hl) openLiveHL(g, idx); else openLive(g, idx, false); }
   function afterAdvance(r) {
-    if (r.status === 'userGame') { if (ui.hl) openLiveHL(r.game, r.idx); else openLive(r.game, r.idx, false); return; }
+    if (r.status === 'userGame') { if (pref('briefSkip', '0') !== '1' && L.preGame()) { ui.pre = { g: r.game, idx: r.idx, pg: null }; render(); window.scrollTo(0, 0); return; } startPlay(r.game, r.idx); return; }
     autosave(); render();
   }
   /* 하이라이트 개입: 설정한 이닝 이후 접전이 되기 전까지는 경기 계획대로 자동 진행하고, 그 시점부터 직접 지휘 */
@@ -1568,6 +1600,17 @@
     postNext() { if (L.userInPost()) { ui.liveMode ? A.postLive() : A.postAuto(); return; } const r = L.simPostGame(); if (r) openPostSheet([r]); autosave(); render(); },
     postAll() { let n = 0; const list = []; while (!L.S.post.done && !L.userInPost() && n++ < 40) { const r = L.simPostGame(); if (r) list.push(r); } if (list.length) openPostSheet(list); autosave(); render(); },
     postLive() { openLive(null, 0, true); },
+    preStart() { const pre = ui.pre; if (!pre) return; ui.pre = null; startPlay(pre.g, pre.idx); },
+    preSkip(_a, el) { setPref('briefSkip', el && el.checked ? '1' : '0'); },
+    preUndo() { L.clearTonight(); if (ui.pre) ui.pre.pg = null; toast('오늘 타순 적용을 취소했습니다.'); render(); },
+    preApply() {
+      const pre = ui.pre, pg = pre && pre.pg; if (!pg || pg.keep) return;
+      const nm = list => list.map((u, i) => `${i + 1}. ${esc(u.ko)} <span class="muted small">${esc(posName[u.pos] || u.pos)}</span>`).join('<br>');
+      askConfirm({ title: '오늘 타순 적용', ok: '이번 경기만 적용',
+        rows: [['현재 타순', nm(pg.cur)], ['제안 타순', nm(pg.sug)], ['기대 득점(추정)', `${pg.curExp.toFixed(2)} → <b class="pos">${pg.sugExp.toFixed(2)}</b> (+${pg.gain.toFixed(2)}/경기)`]],
+        notes: [{ t: '이번 경기에만 적용됩니다. 경기가 끝나면 원래 라인업(저장된 라인업·프리셋)으로 돌아가며, 프리셋이 켜져 있어도 오늘은 이 타순이 우선합니다.' }, { t: '기대 득점은 모델 추정이며 결과를 보장하지 않습니다.', cls: 'muted' }],
+        run: () => { const err = L.applyTonight(pg.sug.map(u => ({ id: u.id, pos: u.pos }))); if (err) toast(err); else { ui.pre.pg = null; toast('오늘 타순을 적용했습니다.'); } render(); } });
+    },
     postAuto() { const c = L.startUserPostGame(); L.playAuto(c); const r = L.finishUserPostGame(c); openPostSheet([r]); autosave(); render(); },
     toOff() { L.startOffseason(); ui.screen = 'offseason'; autosave(); render(); },
     rfilter(a) { ui.rf.f = a; render(); },
@@ -1703,7 +1746,7 @@
     saveNow() { if (store.set(SAVE_KEY, L.save())) toast('저장했습니다.'); else toast('이 환경에서는 저장할 수 없습니다. 백업 텍스트를 사용하세요.'); },
     exportSave() { const t = { value: L.save() }; ui.saveText = t.value; try { navigator.clipboard.writeText(t.value).then(() => toast('백업 텍스트를 복사했습니다.'), () => toast('텍스트를 직접 복사하세요.')); } catch (e) { toast('텍스트를 직접 복사하세요.'); } },
     importSave() { const t = ($('#saveText') || {}).value; if (!t || !t.trim()) return toast('붙여넣은 텍스트가 없습니다.'); try { L = League.load(t.trim()); ui.screen = 'home'; autosave(); render(); toast('불러왔습니다.'); } catch (e) { toast('올바른 백업 텍스트가 아닙니다.'); } },
-    newGameMenu() { L = null; ui.live = null; render(); },
+    newGameMenu() { L = null; ui.live = null; ui.pre = null; render(); },
     /* 경기 */
     liveRun(a) { liveRun(a); },
     liveTac(a) { const lv = ui.live; if (a === 'pcOpen') { lv.pick = { t: 'pc' }; lv.sheet = null; render(); } else if (a === 'phOpen') { lv.pick = { t: 'ph' }; lv.sheet = null; render(); } else if (a === 'prOpen') { lv.pick = { t: 'pr', base: null }; lv.sheet = null; render(); } else if (a === 'dsOpen') { lv.pick = { t: 'ds', slot: null }; lv.sheet = null; render(); } else liveTactic(a); },

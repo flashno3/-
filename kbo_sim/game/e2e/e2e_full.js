@@ -90,11 +90,20 @@ async function run(vp,label,team){
   if(await click('.plist button[data-act="toggleActive"]')){await pg.waitForTimeout(200);await sweep('콜업시트');await click('button[data-act="swapClose"]')}
   // 7) 시즌 진행(자동) + 이벤트 처리 + 라이브 경기
   await nav('대시보드');await pg.evaluate(()=>{const e=document.querySelector('#playMode');if(e){e.value='highlight';e.dispatchEvent(new Event('change',{bubbles:true}))}});
-  let liveDone=0,reviewSeen=false,momentSeen=false,fbw=[],feedAll='',tapDone=false,tapDone2=false,tapDone3=false,swipeDone=false;
+  let liveDone=0,reviewSeen=false,momentSeen=false,fbw=[],feedAll='',tapDone=false,tapDone2=false,tapDone3=false,swipeDone=false,briefDone=false;
   for(let i=0;i<70&&liveDone<2;i++){
     for(let k=0;k<4;k++)await click('button[data-act="evChoice"]');
     const act=await pg.evaluate(()=>{const b=document.querySelector('button.primary[data-act="adv"],button[data-act="adv"],button[data-act="advMoment"]');return b?b.dataset.act:null});
     await click('button[data-act="advMoment"]')||await click('button[data-act="adv"]');await pg.waitForTimeout(250);
+    if(await pg.$('button[data-act="preStart"]')){   // 경기 전 브리핑(타순 제안·오늘만 적용)
+      if(!briefDone){briefDone=true;const body=()=>pg.evaluate(()=>document.body.innerText);
+        const t0=await body();ok(/경기 전 브리핑/.test(t0)&&/상대 선발/.test(t0)&&/상대 타순/.test(t0),`${label}: 브리핑 화면(상대 선발·타순)`);ok(/기대 득점은 모델 추정/.test(t0),`${label}: 추정치 고지`);await sweep('브리핑');
+        console.log('  [브리핑] 적용 버튼 '+!!(await pg.$('button[data-act="preApply"]')));if(await pg.$('button[data-act="preApply"]')){await click('button[data-act="preApply"]');await pg.waitForTimeout(150);ok(!!(await pg.$('.sheet-bg'))&&/현재 타순/.test(await body())&&/제안 타순/.test(await body()),`${label}: 적용 전 요약 시트`);await sweep('타순 적용 요약');
+          await click('button[data-act="cfClose"]');ok(/오늘 타순 적용 중/.test(await body())===false,`${label}: 취소하면 적용 안 됨`);
+          await click('button[data-act="preApply"]');await click('button[data-act="cfDo"]');await pg.waitForTimeout(200);ok(/오늘 타순 적용 중/.test(await body()),`${label}: 적용 표시`);
+          await click('button[data-act="preUndo"]');await pg.waitForTimeout(150);ok(!/오늘 타순 적용 중/.test(await body()),`${label}: 적용 취소`);
+          await click('button[data-act="preApply"]');await click('button[data-act="cfDo"]');await pg.waitForTimeout(150)}}
+      await click('button[data-act="preStart"]');await pg.waitForTimeout(250)}
     if(await pg.$('.livecols')){
       let st=0;while(await pg.$('.livecols')&&st++<400){
         if(await pg.$('.momentcard'))momentSeen=true;
