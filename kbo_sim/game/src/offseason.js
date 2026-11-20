@@ -208,6 +208,12 @@
   };
   proto._hometown = function (p, t) { const h = (this.S.schoolHome || {})[p.dh && p.dh.school]; return !!(h && h.includes(t)); };   // 고교 소재 지역이 해당 구단 연고
   proto.loyDiscount = function (p, t) { const l = this.loyalty(p, t); return !l || l.team !== (t || p.team) ? 0 : Math.max(0, Math.min(0.12, (l.v - 55) * 0.0027)); };
+  /* 프랜차이즈 스타: 이 구단(t)의 충성도가 70 이상이고 가치(WAR 1.0 이상)가 높은 국내 선수가 이 구단에서 FA로 나왔을 때.
+     구단은 이사회를 강하게 설득해 예산을 넘겨서라도 붙잡으려 한다 — 내 팀은 이사회 설득 성공 확률↑·신뢰도 하락↓, AI 구단은 여유자금이 모자라도(부족분이 비용의 45% 이내) 특별 승인으로 우선 입찰한다. */
+  proto.faStar = function (p, t) {
+    if (!p || p.foreign || p.team !== 'FA' || !p.faInfo || !t || p.faInfo.from !== t || this.war(p) < 1.0) return null;
+    const l = this.loyalty(p, t); if (!l || l.team !== t || l.v < 70) return null; return { v: l.v, s: clamp((l.v - 70) / 30, 0, 1) };
+  };
   proto._blendAsk = function (p) { const cur = p.contract.salary, ask = this.askSalary(p); return Math.max(0.3, Math.round((cur + (ask > cur ? 0.6 : 0.4) * (ask - cur)) * 10) / 10); };
   proto.resignAsk = function (p) {
     const ld = 1 - 0.5 * this.loyDiscount(p, p.team), base = Math.max(0.3, Math.round(this._blendAsk(p) * ld * 10) / 10); if (p.foreign || !this.faEligible(p)) return base;
@@ -245,7 +251,8 @@
   proto._aiDeal = function (t, p) {   // AI 구단의 영입 조건(선호 기간, 요구액 그대로, 계약금 35%) — 여유자금·상한 안이면 계약
     const tm = this.faTerms(p, t), o = this.faDefaultOffer(p, t, tm.pref), per = (o.bonus + o.salary * o.years) / o.years;
     if (this.cbtPay(t, this.S.phase === 'offseason') + per * (this.S.calib.cbtK || 1) > this.cbtCap() * 0.97) return null;
-    if (this.faRoom(t) < o.salary + o.bonus / o.years + this.faCompCost(p, t)) return null;   // 외부 FA 영입 시 보상금도 예산에 반영
+    const cost = o.salary + o.bonus / o.years + this.faCompCost(p, t), room = this.faRoom(t), star = this.faStar(p, t);   // 외부 FA 영입 시 보상금도 예산에 반영
+    if (room < cost) { if (!star || cost - room > 0.45 * cost) return null; return Object.assign({ per, tm, special: Math.round((cost - room) * 10) / 10 }, o); }   // 프랜차이즈 스타: 이사회 특별 승인(예산 초과 허용)
     return Object.assign({ per, tm }, o);
   };
   proto._fromText = function (p) {   // 기록 소식에 붙는 '내가 데려온 선수' 표기
@@ -719,8 +726,13 @@
   };
   proto._aiSign = function (t, p, per, y, d) {   // 입찰 금액으로 계약(여유자금·로스터 확인). 성공 여부 반환
     const S = this.S, bon = Math.round(per * y * BONUS_SHARE * 10) / 10, sal = Math.ceil(((per * y - bon) / y) * 10 - 1e-9) / 10;
-    if (S.teams[t].ids.length >= ROSTER_MAX - 2 || this.faRoom(t) < sal + bon / y) return false;
-    const g = p.faInfo && p.faInfo.grade, from = p.faInfo && p.faInfo.from;
+    if (S.teams[t].ids.length >= ROSTER_MAX - 2) return false;
+    const g = p.faInfo && p.faInfo.grade, from = p.faInfo && p.faInfo.from, room = this.faRoom(t), cost = sal + bon / y;
+    if (room < cost) {   // 프랜차이즈 스타는 이사회 특별 승인으로 예산을 넘겨 계약
+      const star = this.faStar(p, t), need = Math.round((cost - room) * 10) / 10; if (!star || need > 0.45 * cost) return false;
+      const f = S.fin.teams[t]; f.boardExtra = Math.round(((f.boardExtra || 0) + need * 1.05 + 0.1) * 10) / 10; f.trust = clamp(Math.round(((f.trust === undefined ? 70 : f.trust) - Math.min(6, 2 + need * 0.3)) * 10) / 10, 0, 100);
+      const tx = `${KO0[t]} 이사회가 프랜차이즈 스타 ${p.ko}(충성도 ${star.v}) 영입을 위해 예산을 ${need.toFixed(1)}억 초과 승인했습니다.`; if (this._faFeedAdd) this._faFeedAdd('sign', tx, p.id); news(this, tx);
+    }
     this._doSign(t, p, y, sal, bon); this.refreshTeam(t);
     const text = `FA ${p.ko}(${from ? KO0[from] + ' ' : ''}${g ? g + '등급' : ''}) → ${KO0[t]} (${y}년 총 ${(per * y).toFixed(1)}억, 계약금 ${bon.toFixed(1)})`;
     if (this._faFeedAdd) this._faFeedAdd('sign', text, p.id);
@@ -729,6 +741,14 @@
   proto._postBids = function (d) {
     const S = this.S, m = S.faMkt, pool = this.faList().filter(p => !p.foreign && this.war(p) >= 1.0).sort((a, b) => this.war(b) - this.war(a)).slice(0, 30); if (!pool.length) return;
     const pr = 0.02 + 0.3 * Math.exp(-d / 12), r = rngFor(S.seed, S.year, 7000 + d, 5000), teams = TEAMS.filter(t => t !== S.userTeam).sort(() => r.random() - 0.5);
+    {   // 프랜차이즈 스타 우선 입찰: 충성도 높은 자기 구단 FA는 일반 입찰 확률과 관계없이 매일 높은 확률로 붙잡으러 나선다(여유자금이 모자라도 특별 승인 대상)
+      const rs = rngFor(S.seed, S.year, 7000 + d, 5002);
+      for (const p of this.faList()) { const t = p.faInfo && p.faInfo.from; if (!t || t === S.userTeam || p.team !== 'FA' || (m.bids[p.id] || []).some(b => b.team === t)) continue;
+        const star = this.faStar(p, t); if (!star || !(rs.random() < 0.4 + 0.4 * star.s)) continue; if (S.teams[t].ids.length >= ROSTER_MAX - 4) continue;
+        const deal = this._aiDeal(t, p); if (!deal) continue;
+        (m.bids[p.id] = m.bids[p.id] || []).push({ team: t, per: Math.round(deal.per * 100) / 100, ceil: Math.round(deal.per * (1.08 + 0.12 * rs.random()) * 100) / 100, y: deal.years, day: d, star: true });
+        if (this._faFeedAdd) this._faFeedAdd('bid', `${KO0[t]}이(가) 프랜차이즈 스타 ${p.ko}를 붙잡기 위해 ${deal.years}년 연 ${deal.per.toFixed(1)}억을 제시했습니다.${deal.special ? ' (이사회 특별 승인 예정)' : ''}`, p.id); }
+    }
     for (const t of teams) {
       if (r.random() > pr) continue;
       if (this._faCount(t) >= EXT_LIMIT || S.teams[t].ids.length >= ROSTER_MAX - 4) continue;
@@ -811,8 +831,9 @@
     const S = this.S, t = S.userTeam, p = S.players[id], f = S.fin.teams[t], ev = this.faEvaluate(p, offer, t); if (!ev.ok) return { ok: false, msg: ev.msg };
     const cost = ev.sal + ev.bon / ev.y + this.faCompCost(p, t), room = this.faRoom(t), need = Math.max(0, Math.round((cost - room) * 10) / 10), pers = f.pers || { n: 0, last: -99 };
     const now = S.faMkt ? S.faMkt.day : (S.day || 0) + 100, left = Math.max(0, 7 - (now - pers.last));
-    const prob = clamp(0.12 + 0.6 * (f.trust / 100) + (this.war(p) >= 2 ? 0.1 : this.war(p) >= 1 ? 0.04 : 0) - 0.5 * need / Math.max(cost, 0.1), 0.05, 0.9);
-    return { ok: true, need, cost, room, prob: Math.round(prob * 100) / 100, tries: pers.n, left, max: 3, ev, now };
+    const star = this.faStar(p, t);   // 프랜차이즈 스타(충성도 70+, 내 팀 출신): 이사회가 더 관대하다
+    const prob = clamp(0.12 + 0.6 * (f.trust / 100) + (this.war(p) >= 2 ? 0.1 : this.war(p) >= 1 ? 0.04 : 0) + (star ? 0.15 + 0.15 * star.s : 0) - (star ? 0.2 : 0.5) * need / Math.max(cost, 0.1), 0.05, star ? 0.95 : 0.9);
+    return { ok: true, need, cost, room, prob: Math.round(prob * 100) / 100, tries: pers.n, left, max: star ? 4 : 3, ev, now, star };
   };
   proto.persuadeBoard = function (id, offer) {
     const S = this.S, t = S.userTeam, o = this.boardOdds(id, offer); if (!o.ok) return { ok: false, msg: o.msg };
@@ -823,7 +844,7 @@
     f.pers.n++; f.pers.last = o.now;
     const r = rngFor(S.seed, S.year, (S.faMkt ? S.faMkt.day : S.day) * 10 + f.pers.n, 9100);
     if (r.random() < o.prob) {
-      const drop = clamp(2 + o.need * 0.4, 2, 8); f.boardExtra = Math.round(((f.boardExtra || 0) + o.need * 1.05 + 0.1) * 10) / 10; f.trust = clamp(Math.round((f.trust - drop) * 10) / 10, 0, 100);
+      const drop = clamp((2 + o.need * 0.4) * (o.star ? 0.5 : 1), o.star ? 1 : 2, 8); f.boardExtra = Math.round(((f.boardExtra || 0) + o.need * 1.05 + 0.1) * 10) / 10; f.trust = clamp(Math.round((f.trust - drop) * 10) / 10, 0, 100);
       this._doSign(t, p, o.ev.y, o.ev.sal, o.ev.bon);
       if (S.faMkt) { delete S.faMkt.pend[id]; delete S.faMkt.bids[id]; }
       news(this, `이사회 설득 성공: ${p.ko} 영입 승인 (초과 ${o.need}억 추가 예산, 신뢰도 −${drop.toFixed(1)}) — ${o.ev.y}년 총 ${(o.ev.per * o.ev.y).toFixed(1)}억`);
@@ -1244,7 +1265,12 @@
     for (const t of TEAMS) if (t === S.userTeam) this.ensureActive(t);
     this.topUpWhales();
     this.returnMilitary(S.year * 12 + 2);   // 새 시즌 개막(3월) 전까지 전역한 선수 복귀
-    this.newSeasonSetup(false); this.repairSettings(S.userTeam);
+    this.newSeasonSetup(false);
+    for (const t of TEAMS) {   // 1군 편성은 오프시즌 달력(11월 20일) 기준으로 이뤄졌으므로, 개막일 기준 부상자(복귀가 3~4월 이후인 선수)를 1군에서 내리고 건강한 선수로 채운다
+      let ch = false; for (const p of this.players(t)) if (p.active && this.isInj(p)) { p.active = false; ch = true; }
+      if (ch) this.ensureActive(t);
+    }
+    this.repairSettings(S.userTeam);
     const cap = S.calib.cap; S.calib.cap = cap;
     this._setGoals(); S.report = S.report;
     if (this._campApply) this._campApply(); if (this._campEvApply) this._campEvApply(); if (this._investApply) this._investApply(); if (this._loyDecay) this._loyDecay(2);   // 새 시즌: 오래된 불만·기쁨이 가라앉는다

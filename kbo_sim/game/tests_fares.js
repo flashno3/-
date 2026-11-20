@@ -20,4 +20,10 @@ for(const [seed,team] of [[5,'Lions'],[9,'Tigers']]){const L=League.create(base,
 {const L=League.create(base,'Lions',5);L.faAdvance(5);const S=L.S;const mine=L.foreignOf('Lions').find(q=>!q.aq&&!q.sub);const p=Object.values(S.players).find(q=>q.foreign&&q.team==='FA'&&!q.aq&&L.askSalary(q)>2);
  ok(L.negStart(p.id,'foreign',{replace:mine.id}).ok,'협상 시작');const at=m=>{S.neg.mood=m;L._negRangeSync(S.neg);return {r:S.neg.range.slice(),req:L._negEval(p,{years:1,salary:1,bonus:0},'foreign').req}};
  const lo=at(20),hi=at(90);ok(hi.r[1]<lo.r[1]&&hi.r[0]<lo.r[0],'호감도↑ → 범위↓ '+lo.r+' → '+hi.r);ok(hi.req<lo.req,'호감도↑ → 요구액↓ '+lo.req+' → '+hi.req)}
+// 새 시즌 개막: 복귀가 3~4월 이후인 부상자(오프시즌 달력으로는 건강으로 보임)가 1군 엔트리에 올라오지 않는다
+for(const [seed,team] of [[5,'Lions'],[9,'Tigers']]){const L=League.create(base,team,seed);L.faAdvance(75);L.closeFA();const S=L.S;season(L);L.startOffseason();const off=S.off;
+ for(const id of off.rep.expiring.slice())L.resign(id);L.finishContracts();L.buildDraft();L.draftAutoRest();L.finishDraft();L.openFAMarket();L.faAdvance(75);L.closeFA();
+ const hurt=[];for(const t of Object.keys(S.teams))for(const p of L.players(t).filter(q=>q.active).slice(0,3)){p.inj={dx:'테스트 부상',ret:(S.year+1)+'-04-10',retN:Math.floor(Date.UTC(S.year+1,3,10)/864e5),apply:true};hurt.push(p)}
+ L.startNewSeason();const bad=hurt.filter(p=>p.active&&L.isInj(p));ok(bad.length===0,`개막 때 부상자 1군: ${bad.map(p=>p.ko).join(',')}`);
+ for(const t of Object.keys(S.teams))ok(L.players(t).filter(p=>p.active&&L.isInj(p)).length===0,t+' 1군 부상자 없음');ok(L.players(S.userTeam).filter(p=>p.active).length>=18,'1군 인원 유지')}
 console.log('fares tests ok',n);
