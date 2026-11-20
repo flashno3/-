@@ -145,9 +145,11 @@
     const g = gauss(r, 0, 0.5), z = () => -1.1 + g + gauss(r, 0, 0.6);
     const nPl = Object.keys(S.players).length; if (!this._nameTaken || this._nameTakenS !== S || this._nameTakenN !== nPl) { this._nameTaken = new Set(Object.values(S.players).map(q => q.ko)); this._nameTakenS = S; }   // 선수 수가 바뀌면(다른 경로로 생긴 선수 포함) 다시 모은다   // 이미 있는 모든 선수 이름과 겹치지 않게(가상 신인이 실제 선수와 같은 이름이 되어 중복처럼 보이는 것을 막는다)
     let name = opts.name; if (!name) for (let k = 0; k < 60; k++) { name = SURN[Math.floor(r.random() * SURN.length)] + GIV[Math.floor(r.random() * GIV.length)]; if (!this._nameTaken.has(name)) break; }
+    const dupName = !!opts.name && this._nameTaken.has(name);   // 실제 지명자 이름이 기존 선수와 겹치면 동명이인으로 표시(무작위 이름은 겹치지 않게 뽑는다)
     this._nameTaken.add(name); this._nameTakenN = nPl + 1;
     const age = opts.age || 18 + Math.min(5, Math.floor(r.random() * r.random() * 6 + r.random() * 2));
     const p = { id, type, name, ko: name, team: 'DRAFT', age, rookie: S.year + 1, foreign: false, active: false, fat: 0, lastStart: -99, retired: false, pot: Math.max(0, gauss(r, 0.75, 0.5)), p: {} };
+    if (dupName) { p.ns = true; for (const q of Object.values(S.players)) if (q.ko === name) q.ns = true; }
     if (type === 'B') {
       const cl = (v, a, b) => clamp(v, a, b);
       p.p = { k: cl(sc.k[0] - z() * sc.k[1], .08, .40), bb: cl(sc.bb[0] + z() * sc.bb[1], .02, .17), hr: cl(sc.hr[0] + z() * sc.hr[1], .002, .06), babip: cl(sc.babip[0] + z() * sc.babip[1], .25, .37), xbh: cl(sc.xbh[0] + z() * sc.xbh[1], .12, .30), sba: cl(sc.sba[0] + z() * sc.sba[1], .01, .2), hbp: lb.hbp * (0.6 + 0.8 * r.random()), tri: lb.tri * (0.6 + 0.9 * r.random()), sbp: cl(lb.sbp - 0.04 + gauss(r, 0, 0.07), .5, .9) };

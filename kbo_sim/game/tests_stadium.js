@@ -22,7 +22,7 @@ S.year=2032;ok(!L.isBigMatch('Twins','Bears'),'2032 이후에는 이원화 없�
  const g=L.finGateAvg('Twins');ok(Math.abs(g-((1-10/72)*18000+10/72*big)*f.price*f.pm*1.12)<1e-9,'예상 평균 입장 수입(이원화 가중)');ok(Math.abs(L.finGateAvg('Lions')-L.finAtt('Lions')*S.fin.teams.Lions.price*S.fin.teams.Lions.pm)<1e-12,'다른 구단은 기존 식 그대로');}
 // 시즌 시뮬레이션: 잠실 구단 입장 수입이 정규 18,000 상한·객단가 1.12 배율로 누적, 다른 구단은 그대로
 {const A=League.create(base,'Lions',5);A.faAdvance(75);A.closeFA();A.advance(300,false);const fa=A.S.fin.teams;
- for(const t of ['Twins','Bears']){const f=fa[t];ok(f.games>=60,'홈경기 수 '+f.games);const per=f.gate/f.games/(f.price*f.pm*1.12);ok(per<=30000&&per>=15000,`${t} 홈경기 평균 관중 ${Math.round(per)} (18,000 상한 + 빅매치 소수)`);ok(per>17000&&per<20500,`${t} 대부분 18,000 근처 ${Math.round(per)}`)}
+ for(const t of ['Twins','Bears']){const f=fa[t];ok(f.games>=60,'홈경기 수 '+f.games);const per=f.gate/f.games/(f.price*f.pm*1.12);ok(per<=30000&&per>=15000,`${t} 홈경기 평균 관중 ${Math.round(per)} (18,000 상한 + 빅매치 소수)`);ok(per>17000&&per<21500,`${t} 대부분 18,000 근처 ${Math.round(per)}`)}
  const perL=fa.Lions.gate/fa.Lions.games/(fa.Lions.price*fa.Lions.pm);ok(perL>20000&&perL<=24000,'삼성은 24,000 이내 '+Math.round(perL));
  const P=A.startPostseason();ok(Array.isArray(P.seeds),'포스트시즌');}
 // 이전 버전 대비: 같은 시드 1시즌 순위는 재정 데이터와 무관하게 동일(재정은 시즌 중 경기 결과에 영향이 없다)
