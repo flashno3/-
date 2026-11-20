@@ -687,10 +687,11 @@
     const pr = !meet ? `<div class="small">선수 우선순위 ${n.prios.map(k => n.revealed.includes(k) ? `<span class="chip in">${esc(L.negPrioName(k))}</span>` : '<span class="chip">???</span>').join(' ')}</div>` : '';
     const fac = n.factors && n.factors.length ? `<details class="small"><summary>호감도 요인</summary>${n.factors.map(f => `<div class="row" style="gap:6px"><span>${esc(f[0])}</span><span class="sp"></span><b class="${f[1] >= 0 ? 'pos' : 'neg'}">${f[1] > 0 ? '+' : ''}${f[1]}</b></div>`).join('')}</details>` : '';
     const dots = `<span class="rdots" aria-label="라운드">${Array.from({ length: n.max }, (_, i) => `<i class="${i < n.round ? 'on' : ''}"></i>`).join('')}</span>`;
-    let panel;
+    let panel, negTabs = '';
     if (open) {
       const tab = ui.negTab || (meet ? 'cards' : 'offer');
-      panel = `${meet ? '' : `<div class="tabs" role="tablist" style="margin:0"><button role="tab" aria-selected="${tab === 'offer'}" data-act="negTab" data-a="offer">조건 제안</button><button role="tab" aria-selected="${tab === 'cards'}" data-act="negTab" data-a="cards">대화 카드</button></div>`}
+      negTabs = meet ? '' : `<div class="tabs" role="tablist" style="margin:0"><button role="tab" aria-selected="${tab === 'offer'}" data-act="negTab" data-a="offer">조건 제안</button><button role="tab" aria-selected="${tab === 'cards'}" data-act="negTab" data-a="cards">대화 카드</button></div>`;
+      panel = `
         ${tab === 'offer' && !meet ? negPanelOffer(n, p) : negPanelCards(n, p, meet)}
         <div class="row"><button class="sm" data-act="${meet ? 'meetEnd' : 'negLeave'}">${meet ? '면담 마무리' : '협상 종료(결렬)'}</button></div>`;
     } else {
@@ -700,7 +701,7 @@
     return `<div class="neg-bg"><div class="negwin" role="dialog" aria-label="협상 테이블" data-stop="1"><div class="neg-head"><div class="row" style="flex-wrap:nowrap"><button class="sm" data-act="negExit" aria-label="목록으로 돌아가기">← 돌아가기</button><b style="flex:1;text-align:center;min-width:0">${esc(p.ko)}</b><span class="chip in">${n.kind === 'foreign' && p.aq ? '아시아쿼터 선수 계약' : NEG_KIND[n.kind]}</span></div>
       <div class="row" style="justify-content:center;gap:6px"><span class="chip">${pos(p)}</span><span class="chip">${p.age}세</span>${foreignOvr(p)}${L.hiddenForeign(p) ? '' : moodChip(p) + traitChip(p)}</div>
       <div class="row" style="justify-content:space-between">${negMoodBar(n.mood, n.mood0)}<span class="small muted">${meet ? TOPIC_KO[n.topic] || '면담' : `${open ? `라운드 ${Math.min(n.round + 1, n.max)}/${n.max}` : '종료'}`} ${dots}</span></div>${pr}${fac}</div>
-      <div class="neg-chat" aria-live="polite">${chat}</div><div class="neg-panel">${panel}</div></div></div>`;
+      <div class="neg-chat" aria-live="polite">${chat}</div>${negTabs}<div class="neg-panel">${panel}</div></div></div>`;
   }
   function fslotSheet() {
     const id = ui.fslot; if (!id || !L) return ''; const p = P(id); if (!p || p.team !== 'FA') { ui.fslot = null; return ''; }
