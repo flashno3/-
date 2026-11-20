@@ -1,6 +1,6 @@
 import json,random,collections,math,os,sys,time
 RAT=os.environ.get('RAT','ratings_replay.json'); K2=float(os.environ.get('K2','0.004')); TRACK=int(os.environ.get('TRACK','0'))
-USE_FIELD=int(os.environ.get('FIELD','1'));PARKMODE=os.environ.get('PARK','y2026');BOFF=float(os.environ.get('BOFF','-0.001'))
+USE_FIELD=int(os.environ.get('FIELD','1'));PARKMODE=os.environ.get('PARK','y2026');BOFF=float(os.environ.get('BOFF','0.003'))
 R=json.load(open(RAT,encoding='utf8'));F=json.load(open('fielding.json',encoding='utf8'))
 DEFJ=json.load(open('defense_parsed.json',encoding='utf8'))['D'];POSL=json.load(open('positions.json'))
 LB=R['league_bat'];TEAMDEF=R['team_def']
@@ -18,7 +18,7 @@ STINT={'Matt Davidson 데이비슨':[('Dinos',1,60,0.93),('Heroes',61,144,0.81)]
        'Ah-seop Son 손아섭':[('Bears',1,144,54/144)],'Seung Min Ryu 류승민':[('Bears',1,144,43/144)],
        'Jeong-bum Lee 이정범':[('Wiz',1,144,9/144)]}
 PMOVE={'Hyeong-beom Lee 이형범':[('Tigers',1,95),('Eagles',96,144)]}
-ENV={'gdp':0.185,'sf':0.40,'adv13':0.33,'sc2on1':0.65,'sc1on2':0.48,'roe':0.016,'hrs':0.9,'wp':0.0215,'sb_mult':1.6,'prod':0.30}
+ENV={'gdp':0.185,'sf':0.40,'adv13':0.33,'sc2on1':0.65,'sc1on2':0.48,'roe':0.016,'hrs':0.88,'wp':0.0215,'sb_mult':1.6,'prod':0.30}
 odds=lambda p:p/(1-p)
 def comb(pb,pp,pl):
     o=odds(pb)*odds(pp)/odds(pl);return o/(1+o)

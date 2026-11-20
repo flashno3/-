@@ -791,8 +791,10 @@
     }
     /* 라인업 프리셋: 상대 선발 좌/우투에 따라 저장해 둔 라인업을 자동 적용 */
     /* 오늘 경기 한정 타순(경기 전 브리핑 제안). {day, lineup:[{id,pos}]} — 같은 날·유효한 9인일 때만 인정, 프리셋보다 우선 */
-    tonightOf() { const S = this.S, tn = S.tonight; if (!tn || tn.day !== S.day || !this._presetOk(tn.lineup)) return null; return tn; }
-    setTonight(order) { const S = this.S; if (!this.userGameToday() || !this._presetOk(order)) return false; S.tonight = { day: S.day, lineup: order.map(x => ({ id: x.id, pos: x.pos })) }; return true; }
+    /* 오늘 타순은 '현재 출전 9명의 순서만 바꾼 것'이라, 부상 중이어도 이미 그 라인업에 있던 선수는 그대로 인정한다(프리셋과 달리 새로 끼워 넣는 것이 아님) */
+    _tonightOk(pl) { const S = this.S, t = S.userTeam; return !!pl && pl.length === 9 && new Set(pl.map(x => x.id)).size === 9 && pl.every(x => { const p = S.players[x.id]; return p && p.team === t && p.active && p.type === 'B'; }); }
+    tonightOf() { const S = this.S, tn = S.tonight; if (!tn || tn.day !== S.day || !this._tonightOk(tn.lineup)) return null; return tn; }
+    setTonight(order) { const S = this.S; if (!this.userGameToday() || !this._tonightOk(order)) return false; S.tonight = { day: S.day, lineup: order.map(x => ({ id: x.id, pos: x.pos })) }; return true; }
     clearTonight() { delete this.S.tonight; return true; }
     savePreset(hand) { const S = this.S, set = S.teams[S.userTeam].set; if (!['L', 'R'].includes(hand) || set.lineup.length !== 9) return false; S.presets = Object.assign({ on: false }, S.presets, { [hand]: set.lineup.map(x => ({ id: x.id, pos: x.pos })) }); return true; }
     clearPreset(hand) { const S = this.S; if (S.presets) delete S.presets[hand]; return true; }

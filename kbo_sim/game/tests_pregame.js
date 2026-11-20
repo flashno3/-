@@ -54,7 +54,7 @@ const userGame=(L,away)=>{for(let i=0;i<80;i++){const rd=L.S.schedule[L.S.day],g
  const bench=L.hitters(t,true).find(h=>!cur.some(x=>x.id===h.id));ok(typeof L.applyTonight(cur.map((x,i)=>i===0?{id:bench.id,pos:x.pos}:x))==='string','다른 선수 거부(교체 불가)');
  ok(typeof L.applyTonight(cur.map((x,i)=>i===0?{id:x.id,pos:x.pos==='DH'?'1B':'DH'}:x))==='string','포지션 변경 거부');ok(!S.tonight,'거부 시 상태 불변');
  // 부상이면 무효(경기 때 자동으로 원래 라인업으로)
- L.applyTonight(cur.slice().reverse());const p0=S.players[S.tonight.lineup[0].id];p0.inj={days:5};if(L.isInj(p0)){ok(!L.tonightOf(),'부상 선수 포함 타순 무효')}}
+ L.applyTonight(cur.slice().reverse());ok(!!L.tonightOf(),'적용됨');S.players[S.tonight.lineup[0].id].active=false;ok(!L.tonightOf(),'2군으로 내려간 선수가 포함되면 무효')}
 // 5) 비경기일·저장/불러오기
 {const L=mk(11,'Lions');let r=null;for(let i=0;i<30;i++){if(!L.userGameToday()){r=L.preGame();break}const x=L.advance(1,true);if(x.status==='userGame'){const c=L.startUserGame(x.game,x.idx);L.playAuto(c);L.finishUserGame(c)}}
  ok(r===null||r===undefined,'경기 없는 날은 null');
