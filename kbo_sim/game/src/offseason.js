@@ -1354,7 +1354,8 @@
       d += op >= 0 ? 2 : (-op > f.lastRev * LOSS * (0.5 + f.trust / 100) ? -6 : -1);
       const trust = clamp(Math.round(f.trust + d), 0, 100);
       row.teams[t] = { gate: Math.round(v.gate * 10) / 10, par: f.parAds, other: f.other, bc: v.bc, rev: Math.round((v.rev + div + bonus) * 10) / 10, ps: Math.round(div * 10) / 10, bonus: Math.round(bonus * 10) / 10, prize: Math.round(prize * 10) / 10, pay: Math.round(v.pay * 10) / 10, opex: f.opex, cbt: Math.round(v.cbt * 100) / 100, op: Math.round(op * 10) / 10, att: v.att, trust, dTrust: trust - f.trust, rank };
-      f.lastRev = v.rev - (f.evRev || 0); f.trust = trust; f.evRev = 0; f.evCost = 0; f.attMult = 1; f.promo = null; f.boardExtra = 0; f.pers = null; f.snap = []; f.dead = (f.dead || []).filter(x => x.year > S.year);   // 시즌 한정 이벤트 효과 정리·지난 위약금 소멸 f.att0 = Math.min(this.finCap(t, S.year + 1), Math.round(f.att0 * clamp(1 + 0.35 * (wp - 0.5) + (champ ? 0.03 : 0), 0.92, 1.1)));   // 성적이 좋으면 다음 해 기준 관중 상승
+      f.lastRev = v.rev - (f.evRev || 0); f.trust = trust; f.evRev = 0; f.evCost = 0; f.attMult = 1; f.promo = null; f.boardExtra = 0; f.pers = null; f.snap = []; f.dead = (f.dead || []).filter(x => x.year > S.year);   // 시즌 한정 이벤트 효과 정리·지난 위약금 소멸
+      f.att0 = Math.min(Math.max(this.finCap(t, S.year + 1), f.cap), Math.round(f.att0 * clamp(1 + 0.35 * (wp - 0.5) + (champ ? 0.03 : 0), 0.92, 1.1)));   // 성적이 좋으면 다음 해 기준 관중 상승(수요는 임시 구장의 좌석 축소로 사라지지 않게 처음 수용량 이내로만 제한)
       f.gate = 0; f.games = 0;
     }
     S.fin.hist.push(row); if (S.fin.hist.length > 20) S.fin.hist.shift();

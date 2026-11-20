@@ -42,4 +42,10 @@ console.log('finance tests ok',n);
 {const by=k=>Object.values(League.create(base,'Lions',7).S.players).filter(p=>p.ko===k);
  const c=by('조수행').find(p=>p.contract&&p.contract.total===16);ok(c&&c.team==='Bears'&&c.contract.years===3,'조수행 두산 잔여 3년');
  const s=by('손아섭').find(p=>p.team==='Dinos');ok(s&&s.team==='Dinos'&&Math.abs(s.contract.salary-0.5)<1e-9,'손아섭 NC 0.5억');
- ok(by('황재균').length===0,'황재균 은퇴 제외');console.log('contracts ok');}
+ ok(by('황재균').length===0,'황재균 은퇴 제외');// 기준 관중(att0)은 성적에 따라 다음 해로 이어진다: ×clamp(1 + 0.35×(승률−0.5) + 우승 0.03, 0.92, 1.1), 처음 수용량 이내
+{const L=League.create(base,'Lions',5);L.faAdvance(75);L.closeFA();const S=L.S;const a0={};for(const t of Object.keys(S.teams))a0[t]=S.fin.teams[t].att0;
+ L.advance(300,false);const P=L.startPostseason();let g=0;while(!P.done&&g++<100){if(L.userInPost()){const c=L.startUserPostGame();c.live.playToEnd();L.finishUserPostGame(c)}else L.simPostGame()}
+ const wp={};for(const t of Object.keys(S.teams))wp[t]=S.rec[t][0]/Math.max(1,S.rec[t][0]+S.rec[t][1]);const champ=S.post&&S.post.champion;
+ L.startOffseason();let moved=0;for(const t of Object.keys(S.teams)){const f=S.fin.teams[t],fac=Math.min(1.1,Math.max(0.92,1+0.35*(wp[t]-0.5)+(t===champ?0.03:0))),want=Math.min(Math.max(L.finCap(t,S.year+1),f.cap),Math.round(a0[t]*fac));ok(f.att0===want,`${t} 기준 관중 ${a0[t]} → ${f.att0} (기대 ${want})`);if(f.att0!==a0[t])moved++;ok(f.att0>=a0[t]*0.92-1&&f.att0<=a0[t]*1.1+1,'변동 범위')}
+ ok(moved>=8,'대부분 구단의 기준 관중이 성적에 따라 바뀜 '+moved);ok(S.fin.teams.Twins.att0>=a0.Twins*0.92-1,'잠실 임시 구장(정규 18,000석)이어도 수요(기준 관중)는 좌석 축소로 사라지지 않음 '+S.fin.teams.Twins.att0);}
+console.log('contracts ok');}
