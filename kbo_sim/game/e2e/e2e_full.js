@@ -89,7 +89,7 @@ async function run(vp,label,team){
   if(await click('.plist button[data-act="toggleActive"]')){await pg.waitForTimeout(200);await sweep('콜업시트');await click('button[data-act="swapClose"]')}
   // 7) 시즌 진행(자동) + 이벤트 처리 + 라이브 경기
   await nav('대시보드');await pg.evaluate(()=>{const e=document.querySelector('#playMode');if(e){e.value='highlight';e.dispatchEvent(new Event('change',{bubbles:true}))}});
-  let liveDone=0,reviewSeen=false,momentSeen=false,fbw=[],feedAll='',tapDone=false,tapDone2=false,tapDone3=false;
+  let liveDone=0,reviewSeen=false,momentSeen=false,fbw=[],feedAll='',tapDone=false,tapDone2=false,tapDone3=false,swipeDone=false;
   for(let i=0;i<70&&liveDone<2;i++){
     for(let k=0;k<4;k++)await click('button[data-act="evChoice"]');
     const act=await pg.evaluate(()=>{const b=document.querySelector('button.primary[data-act="adv"],button[data-act="adv"],button[data-act="advMoment"]');return b?b.dataset.act:null});
@@ -107,6 +107,12 @@ async function run(vp,label,team){
         if(!tapDone2&&await pg.$('.fieldsvg')){await click('.fieldsvg g.tap[data-a="pit"]');ok(!!(await pg.$('.sheet.pop')),`${label}: 투수 카드 팝업`);await sweep('투수 팝업');await click('.sheet.pop button[data-act="livePopClose"]');await click('.fieldsvg g.tap[data-a="bat"]');ok(!!(await pg.$('.sheet.pop')),`${label}: 타자 팝업`);await sweep('타자 팝업');await click('.sheet.pop button[data-act="livePopClose"]');ok(!(await pg.$('.sheet.pop')),`${label}: 팝업 닫기`);tapDone2=true}
         if(!tapDone3&&await pg.$('.fieldsvg')){await click('button[data-act="livePop"][data-a="plan"]');ok(!!(await pg.$('.sheet.pop [data-sel="rvpcpct"]')),`${label}: 예약·멈춤 팝업`);await sweep('예약 팝업');await click('.sheet.pop button[data-a="set:stopfat:30"]');await click('.sheet.pop button[data-a="rv:addpc"]');await click('.sheet.pop button[data-act="livePopClose"]');
           ok(await pg.evaluate(()=>/멈춤: 체력 30%/.test(document.body.innerText)&&/예약 1건/.test(document.body.innerText)),`${label}: 예약·멈춤 설정 표시`);tapDone3=true}
+        if(!swipeDone&&vp.width<600&&await pg.$('.fieldsvg')){swipeDone=true;const cdp=await ctx.newCDPSession(pg);
+          const swipe=async(x,y0,y1)=>{await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y:y0}]});for(let i=1;i<=10;i++){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y:y0+(y1-y0)*i/10}]});await pg.waitForTimeout(16)}await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await pg.waitForTimeout(450)};
+          await click('button[data-act="liveSheet"][data-a="subs"]');await pg.waitForTimeout(150);const bx=await pg.evaluate(()=>{const r=document.querySelector('.sheet').getBoundingClientRect();return {y:r.y}});
+          await swipe(195,Math.round(bx.y+80),Math.round(bx.y+100));ok(!!(await pg.$('.sheet-bg')),`${label}: 시트를 조금만 쓸면 닫히지 않음`);
+          await swipe(195,Math.round(bx.y+80),Math.round(bx.y+80-60));ok(!!(await pg.$('.sheet-bg')),`${label}: 위로 쓸면 닫히지 않음`);
+          await swipe(195,Math.round(bx.y+60),Math.round(bx.y+60+260));ok(!(await pg.$('.sheet-bg')),`${label}: 시트를 아래로 쓸면 닫힘`)}
         {const w=await pg.evaluate(()=>{const i=document.querySelector('.fbar i');return i?parseFloat(i.style.width):null});if(w!==null)fbw.push(w)}
         feedAll+=await pg.evaluate(()=>[...document.querySelectorAll('.feed li')].map(l=>l.innerText).join('\n'))+'\n';
         await click('button[data-act="liveRun"][data-a="pa"]');if(st%25===0)await sweep('라이브'+st)}

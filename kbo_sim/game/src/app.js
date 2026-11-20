@@ -1787,6 +1787,22 @@
   let sw0 = null;   // 선수 상세 좌우 스와이프: 같은 팀 선수 이전/다음
   document.addEventListener('touchstart', e => { sw0 = ui.modal && e.target.closest && e.target.closest('.modal') && !e.target.closest('.tablewrap') ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null; }, { passive: true });
   document.addEventListener('touchend', e => { if (!sw0 || !ui.modal || !L) return; const t = e.changedTouches[0], dx = t.clientX - sw0.x, dy = t.clientY - sw0.y; sw0 = null; if (Math.abs(dx) < 70 || Math.abs(dy) > 40) return; const p = P(ui.modal), list = L.players(p.team).sort((x, y) => L.ovr(y) - L.ovr(x)), i = list.findIndex(x => x.id === p.id), n = list[i + (dx < 0 ? 1 : -1)]; if (n) { ui.modal = n.id; ui.confirm = null; render(); } }, { passive: true });
+  /* 아래 시트: 손잡이(회색 막대)가 있는 시트는 맨 위에서 아래로 쓸어내려 닫을 수 있다(배경 터치·닫기 버튼과 같은 동작). 위로·옆으로 쓸거나 목록을 스크롤하는 중에는 반응하지 않는다 */
+  let sheetDrag = null;
+  document.addEventListener('touchstart', e => {
+    const sh = e.target.closest && e.target.closest('.sheet'), bg = sh && sh.parentElement; if (!sh || !bg || !bg.classList.contains('sheet-bg') || !bg.dataset.act || e.touches.length !== 1) { sheetDrag = null; return; }
+    const t = e.touches[0]; sheetDrag = { sh, bg, x0: t.clientX, y0: t.clientY, t0: Date.now(), dy: 0, on: false, top: sh.scrollTop <= 0, ok: !e.target.closest('input, textarea, select, .tablewrap') };
+  }, { passive: true });
+  document.addEventListener('touchmove', e => {
+    const d = sheetDrag; if (!d || !d.ok || e.touches.length !== 1) return; const t = e.touches[0], dy = t.clientY - d.y0, dx = t.clientX - d.x0;
+    if (!d.on) { if (Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy)) { sheetDrag = null; return; } if (!(d.top && d.sh.scrollTop <= 0 && dy > 10 && dy > Math.abs(dx))) return; d.on = true; d.y0 = t.clientY; d.t0 = Date.now(); d.dy = 0; d.sh.style.transition = 'none'; return; }
+    d.dy = Math.max(0, t.clientY - d.y0); d.sh.style.transform = `translateY(${d.dy}px)`;
+  }, { passive: true });
+  const endSheetDrag = () => {
+    const d = sheetDrag; sheetDrag = null; if (!d || !d.on) return; const fast = d.dy / Math.max(1, Date.now() - d.t0) > 0.6; d.sh.style.transition = 'transform .18s ease-out';
+    if (d.dy > 110 || (fast && d.dy > 50)) { d.sh.style.transform = 'translateY(100%)'; setTimeout(() => d.bg.dispatchEvent(new MouseEvent('click', { bubbles: true })), 170); } else d.sh.style.transform = '';
+  };
+  ['touchend', 'touchcancel'].forEach(ev => document.addEventListener(ev, endSheetDrag, { passive: true }));
   window.addEventListener('keydown', e => {
     if (!L) return; const tg = e.target, typing = tg && (tg.tagName === 'INPUT' || tg.tagName === 'TEXTAREA' || tg.tagName === 'SELECT' || tg.isContentEditable);
     if (e.key === 'Escape') { if (ui.cf) A.cfClose(); else if (ui.search) A.searchClose(); else if (ui.cmpOpen) A.cmpClose(); else if (ui.modal) A.closeModal(); return; }
