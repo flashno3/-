@@ -340,7 +340,7 @@
   }
 
   /* 경쟁균형세 표시: 상위 40명 합계(신인·외국인 제외) / 상한 */
-  function salCell(p) { const c = p.contract; return c.amort ? `${money(c.salary)}<div class="muted small">+ 계약금 ${c.amort}억/년 (총 ${c.bonus}억)</div>` : money(c.salary); }
+  function salCell(p) { const c = p.contract; return c.amort ? `${money(c.salary)}<div class="muted small wrapok">+ 계약금 ${c.amort}억/년 (총 ${c.bonus}억)</div>` : money(c.salary); }
   function cbtText(t) { const v = L.cbtPreview(t), fl = v.fl !== null ? ` · 하한 ${v.fl.toFixed(1)}` : ''; return `연봉(상위 40) ${v.pay} / 상한 ${v.cap.toFixed(1)}억${fl}${v.kind === 'over' ? ` ⚠ 초과 시 기금 ${v.fee.toFixed(1)}억` : v.kind === 'under' ? ` ⚠ 하한 미달 시 기금 ${v.fee.toFixed(1)}억` : ''}`; }
   /* 래리 버드 룰 안내: FA가 끝난 시점에 추천(보수 최고 자격 선수) 지정 내용을 알리고 확정·변경 */
   function excPromptCard() {
