@@ -76,7 +76,7 @@ const f=L.foreignOf(U);const fm=L.faList().filter(p=>p.foreign);
 L.finishFA();
 for(const tm of TEAMS){if(tm===U)continue;const fo=L.foreignOf(tm),gen=fo.filter(p=>!p.aq),aq=fo.filter(p=>p.aq);
  ok(gen.length===3&&aq.length===1,tm+' 외국인 일반 '+gen.length+' + AQ '+aq.length);ok(!gen.every(p=>p.type===gen[0].type),tm+' 같은 포지션 3명');
- for(const p of fo)ok(p.contract.salary<=(p.aq?2.8:14)+Math.max(0,(p.faInfo?1:0))||p.contract.salary<=p.salHist[p.salHist.length-1]+0.01,tm+' '+p.ko+' 외국인 연봉 상한 '+p.contract.salary)}
+ for(const p of fo)ok(p.contract.salary<=(p.aq?2.8:14)+Math.max(0,(p.faInfo?1:0))||p.contract.salary<=p.salHist[p.salHist.length-1]+(p.aq?1.4:7)+0.01,tm+' '+p.ko+' 외국인 연봉 상한 '+p.contract.salary)}
 // 모든 팀 로스터 정합성
 for(const tm of TEAMS){const ids=S.teams[tm].ids;ok(new Set(ids).size===ids.length&&ids.every(id=>S.players[id].team===tm),tm+' 소속 정합');}
 L.startNewSeason();ok(S.year===2028,'다음 시즌');

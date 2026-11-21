@@ -2449,7 +2449,8 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
     if (p.fa.used >= 2 || p.fa.last === 'C') return 'C';
     if (p.fa.used === 1) return (p.fa.last === 'A' || p.fa.last === 'B') ? 'B' : 'C';
     if (p.age >= 38) return 'C';   // 고령 C등급: 규정은 만 35세 이상이나 FA 이력 CSV에서 1990년생(만 35)이 B, 1988년생 이전이 C로 확인되어 p.age 38 이상(1989년생 이전)으로 보정
-    const ranks = this._salRanks(), tr = ranks.team[p.id], lr = ranks.league[p.id];
+    const ranks = this._salRanks(); let tr = ranks.team[p.id], lr = ranks.league[p.id];
+    if (tr === undefined) { const v = this._salAvg(p), tm = team in this.S.teams ? team : p.team in this.S.teams ? p.team : p.faInfo && p.faInfo.from in this.S.teams ? p.faInfo.from : null; tr = tm ? 1 + this.players(tm).filter(x => x.id !== p.id && ranks.team[x.id] !== undefined && this._salAvg(x) > v).length : 99; lr = 1 + Object.keys(ranks.league).filter(id => id !== p.id && this._salAvg(this.S.players[id]) > v).length; }   // 계약 만료 시점에 모집단에서 빠져 있던 선수(예: 다년계약 마지막 해)는 같은 기준으로 순위를 따로 계산
     if (tr <= 3 && lr <= 30) return 'A';
     if (tr <= 10 && lr <= 60) return 'B';
     return 'C';
@@ -2457,8 +2458,11 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
   proto._salRanks = function () {
     const S = this.S, key = S.year + ':' + S.day + ':' + S.phase + ':' + (S.off ? S.off.step : '');
     if (this._rk && this._rk.key === key && this._rk.n === Object.keys(S.players).length) return this._rk;
-    const team = {}, all = [];
-    for (const t of TEAMS) { const l = this.players(t).slice().sort((a, b) => this._salAvg(b) - this._salAvg(a)); l.forEach((p, i) => { team[p.id] = i + 1; all.push(p); }); }
+    /* 규약 제172조: 등급 산정 순위는 '기존 FA계약선수와 비FA 다년계약(마지막 해 제외) 선수'를 뺀 선수들 사이에서 매긴다. 이 게임에서 FA로 계약한 선수(contract.fa)는 계약이 끝날 때까지 모집단에서 뺀다.
+       빼지 않으면 해마다 FA 고액 계약자가 쌓여 리그 상위 30·60위를 채우고, 2년차부터 새 FA 자격자가 대부분 C등급이 된다.
+       ⚠ 시작 시점의 실제 FA 계약(2026 이전)은 구분하지 않고 그대로 둔다 — 실제 공시(김호령 연봉 61위 → C, B 기준 60위 이내 미달)와 이 모집단 기준 순위가 일치함을 확인했기 때문. 외국인도 모집단에 남겨 둔다. */
+    const team = {}, all = [], inPool = p => !(p.contract && (p.contract.fa || p.contract.years > 1));
+    for (const t of TEAMS) { const l = this.players(t).filter(inPool).sort((a, b) => this._salAvg(b) - this._salAvg(a)); l.forEach((p, i) => { team[p.id] = i + 1; all.push(p); }); }
     all.sort((a, b) => this._salAvg(b) - this._salAvg(a)); const league = {}; all.forEach((p, i) => { league[p.id] = i + 1; });
     this._rk = { key, n: Object.keys(S.players).length, team, league }; return this._rk;
   };
@@ -2566,7 +2570,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
   proto._doSign = function (t, p, years, ask, bonus) {
     const S = this.S, info = p.faInfo, graded = info && info.grade, comp = graded && info.from !== t ? graded : null;
     S.fa = (S.fa || []).filter(x => x !== p.id); p.team = t; p.active = false; S.teams[t].ids.push(p.id); if (t === S.userTeam) p.myFrom = { y: S.year, how: p.foreign ? (p.aq ? '아시아쿼터 영입' : '외국인 영입') : 'FA 영입' };
-    ask = Math.round(ask * 10) / 10; bonus = Math.round((bonus || 0) * 10) / 10; p.contract = this._newContract(p, ask, p.foreign || !graded ? 1 : years, p.foreign || !graded ? 0 : bonus); p.salHist = (p.salHist || []).slice(-2).concat([Math.round(((p.contract.bonus || 0) / p.contract.years + ask) * 10) / 10]);
+    ask = Math.round(ask * 10) / 10; bonus = Math.round((bonus || 0) * 10) / 10; p.contract = this._newContract(p, ask, p.foreign || !graded ? 1 : years, p.foreign || !graded ? 0 : bonus); if (graded && !p.foreign) p.contract.fa = true;   // FA 계약 표시(다음 FA 등급 산정 모집단에서 제외) p.salHist = (p.salHist || []).slice(-2).concat([Math.round(((p.contract.bonus || 0) / p.contract.years + ask) * 10) / 10]);
     if (t === S.userTeam && this._contractNote) this._contractNote(p, p.foreign ? '외국인' : graded ? 'FA' : '재계약');
     if (graded && p.fa) { p.fa.used += 1; p.fa.last = graded; p.fa.svc = 0; p.fa.rem = 0; }
     if (comp) { this._faCount(t, 1); this._compensate(t, p, info); }
