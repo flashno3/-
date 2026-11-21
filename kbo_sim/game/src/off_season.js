@@ -1,0 +1,86 @@
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) factory(require('./league.js'), require('../../web/src/engine.js'));
+  else factory(root.KBOLeague, root.KBOEngine);
+})(typeof self !== 'undefined' ? self : this, function (LG, Engine) {
+  'use strict';
+  /* [오프시즌 분할] 새 시즌·트레이드 — 원본 offseason.js 순서 그대로. 공용 심볼은 off_common.js(LG.OFFC). */
+  const { proto, ACTIVE_MAX, rngFor, TEAMS, news, LIM_DEADLINE, ROSTER_MAX, ROSTER_MIN, KO0 } = LG.OFFC;
+  /* ---------------- 새 시즌 ---------------- */
+  proto.ensureActive = function (t) {   // 1군 28명 유지(부족하면 가치 높은 선수로 채움, 초과하면 낮은 순으로 내림)
+    const S = this.S, P = this.players(t);
+    for (const p of P) if (!S.teams[t].ids.includes(p.id)) p.active = false;
+    let act = P.filter(p => p.active);
+    const need = () => ({ B: act.filter(p => p.type === 'B').length, P: act.filter(p => p.type === 'P').length, C: act.filter(p => p.pos === 'C').length });
+    while (act.length > ACTIVE_MAX) { const w = act.sort((a, b) => this.marketValue(a) - this.marketValue(b))[0]; w.active = false; act = P.filter(p => p.active); }
+    const fill = (pred, count) => { const c = P.filter(p => !p.active && !this.isInj(p) && pred(p)).sort((a, b) => this.marketValue(b) - this.marketValue(a)).slice(0, count); c.forEach(p => { p.active = true; }); act = P.filter(p => p.active); };
+    let n = need();
+    if (n.B < 13) fill(p => p.type === 'B', 13 - n.B); n = need();
+    if (n.C < 2) fill(p => p.pos === 'C', 2 - n.C);
+    n = need(); if (n.P < 13) fill(p => p.type === 'P', 13 - n.P);
+    act = P.filter(p => p.active);
+    if (act.length < ACTIVE_MAX) fill(() => true, ACTIVE_MAX - act.length);
+    act = P.filter(p => p.active); while (act.length > ACTIVE_MAX) { const w = act.filter(p => p.type === 'B').sort((a, b) => this.marketValue(a) - this.marketValue(b))[0]; w.active = false; act = P.filter(p => p.active); }
+    this.invalidate();
+  };
+  /* 울산 웨일즈(퓨처스 전용): 은퇴로 줄어든 선수를 신인으로 채워 규모(타자 24·투수 22 이상)를 유지 */
+  proto.topUpWhales = function () {
+    const S = this.S, w = S.fteams && S.fteams.Whales; if (!w || w.ids.length < 20) return;
+    const r = rngFor(S.seed, S.year, 61), cnt = k => w.ids.filter(id => S.players[id] && S.players[id].type === k).length;
+    for (const k of ['B', 'P']) while (cnt(k) < (k === 'B' ? 24 : 22)) { const p = this.makeRookie(r, k); p.team = 'Whales'; p.rookie = undefined; p.contract = { salary: 0.3, years: 2 }; w.ids.push(p.id); }
+    this.invalidate();
+  };
+  proto.startNewSeason = function () {
+    if (this._campEvClose) this._campEvClose();   // 결정하지 않은 캠프 소식은 기본(변화 없음)으로 처리
+    const S = this.S; S.year += 1; S.off = null; S.faMkt = null; S.teamMood = null; S.restUntil = 0; S.trainAcc = { total: 0, B: {}, P: {} }; S.trainTrack = []; for (const id in S.players) if (S.players[id].tr) delete S.players[id].tr; for (const id in S.players) if (S.players[id].mood) delete S.players[id].mood; if (S.events) for (const e of (S.events.list || [])) if (e.status === 'open') { e.status = 'done'; e.result = '시즌 종료로 자동 종결'; } S.fa = (S.fa || []);
+    for (const id in S.players) if (S.players[id].retired || S.players[id].team === 'RET') delete S.players[id];   // 은퇴·이탈 선수 정리(저장 용량)
+    this.finishFA === undefined; const adj = this.normalizeTalent(); S.lastAdj = adj;
+    for (const t of TEAMS) if (t === S.userTeam) this.ensureActive(t);
+    this.topUpWhales();
+    this.returnMilitary(S.year * 12 + 2);   // 새 시즌 개막(3월) 전까지 전역한 선수 복귀
+    if (S.cbt && S.cbt.excPrompt) S.cbt.excPrompt = null;   // 확인하지 않아도 추천 선수로 적용된 상태로 새 시즌 시작
+    this.newSeasonSetup(false);
+    for (const t of TEAMS) {   // 1군 편성은 오프시즌 달력(11월 20일) 기준으로 이뤄졌으므로, 개막일 기준 부상자(복귀가 3~4월 이후인 선수)를 1군에서 내리고 건강한 선수로 채운다
+      let ch = false; for (const p of this.players(t)) if (p.active && this.isInj(p)) { p.active = false; ch = true; }
+      if (ch) this.ensureActive(t);
+    }
+    this.repairSettings(S.userTeam);
+    const cap = S.calib.cap; S.calib.cap = cap;
+    this._setGoals(); S.report = S.report;
+    if (this._campApply) this._campApply(); if (this._campEvApply) this._campEvApply(); if (this._investApply) this._investApply(); if (this._loyDecay) this._loyDecay(2);   // 새 시즌: 오래된 불만·기쁨이 가라앉는다
+    S.prospectsDone = null; S.scWatch = []; S.scPtr = 0; if (this.ensureProspects) this.ensureProspects();   // 이번 시즌의 드래프트 후보 풀 공개
+    news(this, `${S.year} 시즌 개막 준비`);
+  };
+
+  /* ---------------- 트레이드 ---------------- */
+  proto.canTrade = function () { const S = this.S; if (S.phase === 'offseason') return true; if (S.phase === 'preseason') return true; if (S.phase === 'regular' || S.phase === 'regular_done') return S.day < LIM_DEADLINE; return false; };
+  proto.tradeValue = function (p, aiTeam) { let v = this.marketValue(p); if (p.team === aiTeam) v *= 1.18; return v; };
+  proto.evaluateTrade = function (aiTeam, give, get) {
+    const S = this.S, me = S.userTeam; if (!this.canTrade()) return { ok: false, why: S.phase === 'post' || S.phase === 'post_done' ? '포스트시즌에는 트레이드할 수 없습니다.' : `트레이드 마감(${LIM_DEADLINE}일차) 이후에는 할 수 없습니다.` };
+    if (!give.length || !get.length) return { ok: false, why: '양쪽에서 최소 1명씩 선택하세요.' };
+    const gp = give.map(id => S.players[id]), tp = get.map(id => S.players[id]);
+    if (gp.some(p => p.team !== me) || tp.some(p => p.team !== aiTeam)) return { ok: false, why: '선수 소속이 올바르지 않습니다.' };
+    const vGet = tp.reduce((a, p) => a + this.tradeValue(p, aiTeam), 0), vGive = gp.reduce((a, p) => a + this.tradeValue(p, aiTeam), 0);
+    const aiN = S.teams[aiTeam].ids.length - tp.length + gp.length, myN = S.teams[me].ids.length + tp.length - gp.length;
+    if (aiN > ROSTER_MAX || myN > ROSTER_MAX) return { ok: false, why: `보유 선수 ${ROSTER_MAX}명 제한을 넘습니다.` };
+    if (aiN < ROSTER_MIN || myN < ROSTER_MIN) return { ok: false, why: `보유 선수 최소 ${ROSTER_MIN}명이 필요합니다.` };
+    { const cb = this.capBlockTrade(me, tp, gp); if (cb) return { ok: false, why: cb }; }   // 내 구단도 FA 영입과 같은 상한 규칙
+    // AI 구단은 트레이드로 상한을 넘기지 않는다
+    const aiPay = this.cbtPay(aiTeam) + (S.calib.cbtK || 1) * (gp.reduce((a, p) => a + (p.rookie === S.year || p.foreign ? 0 : p.contract.salary), 0) - tp.reduce((a, p) => a + (p.rookie === S.year || p.foreign ? 0 : p.contract.salary), 0));
+    if (aiPay > this.cbtCap() && aiPay > this.cbtPay(aiTeam)) return { ok: false, why: `${aiTeam} 구단이 연봉 상한(${this.cbtCap()}억)을 넘게 되어 수락하지 않습니다.` };
+    // AI가 핵심 선수를 내줄 때는 더 큰 대가를 요구
+    const star = tp.some(p => this.ovr(p) >= 65) ? 1.25 : 1.0, need = vGet * 1.12 * star + 0.1;
+    return { ok: vGive >= need, vGive: Math.round(vGive * 10) / 10, vGet: Math.round(vGet * 10) / 10, need: Math.round(need * 10) / 10, why: vGive >= need ? null : `상대 구단이 받는 가치(${Math.round(vGive * 10) / 10})가 요구 수준(${Math.round(need * 10) / 10})에 못 미칩니다.` };
+  };
+  proto.executeTrade = function (aiTeam, give, get) {
+    const S = this.S, ev = this.evaluateTrade(aiTeam, give, get); if (!ev.ok) return ev; const me = S.userTeam;
+    const gb = give.map(id => ({ id, bl: this.bonds ? this.bonds(S.players[id]) : [] }));
+    for (const id of give) { this.removeFromTeam(me, id); S.players[id].team = aiTeam; S.players[id].active = false; S.teams[aiTeam].ids.push(id); }
+    for (const id of get) delete S.players[id].aiGs;
+    for (const id of get) { this.removeFromTeam(aiTeam, id); S.players[id].team = me; S.players[id].active = false; S.teams[me].ids.push(id); }
+    for (const id of get) S.players[id].myFrom = { y: S.year, how: `트레이드(${KO0[aiTeam]})` };
+    news(this, `트레이드: ${give.map(i => S.players[i].ko).join(', ')} ↔ ${get.map(i => S.players[i].ko).join(', ')} (${aiTeam})`);
+    if (this._bondShift) for (const x of gb) this._bondShift(S.players[x.id], -1, '트레이드', x.bl);
+    this.refreshTeam(aiTeam); this.repairSettings(me); this.invalidate(); return ev;
+  };
+
+});

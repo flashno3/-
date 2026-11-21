@@ -646,7 +646,7 @@ def load_school_home():
         names={n}
         for c in sorted(CITY,key=len,reverse=True):
             if n.startswith(c) and len(n)-len(c)>=3 and n not in ('서울동산고',): names.add(n[len(c):])
-        for a in names: sh.setdefault(a,[]).append((tm,n))
+        for a in sorted(names): sh.setdefault(a,[]).append((tm,n))
     out={}
     for a,v in sh.items():
         full={n for _,n in v}
