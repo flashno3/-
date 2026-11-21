@@ -113,8 +113,8 @@
 
   /* ---------------- 주간 관찰 ---------------- */
   proto._scoutDay = function () { const S = this.S; if (this._subDay) this._subDay(); if (S.phase !== 'regular' || !S.scouts || !S.scouts.length || !S.day || S.day % 7 !== 0) return; this._scoutWeek(); S.scoutObs = (S.scoutObs || 0) + this._scoutWeekForeign(); };
-  proto._scoutObserve = function (id, sc, week, idx) {
-    const S = this.S, p = S.players[id]; if (!p || p.team !== 'DRAFT') return false; const rating = p.pro && p.pro.univ ? sc.univ : sc.high, se = clamp(16 - 0.17 * (rating - 40), 7, 16) * (p.pro && p.pro.cls === 2 ? 1.25 : 1) * projMul(sc, p), seo = SE_O * toolMul(sc, p);   // 내년 후보는 더 어려서 관찰 잡음 ×1.25
+  proto._scoutObserve = function (id, sc, week, idx, mul) {   // mul: 관찰 잡음 배율(출장 관찰 <1 · 영상 분석 >1, 기본 1)
+    const S = this.S, p = S.players[id]; if (!p || p.team !== 'DRAFT') return false; const rating = p.pro && p.pro.univ ? sc.univ : sc.high, se = clamp(16 - 0.17 * (rating - 40), 7, 16) * (p.pro && p.pro.cls === 2 ? 1.25 : 1) * projMul(sc, p) * (mul || 1), seo = SE_O * toolMul(sc, p) * (mul || 1);   // 내년 후보는 더 어려서 관찰 잡음 ×1.25
     const si = idn(sc.id), rb = rngFor(S.seed, S.year, idn(id) * 997 + si, 7410), bc = gauss(rb, 0, BIAS_C), bo = gauss(rb, 0, BIAS_O);   // 스카우트×선수 고정 편향
     const rn = rngFor(S.seed, S.year, idn(id) * 131 + week * 7 + idx, 7420 + si % 50);
     const mc = clamp(p.peak + bc + gauss(rn, 0, se), 20, 90), mo = this.ovr(p) + bo + gauss(rn, 0, seo);
@@ -146,6 +146,39 @@
     return { est: e, strengths: e.n >= 2 ? sorted.slice(0, 2).filter(x => x[1] >= mean + 2).map(x => x[0]) : [], weaknesses: e.n >= 2 ? sorted.slice(-1).filter(x => x[1] <= mean - 2).map(x => x[0]) : [], detail: e.n >= 2, hand: p.type === 'B' ? (p.bats === 'L' ? '좌타' : p.bats === 'S' ? '양타' : '우타') : (p.throws === 'L' ? '좌투' : '우투'), school: p.pro ? p.pro.school : '', univ: !!(p.pro && p.pro.univ), by: Object.entries((p.sc && p.sc.by) || {}).map(([id, b]) => ({ id, n: b.n, name: ((S.scouts || []).find(s => s.id === id) || {}).name || '이전 스카우트' })), trait: this.scoutTraitView(p), cls: p.pro ? p.pro.cls : 1 };
   };
 
+  /* ---------------- 관찰 방식 선택(비용 있는 선택) ----------------
+     정기 관찰(관심 목록 주간 순회) 외에 직접 후보를 골라 추가로 관찰한다. 조사비는 새 시즌 행사 비용(evCost)에 계상, 시즌 중·오프시즌 모두 가능.
+       출장 관찰: 0.5억, 스카우트 1명이 한 후보를 직접 보고 3회 관찰 분량(잡음 ×0.75) — 스카우트당 시즌 2회, 같은 후보는 스카우트마다 1회
+       영상 분석: 0.1억, 1회 관찰(잡음 ×1.3) — 같은 스카우트·후보 3회까지, 시즌 횟수 제한 없음
+       비교 평가: 두 후보를 나란히 놓고 '누가 더 나은가'의 확률을 계산(비용 없음, 읽기 전용)
+     같은 스카우트가 여러 번 봐도 그 스카우트의 고정 편향은 줄지 않으므로 오차에는 바닥이 있다(기존 규칙). ⚠ 비용·횟수·배율은 가정값 */
+  const VISIT_COST = 0.5, VIDEO_COST = 0.1, VISIT_MAX = 2, VIDEO_MAX = 3;
+  proto.scoutVisitCost = function () { return VISIT_COST; }; proto.scoutVideoCost = function () { return VIDEO_COST; };
+  proto.scoutVisitLeft = function (scoutId) { const S = this.S, v = S.scVisits && S.scVisits.y === S.year ? S.scVisits.n[scoutId] || 0 : 0; return Math.max(0, VISIT_MAX - v); };
+  proto._scoutManualOk = function (id, scoutId) {
+    const S = this.S, p = S.players[id]; if (!p || p.team !== 'DRAFT' || p.fpool) return '관찰할 수 있는 드래프트 후보가 아닙니다.'; const sc = (S.scouts || []).find(x => x.id === scoutId); if (!sc) return '관찰을 맡을 스카우트를 고르세요.'; return { p, sc };
+  };
+  proto.scoutVisit = function (id, scoutId) {
+    const ck = this._scoutManualOk(id, scoutId); if (typeof ck === 'string') return ck; const { p, sc } = ck, S = this.S; p.sc = p.sc || { by: {} }; p.sc.vis = p.sc.vis || {};
+    if (p.sc.vis[scoutId]) return '이 스카우트가 이미 직접 관찰했습니다.'; if (this.scoutVisitLeft(scoutId) <= 0) return `${sc.name}의 출장 관찰은 시즌당 ${VISIT_MAX}회까지입니다.`;
+    const bad = spend(this, VISIT_COST); if (bad) return bad;
+    if (!S.scVisits || S.scVisits.y !== S.year) S.scVisits = { y: S.year, n: {} }; S.scVisits.n[scoutId] = (S.scVisits.n[scoutId] || 0) + 1; p.sc.vis[scoutId] = (S.day || 0) + 1;
+    for (let i = 0; i < 3; i++) this._scoutObserve(id, sc, 900 + S.scVisits.n[scoutId] * 10, i, 0.75);
+    return null;
+  };
+  proto.scoutVideo = function (id, scoutId) {
+    const ck = this._scoutManualOk(id, scoutId); if (typeof ck === 'string') return ck; const { p, sc } = ck, S = this.S; p.sc = p.sc || { by: {} }; p.sc.vid = p.sc.vid || {};
+    if ((p.sc.vid[scoutId] || 0) >= VIDEO_MAX) return `영상 분석은 같은 스카우트·후보당 ${VIDEO_MAX}회까지입니다.`;
+    const bad = spend(this, VIDEO_COST); if (bad) return bad;
+    p.sc.vid[scoutId] = (p.sc.vid[scoutId] || 0) + 1; this._scoutObserve(id, sc, 950 + p.sc.vid[scoutId], 0, 1.3); return null;
+  };
+  const Phi = z => 0.5 * (1 + (z < 0 ? -1 : 1) * Math.sqrt(1 - Math.exp(-2 * z * z / Math.PI)));
+  proto.scoutCompare = function (aId, bId) {   // 두 후보의 성장 상한·현재 능력 추정을 비교: A가 더 나을 확률(추정 오차 반영)
+    const S = this.S, a = S.players[aId], b = S.players[bId]; if (!a || !b || a.team !== 'DRAFT' || b.team !== 'DRAFT' || aId === bId) return null;
+    const ea = this.scoutEst(a), eb = this.scoutEst(b), pc = Phi((ea.ceil - eb.ceil) / Math.sqrt(ea.ceilSd * ea.ceilSd + eb.ceilSd * eb.ceilSd)), po = Phi((ea.o - eb.o) / Math.sqrt(ea.oSd * ea.oSd + eb.oSd * eb.oSd));
+    const edge = Math.abs(pc - 0.5), conf = edge >= 0.3 ? '높음' : edge >= 0.15 ? '보통' : '낮음';
+    return { a: { id: aId, name: a.ko, e: ea }, b: { id: bId, name: b.ko, e: eb }, pCeil: Math.round(pc * 100) / 100, pNow: Math.round(po * 100) / 100, winner: pc >= 0.5 ? aId : bId, conf };
+  };
   /* 평가 항목별 확신도(리포트): 현재 능력(툴) · 성장 상한 · 성격. 항목마다 오차 크기에 따라 확신도를 따로 보여 준다 */
   proto.scoutItems = function (p) {
     const e = this.scoutEst(p); if (!e) return null; const tv = this.scoutTraitView(p), oc = sd => sd >= 2.6 ? '낮음' : sd >= 1.7 ? '보통' : '높음';

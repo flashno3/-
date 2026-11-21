@@ -24,7 +24,11 @@
       eye: { n: '선구', base: 0.7, w: { bb: 1, k: 0.5 }, coach: ['eye'], tip: '볼넷 증가·삼진 감소 성장 ↑' },
       run: { n: '주루', base: 0.4, w: {}, speed: 0.06, coach: ['speed'], tip: '도루 능력 성장 ↑' },
       def: { n: '수비', base: 0.5, w: {}, range: 1.2, coach: ['defense'], tip: '수비 범위 성장 ↑' },
-      cond: { n: '컨디션 관리', base: 0.4, w: {}, coach: ['mgmt'], tip: '소폭 성장 ↑ · 부상 위험 −12%' }
+      cond: { n: '컨디션 관리', base: 0.4, w: {}, coach: ['mgmt'], tip: '소폭 성장 ↑ · 부상 위험 −12%' },
+      strength: { n: '근력', base: 0.3, w: { hr: 0.6, xbh: 0.6 }, phys: true, injMul: 1.04, coach: ['power', 'mgmt'], tip: '장타 성장 소폭 ↑ · 신체 부담으로 부상 위험 +4% · 어릴수록 효과 큼' },
+      endur: { n: '지구력', base: 0.3, w: {}, phys: true, injMul: 0.95, coach: ['mgmt'], tip: '소폭 성장 ↑ · 부상 위험 −5% · 어릴수록 효과 큼' },
+      prevent: { n: '부상 예방', base: 0.2, w: {}, phys: true, injMul: 0.8, coach: ['mgmt'], tip: '부상 위험 −20%(고령일수록 효과 큼) · 성장 효과는 작음' },
+      recover: { n: '회복', base: 0.2, w: {}, phys: true, injMul: 0.92, coach: ['mgmt'], tip: '부상 위험 −8% · 타자는 컨디션 회복에 유리(고령일수록 효과 큼)' }
     },
     P: {
       none: { n: '없음', base: 0, w: {}, tip: '특별한 집중 없이 운영' },
@@ -32,7 +36,11 @@
       stuff: { n: '구위', base: 0.7, w: { k: 1, hr: 1 }, coach: ['stuff'], tip: '탈삼진 증가·피홈런 감소 성장 ↑' },
       control: { n: '제구', base: 0.7, w: { bb: 1, babip: 0.5 }, coach: ['control'], tip: '볼넷 감소·피안타 성장 ↑' },
       stamina: { n: '체력', base: 0.3, w: {}, stamina: 2.0, coach: ['stamina'], tip: '체력(이닝 소화) 성장 ↑' },
-      cond: { n: '컨디션 관리', base: 0.4, w: {}, coach: ['mgmt'], tip: '소폭 성장 ↑ · 부상 위험 −12%' }
+      cond: { n: '컨디션 관리', base: 0.4, w: {}, coach: ['mgmt'], tip: '소폭 성장 ↑ · 부상 위험 −12%' },
+      strength: { n: '근력', base: 0.3, w: { k: 0.6 }, phys: true, injMul: 1.04, coach: ['stuff', 'mgmt'], tip: '탈삼진 성장 소폭 ↑ · 신체 부담으로 부상 위험 +4% · 어릴수록 효과 큼' },
+      endur: { n: '지구력', base: 0.3, w: {}, stamina: 1.5, phys: true, injMul: 0.95, coach: ['stamina', 'mgmt'], tip: '체력(이닝 소화) 성장 ↑ · 부상 위험 −5% · 어릴수록 효과 큼' },
+      prevent: { n: '부상 예방', base: 0.2, w: {}, phys: true, injMul: 0.8, coach: ['mgmt'], tip: '부상 위험 −20%(고령일수록 효과 큼) · 성장 효과는 작음' },
+      recover: { n: '회복', base: 0.2, w: {}, phys: true, injMul: 0.92, rec: 1.25, coach: ['mgmt'], tip: '피로 회복 +25%(고령일수록 효과 큼) · 부상 위험 −8%' }
     }
   };
   const EMPH = 0.5;
@@ -40,6 +48,9 @@
   proto.trainFocusKeys = function (side) { return Object.keys(FOC[side]); };
   proto.trainIntenName = function (k) { return INT_KO[k] || k; };
   const sideOf = p => p.type === 'P' ? 'P' : 'B';
+  /* 신체 훈련(phys)의 나이별 효과: 성장 효과는 어릴수록 크고(≤25 1.0 · ≤29 0.8 · ≤33 0.5 · 그 외 0.3), 부상 예방·회복 효과는 고령일수록 크다(≤25 0.8 · ≤30 1.0 · 그 외 1.4). ⚠ 계수는 가정 */
+  const ageGrow = age => age <= 25 ? 1 : age <= 29 ? 0.8 : age <= 33 ? 0.5 : 0.3, ageProt = age => age <= 25 ? 0.8 : age <= 30 ? 1 : 1.4;
+  const focInjMul = (side, f, age) => { const i = FOC[side][f]; if (!i) return 1; if (f === 'cond') return 0.88; if (!i.phys) return 1; const m = i.injMul || 1; return m < 1 ? 1 - (1 - m) * ageProt(age) : m; };
 
   /* ---------------- 설정 (구 설정 호환) ---------------- */
   proto.trainCfg = function () {
@@ -131,7 +142,7 @@
     const sh = this._trainShares(p); if (!sh.total) return out; const side = sideOf(p), cfCache = {}; let tot = 0;
     for (const f of Object.keys(sh.acc)) {
       const info = FOC[side][f]; if (!info || !info.base && !Object.keys(info.w).length) continue; const share = sh.acc[f] / sh.total; if (share <= 0) continue;
-      const cf = cfCache[f] || (cfCache[f] = this.trainCoach(side, f).cf);
+      const cf = (cfCache[f] || (cfCache[f] = this.trainCoach(side, f).cf)) * (info.phys ? ageGrow(p.age) : 1);
       tot += share * info.base * cf;
       for (const k of Object.keys(info.w)) out.w[k] = (out.w[k] || 1) + EMPH * share * info.w[k] * cf;
       if (info.speed) out.speed += share * info.speed * cf; if (info.range) out.range += share * info.range * cf; if (info.stamina) out.stamina += share * info.stamina * cf;
@@ -141,9 +152,13 @@
   proto._trainMult = function (p) { return this._trainEff(p).mult; };
   proto._trainInjFor = function (p) {
     const ef = this.trainEffCfg(p), f = ef.focus, it = ef.inten;
-    return (INT_INJ[it] || 1) * (f === 'cond' ? 0.88 : 1);
+    return (INT_INJ[it] || 1) * focInjMul(sideOf(p), f, p.age);
   };
-  proto._trainInj = function () { const c = this.trainCfg(), v = s => (INT_INJ[c[s].inten] || 1) * (c[s].focus === 'cond' ? 0.88 : 1); return (v('B') + v('P')) / 2; };
+  proto._trainInj = function () { const c = this.trainCfg(), v = s => (INT_INJ[c[s].inten] || 1) * focInjMul(s, c[s].focus, 28); return (v('B') + v('P')) / 2; };
+  proto.trainInjMulFor = function (side, f, age) { return focInjMul(side, f, age === undefined ? 28 : age); };   // 화면 표시용(28세 기준)
+  proto._trainRec = function (p) {   // 회복 훈련: 투수 피로 회복 배율(해당 훈련을 받는 내 투수만)
+    if (p.type !== 'P' || p.team !== this.S.userTeam) return 1; const f = this.trainEffCfg(p).focus, i = FOC.P[f]; return i && i.rec ? 1 + (i.rec - 1) * ageProt(p.age) : 1;
+  };
   proto.trainRisk = function (p) {   // 훈련으로 인한 부상 위험(기본 대비 %)과 사유
     const cfg = this.trainCfg(), side = sideOf(p), sl = cfg.slots.find(x => x.id === p.id), m = this._trainInjFor(p), pct = Math.round((m - 1) * 100), why = [];
     { const ef = this.trainEffCfg(p, cfg); if (ef.inten === 'heavy') why.push(ef.src === 'slot' ? '개별 훈련 강하게' : ef.src === 'group' ? `${GROUPS[side][this.trainGroupOf(p)]} 훈련 강하게` : `${side === 'B' ? '타자' : '투수'} 팀 훈련 강하게`); }

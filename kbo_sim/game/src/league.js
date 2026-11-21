@@ -679,7 +679,7 @@
     /* ------------------------------------------------------------ 내 경기 */
     _fatigueOk(p) { return (p.fat || 0) < 35; }
     /* 피로 회복: 구원은 하루 8(1이닝 20 → 약 2.5일), 선발은 하루 20(한 경기 최대 약 95 → 5일 로테이션 안에 전부 회복). 선발의 회복이 8이면 등판마다 피로가 쌓여 계속 지쳐 보였다. 피로는 0~100 */
-    _decayFatigue() { for (const p of this.players(this.S.userTeam)) if (p.type === 'P') p.fat = Math.max(0, Math.min(100, p.fat || 0) - (p.role === 'SP' ? 20 : 8)); }
+    _decayFatigue() { for (const p of this.players(this.S.userTeam)) if (p.type === 'P') p.fat = Math.max(0, Math.min(100, p.fat || 0) - (p.role === 'SP' ? 20 : 8) * (this._trainRec ? this._trainRec(p) : 1)); }
     /* 내 경기 준비: 결장 선수, 선발 투수, 라인업 */
     prepareUserGame(g, idx) {
       const S = this.S, t = S.userTeam, set = S.teams[t].set, d = S.day, r = rngFor(S.seed, S.year, d, 4000 + idx);

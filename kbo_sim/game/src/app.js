@@ -835,6 +835,13 @@
       <div class="chips wrap" style="margin-top:8px">${sc.length ? sc.map(s => { const done = p.fsc && p.fsc.by[s.id] && p.fsc.by[s.id].manual; return `<button class="sm" data-act="scoutFor" data-a="${p.id}:${s.id}" ${done ? 'disabled' : ''} title="집중 조사 ${L.scoutProbeCost()}억 · 해외 ${s.abroad === undefined ? 45 : s.abroad}">${esc(s.name)} 집중 조사${done ? ' ✓' : ` (${L.scoutProbeCost()}억)`}</button>`; }).join('') : '<span class="small muted">스카우트를 고용하면 집중 조사를 할 수 있습니다.</span>'}</div>
       <div class="row" style="margin-top:10px"><button class="sm ${w ? 'primary' : ''}" data-act="foreignWatchA" data-a="${p.id}">${w ? '관심 해제' : '관심 목록에 추가'}</button>${w ? `<button class="sm ${w.star ? 'primary' : ''}" data-act="foreignStarA" data-a="${p.id}">${w.star ? '★ 우선 관찰 중' : '☆ 우선 관찰'}</button>` : ''}<button class="sm" data-act="scoutClose">닫기</button></div></div></div>`;
   }
+  /* 비교 평가: 관심 목록의 다른 후보와 '누가 더 나은가' 확률 비교 */
+  function cmpHtml(id) {
+    const others = L.scoutWatchList().filter(w => w.id !== id).map(w => P(w.id)).filter(Boolean); if (!others.length) return '<div class="small muted" style="margin-top:8px">관심 목록에 다른 후보가 있으면 비교 평가를 할 수 있습니다.</div>';
+    const b = ui.scCmpB && others.some(x => x.id === ui.scCmpB) ? ui.scCmpB : others[0].id, r = L.scoutCompare(id, b), win = r && r.winner === id;
+    return `<div style="margin-top:8px"><div class="small"><b>비교 평가</b></div><div class="row" style="gap:6px;margin-top:4px"><select data-sel="sccmp" style="flex:1;min-width:0">${others.map(x => `<option value="${x.id}" ${x.id === b ? 'selected' : ''}>${esc(x.ko)} (${progLabel(x)})</option>`).join('')}</select></div>
+      ${r ? `<div class="small" style="margin-top:4px">성장 상한: <b>${esc(P(id).ko)}</b> ${r.a.e.ceil}±${r.a.e.ceilSd} vs <b>${esc(r.b.name)}</b> ${r.b.e.ceil}±${r.b.e.ceilSd} → ${win ? esc(P(id).ko) : esc(r.b.name)} 우세 확률 <b>${Math.round((win ? r.pCeil : 1 - r.pCeil) * 100)}%</b> <span class="chip ${confCls(r.conf)}">판단 ${r.conf}</span><br><span class="muted">현재 능력: ${esc(P(id).ko)}가 더 나을 확률 ${Math.round(r.pNow * 100)}%</span></div>` : ''}</div>`;
+  }
   function scoutSheet() {
     const id = ui.scoutId; if (!id || !L) return ''; const p = P(id); if (!p || p.team !== 'DRAFT') { ui.scoutId = null; return ''; }
     if (p.fpool) return foreignSheet(p);
@@ -847,6 +854,9 @@
       ${by.length ? `<div class="small muted" style="margin-top:6px">관찰: ${by.map(x => `${esc(x.name)} ${x.n}회`).join(' · ')}</div>` : ''}
       <div style="margin-top:8px"><div class="small"><b>성격</b> ${rp.trait.known ? `<span class="chip ${rp.trait.split ? 'warn' : 'in'}">${esc(rp.trait.label)}</span> <span class="chip ${confCls(rp.trait.conf === '엇갈림' ? '낮음' : rp.trait.conf)}">신뢰 ${rp.trait.conf}</span>` : '<span class="chip">미확인</span>'}</div>${rp.trait.known ? `<div class="small muted">${rp.trait.opinions.map(o => `${esc(o.name)}: ${esc(o.label)}(정확도 ${Math.round(o.acc * 100)}%)`).join(' · ')}</div>` : '<div class="small muted">성격은 인성 조사로만 알 수 있습니다. 조사 결과는 틀릴 수 있고, 지명하면 실제 성격이 드러납니다.</div>'}
         ${L.scouts().length ? `<div class="chips wrap" style="margin-top:4px">${L.scouts().map(s => { const done = p.sc && p.sc.tr && p.sc.tr[s.id]; return `<button class="sm" data-act="scoutProbeA" data-a="${id}:${s.id}" ${done ? 'disabled' : ''} title="조사비 ${L.scoutProbeCost()}억">${esc(s.name)} 인성 조사${done ? ' ✓' : ` (${L.scoutProbeCost()}억)`}</button>`; }).join('')}</div>` : '<div class="small muted">스카우트를 고용하면 인성 조사를 할 수 있습니다.</div>'}</div>
+      <div style="margin-top:8px"><div class="small"><b>추가 관찰</b> <span class="muted">(조사비는 새 시즌 행사 비용에 계상 · 같은 스카우트가 여러 번 봐도 편향은 줄지 않아 오차에 바닥이 있음)</span></div>
+        ${L.scouts().length ? L.scouts().map(sc => { const vis = p.sc && p.sc.vis && p.sc.vis[sc.id], vid = (p.sc && p.sc.vid && p.sc.vid[sc.id]) || 0, left = L.scoutVisitLeft(sc.id); return `<div class="chips wrap" style="margin-top:4px"><span class="small muted" style="align-self:center;min-width:64px">${esc(sc.name)}</span><button class="sm" data-act="scoutVisitA" data-a="${id}:${sc.id}" ${vis || left <= 0 ? 'disabled' : ''} title="직접 출장 관찰: 3회 관찰 분량(잡음 ×0.75) · 시즌당 2회">출장 관찰${vis ? ' ✓' : ` (${L.scoutVisitCost()}억 · 남은 ${left}회)`}</button><button class="sm" data-act="scoutVideoA" data-a="${id}:${sc.id}" ${vid >= 3 ? 'disabled' : ''} title="영상 분석: 1회 관찰(잡음 ×1.3)">영상 분석 (${L.scoutVideoCost()}억${vid ? ' · ' + vid + '/3' : ''})</button></div>`; }).join('') : '<div class="small muted">스카우트를 고용하면 추가 관찰을 할 수 있습니다.</div>'}</div>
+      ${cmpHtml(id)}
       <div class="row" style="margin-top:10px"><button class="sm ${w ? 'primary' : ''}" data-act="scoutWatchA" data-a="${id}">${w ? '관심 해제' : '관심 목록에 추가'}</button>${w ? `<button class="sm ${w.star ? 'primary' : ''}" data-act="scoutStarA" data-a="${id}">${w.star ? '★ 우선 관찰 중' : '☆ 우선 관찰'}</button>` : ''}<button class="sm" data-act="scoutClose">닫기</button></div></div></div>`;
   }
   /* ---------------- 훈련 센터 ---------------- */
@@ -860,7 +870,7 @@
     const chips = keys.map(k => `<button class="sm ${cfg.focus === k ? 'primary' : ''}" data-act="trainSide" data-a="${side}:focus:${k}" title="${esc(info[k].tip)}">${info[k].n}</button>`).join('');
     const ints = ['light', 'normal', 'heavy'].map(v => `<button class="sm ${cfg.inten === v ? 'primary' : ''}" data-act="trainSide" data-a="${side}:inten:${v}" title="${v === 'heavy' ? '효과 ×1.5 · 부상 위험 +15%' : v === 'light' ? '효과 ×0.5 · 부상 위험 −8%' : '기본'}">${L.trainIntenName(v)}</button>`).join('');
     const p = pv[side], fields = p.fields.slice(0, 3).map(f => `${esc(L.trainFieldName(f[0]))} +${f[1]}%`).join(' · ');
-    const inj = Math.round(((({ light: 0.92, normal: 1, heavy: 1.15 })[cfg.inten]) * (cfg.focus === 'cond' ? 0.88 : 1) - 1) * 100);
+    const inj = Math.round(((({ light: 0.92, normal: 1, heavy: 1.15 })[cfg.inten]) * (cfg.focus === 'cond' ? 0.88 : L.trainInjMulFor(side, cfg.focus)) - 1) * 100);
     return `<div class="card"><div class="row"><h2 style="margin:0">${isB ? '타자 훈련' : '투수 훈련'}</h2><span class="sp"></span><span class="small muted">${p.n}명(30세 이하)</span></div>
       <div class="small muted" style="margin:4px 0">${esc(info[cfg.focus].tip)}</div>
       <div class="small">집중 분야</div><div class="chips wrap">${chips}</div>
@@ -1715,6 +1725,8 @@
       else if (k === 'detail') ui.modal = id; render(); },
     captain(a) { const e = L.setCaptain(a); if (e) toast(e); else { toast(L.S.captain === a ? `${P(a).ko}을(를) 주장으로 임명했습니다.` : '주장을 해임했습니다.'); autosave(); } render(); },
     scoutHireA(a) { const e = L.scoutHire(a); if (e) toast(e); else { toast('스카우트를 영입했습니다.'); autosave(); } render(); },
+    scoutVisitA(a) { const [id, sc] = a.split(':'); const e = L.scoutVisit(id, sc); if (e) toast(e); else { toast('직접 출장 관찰을 마쳤습니다(3회 관찰 분량).'); autosave(); } render(); },
+    scoutVideoA(a) { const [id, sc] = a.split(':'); const e = L.scoutVideo(id, sc); if (e) toast(e); else { toast('영상 분석을 마쳤습니다.'); autosave(); } render(); },
     scoutFocusA(a) { const [id, f] = a.split(':'); const e = L.setScoutFocus(id, f); if (e) toast(e); else autosave(); render(); },
     scoutFireA(a) { const e = L.scoutFire(a); if (e) toast(e); else autosave(); render(); },
     scoutWatchA(a) { const e = L.scoutWatch(a); if (e) toast(e); else autosave(); render(); },
@@ -1862,6 +1874,7 @@
     if (sel === 'negrole') { ui.negRole = el.value; return; }
     if (sel === 'storyy') { ui.storyY = +el.value; render(); return; }
     if (sel === 'tgf' || sel === 'tgi') { L.pushUndo('역할별 훈련'); const e = L.setTrainGroup(el.dataset.a, sel === 'tgf' ? 'focus' : 'inten', el.value); if (e) toast(e); else autosave(); render(); return; }
+    if (sel === 'sccmp') { ui.scCmpB = el.value; render(); return; }
     if (sel === 'slotpick') { ui.slotPick = el.value; return; }
     if (['rvpcpct', 'rvpcto', 'rvphbat', 'rvphto'].includes(sel)) { const lv = ui.live; if (lv) { lv.form = lv.form || {}; lv.form[sel] = el.value; } return; }
     if (sel === 'subcand') { ui.subCand = el.value; return; }
