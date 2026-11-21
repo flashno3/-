@@ -875,8 +875,23 @@
       const s = defs[stage](); s.games = []; s.w = { [s.hi]: 0, [s.lo]: 0 }; s.slot = 0; s.winner = null; s.sp = { [s.hi]: 0, [s.lo]: 0 }; s.hiAdv = false; s.loWins = 0;
       P.cur = s; P.stage = stage; P.rounds[stage] = s;
     }
+    /* 포스트시즌 대진 자가 복구: 앞 시리즈의 승자가 없는데 다음 시리즈가 만들어졌거나(상대 미정) 현재 시리즈의 팀이 비어 있는 손상 상태를 바로잡는다.
+       손상된 시리즈의 경기 기록으로 승자를 확정할 수 있으면 확정하고, 아니면 그 시리즈를 현재 시리즈로 되돌려 이어 진행한다. 반환: 복구했으면 true */
+    _postHeal() {
+      const P = this.S.post; if (!P || P.done || !P.rounds) return false;
+      let k = -1; for (let i = 0; i < P.stage; i++) { const x = P.rounds[i]; if (!x || !x.winner) { k = i; break; } }
+      const cur = P.rounds[P.stage]; if (k < 0 && (!cur || !cur.hi || !cur.lo) && P.stage > 0) k = P.stage - 1;
+      if (k < 0 && (!cur || !cur.hi || !cur.lo)) return false; if (k < 0) return false;
+      const s = P.rounds[k]; P.rounds.length = k + 1;
+      if (!s) { this._mkSeries(k); return true; }
+      let win = null;
+      if (s.wc) { const hw = s.games.filter(x => !x.draw && (x.rh > x.ra ? x.home === s.hi : x.away === s.hi)).length, lw = s.games.filter(x => !x.draw).length - hw; if (hw >= 1) win = s.hi; else if (s.games.length >= 2) win = lw >= 2 ? s.lo : s.hi; }
+      else { const w = { [s.hi]: 0, [s.lo]: 0 }; for (const x of s.games) if (!x.draw) w[x.rh > x.ra ? x.home : x.away]++; s.w = w; win = w[s.hi] >= s.need ? s.hi : w[s.lo] >= s.need ? s.lo : null; }
+      if (win) { s.winner = win; if (k === 3) { P.done = true; P.champion = win; P.runnerUp = win === s.hi ? s.lo : s.hi; this.S.phase = 'post_done'; } else this._mkSeries(k + 1); return true; }
+      s.winner = null; P.cur = s; P.stage = k; return true;
+    }
     postNextGame() {
-      const P = this.S.post; if (!P || P.done) return null; const s = P.cur;
+      this._postHeal(); const P = this.S.post; if (!P || P.done) return null; const s = P.cur;
       if (s.wc) { if (s.games.length >= 2 || s.hiAdv) return null; return { home: s.hi, away: s.lo }; }
       const hiHome = s.pattern[s.slot % s.pattern.length] === 'H'; return { home: hiHome ? s.hi : s.lo, away: hiHome ? s.lo : s.hi };
     }

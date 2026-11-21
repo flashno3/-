@@ -138,7 +138,7 @@
     return `<div class="series"><div class="name"><span>${s.name}</span><span>${s.wc ? '4위 1승 어드밴티지' : s.need === 4 ? '7전 4선승' : '5전 3선승'}</span></div>${side(s.hi, w[s.hi], s.winner === s.hi)}${side(s.lo, w[s.lo], s.winner === s.lo)}${games ? `<details><summary class="small muted">경기 결과</summary><ul style="margin:6px 0 0;padding-left:18px">${games}</ul></details>` : ''}</div>`;
   }
   function screenPost() {
-    const S = L.S, P2 = S.post; if (!P2) return '';
+    const S = L.S, P2 = S.post; if (!P2) return ''; L._postHeal();   // 손상된 대진 자가 복구
     const seeds = P2.seeds, rounds = P2.rounds.filter(Boolean);
     let head = '';
     if (P2.done) head = `<div class="champ"><div><div class="small muted">한국시리즈 우승</div><div class="t">${teamTag(P2.champion)}</div></div>${P2.champion === U() ? '<span class="chip ks">우승!</span>' : ''}</div>`;
