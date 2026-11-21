@@ -112,14 +112,18 @@
   proto.userScore = function (p) { if (!p.sc || !p.sc.by || !Object.keys(p.sc.by).length) return this.scoutScore(p); return this.scoutEst(p).score; };   // 관찰이 없으면 기존 점수 그대로
 
   /* ---------------- 주간 관찰 ---------------- */
-  proto._scoutDay = function () { const S = this.S; if (this._subDay) this._subDay(); if (S.phase !== 'regular' || !S.scouts || !S.scouts.length || !S.day || S.day % 7 !== 0) return; this._scoutWeek(); S.scoutObs = (S.scoutObs || 0) + this._scoutWeekForeign(); };
+  proto._scoutDay = function () {
+    const S = this.S; if (this._subDay) this._subDay();
+    if (S.phase === 'regular' && S.scouts && S.scouts.length && S.day && S.day % 7 === 0) { if (this.scoutAuto().on) { const fc = this._scoutWeekAuto(); S.scoutObs = (S.scoutObs || 0) + fc; } else { this._scoutWeek(); S.scoutObs = (S.scoutObs || 0) + this._scoutWeekForeign(); } }
+    if (this._reportDay) this._reportDay();   // 정기 보고서(스카우트·훈련)
+  };
   proto._scoutObserve = function (id, sc, week, idx, mul) {   // mul: 관찰 잡음 배율(출장 관찰 <1 · 영상 분석 >1, 기본 1)
     const S = this.S, p = S.players[id]; if (!p || p.team !== 'DRAFT') return false; const rating = p.pro && p.pro.univ ? sc.univ : sc.high, se = clamp(16 - 0.17 * (rating - 40), 7, 16) * (p.pro && p.pro.cls === 2 ? 1.25 : 1) * projMul(sc, p) * (mul || 1), seo = SE_O * toolMul(sc, p) * (mul || 1);   // 내년 후보는 더 어려서 관찰 잡음 ×1.25
     const si = idn(sc.id), rb = rngFor(S.seed, S.year, idn(id) * 997 + si, 7410), bc = gauss(rb, 0, BIAS_C), bo = gauss(rb, 0, BIAS_O);   // 스카우트×선수 고정 편향
     const rn = rngFor(S.seed, S.year, idn(id) * 131 + week * 7 + idx, 7420 + si % 50);
     const mc = clamp(p.peak + bc + gauss(rn, 0, se), 20, 90), mo = this.ovr(p) + bo + gauss(rn, 0, seo);
     p.sc = p.sc || { by: {} }; const b = p.sc.by[sc.id] = p.sc.by[sc.id] || { n: 0, mc: 0, mo: 0, se: Math.round(se * 10) / 10 }; if (b.v2 === undefined) b.v2 = b.n * b.se * b.se; if (seo !== SE_O && b.vo2 === undefined) b.vo2 = b.n * SE_O * SE_O; b.n++; b.mc += mc; b.mo += mo; b.v2 += se * se; if (b.vo2 !== undefined) b.vo2 += seo * seo; b.se = Math.round(se * 10) / 10; p.sc.last = S.day;
-    S.scoutObs = (S.scoutObs || 0) + 1; return true;
+    S.scoutObs = (S.scoutObs || 0) + 1; (S.scStat = S.scStat || { p: 0, f: 0, cost: 0, done: [], found: [] }).p++; return true;
   };
   proto._scoutWeek = function () {
     const S = this.S, pr = S.prospects; if (!pr || pr.y !== S.year) return; const watch = this.scoutWatchList(); if (!watch.length) return;
@@ -229,6 +233,92 @@
     sc.forEach((x, i) => { const rank = i + 1; out[x.id] = { rank, avail: until === null ? '' : until === 0 ? 'now' : rank > until + 6 ? 'likely' : rank > until ? 'maybe' : 'gone' }; });
     return out;
   };
+  /* ---------------- 자동 스카우팅(대상 풀 확대 · 목표 도달 시 자동 전환) ----------------
+     켜면 관심 목록과 무관하게 고교·대학·외국인·아시아쿼터 전체 후보(내년 후보 포함 선택)를 대상으로 매주 관찰한다. 우선순위는 '성장 상한이 높게 보이면서 아직 불확실한 후보'(관심 목록·★는 가산)이며,
+     추정이 목표 확신도에 도달한 후보(국내: 성장 상한 ±오차 < 9 보통 / < 7 높음, 해외: 능력 ±오차 < 4.2 보통 / < 3.4 높음 — 스카우트 1명이 1~2번 보면 보통, 높음은 여러 번 또는 여러 스카우트가 봐야 도달)는 완료로 보고 자동으로 다음 후보로 넘어간다. 한 주에 스카우트들이 같은 후보를 겹쳐 보지 않도록 분산한다.
+     담당(고교·대학·투수·타자·해외 전담)이 있는 스카우트는 자기 담당 범위만 본다. 꺼 두면 기존 관심 목록 방식 그대로. */
+  const AUTO_DEF = { on: false, target: 'mid', next: true, cats: { high: true, univ: true, foreign: true, aq: true } }, TARGET = { mid: { c: 9, f: 4.2 }, high: { c: 7, f: 3.4 } };
+  proto.scoutAuto = function () { const a = this.S.scAuto || {}; return { on: !!a.on, target: a.target === 'high' ? 'high' : 'mid', next: a.next !== false, cats: Object.assign({}, AUTO_DEF.cats, a.cats || {}) }; };
+  proto.setScoutAuto = function (k, v) {
+    const S = this.S, a = S.scAuto = S.scAuto || {}; if (k === 'on') a.on = !!v; else if (k === 'next') a.next = !!v; else if (k === 'target') { if (v !== 'mid' && v !== 'high') return '잘못된 목표입니다.'; a.target = v; } else if (/^cat:/.test(k)) { const c = k.slice(4); if (!(c in AUTO_DEF.cats)) return '잘못된 분류입니다.'; a.cats = Object.assign({}, AUTO_DEF.cats, a.cats || {}); a.cats[c] = !!v; } else return '잘못된 설정입니다.'; this.invalidate(); return null;
+  };
+  proto.scoutCat = p => p.fpool ? (p.aq ? 'aq' : 'foreign') : (p.pro && p.pro.univ ? 'univ' : 'high');
+  proto.scoutCatName = k => ({ high: '고교', univ: '대학', foreign: '일반 외국인', aq: '아시아쿼터' })[k] || k;
+  proto.scoutDone = function (p) {   // 현재 목표 확신도에 도달했는가
+    const t = TARGET[this.scoutAuto().target]; if (p.fpool) { const e = this.fEst(p); return e.exact || e.sd < t.f; } const e = this.scoutEst(p); return !!e && e.ceilSd < t.c;
+  };
+  proto.scoutAutoPool = function () {   // 관찰 대상 전체(분류별) + 완료 여부 + 우선순위(내림차순)
+    const S = this.S, A = this.scoutAuto(), watch = new Map(this.scoutWatchList().map(w => [w.id, w])), fw = new Map(this.foreignWatchList().map(w => [w.id, w])), out = [];
+    for (const p of A.next ? this.prospectAll() : this.prospectList()) { const c = this.scoutCat(p); if (!A.cats[c]) continue; const e = this.scoutEst(p), w = watch.get(p.id); out.push({ p, cat: c, f: false, done: this.scoutDone(p), v: e.ceil + 0.8 * e.ceilSd + (w ? 10 + (w.star ? 6 : 0) : 0) }); }
+    for (const p of this.foreignPoolList()) { const c = this.scoutCat(p); if (!A.cats[c]) continue; const e = this.fEst(p), w = fw.get(p.id); out.push({ p, cat: c, f: true, done: this.scoutDone(p), v: e.o + 0.8 * e.sd * 3 + (w ? 10 + (w.star ? 6 : 0) : 0) }); }
+    return out.sort((a, b) => b.v - a.v);
+  };
+  proto.scoutAutoStatus = function () {
+    const pool = this.scoutAutoPool(), cats = {}; for (const k of Object.keys(AUTO_DEF.cats)) cats[k] = { n: 0, done: 0 }; for (const x of pool) { cats[x.cat].n++; if (x.done) cats[x.cat].done++; }
+    return { cats, total: pool.length, done: pool.filter(x => x.done).length, next: pool.filter(x => !x.done).slice(0, 5) };
+  };
+  proto._scoutWeekAuto = function () {
+    const S = this.S, week = Math.floor(S.day / 7), pool = this.scoutAutoPool().filter(x => !x.done), taken = new Set(), st = S.scStat = S.scStat || { p: 0, f: 0, cost: 0, done: [], found: [] }; let total = 0, fCount = 0;
+    (S.scouts || []).forEach(sc => {
+      const f = sc.focus || 'auto', capP = f === 'foreign' ? 0 : this.scoutCap(sc), capF = f === 'auto' || f === 'foreign' ? this.scoutFCap(sc) + (f === 'foreign' ? 1 : 0) : 0;
+      const take = (isF, cap) => { const mine = pool.filter(x => x.f === isF && (isF || focusOk(sc, x.p))); let n = 0;
+        for (const pass of [0, 1]) for (const x of mine) { if (n >= cap) break; if (pass === 0 && taken.has(x.p.id)) continue; if (this.scoutDone(x.p)) continue;
+          taken.add(x.p.id); const ok = isF ? this._fObs(x.p, sc, 1, week * 5 + n, false) : this._scoutObserve(x.p.id, sc, week, n); n++; if (ok) { total++; if (isF) fCount++; }
+          if (this.scoutDone(x.p)) { if (!st.done.some(d => d.id === x.p.id)) st.done.push({ id: x.p.id, cat: x.cat }); }
+          if (!isF) { const e = this.scoutEst(x.p); if (e.ceil >= 66 && e.ceilSd <= 9 && x.p.sc && !x.p.sc.found) { x.p.sc.found = S.day; st.found.push(x.p.id); this._scoutNews(`스카우트 보고: ${x.p.ko}(${x.p.pro ? x.p.pro.school : ''}) — 성장 상한 ${e.grade}급 가능성(추정 ${e.ceil}±${e.ceilSd}, 확신도 ${e.conf})`); } } } return n; };
+      take(false, capP); take(true, capF);
+    });
+    (S.scoutLog = S.scoutLog || []).unshift({ y: S.year, d: S.day, n: total, who: taken.size }); if (S.scoutLog.length > 20) S.scoutLog.pop(); return fCount;   // 국내 후보 관찰은 _scoutObserve 안에서 scoutObs에 이미 집계되므로 해외 관찰 수만 돌려준다
+  };
+
+  /* ---------------- 정기 보고서(스카우트 · 훈련) ----------------
+     보고 주기(끔/7/14/30일)를 정하면 정규시즌 중 그 주기마다 요약 보고서를 만들어 대시보드 '보고서' 함에 쌓고(최대 30건) 소식으로도 알린다. 기간 통계는 보고 때마다 초기화된다.
+     스카우트: 관찰 건수(국내·해외)·목표 확신도에 도달해 넘어간 후보·새 발견·조사비·진행 중 상위 후보. 훈련: 팀·그룹 방침·개별 훈련·기술 프로젝트 진행과 결과·기간 내 부상·부상 위험 경고·연말 예상 보정. */
+  const RPT_OPTS = [0, 7, 14, 30];
+  proto.reportCfg = function () { const c = this.S.rptCfg || {}; return { scout: c.scout || 0, train: c.train || 0 }; };
+  proto.reportOptions = function () { return RPT_OPTS; };
+  proto.setReportEvery = function (kind, n) {
+    if (kind !== 'scout' && kind !== 'train') return '알 수 없는 보고 종류입니다.'; if (!RPT_OPTS.includes(+n)) return '보고 주기는 끔/7/14/30일 중에서 고르세요.';
+    const S = this.S, c = S.rptCfg = S.rptCfg || {}; c[kind] = +n; c['last_' + kind] = S.day || 0; return null;
+  };
+  proto.reports = function () { return (this.S.reports || []).slice(); };
+  proto.reportsUnread = function () { return (this.S.reports || []).filter(r => r.unread).length; };
+  proto.reportRead = function (id) { const r = (this.S.reports || []).find(x => x.id === id); if (!r) return '보고서를 찾을 수 없습니다.'; r.unread = false; return null; };
+  proto.reportReadAll = function () { for (const r of this.S.reports || []) r.unread = false; return null; };
+  proto._reportDay = function () {
+    const S = this.S, c = S.rptCfg; if (!c || (S.phase !== 'regular' && S.phase !== 'preseason') || !S.day) return;
+    for (const k of ['scout', 'train']) { const ev = c[k]; if (!ev) continue; if (c['last_' + k] === undefined || c['last_' + k] > S.day) c['last_' + k] = c['last_' + k] === undefined ? S.day : 0; if (S.day - c['last_' + k] >= ev) { this.reportMake(k); c['last_' + k] = S.day; } }   // 새 시즌(날짜가 처음으로 돌아감)에는 0부터 다시 센다
+  };
+  proto.reportMake = function (kind) {   // 즉시 보고서 생성(주기 보고·'지금 받기' 공용). 반환: 보고서
+    const S = this.S, c = S.rptCfg = S.rptCfg || {}, from = c['last_' + kind] || 0, b = kind === 'scout' ? this._rptScout(from) : this._rptTrain(from);
+    const r = { id: `R${S.year}-${S.day}-${kind}-${(S.reports || []).length}`, kind, y: S.year, d: S.day, from, title: b.title, lines: b.lines, unread: true }; S.reports = [r].concat(S.reports || []).slice(0, 30);
+    S.news.unshift({ year: S.year, day: S.day, text: `${kind === 'scout' ? '스카우트' : '훈련'} 보고서: ${b.title}` }); if (S.news.length > 120) S.news.length = 120; c['last_' + kind] = S.day; return r;
+  };
+  proto._rptScout = function (from) {
+    const S = this.S, st = S.scStat || { p: 0, f: 0, cost: 0, done: [], found: [] }, A = this.scoutAuto(), lines = [], nm = id => (S.players[id] ? S.players[id].ko : '?');
+    lines.push(`기간 ${this.dateStr(from)} ~ ${this.dateStr(S.day)} · 관찰 ${st.p + st.f}건(국내 후보 ${st.p} · 해외 후보 ${st.f})${st.cost ? ' · 추가 조사비 ' + st.cost + '억' : ''}`);
+    if (A.on) { const byCat = {}; for (const d of st.done) byCat[d.cat] = (byCat[d.cat] || 0) + 1; lines.push(st.done.length ? `목표 확신도(${A.target === 'high' ? '높음' : '보통'}) 도달 → 다음 후보로 전환 ${st.done.length}명: ${st.done.slice(0, 6).map(d => nm(d.id)).join(', ')}${st.done.length > 6 ? ' 외' : ''} (${Object.entries(byCat).map(([k, v]) => this.scoutCatName(k) + ' ' + v).join(' · ')})` : '이 기간에 목표 확신도에 도달한 후보는 없습니다.'); }
+    if (st.found.length) lines.push(`새 발견(성장 상한 A급 이상 가능성): ${st.found.slice(0, 5).map(nm).join(', ')}`);
+    if (A.on) { const stt = this.scoutAutoStatus(); lines.push(`대상 ${stt.total}명 중 완료 ${stt.done}명(${Object.entries(stt.cats).filter(([, v]) => v.n).map(([k, v]) => this.scoutCatName(k) + ' ' + v.done + '/' + v.n).join(' · ')})`); if (stt.next.length) lines.push(`다음 관찰 우선 후보: ${stt.next.slice(0, 3).map(x => { const e = x.f ? this.fEst(x.p) : this.scoutEst(x.p); return `${x.p.ko}(${this.scoutCatName(x.cat)}, ${x.f ? '능력 ' + Math.round(e.o) + '±' + e.sd : '상한 ' + e.ceil + '±' + e.ceilSd})`; }).join(' · ')}`); }
+    else { const w = this.scoutWatchList().map(w => ({ p: S.players[w.id], e: this.scoutEst(S.players[w.id]) })).sort((a, b) => b.e.ceil - a.e.ceil).slice(0, 3); lines.push(`관심 목록 ${this.scoutWatchList().length}명${w.length ? ' · 상위: ' + w.map(x => `${x.p.ko}(${x.e.ceil}±${x.e.ceilSd})`).join(' · ') : ''} — 자동 스카우팅을 켜면 목표 도달 후보를 건너뛰고 전체 후보를 돌려 봅니다.`); }
+    lines.push(`스카우트 ${(S.scouts || []).length}명: ${(S.scouts || []).map(s => `${s.name}(${this.scoutFocusLabel(s.focus)})`).join(' · ') || '없음'}`);
+    S.scStat = { p: 0, f: 0, cost: 0, done: [], found: [] };
+    return { title: `관찰 ${st.p + st.f}건${A.on ? ' · 목표 도달 ' + st.done.length + '명' : ''}`, lines };
+  };
+  proto._rptTrain = function (from) {
+    const S = this.S, st = S.tnStat || { inj: [], skill: [] }, cfg = this.trainCfg(), lines = [], F = k => this.trainFocusInfo(k);
+    lines.push(`기간 ${this.dateStr(from)} ~ ${this.dateStr(S.day)} · 올 시즌 훈련 누적 ${(S.trainAcc && S.trainAcc.total) || 0}일`);
+    lines.push(`팀 방침: 타자 ${F('B')[cfg.B.focus].n}(${this.trainIntenName(cfg.B.inten)}) · 투수 ${F('P')[cfg.P.focus].n}(${this.trainIntenName(cfg.P.inten)})${Object.keys(cfg.groups || {}).length ? ' · 그룹 따로 ' + Object.keys(cfg.groups).map(k => this.trainGroupName(k)).join('·') : ''}`);
+    const sl = this.trainSlots(); lines.push(`개별 훈련 ${sl.length}/${this.slotLimit()}명${sl.length ? ': ' + sl.slice(0, 5).map(x => `${S.players[x.id].ko}(${F(S.players[x.id].type === 'P' ? 'P' : 'B')[x.focus].n}${x.weak ? ' · 약점 ' + x.weak : ''})`).join(' · ') : ''}`);
+    const sp = this.skillProjects(); lines.push(sp.length ? `기술 프로젝트 ${sp.length}개: ${sp.map(x => `${S.players[x.id].ko} ${Math.min(100, Math.round(x.prog / this.skillDays() * 100))}%`).join(' · ')}` : '진행 중인 기술 프로젝트 없음');
+    if (st.skill.length) lines.push(`프로젝트 결과: ${st.skill.map(x => `${x.name} ${x.n} ${x.res === 'success' ? '성공' : x.res === 'partial' ? '부분 성공' : '실패'}`).join(' · ')}`);
+    lines.push(st.inj.length ? `기간 내 부상 ${st.inj.length}건: ${st.inj.slice(0, 5).map(x => `${x.name}(${x.pos} ${x.dx} ${x.days}일)`).join(' · ')}${st.inj.length > 5 ? ' 외' : ''}` : '기간 내 부상 없음');
+    const rk = this.trainRiskList(); if (rk.length) lines.push(`부상 위험 경고 ${rk.length}명: ${rk.slice(0, 3).map(x => `${x.p.ko}(${x.p.age}세 ${x.r.pct > 0 ? '+' : ''}${x.r.pct}%)`).join(' · ')}`);
+    lines.push(`연말 예상: 30세 이하 평균 성장 보정 +${this.trainForecast().avgBonus}%`);
+    S.tnStat = { inj: [], skill: [] };
+    return { title: `부상 ${st.inj.length}건 · 프로젝트 ${sp.length}개 진행`, lines };
+  };
+
   /* 평가 항목별 확신도(리포트): 현재 능력(툴) · 성장 상한 · 성격. 항목마다 오차 크기에 따라 확신도를 따로 보여 준다 */
   proto.scoutItems = function (p) {
     const e = this.scoutEst(p); if (!e) return null; const tv = this.scoutTraitView(p), oc = sd => sd >= 2.6 ? '낮음' : sd >= 1.7 ? '보통' : '높음';
@@ -245,7 +335,7 @@
   proto.scoutProbeCost = function () { return PROBE_COST; };
   const spend = function (L, cost) {   // 스카우팅 조사비는 새 시즌 행사 비용(evCost)로 계상
     const S = L.S, f = S.fin && S.fin.teams && S.fin.teams[S.userTeam]; if (!f) return '재정 정보가 없습니다.'; const room = L.faRoom(S.userTeam); if (room < cost) return `예산 부족: 조사비 ${cost}억이 FA 여유자금 ${room.toFixed(1)}억을 넘습니다.`;
-    f.evCost = Math.round(((f.evCost || 0) + cost) * 10) / 10; return null;
+    f.evCost = Math.round(((f.evCost || 0) + cost) * 10) / 10; (S.scStat = S.scStat || { p: 0, f: 0, cost: 0, done: [], found: [] }).cost = Math.round((S.scStat.cost + cost) * 10) / 10; return null;
   };
   proto.scoutProbe = function (id, scoutId) {
     const S = this.S, p = S.players[id]; if (!p || p.team !== 'DRAFT') return '조사할 수 있는 후보가 아닙니다.'; const sc = (S.scouts || []).find(x => x.id === scoutId); if (!sc) return '조사를 맡을 스카우트를 고르세요.';
@@ -274,7 +364,7 @@
   proto._fObs = function (p, sc, seMul, idx, manual) {   // 외국인 후보 1회 관찰: 진짜 능력 + 스카우트×선수 고정 편향 + 관찰 잡음
     const S = this.S; this.fEst(p); const ab = sc.abroad === undefined ? 45 : sc.abroad, se = clamp(8 - 0.07 * (ab - 40), 3, 8) * seMul, si = idn(sc.id) % 997;
     const bias = gauss(rngFor(S.seed, 0, idn(p.id) * 29 + si, 7525), 0, FBIAS), noise = gauss(rngFor(S.seed, S.year, idn(p.id) * 31 + si * 7 + idx, 7520), 0, se);
-    const b = p.fsc.by[sc.id] = p.fsc.by[sc.id] || { n: 0, m: 0, se: Math.round(se * 10) / 10 }; if (b.v2 === undefined) b.v2 = b.n * b.se * b.se; b.n++; b.m += this.ovr(p) + bias + noise; b.v2 += se * se; b.se = Math.round(se * 10) / 10; if (manual) b.manual = true; return true;
+    const b = p.fsc.by[sc.id] = p.fsc.by[sc.id] || { n: 0, m: 0, se: Math.round(se * 10) / 10 }; if (b.v2 === undefined) b.v2 = b.n * b.se * b.se; b.n++; b.m += this.ovr(p) + bias + noise; b.v2 += se * se; b.se = Math.round(se * 10) / 10; if (manual) b.manual = true; (S.scStat = S.scStat || { p: 0, f: 0, cost: 0, done: [], found: [] }).f++; return true;
   };
   proto.scoutForeign = function (id, scoutId) {   // 집중 조사(조사비 0.3억, 스카우트별 1회): 일반 관찰보다 잡음이 40% 작다
     const S = this.S, p = S.players[id]; if (!this.hiddenForeign(p)) return '조사가 필요 없는 선수입니다(KBO 기록이 있거나 이미 계약했습니다).'; const sc = (S.scouts || []).find(x => x.id === scoutId); if (!sc) return '조사를 맡을 스카우트를 고르세요.';

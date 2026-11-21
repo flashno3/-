@@ -298,7 +298,7 @@
       const p = S.players[pr.id]; if (!p || p.team !== S.userTeam || p.retired) continue; if (!this.isInj(p)) pr.prog++;
       if (pr.prog < SKILL_DAYS) { keep.push(pr); continue; }
       const side = sideOf(p), info = SKILL[side][pr.kind], u = rngFor(S.seed, S.year, parseInt(String(pr.id).replace(/\D/g, '')) * 31 + pr.start, 8800).random(), pc = pr.chance, res = u < pc ? 'success' : u < pc + 0.3 * (1 - pc) ? 'partial' : 'fail';
-      const log = { y: S.year, d: S.day, id: p.id, name: p.ko, kind: pr.kind, n: info.n, res }; (S.skillLog = S.skillLog || []).unshift(log); if (S.skillLog.length > 20) S.skillLog.pop();
+      const log = { y: S.year, d: S.day, id: p.id, name: p.ko, kind: pr.kind, n: info.n, res }; (S.tnStat = S.tnStat || { inj: [], skill: [] }).skill.push({ name: p.ko, n: info.n, res }); (S.skillLog = S.skillLog || []).unshift(log); if (S.skillLog.length > 20) S.skillLog.pop();
       if (res === 'fail') { p.mood = { v: -1, until: S.day + 20 }; } else { const d = S.skillDone = S.skillDone || {}; d[p.id] = { y: S.year, kind: pr.kind, scale: res === 'success' ? 1 : 0.5 }; }
       const tx = res === 'success' ? `${p.ko} ${info.n} 성공! — 연말 성장 때 ${Object.keys(info.f).map(f => FIELD_KO2[f]).join('·')} 보너스가 반영됩니다.` : res === 'partial' ? `${p.ko} ${info.n} 부분 성공 — 연말 성장 보너스가 절반 반영됩니다.` : `${p.ko} ${info.n} 실패 — 20일간 컨디션이 떨어집니다.`;
       S.news.unshift({ year: S.year, day: S.day, text: tx }); if (S.news.length > 120) S.news.length = 120; if (this.story) this.story('train', tx, res === 'success' ? 2 : 1);

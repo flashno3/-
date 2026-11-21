@@ -1490,7 +1490,7 @@
       const retN = now + days, rd = new Date(retN * 864e5);
       p.inj = { dx: u >= 0.97 ? part.replace('통증', '손상 → 수술') : part, since: `${S.year}-${String(new Date(now * 864e5).getUTCMonth() + 1).padStart(2, '0')}-${String(new Date(now * 864e5).getUTCDate()).padStart(2, '0')} 발생`, ret: rd.toISOString().slice(0, 10), retN, basis: '시즌 중 발생한 부상(확률 모델)', apply: true, generated: true };
       p.active = false; changed.add(t); (out[t] = out[t] || []).push(p);
-      if (t === user) { const ih = S.injHist = S.injHist || {}; ih[S.year] = (ih[S.year] || 0) + 1; news(this, `부상: ${p.ko} — ${p.inj.dx}${sev}, 약 ${days}일 (복귀 예정 ${this.injDateStr(p)})`); if (days >= 30) this._bondShift(p, -1, '장기 부상'); }
+      if (t === user) { const ih = S.injHist = S.injHist || {}; ih[S.year] = (ih[S.year] || 0) + 1; (S.tnStat = S.tnStat || { inj: [], skill: [] }).inj.push({ name: p.ko, dx: p.inj.dx, days, pos: p.type === 'P' ? (p.role === 'SP' ? '선발' : '구원') : p.pos }); news(this, `부상: ${p.ko} — ${p.inj.dx}${sev}, 약 ${days}일 (복귀 예정 ${this.injDateStr(p)})`); if (days >= 30) this._bondShift(p, -1, '장기 부상'); }
     }
     {   // 부상으로 1군이 최소 인원(타자 10·투수 8) 아래가 되면 건강한 2군 선수를 자동 등록(경기 진행 불가 방지)
       const a = this.players(user).filter(p => p.active), nb = a.filter(p => p.type === 'B').length, np = a.filter(p => p.type === 'P').length;

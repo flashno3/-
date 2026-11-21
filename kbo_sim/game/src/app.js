@@ -798,6 +798,22 @@
       ${h.list.length ? `<div class="tablewrap"><table><thead><tr><th class="l">스카우트</th><th>후보</th><th>평균 오차</th><th>편향</th><th>등급</th><th class="l">최근</th></tr></thead><tbody>${h.list.map(x => `<tr><td class="l"><b>${esc(x.name)}</b> ${x.active ? '' : '<span class="muted small">(이전)</span>'}</td><td class="n">${x.n}명</td><td class="n">${x.err === null ? '-' : x.err}</td><td class="n">${x.bias === null ? '-' : (x.bias > 0 ? '+' : '') + x.bias}</td><td><span class="chip ${cc(x.grade)}">${x.grade}</span></td><td class="l small muted">${x.years.map(y => `${y.y} ${y.err}`).join(' · ')}</td></tr>`).join('')}</tbody></table></div>` : ''}
       ${h.years.length ? `<div class="small" style="margin-top:6px"><b>내 추정(관찰 반영) 정확도</b> ${h.years.map(y => `${y.y}: ${y.err === null ? '관찰 없음' : '오차 ' + y.err + ' · 후보 ' + y.n + '명'}`).join(' · ')}</div>` : ''}</div>`;
   }
+  /* ---------------- 정기 보고서 · 자동 스카우팅 ---------------- */
+  const rptSelect = kind => `<select data-sel="rpt${kind}" aria-label="${kind === 'scout' ? '스카우트' : '훈련'} 보고 주기">${L.reportOptions().map(n => `<option value="${n}" ${L.reportCfg()[kind] === n ? 'selected' : ''}>${n ? n + '일마다' : '받지 않음'}</option>`).join('')}</select>`;
+  function reportsCard() {
+    const rs = L.reports(), un = L.reportsUnread(); if (!rs.length) return '';
+    return `<div class="card"><div class="row"><h2 style="margin:0">보고서</h2>${un ? `<span class="chip warn">새 보고서 ${un}</span>` : ''}<span class="sp"></span>${un ? '<button class="sm" data-act="rptReadAll">모두 읽음</button>' : ''}</div>
+      ${rs.slice(0, 4).map(r => `<details class="small" style="margin-top:6px" ${r.unread ? 'open' : ''}><summary data-act="rptRead" data-a="${r.id}"><b>${r.kind === 'scout' ? '스카우트' : '훈련'}</b> <span class="muted">${L.dateStr(r.d)}</span> — ${esc(r.title)} ${r.unread ? '<span class="chip in">NEW</span>' : ''}</summary>${r.lines.map(l => `<div style="margin:2px 0 0 12px">• ${esc(l)}</div>`).join('')}</details>`).join('')}
+      <div class="small muted" style="margin-top:6px">보고 주기는 스카우팅·훈련 화면에서 정합니다. 지난 보고서는 최대 30건 보관됩니다.</div></div>`;
+  }
+  function scoutAutoCard() {
+    const A = L.scoutAuto(), st = L.scoutAutoStatus(), cats = ['high', 'univ', 'foreign', 'aq'];
+    return `<div class="card"><div class="row"><h2 style="margin:0">자동 스카우팅</h2><span class="sp"></span><label class="row small" style="gap:6px"><input type="checkbox" data-act="scAutoOn" ${A.on ? 'checked' : ''}><b>${A.on ? '사용 중' : '사용 안 함'}</b></label></div>
+      <div class="small muted" style="margin:4px 0">켜면 관심 목록과 상관없이 아래 분류의 전체 후보를 매주 관찰합니다. 성장 상한이 높게 보이면서 아직 불확실한 후보부터 보고, 추정이 <b>목표 확신도</b>에 도달하면 완료로 보고 자동으로 다음 후보로 넘어갑니다(스카우트끼리 같은 후보를 겹쳐 보지 않게 분산, 담당이 있는 스카우트는 담당 범위만). 관심 목록·★ 후보는 우선순위가 높습니다. 정규시즌 중 매주 진행됩니다.</div>
+      <div class="chips wrap">${cats.map(c => `<label class="row small" style="gap:4px;margin-right:8px"><input type="checkbox" data-act="scAutoCat" data-a="${c}" ${A.cats[c] ? 'checked' : ''}>${esc(L.scoutCatName(c))} <span class="muted">${st.cats[c].done}/${st.cats[c].n}</span></label>`).join('')}<label class="row small" style="gap:4px"><input type="checkbox" data-act="scAutoNext" ${A.next ? 'checked' : ''}>내년 드래프트 후보 포함</label></div>
+      <div class="row small" style="gap:6px;margin-top:6px">목표 확신도 <button class="sm ${A.target === 'mid' ? 'primary' : ''}" data-act="scAutoTarget" data-a="mid" title="국내 상한 ±오차 < 9 · 해외 능력 ±오차 < 4.2 (스카우트 1~2회 관찰)">보통 이상</button><button class="sm ${A.target === 'high' ? 'primary' : ''}" data-act="scAutoTarget" data-a="high" title="국내 상한 ±오차 < 7 · 해외 능력 ±오차 < 3.4 (여러 번 또는 여러 스카우트)">높음</button><span class="muted">대상 ${st.total}명 중 완료 ${st.done}명</span></div>
+      <div class="row small" style="gap:6px;margin-top:6px">보고서 ${rptSelect('scout')}<button class="sm" data-act="rptNow" data-a="scout">지금 받기</button></div></div>`;
+  }
   function screenScout() {
     const S = L.S, pr = L.ensureProspects(), scouts = L.scouts(), watch = L.scoutWatchList(), lim = L.scoutLimit();
     const cls = ui.scC || 1, all = cls === 2 ? L.prospectList2() : L.prospectList(), f = ui.scF || 'all', sk = ui.scS || 'score';
@@ -812,6 +828,7 @@
     return `<div class="card"><div class="row"><h2 style="margin:0">스카우팅</h2><span class="sp"></span><span class="small muted">${cls === 2 ? S.year + 1 : S.year} 드래프트 후보 ${all.length}명(가상 선수)</span></div>
       <div class="kpis"><div class="kpi"><div class="l">스카우트</div><div class="v">${scouts.length}/${lim}</div></div><div class="kpi"><div class="l">주간 관찰</div><div class="v">${weekly}건</div></div><div class="kpi"><div class="l">관심 목록</div><div class="v">${watch.length}명</div></div></div>
       <div class="small muted" style="margin-top:6px">스카우트를 고용하고 관심 목록에 후보를 올리면 시즌 중 매주 관찰해 성장 상한 추정의 오차가 줄어듭니다. 스카우트마다 전문 분야(투수·타자)와 평가 항목 능력(툴·성장·성격)이 다르고, 담당(고교·대학·투수·타자·해외 전담)을 지정하면 그 후보만 맡아 관찰합니다(모두 '자동'이면 전체를 돌아가며 관찰). 같은 스카우트가 여러 번 봐도 오차에는 바닥이 있고, 스카우트가 여러 명일수록 더 정확해집니다. 진짜 능력은 바뀌지 않으며 추정만 정교해집니다. 후보는 이 게임이 만든 가상 선수입니다.${season ? '' : ' 관찰은 정규시즌 중에만 진행됩니다.'}</div></div>
+      ${scoutAutoCard()}
       <div class="card"><div class="row"><h2 style="margin:0">스카우트 조직</h2><span class="sp"></span><span class="small muted">연봉은 팀 보수에 포함</span></div>${scouts.length ? scouts.map(scRow).join('') : '<div class="small muted">고용한 스카우트가 없습니다. 아래 후보에서 영입하세요.</div>'}
         <div class="small" style="margin-top:8px"><b>영입 후보</b></div>${mkt.length ? mkt.map(mkRow).join('') : '<div class="small muted">영입 가능한 후보가 없습니다.</div>'}</div>
       <div class="card"><div class="row"><h2 style="margin:0">관심 목록</h2><span class="sp"></span><button class="sm" data-act="scoutAuto">추천으로 채우기</button></div><div class="small muted">★ 표시한 후보는 두 배로 관찰합니다. 최대 24명.</div>
@@ -949,6 +966,7 @@
       ${trainGroupCard()}
       ${weakCard()}
       ${skillCard()}
+      <div class="card"><div class="row"><h2 style="margin:0">훈련 보고</h2><span class="sp"></span>${rptSelect('train')}<button class="sm" data-act="rptNow" data-a="train">지금 받기</button></div><div class="small muted" style="margin-top:4px">정해 둔 주기마다 방침·개별 훈련·기술 프로젝트·기간 내 부상·부상 위험·연말 예상을 요약해 대시보드 보고서로 알려 줍니다.</div></div>
       ${trainReportCard()}
       <div class="card"><div class="row"><h2 style="margin:0">개별 훈련</h2><span class="sp"></span><span class="small muted">${slots.length}/${lim}명 · 육성관리 코치 능력에 따라 늘어남</span></div>
         <div class="small muted" style="margin:4px 0">팀 훈련과 별개로 선수 몇 명을 따로 지정합니다. 유망주·부진한 선수에게 적합합니다. 부상 중에는 훈련 효과가 쌓이지 않습니다.</div>
@@ -1618,7 +1636,7 @@
     const scroll = window.scrollY;
     if (ui.pre && !ui.live) { document.body.classList.remove('modal-open'); root.innerHTML = screenPre() + confirmSheet() + toastHtml(); window.scrollTo(0, scroll); return; }   // 경기 전 브리핑(날짜 처리 끝, 경기 시작 전)
     if (ui.live) { document.body.classList.remove('modal-open'); root.innerHTML = screenLive() + toastHtml(); window.scrollTo(0, scroll); return; }   // 경기 화면에서는 이전 화면의 스크롤 잠금이 남지 않게 푼다
-    const S = ui.screen, f = { invest: screenInvest, desk: screenDesk, home: () => goalCard() + pressCard() + screenHome() + evHistory(), roster: () => changeBar() + screenRoster(), farm: () => changeBar() + screenFarm(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, story: screenStory, mood: screenMood, train: screenTrain, scout: screenScout, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
+    const S = ui.screen, f = { invest: screenInvest, desk: screenDesk, home: () => goalCard() + pressCard() + reportsCard() + screenHome() + evHistory(), roster: () => changeBar() + screenRoster(), farm: () => changeBar() + screenFarm(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, story: screenStory, mood: screenMood, train: screenTrain, scout: screenScout, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
     document.body.classList.toggle('modal-open', !!ui.modal);
     const keep = snapInner(root);   // 체크박스·버튼으로 다시 그려도 안쪽 스크롤 상자와 펼침 상태를 유지한다
     root.innerHTML = shell((S === 'home' || S === 'market' || S === 'offseason' ? eventCards() + excPromptCard() : evBanner()) + f()) + (ui.modal ? modalPlayer(ui.modal) : '') + sheetHtml() + firedModal() + quickSheet() + swapSheet() + posPickSheet() + fslotSheet() + scoutSheet() + growthSheet() + subSheet() + confirmSheet() + cmpSheet() + searchSheet() + cmpTray() + negView() + toastHtml();
@@ -1763,6 +1781,13 @@
     scoutVisitA(a) { const [id, sc] = a.split(':'); const e = L.scoutVisit(id, sc); if (e) toast(e); else { toast('직접 출장 관찰을 마쳤습니다(3회 관찰 분량).'); autosave(); } render(); },
     scoutVideoA(a) { const [id, sc] = a.split(':'); const e = L.scoutVideo(id, sc); if (e) toast(e); else { toast('영상 분석을 마쳤습니다.'); autosave(); } render(); },
     draftNeed(_a, el) { L.setDraftNeedOn(!!(el && el.checked)); render(); },
+    scAutoOn(_a, el) { L.setScoutAuto('on', !!(el && el.checked)); autosave(); render(); },
+    scAutoCat(a, el) { L.setScoutAuto('cat:' + a, !!(el && el.checked)); autosave(); render(); },
+    scAutoNext(_a, el) { L.setScoutAuto('next', !!(el && el.checked)); autosave(); render(); },
+    scAutoTarget(a) { L.setScoutAuto('target', a); autosave(); render(); },
+    rptNow(a) { const r = L.reportMake(a); toast('보고서를 받았습니다: ' + r.title); autosave(); render(); },
+    rptRead(a) { L.reportRead(a); },
+    rptReadAll() { L.reportReadAll(); autosave(); render(); },
     scoutFocusA(a) { const [id, f] = a.split(':'); const e = L.setScoutFocus(id, f); if (e) toast(e); else autosave(); render(); },
     scoutFireA(a) { const e = L.scoutFire(a); if (e) toast(e); else autosave(); render(); },
     scoutWatchA(a) { const e = L.scoutWatch(a); if (e) toast(e); else autosave(); render(); },
@@ -1914,6 +1939,7 @@
     if (sel === 'tgf' || sel === 'tgi') { L.pushUndo('역할별 훈련'); const e = L.setTrainGroup(el.dataset.a, sel === 'tgf' ? 'focus' : 'inten', el.value); if (e) toast(e); else autosave(); render(); return; }
     if (sel === 'sccmp') { ui.scCmpB = el.value; render(); return; }
     if (sel === 'skpl') { ui.skPl = el.value; render(); return; }
+    if (sel === 'rptscout' || sel === 'rpttrain') { const e = L.setReportEvery(sel === 'rptscout' ? 'scout' : 'train', +el.value); if (e) toast(e); else { toast(+el.value ? `${el.value}일마다 보고서를 받습니다.` : '보고서를 받지 않습니다.'); autosave(); } render(); return; }
     if (sel === 'slotpick') { ui.slotPick = el.value; return; }
     if (['rvpcpct', 'rvpcto', 'rvphbat', 'rvphto'].includes(sel)) { const lv = ui.live; if (lv) { lv.form = lv.form || {}; lv.form[sel] = el.value; } return; }
     if (sel === 'subcand') { ui.subCand = el.value; return; }
