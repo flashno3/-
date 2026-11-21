@@ -29,7 +29,7 @@
   --gold: #E6C158; --gold-soft: #3A3017; --focus: #6AA6FF; --nav: #0B1A10; --nav-fg: #C9D8CE; --nav-act: #1E5A3B; color-scheme: dark;
 }
 * { box-sizing: border-box; }
-body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 14.5px; line-height: 1.5; word-break: keep-all; overflow-wrap: anywhere; }   /* 한글은 단어(띄어쓰기) 단위로만 줄바꿈 — '5안/타'처럼 글자 중간에서 꺾이지 않게 */
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 14.5px; line-height: 1.5; word-break: keep-all; overflow-wrap: break-word; }   /* 한글은 단어(띄어쓰기) 단위로만 줄바꿈 — '5안/타'처럼 글자 중간에서 꺾이지 않게 */
 h1, h2, h3 { font-family: var(--font-display); margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
 h1 { font-size: 24px; } h2 { font-size: 17px; } h3 { font-size: 14px; }
 .num, td.n, th.n { font-variant-numeric: tabular-nums; font-family: var(--font-display); }
@@ -58,7 +58,7 @@ select, input[type=text], input[type=number] { background: var(--bg); border: 1p
 .top .muted { color: var(--muted); font-size: 13px; }
 .content { padding: 18px 20px 48px; padding-right: max(20px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 16px; max-width: 1180px; width: 100%; }
 @media (max-width: 860px) {
-  .app { grid-template-columns: minmax(0, 1fr); }
+  .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }   /* 내용이 짧아도 상단 메뉴가 세로로 늘어나지 않게 */
   .side { position: sticky; top: 0; height: auto; flex-direction: row; overflow-x: auto; padding: 8px max(8px, env(safe-area-inset-right, 0px)) 8px max(8px, env(safe-area-inset-left, 0px)); z-index: 6; }
   .side .club, .side .sep { display: none; } .side button { white-space: nowrap; }
   .top { position: static; padding: 10px 14px; } .content { padding: 14px 14px 40px; }
@@ -7450,7 +7450,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
       <p class="help">변화가 작은 선수부터, 가장 큰 변화가 마지막입니다(|변화| 2 이상 최대 15명). 요인은 확인된 사실(나이대·출전 비중·개별 훈련 일수)이며 기여도를 계산한 값이 아닙니다.</p></div></div>`;
   }
   const spark = pts => { const v = pts.map(p => p.o), lo = Math.min(...v), hi = Math.max(...v), w = 90, h = 26, xs = i => (pts.length === 1 ? w / 2 : 4 + i * (w - 8) / (pts.length - 1)), ys = o => (hi === lo ? h / 2 : h - 4 - (o - lo) / (hi - lo) * (h - 8)); return `<svg class="spark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="OVR 추이 ${v.join(' → ')}"><polyline fill="none" stroke="var(--accent)" stroke-width="2" points="${pts.map((p, i) => `${xs(i).toFixed(1)},${ys(p.o).toFixed(1)}`).join(' ')}"/>${pts.map((p, i) => `<circle cx="${xs(i).toFixed(1)}" cy="${ys(p.o).toFixed(1)}" r="2.2" fill="var(--accent)"/>`).join('')}</svg>`; };
-  function prospectRowNote(n) { return `<div class="prow"><div class="row" style="flex-wrap:nowrap"><button class="linkbtn" data-act="player" data-a="${n.id}"><b>${esc(n.name)}</b></button><span class="muted small">${n.pos} · ${n.age}세 · ${n.active ? '1군' : '2군'}</span>${ovrChip(n.ovr)}<span class="sp"></span>${spark(n.spark)}</div><div class="small">${esc(n.line)}</div>${n.facts.length ? `<div class="small muted">${n.facts.map(esc).join(' · ')}</div>` : ''}</div>`; }
+  function prospectRowNote(n) { return `<div class="prow"><div class="row" style="flex-wrap:nowrap"><button class="linkbtn" data-act="player" data-a="${n.id}" style="white-space:nowrap;flex:none"><b>${esc(n.name)}</b></button><span class="muted small">${n.pos} · ${n.age}세 · ${n.active ? '1군' : '2군'}</span>${ovrChip(n.ovr)}<span class="sp"></span>${spark(n.spark)}</div><div class="small">${esc(n.line)}</div>${n.facts.length ? `<div class="small muted">${n.facts.map(esc).join(' · ')}</div>` : ''}</div>`; }
   function prospectCard() {
     const ns = L.prospectNotes(6); if (!ns.length) return '';
     return `<div class="card"><div class="row"><h2 style="margin:0">유망주 노트</h2><span class="sp"></span><span class="small muted">24세 이하 · OVR 순</span></div><div class="small muted" style="margin:4px 0">입단 경로, OVR 추이, 1군 출전 같은 확인된 기록으로 정리합니다. 숨은 잠재력(정점)은 알 수 없으며 표시하지 않습니다.</div>${ns.map(prospectRowNote).join('')}</div>`;

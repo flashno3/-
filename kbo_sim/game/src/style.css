@@ -18,7 +18,7 @@
   --gold: #E6C158; --gold-soft: #3A3017; --focus: #6AA6FF; --nav: #0B1A10; --nav-fg: #C9D8CE; --nav-act: #1E5A3B; color-scheme: dark;
 }
 * { box-sizing: border-box; }
-body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 14.5px; line-height: 1.5; word-break: keep-all; overflow-wrap: anywhere; }   /* 한글은 단어(띄어쓰기) 단위로만 줄바꿈 — '5안/타'처럼 글자 중간에서 꺾이지 않게 */
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 14.5px; line-height: 1.5; word-break: keep-all; overflow-wrap: break-word; }   /* 한글은 단어(띄어쓰기) 단위로만 줄바꿈 — '5안/타'처럼 글자 중간에서 꺾이지 않게 */
 h1, h2, h3 { font-family: var(--font-display); margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
 h1 { font-size: 24px; } h2 { font-size: 17px; } h3 { font-size: 14px; }
 .num, td.n, th.n { font-variant-numeric: tabular-nums; font-family: var(--font-display); }
@@ -47,7 +47,7 @@ select, input[type=text], input[type=number] { background: var(--bg); border: 1p
 .top .muted { color: var(--muted); font-size: 13px; }
 .content { padding: 18px 20px 48px; padding-right: max(20px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 16px; max-width: 1180px; width: 100%; }
 @media (max-width: 860px) {
-  .app { grid-template-columns: minmax(0, 1fr); }
+  .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }   /* 내용이 짧아도 상단 메뉴가 세로로 늘어나지 않게 */
   .side { position: sticky; top: 0; height: auto; flex-direction: row; overflow-x: auto; padding: 8px max(8px, env(safe-area-inset-right, 0px)) 8px max(8px, env(safe-area-inset-left, 0px)); z-index: 6; }
   .side .club, .side .sep { display: none; } .side button { white-space: nowrap; }
   .top { position: static; padding: 10px 14px; } .content { padding: 14px 14px 40px; }
