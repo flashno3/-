@@ -34,7 +34,7 @@ const pair=(L,t)=>{for(const p of L.players(t))if(!p.foreign){const b=L.bonds(p)
  // 방출·트레이드·장기 부상 → 소식
  reset();const pr=L.players(t).filter(x=>!x.foreign&&L.bonds(x).length&&(x.tn>=3||L.ovr(x)>=50)).sort((a,b)=>L.ovr(b)-L.ovr(a))[0];const rcv=L.bonds(pr).map(z=>S.players[z.id]).filter(z=>z.team===t);for(const z of rcv){z.bondAt=undefined}const nn=S.news.length;const rel=L.releasePlayer(pr.id);if(rel.ok){ok(S.news.slice(0,5).some(x=>/^분위기:.*방출/.test(x.text)),'방출 → 분위기 소식')}
  // 시즌 진행 중 자연 발생(기록·부상 복귀·장기 부상): 로그에 원인이 쌓인다
- const L2=mk(7);L2.advance(200,false);const causes=(L2.S.bondLog||[]).map(x=>x.text);ok(causes.length>=1,'시즌 중 동료 영향 발생 '+causes.length);ok(causes.every(x=>/컨디션 [+-]1/.test(x)&&!/NaN|undefined/.test(x)),'로그 형식');}
+ const L2=mk(7);L2.advance(200,false);const causes=(L2.S.bondLog||[]).map(x=>x.text);ok(causes.length>=1,'시즌 중 동료 영향 발생 '+causes.length);ok(causes.every(x=>/컨디션 [+\-−]1/.test(x)&&!/NaN|undefined/.test(x)),'로그 형식');}
 // 5) 분위기 보드·미리보기
 {const L=mk(8);const bd=L.clubhouseBoard(),pv=L.bondPreview();ok(Array.isArray(bd.groups)&&Array.isArray(pv)&&pv.length>=1&&pv.every(x=>x.b.length>=1&&x.b.length<=3),'미리보기');}
 // 6) 불변식: 긴 진행에서 충성도·컨디션 범위

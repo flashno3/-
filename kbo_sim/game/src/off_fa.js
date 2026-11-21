@@ -232,7 +232,7 @@
       if (!p.fa || p.retired) continue;
       if (p.fa.regDays >= FA_REG_DAYS) p.fa.svc += 1; else { p.fa.rem += p.fa.regDays; while (p.fa.rem >= FA_REG_DAYS) { p.fa.svc += 1; p.fa.rem -= FA_REG_DAYS; } }
       if (p.team in this.S.teams) { if (p.tnTeam !== p.team) { p.tnTeam = p.team; p.tn = 0; } if (p.fa.regDays >= 30) p.tn = (p.tn || 0) + 1; }   // 한 구단 소속(등록) 시즌 수(예외 선수 자격 7시즌)
-      p.fa.regDays = 0; p.fa.est = false;
+      p.fa.regDays = 0; p.il = 0; p.fa.est = false;
       if (p.team in this.S.teams || p.team === 'MIL') p.salHist = (p.salHist || []).slice(-2).concat([p.contract.salary]);
     }
   };

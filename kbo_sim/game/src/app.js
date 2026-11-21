@@ -150,7 +150,7 @@
   /* ---------------- 로스터 ---------------- */
   function entryStrip(n1) {
     const cnt = { P: n1.filter(p => p.type === 'P').length, B: n1.filter(p => p.type === 'B').length, C: n1.filter(p => p.pos === 'C').length }, chip = (l, v, min, max) => `<span class="chip ${v < min || (max && v > max) ? 'warn' : 'in'}">${l} ${v}${min ? ` (최소 ${min})` : ''}</span>`;
-    return `<div class="row" style="margin-top:8px"><b class="small">1군 엔트리 ${n1.length}/${ACTIVE_MAX}</b>${chip('투수', cnt.P, 13)}${chip('타자', cnt.B, 13)}${chip('포수', cnt.C, 2)}<span class="small muted">행 오른쪽 <b>1군/2군</b> 버튼으로 바로 이동합니다(2군 말소 후 10경기일은 재등록 불가).</span></div>`;
+    return `<div class="row" style="margin-top:8px"><b class="small">1군 엔트리 ${n1.length}/${L.activeMax()}</b>${chip('투수', cnt.P, 13)}${chip('타자', cnt.B, 13)}${chip('포수', cnt.C, 2)}<span class="small muted">행 오른쪽 <b>1군/2군</b> 버튼으로 바로 이동합니다(2군 말소 후 10경기일은 재등록 불가).</span></div>`;
   }
   function screenRoster() {
     const S = L.S, t = U(), all = L.players(t), f = ui.rf.f, v = ui.rf.v || 'pos', sk = ui.rf.s;
@@ -175,7 +175,7 @@
       : `<div class="card"><div class="tablewrap"><table class="rost">${head}<tbody>${rows.map(rowOf).join('')}</tbody></table></div></div>`;
     const flab = [['all', '전체'], ['act', '1군'], ['res', '2군'], ['inj', '부상'], ['exp', '계약 1년 이하'], ['frn', '외국인'], ['young', '유망주(25세↓ 잠재 C+)']];
     const sortName = { ovr: '능력치(OVR) 높은 순', age: '나이 어린 순', sal: '연봉 높은 순', pot: '잠재력 높은 순' }[sk];
-    return `${clubCard()}<div class="card"><div class="row"><h2 style="margin:0">로스터</h2><span class="muted small">${all.length}명 · 1군 ${n1.length}/${ACTIVE_MAX}</span><span class="sp"></span><select data-sel="rsort" aria-label="정렬 기준"><option value="ovr" ${sk === 'ovr' ? 'selected' : ''}>능력치순</option><option value="pot" ${sk === 'pot' ? 'selected' : ''}>잠재력순</option><option value="age" ${sk === 'age' ? 'selected' : ''}>나이순</option><option value="sal" ${sk === 'sal' ? 'selected' : ''}>연봉순</option></select></div>
+    return `${clubCard()}<div class="card"><div class="row"><h2 style="margin:0">로스터</h2><span class="muted small">${all.length}명 · 1군 ${n1.length}/${L.activeMax()}</span><span class="sp"></span><select data-sel="rsort" aria-label="정렬 기준"><option value="ovr" ${sk === 'ovr' ? 'selected' : ''}>능력치순</option><option value="pot" ${sk === 'pot' ? 'selected' : ''}>잠재력순</option><option value="age" ${sk === 'age' ? 'selected' : ''}>나이순</option><option value="sal" ${sk === 'sal' ? 'selected' : ''}>연봉순</option></select></div>
       <div class="kpis" style="margin-top:10px"><div class="kpi"><div class="l">1군 평균 OVR</div><div class="v">${avg(n1, p => L.ovr(p)).toFixed(1)}</div><div class="small muted">1군 평균 ${avg(n1, p => p.age).toFixed(1)}세</div></div><div class="kpi"><div class="l">구성</div><div class="v">투수 ${all.filter(p => p.type === 'P').length} · 타자 ${all.filter(p => p.type === 'B').length}</div><div class="small muted">부상 ${all.filter(p => L.isInj(p)).length} · 외국인 ${all.filter(p => p.foreign).length}</div></div><div class="kpi"><div class="l">연봉(상위 40)</div><div class="v">${L.cbtPay(t)}</div><div class="small muted">상한 ${L.cbtCap().toFixed(1)}억 · 계약 1년 이하 ${all.filter(flt.exp).length}명</div></div></div></div>
       ${entryStrip(n1)}
       <div class="tabs" role="tablist"><button role="tab" aria-selected="${v === 'pos'}" data-act="rview" data-a="pos">포지션별</button><button role="tab" aria-selected="${v === 'stat'}" data-act="rview" data-a="stat">성적·폼</button><button role="tab" aria-selected="${v === 'list'}" data-act="rview" data-a="list">전체 목록</button></div>
@@ -323,13 +323,13 @@
   }
   function screenFarm() {
     const S = L.S, me = U(), all = L.players(me), farm = all.filter(p => !p.active && !L.isInj(p)).sort((a, b) => L.ovr(b) - L.ovr(a)), injd = all.filter(p => !p.active && L.isInj(p)), act = all.filter(p => p.active);
-    const full = act.length >= ACTIVE_MAX, st2 = L.standings2(), my2 = st2.find(x => x.team === me), recs = farmRecs();
+    const full = act.length >= L.activeMax(), st2 = L.standings2(), my2 = st2.find(x => x.team === me), recs = farmRecs();
     const line = p => p.type === 'B' ? batLine(p.id, true) : pitLine(p.id, true);
     const frow = p => { const lk = L.lockLeft(p), f = formOf(p); return `<tr class="click" data-act="player" data-a="${p.id}"><td class="l"><b>${esc(p.ko)}</b>${injChip(p)}${p.age <= 28 && L.S.coach ? ` <span class="chip" title="육성 방향">${L.planName(L.devPlan(p))}</span>` : ''}${p.age <= 25 ? ` <span class="chip" title="예상 정점 기준: A 슈퍼스타급(68+) · B 확실한 주전급(57+) · C 준주전급(48+) · D 후보급(38+) · E 육성급. 스카우트 추정이며 시즌을 거치며 정확해집니다.">잠재력 ${L.potLetter(p)}</span>` : ''}</td><td class="l">${pos(p)}</td><td class="n">${p.age}</td><td>${ovrChip(L.ovr(p))}</td><td class="l small">${line(p)}</td><td class="l small">${f ? f.txt : '<span class="muted">-</span>'}</td><td data-stop="1">${L.isInj(p) ? `<span class="chip warn">부상자 명단</span>` : lk ? `<span class="chip">잠금 ${lk}일</span>` : `<button class="sm" data-act="toggleActive" data-a="${p.id}">${full ? '콜업' : '1군 등록'}</button>`}</td></tr>`; };
     const arow = p => `<tr class="click" data-act="player" data-a="${p.id}"><td class="l"><b>${esc(p.ko)}</b></td><td class="l">${pos(p)}</td><td class="n">${p.age}</td><td>${ovrChip(L.ovr(p))}</td><td class="l small">${statLine(p)}</td><td data-stop="1"><button class="sm" data-act="toggleActive" data-a="${p.id}">2군으로</button></td></tr>`;
     const rec = recs.length ? recs.map(r => `<div class="row small"><span>↑ <b>${esc(r.up.p.ko)}</b> (OVR ${L.ovr(r.up.p)}${r.up.f ? ' · 최근 ' + r.up.f.txt : ''}) ↔ ↓ <b>${esc(r.down.ko)}</b> (OVR ${L.ovr(r.down)})</span><span class="sp"></span><button class="sm" data-act="swapFarm" data-a="${r.up.p.id}|${r.down.id}">교체</button></div>`).join('') : '<div class="small muted">지금 1군 후보보다 확실히 나은 2군 선수가 없습니다.</div>';
     const th = '<thead><tr><th class="l">선수</th><th class="l">포지션</th><th>나이</th><th>OVR</th><th class="l">2군 기록</th><th class="l">최근 10경기</th><th></th></tr></thead>';
-    return `<div class="card"><div class="row"><h2>2군 (퓨처스)</h2><span class="muted small">1군 ${act.length}/${ACTIVE_MAX} · 2군 ${farm.length}명 · 2군 성적 ${my2.w}승 ${my2.l}패 ${my2.d}무 (${my2.rank}위)</span></div>
+    return `<div class="card"><div class="row"><h2>2군 (퓨처스)</h2><span class="muted small">1군 ${act.length}/${L.activeMax()} · 2군 ${farm.length}명 · 2군 성적 ${my2.w}승 ${my2.l}패 ${my2.d}무 (${my2.rank}위)</span></div>
       <div class="small muted">1군 말소 후 10경기일(약 열흘) 동안은 재등록할 수 없습니다. 2군에서 꾸준히 뛴 어린 선수는 성장이 빠르고, 출전하지 못하면 성장이 더딥니다. 추천은 능력치와 최근 10경기 성적을 함께 본 참고용입니다.</div></div>
       <div class="card"><h2>콜업 추천</h2>${rec}</div>
       ${farmList(farm, full)}${trainCard()}
@@ -1031,11 +1031,11 @@
   function openSwap(upId, ev) { const p = P(upId); if (!p) return; if (L.isInj(p)) { toast(`${p.ko}은(는) 부상자 명단입니다.`); return; } const lk = L.lockLeft(p); if (lk > 0) { toast(`${p.ko}은(는) 2군 말소 후 10경기일이 지나야 1군에 등록할 수 있습니다. (${lk}일 남음)`); return; } ui.swap = { up: upId, ev: ev || null }; render(); }
   function swapSheet() {
     const sw = ui.swap; if (!sw || !L) return ''; const up = P(sw.up); if (!up || up.active) { ui.swap = null; return ''; }
-    const open = L.players(U()).filter(p => p.active).length < ACTIVE_MAX, f = formOf(up), cands = L.downCandidates(up.id);
+    const open = L.players(U()).filter(p => p.active).length < L.activeMax(), f = formOf(up), cands = L.downCandidates(up.id);
     const rows = cands.map(c => { const q = c.p, fm = formOf(q); return `<button data-act="swapPick" data-a="${q.id}" ${c.block ? 'disabled' : ''} style="width:100%;display:flex;gap:8px;align-items:center;text-align:left;min-height:52px;margin-top:6px"><span style="flex:1;min-width:0"><b>${esc(q.ko)}</b> <span class="muted small">${pos(q)} · ${q.age}세</span>${c.role ? ` <span class="chip warn">${c.role}</span>` : ''}${c.block ? ` <span class="chip bad">${c.block}</span>` : ''}<div class="small muted">${fm ? '최근 ' + esc(fm.txt) : '최근 기록 없음'}${q.type === 'P' ? ' · ' + gauge(q) : ''}</div></span>${ovrChip(L.ovr(q))}</button>`; }).join('');
     return `<div class="sheet-bg" data-act="swapClose"><div class="sheet" data-stop="1" role="dialog" aria-label="1군 콜업"><div class="grabber"></div>
       <h2>${esc(up.ko)} 1군 올리기 <span class="muted small">${pos(up)} · OVR ${L.ovr(up)}</span></h2><div class="small muted">${f ? '2군 최근 ' + esc(f.txt) + ' · ' : ''}누구와 교체할까요? (약한 선수·부진한 선수부터 추천)</div>
-      ${open ? `<button class="primary" data-act="swapPick" data-a="none" style="width:100%;min-height:48px;margin-top:8px">교체 없이 등록 (엔트리 ${L.players(U()).filter(p => p.active).length}/${ACTIVE_MAX})</button>` : ''}
+      ${open ? `<button class="primary" data-act="swapPick" data-a="none" style="width:100%;min-height:48px;margin-top:8px">교체 없이 등록 (엔트리 ${L.players(U()).filter(p => p.active).length}/${L.activeMax()})</button>` : ''}
       <div style="max-height:52vh;overflow-y:auto;margin-top:4px">${rows || '<p class="muted">교체할 수 있는 1군 선수가 없습니다.</p>'}</div><button style="width:100%;min-height:44px;margin-top:8px" data-act="swapClose">취소</button></div></div>`;
   }
   function changeBar() {

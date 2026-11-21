@@ -389,11 +389,26 @@
       while (set.bullpen.setup.length < 2 && rest.length) set.bullpen.setup.push(rest.shift().id);
       for (const p of rest) set.bullpen.middle.push(p.id);
     }
+    /* 리그 규정 제14조: 현역선수 등록 29명, 9월 1일 이후 정규시즌 막바지에는 5명을 추가해 34명(확대 엔트리). 포스트시즌은 다시 29명으로 둔다(실제 30명·출장 28명은 별도 확인 필요) */
+    _lnews(text) { if (this._news) this._news(text); else { const S = this.S; S.news.unshift({ year: S.year, day: S.day, text }); if (S.news.length > 120) S.news.length = 120; } }   // 모듈 로드 순서와 무관하게 소식 기록
+    activeMax() { const S = this.S; if (S.phase === 'regular' && S.schedule && S.day < S.schedule.length && this.todayN() >= Date.UTC(S.year, 8, 1) / 864e5) return ACTIVE_MAX + 5; return ACTIVE_MAX; }
+    _trimActive(t) {   // 엔트리가 한도를 넘으면 주전·선발 등 핵심을 제외하고 가치가 낮은 순으로 2군에 내린다(경기일 잠금 없음)
+      const S = this.S, max = this.activeMax(), set = S.teams[t].set; let A = this.players(t).filter(x => x.active); if (A.length <= max) return 0;
+      const core = new Set([...(set.lineup || []).map(x => x.id || x), ...(set.rotation || []).slice(0, 5), set.bullpen && set.bullpen.closer].filter(Boolean)); let n = 0;
+      const cand = A.filter(x => !core.has(x.id)).sort((a, b) => this.marketValue(a) - this.marketValue(b));
+      for (const p of cand) { if (A.length <= max) break; const same = A.filter(x => x.type === p.type).length; if ((p.type === 'B' && same <= 10) || (p.type === 'P' && same <= 8)) continue; p.active = false; A = A.filter(x => x !== p); n++; }
+      this._engDirty = true; this.invalidate(); return n;
+    }
+    _applyActiveMax() {   // 한도가 바뀌는 날(9/1 확대·포스트시즌 복귀) 모든 구단에 적용: AI는 자동 재편성, 내 팀은 확대 안내/초과분 정리
+      const S = this.S, max = this.activeMax(); if (S.amx === undefined) S.amx = ACTIVE_MAX; if (S.amx === max) return; const up = max > S.amx; S.amx = max;
+      for (const t of TEAMS) { if (t === S.userTeam) { if (!up) { const n = this._trimActive(t); if (n) { this.repairSettings(t); this._lnews(`1군 엔트리 ${ACTIVE_MAX}명 복귀: 가치가 낮은 ${n}명이 2군으로 내려갔습니다.`); } } else this._lnews(`9월 1일 확대 엔트리: 1군 엔트리가 ${max}명까지 늘었습니다. 2군 선수를 추가로 등록할 수 있습니다.`); continue; } this.autoActive(t); this.assignUsage(t); }
+      this.invalidate();
+    }
     setActive(t, id, on) {
       const p = this.S.players[id]; if (!p || p.team !== t) return '선수를 찾을 수 없습니다.';
       if (on && this.isInj(p)) return `${p.ko}은(는) 부상자 명단입니다.`;
       if (on && this.S.phase === 'post' && p.noPost === this.S.year) return `${p.ko}은(는) 8월 15일 이후 영입해 포스트시즌에 나갈 수 없습니다.`;
-      if (on && this.players(t).filter(x => x.active).length >= ACTIVE_MAX) return `1군 엔트리는 ${ACTIVE_MAX}명까지입니다.`;
+      if (on && this.players(t).filter(x => x.active).length >= this.activeMax()) return `1군 엔트리는 ${this.activeMax()}명까지입니다.`;
       p.active = !!on; this._engDirty = true; if (t === this.S.userTeam) this.repairSettings(t); return null;
     }
 
@@ -427,7 +442,7 @@
     }
     /* AI 팀의 1군 28명 자동 편성: 주전 9 + 백업 5(포수 2명 이상) + 선발 5 + 불펜 9 */
     autoActive(t, pool) {
-      const S = this.S, inPool = p => (!pool || pool.includes(p)) && !this.isInj(p), H = this.hitters(t).filter(inPool), P = this.pitchers(t).filter(inPool), act = new Set();
+      const S = this.S, AM = t === S.userTeam ? ACTIVE_MAX : this.activeMax(), inPool = p => (!pool || pool.includes(p)) && !this.isInj(p), H = this.hitters(t).filter(inPool), P = this.pitchers(t).filter(inPool), act = new Set();
       const lineup = this.bestLineup(H); lineup.forEach(x => act.add(x.id));
       const bench = H.filter(p => !act.has(p.id)).sort((a, b) => this._runsB(b, true) - this._runsB(a, true)); let nb = 0;
       const needC = 2 - H.filter(p => act.has(p.id) && p.pos === 'C').length;
@@ -436,10 +451,10 @@
       const spv = p => this._runsP(p) + 0.2 * (p.stamina - 50), spc = P.filter(p => p.role === 'SP' || p.stamina >= 52).sort((a, b) => spv(b) - spv(a)).slice(0, 5);
       if (spc.length < 5) { const have = new Set(spc.map(p => p.id)); spc.push(...P.filter(p => !have.has(p.id)).sort((a, b) => b.stamina - a.stamina).slice(0, 5 - spc.length)); }
       spc.forEach(p => act.add(p.id));
-      const rps = P.filter(p => !act.has(p.id)).sort((a, b) => this._runsP(b) - this._runsP(a)).slice(0, Math.max(0, ACTIVE_MAX - act.size)); rps.forEach(p => act.add(p.id));
-      if (act.size < ACTIVE_MAX) {   // 명단 풀이 모자라면 팀의 나머지 선수 중 가치가 높은 순으로 28명까지 채운다(투수 최소 13명)
+      const rps = P.filter(p => !act.has(p.id)).sort((a, b) => this._runsP(b) - this._runsP(a)).slice(0, Math.max(0, AM - act.size)); rps.forEach(p => act.add(p.id));
+      if (act.size < AM) {   // 명단 풀이 모자라면 팀의 나머지 선수 중 가치가 높은 순으로 28명까지 채운다(투수 최소 13명)
         const rest = this.players(t).filter(p => !act.has(p.id) && !this.isInj(p)).sort((a, b) => this.marketValue(b) - this.marketValue(a));
-        while (act.size < ACTIVE_MAX && rest.length) { const needP = [...act].filter(id => S.players[id].type === 'P').length < 13; const i = rest.findIndex(p => needP ? p.type === 'P' : true); const p = rest.splice(i < 0 ? 0 : i, 1)[0]; act.add(p.id); }
+        while (act.size < AM && rest.length) { const needP = [...act].filter(id => S.players[id].type === 'P').length < 13; const i = rest.findIndex(p => needP ? p.type === 'P' : true); const p = rest.splice(i < 0 ? 0 : i, 1)[0]; act.add(p.id); }
       }
       for (const p of this.players(t)) p.active = act.has(p.id);
       this._engDirty = true; this._f2dirty = true;
@@ -453,7 +468,7 @@
       const locking = S.day < S.schedule.length;
       if (on) {
         if (this.isInj(p)) return `${p.ko}은(는) 부상자 명단입니다(${p.inj.dx}, 복귀 예정 ${this.injDateStr(p)}).`;
-        if (A.length >= ACTIVE_MAX) return `1군 엔트리는 ${ACTIVE_MAX}명까지입니다. 먼저 한 명을 2군으로 내리세요.`;
+        if (A.length >= this.activeMax()) return `1군 엔트리는 ${this.activeMax()}명까지입니다. 먼저 한 명을 2군으로 내리세요.`;
         if (locking && S.day < (p.lockUntil || 0)) return `${p.ko}은(는) 2군 말소 후 10경기일이 지나야 1군에 등록할 수 있습니다. (${p.lockUntil - S.day}일 남음)`;
         p.active = true; if (t === S.userTeam && !p.debut1 && S.phase === 'regular') p.debut1 = { y: S.year, d: S.day }; if (this._bondShift && (S.phase === 'regular' || S.phase === 'preseason')) this._bondShift(p, 1, '1군 승격');
       } else {
@@ -532,7 +547,7 @@
       for (const t of TEAMS) { if (t !== S.userTeam) { const rp = first ? this.startPool(t) : []; this.autoActive(t, rp.length >= ACTIVE_MAX ? rp : null); this.assignUsage(t); } }
       this.repairSettings(S.userTeam);
       S.day = 0; S.results = []; S.stats = { bat: {}, pit: {} }; S.stats2 = { bat: {}, pit: {} }; S.recent = {}; S.rec2 = {}; for (const t of this.farmTeams()) S.rec2[t] = [0, 0, 0, 0, 0]; S.post = null; S.phase = 'preseason';
-      S.rec = {}; S.h2h = {}; for (const t of TEAMS) { S.rec[t] = [0, 0, 0, 0, 0]; S.h2h[t] = {}; for (const u of TEAMS) S.h2h[t][u] = [0, 0, 0]; }
+      S.rec = {}; S.h2h = {}; S.h2r = {}; S.tb = null; for (const t of TEAMS) { S.rec[t] = [0, 0, 0, 0, 0]; S.h2h[t] = {}; for (const u of TEAMS) S.h2h[t][u] = [0, 0, 0]; }
       for (const id in S.players) { S.players[id].fat = 0; S.players[id].lastStart = -99; }
       S.schedule = this.makeSchedule(); S.pendingDay = null; S.userGameDone = {};
       this.invalidate();
@@ -601,12 +616,17 @@
 
     /* ------------------------------------------------------------ 순위 */
     standings() {
-      const R = this.S.rec, H = this.S.h2h, pct = t => (R[t][0] + R[t][1]) ? R[t][0] / (R[t][0] + R[t][1]) : 0;
-      const order = TEAMS.slice().sort((x, y) => {
-        if (pct(y) !== pct(x)) return pct(y) - pct(x);
-        const hx = H[x][y], sh = hx[0] + hx[1] ? hx[0] / (hx[0] + hx[1]) : 0.5; if (sh !== 0.5) return sh > 0.5 ? -1 : 1;
-        const dx = R[x][3] - R[x][4], dy = R[y][3] - R[y][4]; if (dx !== dy) return dy - dx; return x < y ? -1 : 1;
-      });
+      const S = this.S, R = S.rec, H = S.h2h, HR = S.h2r || {}, pv = S.prevRank || {}, pct = t => (R[t][0] + R[t][1]) ? R[t][0] / (R[t][0] + R[t][1]) : 0;
+      /* 리그 규정 제3조: 승률 → (동률 구단끼리) 상호 전체 전적 다승 → 상호 다득점 → 전년도 순위. 동률 구단이 3팀 이상이면 동률 구단들 사이 경기만 합산 */
+      const pre = TEAMS.slice().sort((x, y) => pct(y) - pct(x) || (x < y ? -1 : 1)), order = [];
+      for (let i = 0; i < pre.length;) {
+        let j = i; while (j < pre.length && pct(pre[j]) === pct(pre[i])) j++;
+        let g = pre.slice(i, j);
+        if (g.length > 1) { const key = t => [g.reduce((a, u) => a + (u === t ? 0 : H[t][u][0]), 0), g.reduce((a, u) => a + (u === t ? 0 : ((HR[t] || {})[u] || 0)), 0), -(pv[t] || 99)]; const K = new Map(g.map(t => [t, key(t)])); g.sort((x, y) => { const a = K.get(x), b = K.get(y); for (let k = 0; k < 3; k++) if (a[k] !== b[k]) return b[k] - a[k]; return x < y ? -1 : 1; }); }
+        order.push(...g); i = j;
+      }
+      const tb = S.tb && S.tb.year === S.year ? S.tb.games : [];   // 1위·5위 결정전 결과(2개 구단 동률일 때만 거행)
+      for (const x of tb) { const i = order.indexOf(x.winner), k = order.indexOf(x.winner === x.home ? x.away : x.home); if (i > k && k >= 0 && i - k === 1) { order[k] = x.winner; order[i] = x.winner === x.home ? x.away : x.home; } }
       return order.map((t, i) => ({ rank: i + 1, team: t, w: R[t][0], l: R[t][1], d: R[t][2], pct: pct(t), rs: R[t][3], ra: R[t][4] }));
     }
     farmSchedule() { const S = this.S; if (!this._sch2 || this._sch2.y !== S.year || this._sch2.s !== S.seed || this._sch2.n !== this.farmTeams().length) this._sch2 = { y: S.year, s: S.seed, n: this.farmTeams().length, v: this.makeScheduleRR(888, this.farmTeams()) }; return this._sch2.v; }
@@ -615,7 +635,8 @@
       return this.farmTeams().sort((x, y) => pct(y) - pct(x) || (R[y][3] - R[y][4]) - (R[x][3] - R[x][4]) || (x < y ? -1 : 1)).map((t, i) => ({ rank: i + 1, team: t, w: R[t][0], l: R[t][1], d: R[t][2], pct: pct(t), rs: R[t][3], ra: R[t][4] }));
     }
     /* FA 자격 연수: 1군 등록일수 누적(경기일 1일 = 달력 7/6일) */
-    _tickService() { for (const t of TEAMS) for (const p of this.players(t)) if (p.active && p.fa) p.fa.regDays += 7 / 6; }
+    /* 현역선수 등록일수(FA 자격 산정). 리그 규정 제14조 ③: 부상자 명단에 오른 기간은 시즌 최대 30일까지 등록일수로 인정한다(p.il = 올 시즌 인정 일수) */
+    _tickService() { for (const t of TEAMS) for (const p of this.players(t)) { if (!p.fa) continue; if (p.active) p.fa.regDays += 7 / 6; else if (p.inj && (p.il || 0) < 30 && this.isInj(p)) { const d = Math.min(7 / 6, 30 - (p.il || 0)); p.il = (p.il || 0) + d; p.fa.regDays += d; } } }
     /* 군 복무(상무) 선수 복귀: 전역 월이 되면 원소속 구단 2군으로 돌아온다. ym = 연*12+(월-1) */
     returnMilitary(ym) {
       const S = this.S, back = [];
@@ -642,6 +663,7 @@
     }
     commit(home, away, rh, ra, meta) {
       const S = this.S, R = S.rec; if (this._finGame && S.fin) this._finGame(home, away); R[home][3] += rh; R[home][4] += ra; R[away][3] += ra; R[away][4] += rh;
+      const HR = S.h2r = S.h2r || {}; (HR[home] = HR[home] || {})[away] = ((HR[home] || {})[away] || 0) + rh; (HR[away] = HR[away] || {})[home] = ((HR[away] || {})[home] || 0) + ra;   // 상호 득점(순위 동률 해소용)
       if (rh > ra) { R[home][0]++; R[away][1]++; S.h2h[home][away][0]++; S.h2h[away][home][1]++; }
       else if (ra > rh) { R[away][0]++; R[home][1]++; S.h2h[away][home][0]++; S.h2h[home][away][1]++; }
       else { R[home][2]++; R[away][2]++; S.h2h[home][away][2]++; S.h2h[away][home][2]++; }
@@ -655,7 +677,7 @@
     playDay(live) {
       this.S.base = null;   // 하루가 지나면 변경이 확정된 것으로 본다
       const S = this.S; if (S.day >= S.schedule.length) return { status: 'seasonEnd' };
-      S.phase = 'regular'; const E = this.engine(), rd = S.schedule[S.day], d = S.day, others = [];
+      S.phase = 'regular'; this._applyActiveMax(); const E = this.engine(), rd = S.schedule[S.day], d = S.day, others = [];
       let ug = null;
       rd.forEach((g, i) => {
         if (g[0] === S.userTeam || g[1] === S.userTeam) { ug = { g, i }; return; }
@@ -664,7 +686,7 @@
       });
       this.mergeTracking();
       for (const o of others) this.commit(o.home, o.away, o.rh, o.ra, { spH: o.spH, spA: o.spA });
-      this._decayFatigue(); this._tickService(); if (this._injuryDay) this._injuryDay(d); if (this._eventDay) this._eventDay(d); if (this._finSnapDay) this._finSnapDay(d); if (this._trainDay) this._trainDay(); if (this._scoutDay) this._scoutDay(); if (this._milestoneDay) this._milestoneDay(); this.playFutures(d); this.returnMilitary(this.milYM(d));
+      this._applyActiveMax(); this._decayFatigue(); this._tickService(); if (this._injuryDay) this._injuryDay(d); if (this._eventDay) this._eventDay(d); if (this._finSnapDay) this._finSnapDay(d); if (this._trainDay) this._trainDay(); if (this._scoutDay) this._scoutDay(); if (this._milestoneDay) this._milestoneDay(); this.playFutures(d); this.returnMilitary(this.milYM(d));
       if (!ug) { S.day++; return { status: 'ok', day: d }; }
       if (live) { S.pendingDay = d; return { status: 'userGame', day: d, game: ug.g, idx: ug.i }; }
       const L = this.startUserGame(ug.g, ug.i); this.playAuto(L); const res = this.finishUserGame(L);
@@ -753,7 +775,7 @@
     }
     validateEntry() {
       const S = this.S, t = S.userTeam, a = this.players(t).filter(p => p.active), w = [], P = a.filter(p => p.type === 'P').length, B = a.filter(p => p.type === 'B').length, C = a.filter(p => p.pos === 'C').length, set = S.teams[t].set;
-      if (a.length !== ACTIVE_MAX) w.push(`1군 엔트리 ${a.length}/${ACTIVE_MAX}명`); if (P < 13) w.push(`투수 ${P}명 (13명 이상 권장)`); if (B < 13) w.push(`타자 ${B}명 (13명 이상 권장)`); if (C < 2) w.push(`포수 ${C}명 (최소 2명)`);
+      if (a.length < ACTIVE_MAX || a.length > this.activeMax()) w.push(`1군 엔트리 ${a.length}/${this.activeMax()}명`); if (P < 13) w.push(`투수 ${P}명 (13명 이상 권장)`); if (B < 13) w.push(`타자 ${B}명 (13명 이상 권장)`); if (C < 2) w.push(`포수 ${C}명 (최소 2명)`);
       if (set.rotation.length < 5) w.push('선발 로테이션 5명 미만'); if (!set.bullpen.closer) w.push('마무리 미지정');
       const bad = set.lineup.filter(x => this.fitTag(S.players[x.id], x.pos) === 'bad'); if (bad.length) w.push(`수비 부적합 ${bad.length}명 (${bad.map(x => S.players[x.id].ko).join(', ')})`);
       return w;
@@ -864,7 +886,20 @@
     }
 
     /* ------------------------------------------------------------ 포스트시즌 */
+    /* 리그 규정 제3조: 정규시즌 1위 또는 5위가 2개 구단 동률이면 와일드카드 결정전 전날 단판 결정전(홈 = 동률 해소 기준 우위 구단, 기록은 정규시즌에 가산하지 않음).
+     * 3개 구단 이상이면 거행하지 않고 상호 전적 기준으로 순위를 정한다. 연장은 포스트시즌과 같이 15회까지, 그래도 비기면 우위 구단이 진출. */
+    _tieGames() {
+      const S = this.S, st = this.standings(), games = [], E = this.engine(); S.tb = { year: S.year, games };
+      for (const pos of [1, 5]) {
+        const tied = st.filter(x => x.pct === st[pos - 1].pct); if (tied.length !== 2 || tied[0].rank !== pos) continue;
+        const home = tied[0].team, away = tied[1].team, r = rngFor(S.seed, S.year, 9100 + pos), [rh, ra] = E.game(home, away, Math.min(144, 1 + S.day), Math.min(144, 1 + S.day), r, E.newStats(), { maxInn: 15 });
+        const winner = ra > rh ? away : home; games.push({ pos, home, away, rh, ra, winner });
+        this._lnews(`정규시즌 ${pos}위 결정전: ${KO[home] || home} ${rh} : ${ra} ${KO[away] || away} → ${KO[winner] || winner} ${pos === 1 ? '정규시즌 1위' : '와일드카드 결정전 진출'}`);
+      }
+      this.invalidate();
+    }
     startPostseason() {
+      this._tieGames(); this._applyActiveMax();
       const S = this.S, st = this.standings(), seeds = st.slice(0, 5).map(x => x.team), T = i => seeds[i];
       S.post = { seeds, rounds: [], cur: null, stage: 0, done: false, champion: null };
       S.phase = 'post'; if (this._postElig) this._postElig(); this._mkSeries(0); this.invalidate(); return S.post;
