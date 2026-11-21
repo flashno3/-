@@ -63,6 +63,9 @@
       p.stamina = clamp(p.stamina + (a <= 25 ? 1.2 : a >= 33 ? -1.5 : 0) + (dv ? dv.stamina : 0) + (gain > 0 ? te.stamina : 0) + gauss(r, 0, 1.2), 25, 75);
       if (dv) this._devRole(p, dv.plan);
     }
+    { const sb = p.team === this.S.userTeam && this._skillApply ? this._skillApply(p) : null;   // 기술 습득 프로젝트 보너스(일회성·영구)
+      if (sb) { const dir = p.type === 'B' ? { k: -1, bb: 1, hr: 1, babip: 1, xbh: 1 } : { k: 1, bb: -1, hr: -1, babip: -1 }, rg = p.type === 'B' ? { k: [0.06, 0.45], bb: [0.015, 0.20], hr: [0.002, 0.07], babip: [0.24, 0.39], xbh: [0.10, 0.32] } : { k: [0.08, 0.40], bb: [0.02, 0.18], hr: [0.004, 0.06], babip: [0.25, 0.37] };
+        for (const f of Object.keys(sb)) if (dir[f] && rg[f]) set(f, dir[f], rg[f][0], rg[f][1], sb[f]); } }
     if (p.peak !== undefined) p.pot = clamp((p.peak - this.ovr(p)) / 30, 0, 1.4);
     return this.ovr(p) - old;
   };
@@ -292,6 +295,7 @@
       const p = S.players[id]; if (p.retired || p.team === 'DRAFT') continue;
       const share = this.playShare(p), pre = p.team === user ? { o0: this.ovr(p), s0: this.sub(p), a0: p.age, ps: Math.round(share * 100), trd: p.tr && p.tr.y === S.year ? p.tr.total : null } : null;   // 성장 공개 연출용 '성장 전' 기록(읽기 전용)
       const d = this.progress(p, rngFor(S.seed, S.year, 32, parseInt(id.slice(1))), p.team === user && this.investFarm && this.investFarm() > 0 ? clamp(share + this.investFarm(), 0, 1) : share);   // 육성 시설 투자: 내 선수의 출전 비중 보정(투자하지 않으면 그대로)
+      if (p.team === user && this._trainRecord) this._trainRecord(p, d);   // 훈련 효과 분석용 기록(읽기 전용)
       if (p.team === user) { rep.prog.push(Object.assign({ id, d }, pre)); (p.ovrHist = p.ovrHist || []).push({ y: S.year + 1, o: this.ovr(p) }); if (p.ovrHist.length > 8) p.ovrHist.shift(); }
     }
     for (const x of rep.prog) { const p = S.players[x.id]; if (p && p.age <= 24 && x.d >= 5) this.story('train', `유망주 급성장: ${p.ko}(${p.age}세) OVR ${x.o0}→${this.ovr(p)} (+${x.d})`, 2); }
@@ -372,10 +376,11 @@
   };
   proto.draftAutoRest = function () {   // 내 순서도 자동 지명(추천 순)
     const S = this.S, d = S.off.draft;
-    while (d.pick < d.order.length) { if (this.draftOnClock() === S.userTeam) { if (S.teams[S.userTeam].ids.length >= ROSTER_MAX) { d.pick++; continue; } const best = d.pool.map(id => ({ id, s: this.userScore ? this.userScore(S.players[id]) : this.scoutScore(S.players[id]) })).sort((a, b) => b.s - a.s)[0]; this._draftTake(S.userTeam, best.id); } else this.draftAiUntilUser(); }
+    while (d.pick < d.order.length) { if (this.draftOnClock() === S.userTeam) { if (S.teams[S.userTeam].ids.length >= ROSTER_MAX) { d.pick++; continue; } const best = d.pool.map(id => ({ id, s: this.draftBoardScore ? this.draftBoardScore(S.players[id]) : this.userScore ? this.userScore(S.players[id]) : this.scoutScore(S.players[id]) })).sort((a, b) => b.s - a.s)[0]; this._draftTake(S.userTeam, best.id); } else this.draftAiUntilUser(); }
   };
   proto.finishDraft = function () {
-    const S = this.S, d = S.off.draft; for (const id of d.pool) { S.players[id].retired = true; S.players[id].team = 'RET'; } d.pool = [];
+    const S = this.S, d = S.off.draft; if (this._scoutSettle) this._scoutSettle();   // 스카우트 적중률 정산(후보의 숨은 정점이 사라지기 전에)
+    for (const id of d.pool) { S.players[id].retired = true; S.players[id].team = 'RET'; } d.pool = [];
   };
 
   /* ---------- FA ---------- */
@@ -1485,7 +1490,7 @@
       const retN = now + days, rd = new Date(retN * 864e5);
       p.inj = { dx: u >= 0.97 ? part.replace('통증', '손상 → 수술') : part, since: `${S.year}-${String(new Date(now * 864e5).getUTCMonth() + 1).padStart(2, '0')}-${String(new Date(now * 864e5).getUTCDate()).padStart(2, '0')} 발생`, ret: rd.toISOString().slice(0, 10), retN, basis: '시즌 중 발생한 부상(확률 모델)', apply: true, generated: true };
       p.active = false; changed.add(t); (out[t] = out[t] || []).push(p);
-      if (t === user) { news(this, `부상: ${p.ko} — ${p.inj.dx}${sev}, 약 ${days}일 (복귀 예정 ${this.injDateStr(p)})`); if (days >= 30) this._bondShift(p, -1, '장기 부상'); }
+      if (t === user) { const ih = S.injHist = S.injHist || {}; ih[S.year] = (ih[S.year] || 0) + 1; news(this, `부상: ${p.ko} — ${p.inj.dx}${sev}, 약 ${days}일 (복귀 예정 ${this.injDateStr(p)})`); if (days >= 30) this._bondShift(p, -1, '장기 부상'); }
     }
     {   // 부상으로 1군이 최소 인원(타자 10·투수 8) 아래가 되면 건강한 2군 선수를 자동 등록(경기 진행 불가 방지)
       const a = this.players(user).filter(p => p.active), nb = a.filter(p => p.type === 'B').length, np = a.filter(p => p.type === 'P').length;

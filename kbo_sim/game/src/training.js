@@ -113,6 +113,7 @@
   };
   proto._trainDay = function () {
     const S = this.S; if (S.phase !== 'regular' && S.phase !== 'preseason') return;
+    if (this._skillDay) this._skillDay();
     const cfg = this.trainCfg(), a = this._trainAcc();
     if (!a.g) { a.g = {}; for (const side of ['B', 'P']) for (const k of Object.keys(GROUPS[side])) a.g[k] = Object.assign({}, a[side] || {}); }   // 그룹 누적: 처음 만들 때까지의 팀 누적을 그대로 복사(그룹을 따로 정하지 않았다면 팀 누적과 같다)
     a.total++;
@@ -245,6 +246,70 @@
     const p = this.S.players[id]; if (!p) return '선수를 찾을 수 없습니다.'; const ws = this.trainWeakness(p), w = focus ? ws.find(x => x.focus === focus) : ws[0]; if (!w) return '보완할 약점을 찾지 못했습니다.';
     const e = this.slotAdd(id, w.focus, 'normal'); if (e) return e; const cfg = this.trainCfg(); cfg.slots = cfg.slots.map(x => x.id === id ? Object.assign({}, x, { weak: w.stat }) : x); this._trainSave(cfg); return null;
   };
+  /* ---------------- 훈련 효과 분석 ----------------
+     연말 성장 때 내 선수마다 (훈련 보정 배율, 실제 OVR 변화)를 기록한다. 양의 성장분에 훈련 배율이 곱해지므로 '훈련으로 늘어난 몫'은 변화량 × (1 − 1/배율)로 추정한다(⚠ 반사실 시뮬레이션이 아닌 추정).
+     캠프 비용과 그해 부상 건수를 함께 보여 투입 대비 효과를 가늠한다. */
+  proto._trainRecord = function (p, d) {
+    const S = this.S, te = this._trainEff(p), R = S.trainRep && S.trainRep.y === S.year ? S.trainRep : (S.trainRep = { y: S.year, rows: [] });
+    if (!(te.mult > 1) && !Object.keys(te.w).length && !te.speed && !te.range && !te.stamina) return;
+    const ef = this.trainEffCfg(p), attr = d > 0 && te.mult > 1 ? d * (1 - 1 / te.mult) : 0;
+    R.rows.push({ id: p.id, name: p.ko, age: p.age, side: sideOf(p), grp: this.trainGroupOf(p), mult: Math.round(te.mult * 1000) / 1000, d: Math.round(d * 100) / 100, attr: Math.round(attr * 100) / 100, src: ef.src, focus: ef.focus, inten: ef.inten, weak: (this.trainCfg().slots.find(x => x.id === p.id) || {}).weak || null });
+    const tt = S.trainTot = S.trainTot || {}; tt[S.year] = Math.round(((tt[S.year] || 0) + attr) * 100) / 100;
+  };
+  proto.trainReport = function () {
+    const S = this.S, R = S.trainRep; if (!R || !R.rows.length) return null; const camp = (S.campHist && S.campHist[R.y]) || { cost: 0, days: 0 }, inj = (S.injHist && S.injHist[R.y]) || 0, rows = R.rows, sum = a => a.reduce((x, y) => x + y, 0);
+    const grp = {}; for (const r of rows) { const g = grp[r.grp] = grp[r.grp] || { key: r.grp, side: r.side, n: 0, mult: 0, d: 0, attr: 0, focus: {} }; g.n++; g.mult += r.mult; g.d += r.d; g.attr += r.attr; g.focus[r.focus] = (g.focus[r.focus] || 0) + 1; }
+    const groups = Object.values(grp).map(g => ({ key: g.key, side: g.side, n: g.n, bonus: Math.round((g.mult / g.n - 1) * 1000) / 10, d: Math.round(g.d * 10) / 10, attr: Math.round(g.attr * 100) / 100, focus: Object.entries(g.focus).sort((a, b) => b[1] - a[1])[0][0] }));
+    const total = Math.round(sum(rows.map(r => r.attr)) * 100) / 100;
+    return { y: R.y, n: rows.length, groups, total, slots: rows.filter(r => r.src === 'slot').sort((a, b) => b.attr - a.attr), top: rows.slice().sort((a, b) => b.attr - a.attr).slice(0, 5), camp, inj, eff: camp.cost > 0 ? Math.round(total / camp.cost * 100) / 100 : null, hist: Object.keys(S.trainTot || {}).map(y => ({ y: +y, total: S.trainTot[y], camp: ((S.campHist || {})[y] || {}).cost || 0, inj: (S.injHist || {})[y] || 0 })).sort((a, b) => b.y - a.y).slice(0, 4) };
+  };
+  proto.trainGroupName = function (k) { return (GROUPS.B[k] || GROUPS.P[k] || k); };
+  proto.trainFocusName = function (side, f) { return (FOC[side][f] || {}).n || f; };
+
+  /* ---------------- 기술 습득 프로젝트(타격폼 조정 · 구종 습득) ----------------
+     선수 한 명이 수개월(80일, 부상 중에는 진행 안 됨) 걸려 특정 능력을 다듬는 장기 프로젝트. 시작 비용 0.4억(새 시즌 행사 비용에 계상), 동시 진행은 개별 훈련 한도의 절반(1~3개).
+     완료 때 성공 / 부분 성공 / 실패를 가른다(⚠ 확률·크기는 가정값): 성공 확률 = 0.40 + 0.005×(담당 코치 능력 − 60) + 나이(≤25 +0.08 · ≥33 −0.12) + 성장 여력(+0.05) − 동시 진행 페널티, 15~80%.
+     성공은 연말 성장 때 해당 세부 능력에 일회성 보너스(영구)를 더하고, 부분 성공은 절반, 실패는 20일간 컨디션 저하(−1)만 남긴다. 보너스는 연말 성장 계산(progress)에서만 적용되어 평소 능력치·경기 엔진은 건드리지 않는다. */
+  const SKILL = {
+    B: { form_contact: { n: '타격폼 조정(컨택)', f: { k: 0.30, babip: 0.20 }, coach: ['contact'] }, form_power: { n: '타격폼 조정(장타)', f: { hr: 0.30, xbh: 0.25 }, coach: ['power'] }, form_eye: { n: '타석 접근법(선구)', f: { bb: 0.30, k: 0.12 }, coach: ['eye'] } },
+    P: { pitch_new: { n: '새 구종 습득', f: { k: 0.30, babip: 0.20 }, coach: ['stuff', 'control'] }, pitch_cmd: { n: '제구 교정', f: { bb: 0.32, babip: 0.12 }, coach: ['control'] }, pitch_hr: { n: '피홈런 억제(구종 배합)', f: { hr: 0.30, k: 0.12 }, coach: ['stuff'] } }
+  };
+  const SKILL_DAYS = 80, SKILL_COST = 0.4, FIELD_KO2 = { k: '삼진·탈삼진', bb: '볼넷', hr: '홈런', babip: '타구 질', xbh: '장타' };
+  proto.skillKinds = function (side) { return Object.entries(SKILL[side]).map(([k, v]) => ({ k, n: v.n, fields: Object.keys(v.f).map(f => FIELD_KO2[f]).join('·') })); };
+  proto.skillCost = function () { return SKILL_COST; }; proto.skillDays = function () { return SKILL_DAYS; };
+  proto.skillLimit = function () { return clamp(Math.floor(this.slotLimit() / 2), 1, 3); };
+  proto.skillProjects = function () { const S = this.S; return (S.skillProj || []).filter(x => S.players[x.id] && S.players[x.id].team === S.userTeam); };
+  proto.skillChance = function (p, kind) {
+    const side = sideOf(p), info = SKILL[side][kind]; if (!info) return 0; const t = this.S.userTeam, cr = info.coach.reduce((a, f) => a + this.coachRating(t, f), 0) / info.coach.length;
+    const others = Math.max(0, this.skillProjects().filter(x => x.id !== p.id).length);
+    return Math.round(clamp(0.40 + 0.005 * (cr - 60) + (p.age <= 25 ? 0.08 : p.age >= 33 ? -0.12 : 0) + (p.pot > 0.3 ? 0.05 : 0) - 0.04 * others, 0.15, 0.8) * 100) / 100;
+  };
+  proto.skillStart = function (id, kind) {
+    const S = this.S, p = S.players[id]; if (!p || p.team !== S.userTeam || p.foreign) return '우리 팀 국내 선수만 프로젝트를 맡길 수 있습니다.'; const side = sideOf(p), info = SKILL[side][kind]; if (!info) return '이 선수에게 맞지 않는 프로젝트입니다.';
+    if (this.isInj(p)) return `${p.ko}은(는) 부상 중입니다.`; const ps = this.skillProjects(); if (ps.some(x => x.id === id)) return '이미 프로젝트 중인 선수입니다.'; if (ps.length >= this.skillLimit()) return `기술 프로젝트는 동시에 ${this.skillLimit()}개까지입니다(육성관리 코치 능력에 따라 늘어납니다).`;
+    if (p.age >= 36) return '36세 이상은 새 기술을 익히기 어렵습니다.'; const f = S.fin && S.fin.teams && S.fin.teams[S.userTeam]; if (!f) return '재정 정보가 없습니다.'; const room = this.faRoom(S.userTeam); if (room < SKILL_COST) return `예산 부족: 비용 ${SKILL_COST}억이 FA 여유자금 ${room.toFixed(1)}억을 넘습니다.`;
+    f.evCost = Math.round(((f.evCost || 0) + SKILL_COST) * 10) / 10; (S.skillProj = S.skillProj || []).push({ id, kind, y: S.year, start: S.day, prog: 0, chance: this.skillChance(p, kind) });
+    this._trainLog(`${p.ko} 기술 프로젝트 시작: ${info.n}(성공 확률 ${Math.round(this.skillChance(p, kind) * 100)}%)`); this.invalidate(); return null;
+  };
+  proto.skillCancel = function (id) { const S = this.S, n = (S.skillProj || []).length; S.skillProj = (S.skillProj || []).filter(x => x.id !== id); return S.skillProj.length === n ? '진행 중인 프로젝트가 아닙니다.' : null; };
+  proto._skillDay = function () {
+    const S = this.S, list = S.skillProj; if (!list || !list.length) return; const keep = [];
+    for (const pr of list) {
+      const p = S.players[pr.id]; if (!p || p.team !== S.userTeam || p.retired) continue; if (!this.isInj(p)) pr.prog++;
+      if (pr.prog < SKILL_DAYS) { keep.push(pr); continue; }
+      const side = sideOf(p), info = SKILL[side][pr.kind], u = rngFor(S.seed, S.year, parseInt(String(pr.id).replace(/\D/g, '')) * 31 + pr.start, 8800).random(), pc = pr.chance, res = u < pc ? 'success' : u < pc + 0.3 * (1 - pc) ? 'partial' : 'fail';
+      const log = { y: S.year, d: S.day, id: p.id, name: p.ko, kind: pr.kind, n: info.n, res }; (S.skillLog = S.skillLog || []).unshift(log); if (S.skillLog.length > 20) S.skillLog.pop();
+      if (res === 'fail') { p.mood = { v: -1, until: S.day + 20 }; } else { const d = S.skillDone = S.skillDone || {}; d[p.id] = { y: S.year, kind: pr.kind, scale: res === 'success' ? 1 : 0.5 }; }
+      const tx = res === 'success' ? `${p.ko} ${info.n} 성공! — 연말 성장 때 ${Object.keys(info.f).map(f => FIELD_KO2[f]).join('·')} 보너스가 반영됩니다.` : res === 'partial' ? `${p.ko} ${info.n} 부분 성공 — 연말 성장 보너스가 절반 반영됩니다.` : `${p.ko} ${info.n} 실패 — 20일간 컨디션이 떨어집니다.`;
+      S.news.unshift({ year: S.year, day: S.day, text: tx }); if (S.news.length > 120) S.news.length = 120; if (this.story) this.story('train', tx, res === 'success' ? 2 : 1);
+    }
+    S.skillProj = keep;
+  };
+  proto._skillApply = function (p) {   // 연말 성장(progress)에서 호출: {필드: 단위} 일회성 보너스를 돌려주고 소모(없으면 null)
+    const S = this.S, d = S.skillDone && S.skillDone[p.id]; if (!d) return null; delete S.skillDone[p.id]; const info = (SKILL.B[d.kind] || SKILL.P[d.kind]); if (!info) return null;
+    const out = {}; for (const f of Object.keys(info.f)) out[f] = info.f[f] * d.scale; return out;
+  };
+
   /* ---------------- 프리셋 ---------------- */
   const BUILTIN = [
     { id: 'b_bal', name: '균형 육성', cfg: { B: { focus: 'all', inten: 'normal' }, P: { focus: 'all', inten: 'normal' } }, tip: '타자·투수 모두 종합 훈련(보통)' },
@@ -281,6 +346,7 @@
     const S = this.S, c = S.camp; if (!c || c.y !== S.year - 1) { S.camp = null; return; }
     const a = this._trainAcc(); let days = 0, cost = 0;
     for (const side of ['B', 'P']) { const x = c[side]; if (!x || !x.level) continue; const d = CAMP_DAYS[x.level]; a.total += d; a[side][x.focus] = (a[side][x.focus] || 0) + d; days += d; cost += CAMP_COST[x.level]; }
+    (S.campHist = S.campHist || {})[S.year] = { cost: r1(cost), days };   // 훈련 효과 분석용(그 해 캠프)
     if (cost > 0 && S.fin && S.fin.teams && S.fin.teams[S.userTeam]) { const f = S.fin.teams[S.userTeam]; f.evCost = Math.round(((f.evCost || 0) + cost) * 10) / 10; this._trainLog(`비시즌 캠프 종료: 훈련 누적 +${days}일, 비용 ${r1(cost)}억`); this.story('train', `비시즌 캠프 진행(비용 ${r1(cost)}억)`, 1); }
     S.camp = null;
   };

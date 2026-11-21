@@ -57,6 +57,9 @@ async function run(vp,label,team){
   await pg.evaluate(()=>{const s=document.querySelector('select[data-sel="tgf"][data-a="CL"]');const o=[...s.options].find(x=>x.value==='stuff');s.value=o.value;s.dispatchEvent(new Event('change',{bubbles:true}))});await pg.waitForTimeout(150);
   ok(await pg.evaluate(()=>/따로 지정/.test(document.body.innerText)),`${label}: 그룹 지정 표시`);await sweep('역할별 훈련');
   ok(await pg.evaluate(()=>/약점 보완 훈련/.test(document.body.innerText)),`${label}: 약점 보완 카드`);const wk=await pg.$('button[data-act="slotAddWeakDo"]:not([disabled])');if(wk){await wk.click();await pg.waitForTimeout(150);ok(await pg.evaluate(()=>/약점 보완: /.test(document.body.innerText)),`${label}: 약점 보완 개별 훈련 시작`)}
+  ok(await pg.evaluate(()=>/기술 습득 프로젝트/.test(document.body.innerText)&&/훈련 효과 분석/.test(document.body.innerText)),`${label}: 기술 프로젝트·훈련 효과 분석 카드`);
+  {const sb=await pg.$('button[data-act="skillStartA"]');if(sb){await sb.click();await pg.waitForTimeout(150);ok(await pg.evaluate(()=>/0\/80일|\d+% \(/.test(document.body.innerText)&&/중단/.test(document.body.innerText)),`${label}: 기술 프로젝트 시작·진행 표시`);await click('button[data-act="skillCancelA"]')}}
+  await sweep('기술 프로젝트');
   await sweep('약점 보완');await click('button[data-act="undo"]');
   await nav('선수단','2군');ok(await pg.evaluate(()=>/훈련 센터 열기/.test(document.body.innerText)),`${label}: 2군 화면 훈련 요약 카드`);
   // 4-3) 스카우팅: 스카우트 고용·관심 목록·리포트·필터

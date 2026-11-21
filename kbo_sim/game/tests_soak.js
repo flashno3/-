@@ -8,6 +8,7 @@ function invariants(L,tag){
   const S=L.S;
   for(const t of Object.keys(S.teams)){const ids=S.teams[t].ids;ok(ids.length<=ROSTER_MAX+6,`${tag} ${t} 로스터 ${ids.length}`);ok(new Set(ids).size===ids.length,`${tag} 중복 선수`);for(const id of ids){const p=S.players[id];ok(p&&p.team===t,`${tag} 소속 불일치 ${id}`)}}
   const t=S.userTeam,mine=L.players(t);const act=mine.filter(p=>p.active);ok(act.length<=ACTIVE_MAX,`${tag} 1군 초과 ${act.length}`);
+  {const sp=L.skillProjects();ok(sp.length<=L.skillLimit()+0&&sp.every(x=>x.prog>=0&&x.prog<=80),`${tag} 기술 프로젝트 상태`)}
   {const bad=L.players(t).filter(p=>p.active&&L.isInj(p));ok(bad.length===0,`${tag} 부상자가 1군 엔트리에 있음: ${bad.map(p=>p.ko+'/'+(p.inj&&p.inj.dx)).join(',')}`)}
   const fo=L.foreignOf(t).filter(p=>!p.sub),gen=fo.filter(p=>!p.aq),aq=fo.filter(p=>p.aq);ok(gen.length<=3&&aq.length<=1,`${tag} 외국인 슬롯 ${gen.length}/${aq.length}`);ok(!(gen.length===3&&gen.every(p=>p.type===gen[0].type)),`${tag} 같은 포지션 3명`);
   for(const p of mine){finite(p.contract.salary,tag+' 연봉');ok((p.contract.salary>=0.3||(p.sub&&p.contract.salary===0))&&p.contract.years>=0&&p.contract.years<=6,`${tag} 계약 범위 ${p.ko} ${JSON.stringify(p.contract)} cHist=${JSON.stringify(p.cHist)} ext=${JSON.stringify(p.extAt)} myExt=${JSON.stringify(p.myExt)} age=${p.age} notes=${JSON.stringify((p.notes||[]).slice(-3))} myFrom=${JSON.stringify(p.myFrom)} mil=${p.milReturn} rookie=${p.rookie} src=${p.src} act=${p.active} tn=${p.tn} sal=${p.sal} fa=${JSON.stringify(p.faInfo)} inTeams=${Object.keys(S.teams).filter(t=>S.teams[t].ids.includes(p.id)).join(',')} dupInUser=${S.teams[S.userTeam].ids.filter(x=>x===p.id).length} id=${p.id} off=${JSON.stringify(S.off&&S.off.rep&&S.off.rep.expiring.includes(p.id))}`);if(p.contract.bonus)ok(p.contract.bonus>=0&&p.contract.amort>=0,`${tag} 계약금`);if(p.loyAdj!==undefined)ok(p.loyAdj>=-15&&p.loyAdj<=15,`${tag} loyAdj ${p.loyAdj}`);if(p.promise)ok(p.promise.kind&&p.promise.label,`${tag} 약속 형식`)}
@@ -56,7 +57,8 @@ function drive(L,R,tag,kind){
 function randTrain(L,R,tag){
   {const S0=L.S,gi=L.trainGroupInfo(),g=gi[Math.floor(R()*gi.length)],z=R();   // 역할·포지션 그룹 방침, 약점 보완 훈련 무작위
    if(z<0.2){const ks=L.trainFocusKeys(g.side).concat(['inherit']);L.setTrainGroup(g.key,'focus',ks[Math.floor(R()*ks.length)])}else if(z<0.3){L.setTrainGroup(g.key,'inten',['light','normal','heavy','inherit'][Math.floor(R()*4)])}
-   else if(z<0.4){const w=L.trainWeakList(5);if(w.length)L.slotAddWeak(w[Math.floor(R()*w.length)].p.id)}}
+   else if(z<0.4){const w=L.trainWeakList(5);if(w.length)L.slotAddWeak(w[Math.floor(R()*w.length)].p.id)}
+   else if(z<0.5){const pl=L.players(S0.userTeam).filter(p=>!p.foreign);const p=pl[Math.floor(R()*pl.length)];const ks=L.skillKinds(p.type==='P'?'P':'B');L.skillStart(p.id,ks[Math.floor(R()*ks.length)].k)}else if(z<0.53){const a=L.skillProjects();if(a.length)L.skillCancel(a[0].id)}else if(z<0.6){const ks=L.trainFocusKeys(g.side);L.setTrainSide(g.side,'focus',['strength','endur','prevent','recover'][Math.floor(R()*4)])}}
   const S=L.S,t=S.userTeam,x=R();const side=R()<0.5?'B':'P';const keys=L.trainFocusKeys(side),ints=['light','normal','heavy'];
   if(x<0.25)L.setTrainSide(side,'focus',keys[Math.floor(R()*keys.length)]);else if(x<0.4)L.setTrainSide(side,'inten',ints[Math.floor(R()*3)]);
   else if(x<0.55){const ps=L.trainPresets();L.applyTrainPreset(ps[Math.floor(R()*ps.length)].id)}
@@ -84,7 +86,7 @@ function randInvest(L,R,tag){   // 구단 투자: 무작위 착공 시도(예산
   const ig=L.integrity().errors.filter(z=>/^invest/.test(z.code));ok(ig.length===0,`${tag} 투자 무결성 ${JSON.stringify(ig)}`);
 }
 function randScout(L,R,tag){
-  const S=L.S,x=R();{const sc0=L.scouts();if(sc0.length&&R()<0.3){const ks=L.scoutFocusKeys();L.setScoutFocus(sc0[Math.floor(R()*sc0.length)].id,ks[Math.floor(R()*ks.length)])}}
+  const S=L.S,x=R();{const sc1=L.scouts(),ps1=L.prospectAll();if(sc1.length&&ps1.length&&R()<0.3){const q=ps1[Math.floor(R()*ps1.length)],sc=sc1[Math.floor(R()*sc1.length)];if(R()<0.5)L.scoutVideo(q.id,sc.id);else L.scoutVisit(q.id,sc.id)}if(R()<0.1)L.setDraftNeedOn(R()<0.5)}{const sc0=L.scouts();if(sc0.length&&R()<0.3){const ks=L.scoutFocusKeys();L.setScoutFocus(sc0[Math.floor(R()*sc0.length)].id,ks[Math.floor(R()*ks.length)])}}
   if(x<0.2&&S.scoutMkt&&S.scoutMkt.length)L.scoutHire(S.scoutMkt[Math.floor(R()*S.scoutMkt.length)].id);else if(x<0.3){const sc=L.scouts();if(sc.length)L.scoutFire(sc[Math.floor(R()*sc.length)].id)}
   else if(x<0.6){L.scoutAutoWatch(1+Math.floor(R()*10))}else if(x<0.8){const ps=L.prospectList();if(ps.length)L.scoutWatch(ps[Math.floor(R()*ps.length)].id)}else if(x<0.9){const w=L.scoutWatchList();if(w.length)L.scoutStar(w[Math.floor(R()*w.length)].id)}
   const y=R();if(y<0.3){const ps=L.prospectAll(),sc=L.scouts();if(ps.length&&sc.length)L.scoutProbe(ps[Math.floor(R()*ps.length)].id,sc[Math.floor(R()*sc.length)].id)}else if(y<0.6){const hf=L.faList().filter(q=>L.hiddenForeign(q)),sc=L.scouts();if(hf.length&&sc.length)L.scoutForeign(hf[Math.floor(R()*hf.length)].id,sc[Math.floor(R()*sc.length)].id)}else if(y<0.7)L.scoutAutoWatch(1+Math.floor(R()*6),R()<0.5?1:2);else if(y<0.8){const fl=L.foreignPoolList();if(fl.length)L.foreignWatch(fl[Math.floor(R()*fl.length)].id)}else if(y<0.88)L.foreignAutoWatch(1+Math.floor(R()*4));else if(y<0.94){const w=L.foreignWatchList();if(w.length)L.foreignStar(w[Math.floor(R()*w.length)].id)}

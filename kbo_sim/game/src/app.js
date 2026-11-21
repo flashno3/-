@@ -790,6 +790,14 @@
   }
   /* 스카우트 전문 분야·평가 항목 능력(툴·성장·성격). 필드가 없는 기존 스카우트는 표시하지 않는다 */
   const skillLine = s => s.tool === undefined ? '' : `<div class="small" style="margin-top:2px">${s.spec && s.spec !== '-' ? `<span class="chip in">${s.spec === 'P' ? '투수' : '타자'} 전문</span> ` : '<span class="chip">균형형</span> '}툴 평가 <b>${s.tool}</b>(${L.coachGrade(s.tool)}) · 성장 평가 <b>${s.proj}</b>(${L.coachGrade(s.proj)}) · 성격 파악 <b>${s.char}</b>(${L.coachGrade(s.char)})</div>`;
+  /* 스카우트 적중률(드래프트 종료 시 정산): 스카우트별 평균 오차·편향과 시즌별 내 추정 정확도 */
+  function scoutHistCard() {
+    const h = L.scoutHistory(); if (!h.list.length && !h.years.length) return `<div class="card"><h2>스카우트 적중률</h2><div class="small muted">드래프트가 끝나면 스카우트가 관찰한 후보의 추정이 실제 정점과 얼마나 가까웠는지 정산됩니다(평균 오차 ≤7 우수 · ≤10 보통 · 초과 미흡 ⚠ 기준 가정). 개별 후보의 실제 값은 공개하지 않습니다.</div></div>`;
+    const cc = g => g === '우수' ? 'in' : g === '보통' ? '' : 'bad';
+    return `<div class="card"><h2>스카우트 적중률</h2><div class="small muted">드래프트 종료 때 후보의 실제 성장 상한과 비교해 정산한 평균 오차(절댓값)입니다. 편향 +는 과대평가, −는 과소평가 경향이며, 같은 스카우트가 여러 번 봐도 편향은 줄지 않습니다.</div>
+      ${h.list.length ? `<div class="tablewrap"><table><thead><tr><th class="l">스카우트</th><th>후보</th><th>평균 오차</th><th>편향</th><th>등급</th><th class="l">최근</th></tr></thead><tbody>${h.list.map(x => `<tr><td class="l"><b>${esc(x.name)}</b> ${x.active ? '' : '<span class="muted small">(이전)</span>'}</td><td class="n">${x.n}명</td><td class="n">${x.err === null ? '-' : x.err}</td><td class="n">${x.bias === null ? '-' : (x.bias > 0 ? '+' : '') + x.bias}</td><td><span class="chip ${cc(x.grade)}">${x.grade}</span></td><td class="l small muted">${x.years.map(y => `${y.y} ${y.err}`).join(' · ')}</td></tr>`).join('')}</tbody></table></div>` : ''}
+      ${h.years.length ? `<div class="small" style="margin-top:6px"><b>내 추정(관찰 반영) 정확도</b> ${h.years.map(y => `${y.y}: ${y.err === null ? '관찰 없음' : '오차 ' + y.err + ' · 후보 ' + y.n + '명'}`).join(' · ')}</div>` : ''}</div>`;
+  }
   function screenScout() {
     const S = L.S, pr = L.ensureProspects(), scouts = L.scouts(), watch = L.scoutWatchList(), lim = L.scoutLimit();
     const cls = ui.scC || 1, all = cls === 2 ? L.prospectList2() : L.prospectList(), f = ui.scF || 'all', sk = ui.scS || 'score';
@@ -810,6 +818,7 @@
         ${watch.length ? `<div class="plist">${watch.map(w => prospectRow(P(w.id))).join('')}</div>` : '<div class="small muted" style="margin-top:6px">관심 후보가 없습니다. "추천으로 채우기"는 상한이 높게 보이면서 아직 불확실한 후보를 올립니다.</div>'}
         ${log.length ? `<div class="small muted" style="margin-top:8px">최근 관찰: ${log.map(x => `${L.dateStr(x.d)} ${x.n}건`).join(' · ')}</div>` : ''}</div>
       <div class="card"><div class="row"><h2 style="margin:0">후보 풀</h2><span class="sp"></span><span class="small muted">${rows.length}명 표시</span></div><div class="chips wrap"><button class="sm ${cls === 1 ? 'primary' : ''}" data-act="scoutCls" data-a="1">${S.year} 드래프트</button><button class="sm ${cls === 2 ? 'primary' : ''}" data-act="scoutCls" data-a="2">${S.year + 1} 드래프트(내년)</button></div>${cls === 2 ? '<div class="small muted">내년 후보는 더 어려서 관찰 잡음이 25% 큽니다. 나이는 지명 시점 기준입니다.</div>' : ''}<div class="chips wrap">${chips}</div><div class="row small" style="gap:6px">정렬 ${sorts}</div><div class="plist">${rows.map(x => prospectRow(x.p)).join('') || '<div class="small muted">해당하는 후보가 없습니다.</div>'}</div></div>
+      ${scoutHistCard()}
       ${foreignCard()}
       <div class="card"><h2>구단별 스카우트 수준</h2><div class="small muted">재정이 큰 구단일수록 스카우트가 정확해 AI의 지명 추정이 진짜 값에 5~35% 가까워집니다(재정 순위 기반 추정). 내 구단은 위에서 고용한 스카우트와 관찰로 오차를 줄입니다.</div>${L.scoutRanking().map(x => `<div class="row small" style="margin-top:4px">${teamTag(x.t)}<span class="sp"></span>${x.q === null ? '<span class="chip in">내 구단</span>' : `<div class="gauge ${x.q >= 0.25 ? 'good' : x.q >= 0.15 ? 'mid' : 'low'}"><span class="gbar"><i style="width:${Math.round(x.q / 0.35 * 100)}%"></i></span><span class="gtxt">${x.q >= 0.25 ? '상' : x.q >= 0.15 ? '중' : '하'}</span></div>`}</div>`).join('')}</div>`;
   }
@@ -894,6 +903,30 @@
     return `<div class="card"><div class="row"><h2 style="margin:0">역할·포지션별 훈련</h2><span class="sp"></span><span class="small muted">${own ? own + '개 그룹 따로 지정' : '모두 팀 설정 따름'}</span></div>
       <div class="small muted" style="margin:4px 0">포수·내야수·외야수·지명타자, 선발·구원·마무리마다 집중 분야와 강도를 따로 정합니다. 우선순위는 개별 훈련 → 그룹 → 팀 설정입니다. 예) 마무리는 구위, 포수는 수비 집중. 마무리·선발 구분은 현재 불펜·로테이션 편성 기준입니다.</div>${gi.map(row).join('')}</div>`;
   }
+  /* 기술 습득 프로젝트(타격폼·구종): 80일, 성공/부분/실패, 연말 성장 때 보너스 */
+  function skillCard() {
+    const act = L.skillProjects(), lim = L.skillLimit(), t = U(), busy = new Set(act.map(x => x.id)), log = (L.S.skillLog || []).slice(0, 5);
+    const cands = L.players(t).filter(p => !p.foreign && p.age < 36 && !busy.has(p.id) && !L.isInj(p)).sort((a, b) => a.age - b.age).slice(0, 70), sel = cands.find(p => p.id === ui.skPl) || cands[0];
+    const kinds = sel ? L.skillKinds(sel.type === 'P' ? 'P' : 'B') : [];
+    const pr = x => { const p = P(x.id), info = L.skillKinds(p.type === 'P' ? 'P' : 'B').find(k => k.k === x.kind) || { n: x.kind }, pc = Math.min(100, Math.round(x.prog / L.skillDays() * 100)); return `<div class="slotrow"><div class="row" style="flex-wrap:nowrap"><div style="flex:1;min-width:0"><b>${esc(p.ko)}</b> <span class="muted small">${pos(p)} · ${p.age}세</span> <span class="chip in">${esc(info.n)}</span></div><span class="small muted">성공 ${Math.round(x.chance * 100)}%</span><button class="sm" data-act="skillCancelA" data-a="${x.id}">중단</button></div><div class="dprog" role="progressbar" aria-valuenow="${pc}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pc}%"></i></div><div class="small muted">${pc}% (${x.prog}/${L.skillDays()}일 · 부상 중에는 진행 안 됨)</div></div>`; };
+    return `<div class="card"><div class="row"><h2 style="margin:0">기술 습득 프로젝트</h2><span class="sp"></span><span class="small muted">${act.length}/${lim}개 · 시작 ${L.skillCost()}억</span></div>
+      <div class="small muted" style="margin:4px 0">선수 한 명이 ${L.skillDays()}일간 타격폼·구종을 다듬습니다. 성공하면 연말 성장 때 해당 능력에 일회성 보너스(영구)가 붙고, 부분 성공은 절반, 실패는 20일간 컨디션이 떨어집니다. 성공 확률은 담당 코치 능력·나이·성장 여력에 달려 있고 동시에 여러 개를 하면 낮아집니다(⚠ 확률·크기는 가정값). 경기 엔진·평소 능력치에는 영향이 없습니다.</div>
+      ${act.length ? act.map(pr).join('') : '<div class="small muted">진행 중인 프로젝트가 없습니다.</div>'}
+      ${act.length < lim && sel ? `<div class="row" style="gap:6px;margin-top:8px"><select data-sel="skpl" style="flex:1;min-width:0">${cands.map(p => `<option value="${p.id}" ${p.id === sel.id ? 'selected' : ''}>${esc(p.ko)} · ${pos(p)} · ${p.age}세 · OVR ${L.ovr(p)}</option>`).join('')}</select></div><div class="chips wrap" style="margin-top:4px">${kinds.map(k => `<button class="sm" data-act="skillStartA" data-a="${sel.id}:${k.k}" title="${esc(k.fields)} 보너스">${esc(k.n)} <span class="muted">${Math.round(L.skillChance(sel, k.k) * 100)}%</span></button>`).join('')}</div>` : (act.length >= lim ? '<div class="small muted" style="margin-top:6px">동시 진행 한도에 도달했습니다.</div>' : '')}
+      ${log.length ? `<div class="small" style="margin-top:8px"><b>최근 결과</b> ${log.map(x => `${esc(x.name)} ${esc(x.n)} <span class="${x.res === 'success' ? 'pos' : x.res === 'fail' ? 'neg' : 'muted'}">${x.res === 'success' ? '성공' : x.res === 'partial' ? '부분' : '실패'}</span>`).join(' · ')}</div>` : ''}</div>`;
+  }
+  /* 훈련 효과 분석: 지난 연말 성장에서 훈련이 만든 몫(추정)과 투입(캠프 비용)·부상 */
+  function trainReportCard() {
+    const r = L.trainReport(); if (!r) return `<div class="card"><h2>훈련 효과 분석</h2><div class="small muted">첫 연말 성장(시즌 종료) 뒤에 훈련으로 늘어난 몫(추정)·그룹별 효과·개별 훈련 성과·캠프 비용 대비 효율이 표시됩니다.</div></div>`;
+    const gname = g => esc(L.trainGroupName(g.key)), eff = r.eff === null ? '-' : r.eff + ' OVR/억';
+    return `<div class="card"><div class="row"><h2 style="margin:0">훈련 효과 분석</h2><span class="sp"></span><span class="small muted">${r.y} 시즌 연말 성장 기준 · ${r.n}명</span></div>
+      <div class="kpis" style="margin-top:6px"><div class="kpi"><div class="l">훈련이 만든 성장(추정)</div><div class="v">+${r.total}</div><div class="small muted">OVR 합계</div></div><div class="kpi"><div class="l">캠프 비용</div><div class="v">${r.camp.cost}억</div><div class="small muted">${r.camp.days ? r.camp.days + '일' : '없음'} · 효율 ${eff}</div></div><div class="kpi"><div class="l">그해 부상</div><div class="v">${r.inj}건</div><div class="small muted">내 선수 전체</div></div></div>
+      <div class="tablewrap" style="margin-top:6px"><table><thead><tr><th class="l">그룹</th><th>인원</th><th class="l">주 훈련</th><th>평균 보정</th><th>실제 변화</th><th>훈련 기여</th></tr></thead><tbody>${r.groups.sort((a, b) => b.attr - a.attr).map(g => `<tr><td class="l">${gname(g)}</td><td class="n">${g.n}</td><td class="l small">${esc(L.trainFocusName(g.side, g.focus))}</td><td class="n">+${g.bonus}%</td><td class="n">${g.d >= 0 ? '+' : ''}${g.d}</td><td class="n pos">+${g.attr}</td></tr>`).join('')}</tbody></table></div>
+      ${r.slots.length ? `<div class="small" style="margin-top:6px"><b>개별 훈련 성과</b> ${r.slots.slice(0, 6).map(x => `${esc(x.name)}(${esc(L.trainFocusName(x.side, x.focus))}${x.weak ? ' · 약점 ' + esc(x.weak) : ''}) +${x.attr}`).join(' · ')}</div>` : ''}
+      ${r.top.length ? `<div class="small muted" style="margin-top:4px">훈련 기여 상위: ${r.top.map(x => `${esc(x.name)} +${x.attr}`).join(' · ')}</div>` : ''}
+      ${r.hist.length > 1 ? `<div class="small muted" style="margin-top:4px">연도별: ${r.hist.map(h => `${h.y} +${h.total}(캠프 ${h.camp}억 · 부상 ${h.inj})`).join(' · ')}</div>` : ''}
+      <div class="small muted" style="margin-top:6px">⚠ '훈련 기여'는 양의 성장분에 곱해진 훈련 배율로 역산한 추정치(변화량 × (1 − 1/배율))이며, 같은 선수를 훈련하지 않았을 때와 직접 비교한 값이 아닙니다. 훈련 비용은 캠프 비용만 별도로 들고, 일상 훈련은 부상 위험(강도·분야)으로 대가를 치릅니다.</div></div>`;
+  }
   /* 약점 보완: 세부 능력이 리그 평균보다 크게 낮은 선수와 그 약점을 키우는 개별 훈련 추천 */
   function weakCard() {
     const lim = L.slotLimit(), used = L.trainSlots().length, list = L.trainWeakList(6), info = f => L.trainFocusInfo('B')[f] || L.trainFocusInfo('P')[f];
@@ -915,6 +948,8 @@
       ${trainSideCard('B')}${trainSideCard('P')}
       ${trainGroupCard()}
       ${weakCard()}
+      ${skillCard()}
+      ${trainReportCard()}
       <div class="card"><div class="row"><h2 style="margin:0">개별 훈련</h2><span class="sp"></span><span class="small muted">${slots.length}/${lim}명 · 육성관리 코치 능력에 따라 늘어남</span></div>
         <div class="small muted" style="margin:4px 0">팀 훈련과 별개로 선수 몇 명을 따로 지정합니다. 유망주·부진한 선수에게 적합합니다. 부상 중에는 훈련 효과가 쌓이지 않습니다.</div>
         ${slots.length ? slots.map(slotRow).join('') : '<div class="small muted">지정한 선수가 없습니다.</div>'}
@@ -1016,15 +1051,15 @@
         <div class="row"><button class="primary big" data-act="toDraft">계약 확정 · 드래프트로</button></div>`;
     }
     if (cur === 'draft') {
-      const d = off.draft, onClock = L.draftOnClock(), mine = onClock === U(), pool = d.pool.map(id => P(id)).sort((a, b) => L.userScore(b) - L.userScore(a));
-      const pr = pool.slice(0, 60).map(p => `<tr><td class="l"><b>${esc(p.ko)}</b></td><td class="l">${p.type === 'B' ? posName[p.pos] : (p.role === 'SP' ? '선발형' : '구원형')}</td><td class="n">${p.age}</td><td>${ovrChip(Math.max(20, Math.min(80, Math.round(L.scoutEst(p).o))))}</td><td class="l"><span class="chip ${L.scoutEst(p).ceil >= 57 ? 'in' : ''}" title="스카우트 추정 ${L.scoutEst(p).ceil}±${L.scoutEst(p).ceilSd} — 실제 정점은 달라질 수 있습니다">${gradeRange(L.scoutEst(p))}급 ${L.tierLabel(L.scoutEst(p).ceil)}</span> <span class="chip ${confCls(L.scoutEst(p).conf)}">${L.scoutEst(p).conf}</span></td><td>${mine ? `<button class="sm primary" data-act="draftPick" data-a="${p.id}">지명</button>` : ''}</td></tr>`).join('');
+      const d = off.draft, onClock = L.draftOnClock(), mine = onClock === U(), pool = d.pool.map(id => P(id)).sort((a, b) => L.draftBoardScore(b) - L.draftBoardScore(a)), ex = L.draftExpect(), needs = L.draftNeeds();
+      const pr = pool.slice(0, 60).map(p => `<tr><td class="l"><b>${esc(p.ko)}</b></td><td class="l">${p.type === 'B' ? posName[p.pos] : (p.role === 'SP' ? '선발형' : '구원형')}</td><td class="n">${p.age}</td><td>${ovrChip(Math.max(20, Math.min(80, Math.round(L.scoutEst(p).o))))}</td><td class="l small">${L.draftTags(p).map(t => `<span class="chip ${t.cls}">${esc(t.label)}</span>`).join(' ')}</td><td class="n small" title="AI 구단들의 평가 합의 순위(남은 후보 중, 추정)">${ex[p.id] ? ex[p.id].rank + '위' + ({ now: '', likely: ' <span class="pos">남을듯</span>', maybe: ' <span class="muted">불확실</span>', gone: ' <span class="neg">먼저 지명</span>' }[ex[p.id].avail] || '') : ''}</td><td class="l"><span class="chip ${L.scoutEst(p).ceil >= 57 ? 'in' : ''}" title="스카우트 추정 ${L.scoutEst(p).ceil}±${L.scoutEst(p).ceilSd} — 실제 정점은 달라질 수 있습니다">${gradeRange(L.scoutEst(p))}급 ${L.tierLabel(L.scoutEst(p).ceil)}</span> <span class="chip ${confCls(L.scoutEst(p).conf)}">${L.scoutEst(p).conf}</span></td><td>${mine ? `<button class="sm primary" data-act="draftPick" data-a="${p.id}">지명</button>` : ''}</td></tr>`).join('');
       const picks = d.picks.slice(-14).reverse().map(x => `<tr><td class="l n">${x.pick}</td><td class="l">${teamTag(x.team)}</td><td class="l">${esc(P(x.id).ko)}</td></tr>`).join('');
       const myp = d.picks.filter(x => x.team === U()).map(x => esc(P(x.id).ko)).join(', ');
       const lastPk = d.picks[d.picks.length - 1], stage = lastPk ? `<div class="draftstage"><div class="small muted">${Math.ceil(lastPk.pick / 10)}라운드 ${((lastPk.pick - 1) % 10) + 1}순위 · ${KO[lastPk.team]}</div><div class="dname">${esc(P(lastPk.id).ko)}${lastPk.team === U() ? ' <span class="chip in">우리 구단 지명</span>' : ''}</div><div class="small">${esc(L.draftIntro(lastPk.id))}</div>${L.draftDay().lastRx ? `<div class="small" style="margin-top:4px">${rxChip(L.draftDay().lastRx)} ${esc(L.draftDay().lastRx.text)}</div>` : ''}</div>` : '';
       const topPk = mine ? `<div class="card"><h2>스카우트 추천</h2><div class="small muted">내 스카우트 추정 기준 상위 3명입니다. 확신도가 낮으면 실제와 크게 다를 수 있습니다(스카우팅 탭에서 관찰해 오차를 줄일 수 있습니다).</div>${pool.slice(0, 3).map(p => `<div class="row small" style="margin-top:6px"><b>${esc(p.ko)}</b> <span class="muted">${progLabel(p)} · ${p.age}세</span> ${estChips(p)}<span class="sp"></span><button class="sm primary" data-act="draftPick" data-a="${p.id}">지명</button></div>`).join('')}</div>` : '';
       return `${bar}${draftDayCard()}${stage}${topPk}<div class="card"><div class="row"><h2>신인 드래프트</h2><span class="muted small">${d.pick}/${d.order.length}번째 지명 · ${onClock ? (mine ? '<b class="pos">내 차례</b>' : KO[onClock] + ' 차례') : '종료'}</span><span class="sp"></span>${onClock && !mine ? (ui.draftT ? '<button data-act="draftSkip">건너뛰기</button>' : '<button data-act="draftSim">발표 보기</button><button data-act="draftSkip">내 차례까지 바로</button>') : ''}${onClock ? '<button data-act="draftAuto">나머지 자동 지명</button>' : '<button class="primary" data-act="toFA">FA 시장으로</button>'}</div>
         <p class="small muted" style="margin:6px 0">스카우트 평가(능력치·성장 상한 등급)는 오차가 있어 지명 순번이 높아도 크게 못 클 수 있고, 하위 지명에서 대성하기도 합니다. 지명 순서는 정규시즌 성적 역순이고 10라운드까지 진행합니다. 신인은 2군으로 들어옵니다. 내 지명: ${myp || '없음'}</p></div>
-        <div class="grid"><div class="card"><h2>지명 가능 선수</h2><div class="tablewrap" style="max-height:520px;overflow-y:auto"><table><thead><tr><th class="l">선수</th><th class="l">유형</th><th>나이</th><th>OVR(추정)</th><th class="l">성장 상한·확신도</th><th></th></tr></thead><tbody>${pr}</tbody></table></div></div>
+        <div class="grid"><div class="card"><h2>지명 가능 선수</h2><div class="small muted" style="margin:2px 0">포지션 보유 현황: ${Object.values(needs).map(n => `<span class="${n.level === 'high' ? 'neg' : n.level === 'mid' ? 'warn' : ''}">${esc(n.name)} ${n.have}/${n.target}</span>`).join(' · ')}</div><label class="row small" style="gap:6px;margin:4px 0"><input type="checkbox" data-act="draftNeed" ${L.S.draftNeedOn ? 'checked' : ''}>필요 포지션 가중(보드 점수 최대 +4) <span class="muted">· 끄면 스카우트 추정 순위 그대로</span></label><div class="tablewrap" style="max-height:520px;overflow-y:auto"><table><thead><tr><th class="l">선수</th><th class="l">유형</th><th>나이</th><th>OVR(추정)</th><th class="l">태그</th><th title="AI 구단들의 평가 합의 순위. 내 지명 순번까지 남아 있을 가능성">AI 순위</th><th class="l">성장 상한·확신도</th><th></th></tr></thead><tbody>${pr}</tbody></table></div></div>
         <div class="card"><h2>최근 지명</h2><div class="tablewrap"><table><tbody>${picks || '<tr><td class="muted">아직 없습니다.</td></tr>'}</tbody></table></div></div></div>${draftBoardCard()}${draftReportCard()}`;
     }
     return `${bar}${screenFA()}<div class="row"><button class="primary big" data-act="toSeason">FA 종료 · 새 시즌 시작</button></div>`;
@@ -1727,6 +1762,7 @@
     scoutHireA(a) { const e = L.scoutHire(a); if (e) toast(e); else { toast('스카우트를 영입했습니다.'); autosave(); } render(); },
     scoutVisitA(a) { const [id, sc] = a.split(':'); const e = L.scoutVisit(id, sc); if (e) toast(e); else { toast('직접 출장 관찰을 마쳤습니다(3회 관찰 분량).'); autosave(); } render(); },
     scoutVideoA(a) { const [id, sc] = a.split(':'); const e = L.scoutVideo(id, sc); if (e) toast(e); else { toast('영상 분석을 마쳤습니다.'); autosave(); } render(); },
+    draftNeed(_a, el) { L.setDraftNeedOn(!!(el && el.checked)); render(); },
     scoutFocusA(a) { const [id, f] = a.split(':'); const e = L.setScoutFocus(id, f); if (e) toast(e); else autosave(); render(); },
     scoutFireA(a) { const e = L.scoutFire(a); if (e) toast(e); else autosave(); render(); },
     scoutWatchA(a) { const e = L.scoutWatch(a); if (e) toast(e); else autosave(); render(); },
@@ -1776,6 +1812,8 @@
     trainPresetSave() { const e = L.saveTrainPreset(($('#presetName') || {}).value); if (e) toast(e); else { toast('현재 설정을 프리셋으로 저장했습니다.'); autosave(); } render(); },
     trainPresetDel(a) { const e = L.deleteTrainPreset(a); if (e) toast(e); else autosave(); render(); },
     slotAddWeakDo(a) { const [id, f] = a.split(':'); const e = L.slotAddWeak(id, f); if (e) toast(e); else { toast('약점 보완 개별 훈련을 시작했습니다.'); autosave(); } render(); },
+    skillStartA(a) { const [id, k] = a.split(':'); const e = L.skillStart(id, k); if (e) toast(e); else { toast('기술 습득 프로젝트를 시작했습니다.'); autosave(); } render(); },
+    skillCancelA(a) { const e = L.skillCancel(a); if (e) toast(e); else autosave(); render(); },
     slotAddDo(a) { const e = L.slotAdd(a); if (e) toast(e); else { toast('개별 훈련을 시작했습니다.'); autosave(); } render(); },
     slotAddPick() { const id = ui.slotPick; if (!id) return toast('추가할 선수를 선택하세요.'); const e = L.slotAdd(id); if (e) toast(e); else { ui.slotPick = ''; autosave(); } render(); },
     slotSetA(a) { const [id, k, v] = a.split(':'), e = L.slotSet(id, k, v); if (e) toast(e); else autosave(); render(); },
@@ -1875,6 +1913,7 @@
     if (sel === 'storyy') { ui.storyY = +el.value; render(); return; }
     if (sel === 'tgf' || sel === 'tgi') { L.pushUndo('역할별 훈련'); const e = L.setTrainGroup(el.dataset.a, sel === 'tgf' ? 'focus' : 'inten', el.value); if (e) toast(e); else autosave(); render(); return; }
     if (sel === 'sccmp') { ui.scCmpB = el.value; render(); return; }
+    if (sel === 'skpl') { ui.skPl = el.value; render(); return; }
     if (sel === 'slotpick') { ui.slotPick = el.value; return; }
     if (['rvpcpct', 'rvpcto', 'rvphbat', 'rvphto'].includes(sel)) { const lv = ui.live; if (lv) { lv.form = lv.form || {}; lv.form[sel] = el.value; } return; }
     if (sel === 'subcand') { ui.subCand = el.value; return; }

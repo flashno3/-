@@ -179,6 +179,56 @@
     const edge = Math.abs(pc - 0.5), conf = edge >= 0.3 ? '높음' : edge >= 0.15 ? '보통' : '낮음';
     return { a: { id: aId, name: a.ko, e: ea }, b: { id: bId, name: b.ko, e: eb }, pCeil: Math.round(pc * 100) / 100, pNow: Math.round(po * 100) / 100, winner: pc >= 0.5 ? aId : bId, conf };
   };
+  /* ---------------- 스카우팅 이력: 적중률 정산 ----------------
+     드래프트가 끝나면(후보의 숨은 정점이 사라지기 전에) 이번 시즌 후보 풀에서 스카우트가 관찰한 후보마다 '관찰 평균 측정값 − 실제 정점'(성장 상한 오차)을 구해 스카우트별로 누적한다.
+     개별 후보의 실제 정점은 공개하지 않고 평균 오차(절댓값)·편향(+ 과대평가 / − 과소평가)만 보여 준다. 등급(⚠ 기준 가정): 평균 오차 ≤7 우수 · ≤10 보통 · 초과 미흡. 같은 스카우트가 여러 번 봐도 편향은 줄지 않아 오차에 바닥이 있다. */
+  const accGrade = e => e <= 7 ? '우수' : e <= 10 ? '보통' : '미흡';
+  proto._scoutSettle = function () {
+    const S = this.S, d = S.off && S.off.draft; if (!d) return 0; const ids = d.picks.map(x => x.id).concat(d.pool); const H = S.scoutHist = S.scoutHist || { scouts: {}, y: {} }; if (H.y[S.year]) return 0; let tot = 0;
+    const names = {}; for (const sc of S.scouts || []) names[sc.id] = sc.name;
+    const rows = {}; let estN = 0, estAbs = 0, estBias = 0;
+    for (const id of ids) { const p = S.players[id]; if (!p || p.peak === undefined || !p.sc || !p.sc.by) continue; let seen = false;
+      for (const sid of Object.keys(p.sc.by)) { const b = p.sc.by[sid]; if (!b.n) continue; const e = b.mc / b.n - p.peak, r = rows[sid] = rows[sid] || { n: 0, abs: 0, bias: 0, obs: 0 }; r.n++; r.abs += Math.abs(e); r.bias += e; r.obs += b.n; seen = true; }
+      if (seen) { const est = this.scoutEst(p), e = est.ceil - p.peak; estN++; estAbs += Math.abs(e); estBias += e; } }
+    for (const sid of Object.keys(rows)) { const r = rows[sid], h = H.scouts[sid] = H.scouts[sid] || { name: names[sid] || '이전 스카우트', n: 0, abs: 0, bias: 0, obs: 0, years: [] };
+      if (names[sid]) h.name = names[sid]; h.n += r.n; h.abs += r.abs; h.bias += r.bias; h.obs += r.obs; h.years.push({ y: S.year, n: r.n, err: Math.round(r.abs / r.n * 10) / 10, bias: Math.round(r.bias / r.n * 10) / 10 }); tot += r.n; }
+    H.y[S.year] = { n: estN, err: estN ? Math.round(estAbs / estN * 10) / 10 : null, bias: estN ? Math.round(estBias / estN * 10) / 10 : null, scouts: Object.keys(rows).length };
+    for (const sid of Object.keys(rows)) { const h = H.scouts[sid], r = rows[sid], err = r.abs / r.n; if (r.n >= 3) this._scoutNews(`스카우트 적중률 정산(${S.year}): ${h.name} — 후보 ${r.n}명 평균 오차 ${err.toFixed(1)}(${accGrade(err)})${Math.abs(r.bias / r.n) >= 3 ? ', ' + (r.bias > 0 ? '과대평가' : '과소평가') + ' 경향' : ''}`); }
+    return tot;
+  };
+  proto.scoutHistory = function () {   // 화면용: 스카우트별 누적 적중률(현직 우선) + 시즌별 내 추정 정확도
+    const S = this.S, H = S.scoutHist || { scouts: {}, y: {} }, cur = new Set((S.scouts || []).map(x => x.id));
+    const list = Object.entries(H.scouts).map(([id, h]) => { const err = h.n ? h.abs / h.n : null; return { id, name: h.name, active: cur.has(id), n: h.n, obs: h.obs, err: err === null ? null : Math.round(err * 10) / 10, bias: h.n ? Math.round(h.bias / h.n * 10) / 10 : null, grade: err === null ? '-' : accGrade(err), years: h.years.slice(-4) }; }).sort((a, b) => (b.active ? 1 : 0) - (a.active ? 1 : 0) || (a.err === null ? 99 : a.err) - (b.err === null ? 99 : b.err));
+    const years = Object.keys(H.y).map(y => Object.assign({ y: +y }, H.y[y])).sort((a, b) => b.y - a.y).slice(0, 5);
+    return { list, years };
+  };
+
+  /* ---------------- 드래프트 보드 개선: 태그 · 필요 포지션 · AI 예상 순번 ---------------- */
+  const DGRP = { C: ['포수', 4], IF: ['내야수', 14], OF: ['외야수', 11], SP: ['선발', 9], RP: ['구원', 16] };
+  proto.draftGroupOf = p => p.type === 'P' ? (p.role === 'SP' ? 'SP' : 'RP') : p.pos === 'C' ? 'C' : ['LF', 'CF', 'RF'].includes(p.pos) ? 'OF' : 'IF';
+  proto.draftNeeds = function () {   // 포지션 그룹별 필요도(0~1): 보유 인원이 목표보다 적을수록 높다(외국인 제외, 2군 포함, 지명 완료분 포함)
+    const t = this.S.userTeam, cnt = {}; for (const k in DGRP) cnt[k] = 0; for (const p of this.players(t)) if (!p.foreign) cnt[this.draftGroupOf(p)]++;
+    const out = {}; for (const k in DGRP) { const need = Math.max(0, DGRP[k][1] - cnt[k]) / DGRP[k][1]; out[k] = { name: DGRP[k][0], have: cnt[k], target: DGRP[k][1], need: Math.round(need * 100) / 100, level: need >= 0.3 ? 'high' : need >= 0.12 ? 'mid' : 'low' }; }
+    return out;
+  };
+  proto.setDraftNeedOn = function (on) { this.S.draftNeedOn = !!on; return null; };
+  proto.draftBoardScore = function (p) { const base = this.userScore(p), S = this.S; if (!S.draftNeedOn) return base; const nd = this.draftNeeds()[this.draftGroupOf(p)]; return base + 4 * (nd ? nd.need : 0); };   // 필요 포지션 가중(켰을 때만, 최대 +4점 ⚠ 가정)
+  proto.draftTags = function (p) {
+    const e = this.scoutEst(p), d = this.S.off && this.S.off.draft, pool = d ? d.pool.map(id => this.S.players[id]).filter(Boolean) : [], tags = [];
+    const os = pool.map(q => this.scoutEst(q).o).sort((a, b) => b - a), top = os.length ? os[Math.max(0, Math.floor(os.length * 0.15) - 1)] : 99;
+    if (e.o >= top && os.length) tags.push({ k: 'ready', label: '즉전감', cls: 'in' }); if (e.ceil - e.o >= 10) tags.push({ k: 'grow', label: '성장 여력', cls: 'in' });
+    if (e.ceilSd >= 10 && e.ceil >= 60) tags.push({ k: 'risk', label: '고위험·고수익', cls: 'warn' }); else if (e.conf === '높음') tags.push({ k: 'safe', label: '안정적', cls: '' });
+    if (e.conf === '낮음') tags.push({ k: 'unk', label: '정보 부족', cls: 'bad' });
+    const nd = this.draftNeeds()[this.draftGroupOf(p)]; if (nd && nd.level === 'high') tags.push({ k: 'need', label: '필요 포지션', cls: 'in' });
+    return tags;
+  };
+  proto.draftExpect = function () {   // AI 구단들의 평가 합의 순위(남은 후보 중): id → { rank, avail }. avail = 내 다음 지명까지 남아 있을 가능성(순위가 (내 순번까지 남은 지명 수 + 여유)보다 뒤면 'likely')
+    const S = this.S, d = S.off && S.off.draft; if (!d) return {}; const ai = Engine.TEAMS.filter(t => t !== S.userTeam), pool = d.pool.map(id => S.players[id]).filter(Boolean);
+    const sc = pool.map(p => ({ id: p.id, v: ai.reduce((a, t) => a + (this.aiScoutScore ? this.aiScoutScore(t, p) : this.scoutScore(p)), 0) / ai.length })).sort((a, b) => b.v - a.v);
+    const dd = this.draftDay ? this.draftDay() : null, until = dd && dd.untilMine !== null && dd.untilMine !== undefined ? dd.untilMine : null, out = {};
+    sc.forEach((x, i) => { const rank = i + 1; out[x.id] = { rank, avail: until === null ? '' : until === 0 ? 'now' : rank > until + 6 ? 'likely' : rank > until ? 'maybe' : 'gone' }; });
+    return out;
+  };
   /* 평가 항목별 확신도(리포트): 현재 능력(툴) · 성장 상한 · 성격. 항목마다 오차 크기에 따라 확신도를 따로 보여 준다 */
   proto.scoutItems = function (p) {
     const e = this.scoutEst(p); if (!e) return null; const tv = this.scoutTraitView(p), oc = sd => sd >= 2.6 ? '낮음' : sd >= 1.7 ? '보통' : '높음';
