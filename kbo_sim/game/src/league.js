@@ -63,6 +63,7 @@
       S.calib.base = L.talentLevel(undefined, true);
       L.newSeasonSetup(true);
       if (L._setGoals) L._setGoals();
+      if (L._clubStory) L._clubStory();   // 첫 시즌 개막 소식(구단 이야기)
       if (L._markRookies) L._markRookies();
       if (L.ensureProspects) L.ensureProspects();   // 첫 시즌의 드래프트 후보 풀(스카우팅 대상). 다른 선수 id에 영향이 없도록 가장 마지막에 만든다
       return L;

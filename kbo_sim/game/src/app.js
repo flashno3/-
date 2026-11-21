@@ -654,9 +654,21 @@
     return `<div class="card"><div class="row"><h2 style="margin:0">시장 속보</h2>${fresh ? `<span class="chip in">새 소식 ${Math.min(fresh, 10)}</span>` : ''}</div>${fd.map(x => `<div class="small feeditem ${x.kind}${x.mine ? ' mine' : ''}"><span class="muted">${S.faMkt ? L.faDateStr(x.d) : ''}</span> ${x.kind === 'sign' ? '✅' : '📣'} ${esc(x.text)}${x.mine ? ' <span class="chip in">관심</span>' : ''}</div>`).join('')}</div>`;
   }
   /* ---------------- 구단 역사 · 도전 과제 · 커리어 ---------------- */
+  function clubIntroCard() {   // 구단 소개(1층: 확인된 개괄 정보) + 구단 이야기(2층: 역사에서 만든 문구)
+    const P = L.clubProfile(U()); if (!P) return ''; const c = P.c, nar = L.clubNarrative(U());
+    const lin = c.lineage.map(x => `${x[0]} ${esc(x[1])}`).join(' → '), real = c.titles.length, game = P.gameTitles.length;
+    const ys = P.titles.length ? P.titles.map(y => P.gameTitles.includes(y) && !c.titles.includes(y) ? `<b>${y}</b>` : y).join('·') : '없음';
+    return `<div class="card"><h2>${KO[U()]} 구단 소개</h2>
+      <div class="kpis"><div class="kpi"><div class="l">창단(출범)</div><div class="v">${c.founded}</div></div><div class="kpi"><div class="l">연고</div><div class="v">${esc(c.city)}</div></div><div class="kpi"><div class="l">통산 우승</div><div class="v">${P.count}회</div></div></div>
+      <div class="small" style="margin-top:8px">${lin}</div><div class="small muted" style="margin-top:4px">${esc(c.note)}</div>
+      <div class="small" style="margin-top:8px"><b>한국시리즈 우승</b> ${ys}${game ? ' <span class="muted">(굵은 글씨: 이 게임에서 달성)</span>' : ''}</div>${c.retNote ? `<div class="small muted" style="margin-top:2px">${esc(c.retNote)}</div>` : ''}
+      <div class="small" style="margin-top:6px"><b>영구결번</b> ${c.ret.length ? c.ret.map(r => `${esc(r[1])} ${r[0]}번`).join(' · ') : '아직 없음(확인된 범위)'}</div>
+      ${nar.length ? `<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--line)"><b class="small">구단 이야기</b>${nar.map(x => `<div class="small" style="margin-top:4px">${esc(x)}</div>`).join('')}</div>` : ''}
+      <div class="small muted" style="margin-top:8px">출처: ${esc(c.src)}. ${c.yv ? '' : '우승 연도 일부는 우승 횟수와 대조한 값이라 확인이 필요합니다(⚠). '}준우승 기록은 확인된 것만 표시되며, 현대 유니콘스(2008 해체)의 우승은 키움이 아닌 별도 구단 기록입니다.</div></div>`;
+  }
   function histPanel() {
     const h = L.clubHistory(); const rows = h.rows.slice(0, 20).map(r => `<tr><td class="l">${r.year}</td><td>${r.rank}위</td><td>${r.w}승 ${r.l}패${r.d ? ' ' + r.d + '무' : ''}</td><td class="l">${r.champ ? '<span class="chip ks">우승</span>' : r.runner ? '<span class="chip in">준우승</span>' : r.rank <= 5 ? '<span class="chip">가을야구</span>' : ''}</td></tr>`).join('');
-    return `<div class="card"><h2>${KO[U()]} 구단 역사</h2><div class="kpis"><div class="kpi"><div class="l">우승</div><div class="v">${h.titles}회</div></div><div class="kpi"><div class="l">준우승</div><div class="v">${h.runners}회</div></div><div class="kpi"><div class="l">가을야구</div><div class="v">${h.post}회</div></div></div>${rows ? `<div class="tablewrap"><table><thead><tr><th class="l">시즌</th><th>순위</th><th>성적</th><th class="l">비고</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="small muted" style="margin-top:6px">완료된 시즌이 아직 없습니다. 이 게임에서 치른 시즌이 쌓입니다.</div>'}</div>
+    return clubIntroCard() + `<div class="card"><h2>${KO[U()]} 구단 역사 (이 게임의 시즌)</h2><div class="kpis"><div class="kpi"><div class="l">우승</div><div class="v">${h.titles}회</div></div><div class="kpi"><div class="l">준우승</div><div class="v">${h.runners}회</div></div><div class="kpi"><div class="l">가을야구</div><div class="v">${h.post}회</div></div></div>${rows ? `<div class="tablewrap"><table><thead><tr><th class="l">시즌</th><th>순위</th><th>성적</th><th class="l">비고</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="small muted" style="margin-top:6px">완료된 시즌이 아직 없습니다. 이 게임에서 치른 시즌이 쌓입니다.</div>'}</div>
       <div class="card"><h2>명예의 전당</h2>${h.hof.length ? h.hof.map(x => `<div class="stl"><span class="d">${x.y}</span><span><b>${esc(x.name)}</b> <span class="muted small">${esc(x.pos)} · 근속 ${x.tn}년${x.summary ? ' · ' + esc(x.summary) : ''}${x.awards.length ? ' · ' + esc(x.awards.join(', ')) : ''}</span></span></div>`).join('') : '<div class="small muted">우리 구단에서 6년 이상 뛰었거나 시상 경력이 있는 선수가 은퇴하면 헌액됩니다.</div>'}</div>
       <div class="card"><h2>구단 수상 기록</h2>${h.awards.length ? h.awards.slice(0, 30).map(x => `<div class="stl"><span class="d">${x.y}</span><span><b>${esc(x.label)}</b> ${esc(x.name)} <span class="muted small">${esc(x.txt || '')}</span></span></div>`).join('') : '<div class="small muted">아직 없습니다.</div>'}</div>`;
   }
@@ -761,6 +773,7 @@
     return `<div class="card"><div class="row"><h2 style="margin:0">${S.year} 시즌 목표</h2><span class="muted small">이사회 신뢰도 ${f1(f.trust)}</span></div>
       <div class="tablewrap"><table><tbody>${row(`순위 ${gs.rank.goal}위 이내`, gs.played ? gs.rank.cur + '위' : '-', gs.rank.ok, `보수 ${gs.g.payRank}위 구단 기대`)}${row(`손익 ${f1(gs.profit.goal)}억 이상`, (gs.profit.cur >= 0 ? '+' : '') + f1(gs.profit.cur) + '억', gs.profit.ok, '예상 손익 기준(허용 적자 이내)')}${row(`25세 이하 ${gs.youth.goal}명 출전`, gs.youth.cur + '명', gs.youth.ok, '100타석 또는 50이닝 이상')}</tbody></table></div>
       ${o ? `<div class="kpis" style="margin-top:8px"><div class="kpi"><div class="l">가을야구(5위 이내) 확률</div><div class="v">${o.top5}%</div></div><div class="kpi"><div class="l">정규시즌 1위 확률</div><div class="v">${o.top1}%</div></div><div class="kpi"><div class="l">예상 최종 승수</div><div class="v">${o.exp}</div></div></div>` : ''}
+      <div class="small" style="margin-top:6px">${esc(L.clubGoalNote(U()))}</div>
       <div class="small muted" style="margin-top:6px">달성 시 신뢰도: 순위 목표 +3(2계단 이상 초과 +5), 육성 +2 / 순위 3계단 이상 미달 −3. 시즌 말 재정 결산과 함께 반영됩니다.</div>${risk}</div>`;
   }
   function firedModal() {

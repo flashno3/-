@@ -45,7 +45,7 @@
     }
     this.repairSettings(S.userTeam);
     const cap = S.calib.cap; S.calib.cap = cap;
-    this._setGoals(); S.report = S.report;
+    this._setGoals(); S.report = S.report; if (this._clubStory) this._clubStory();
     if (this._campApply) this._campApply(); if (this._campEvApply) this._campEvApply(); if (this._investApply) this._investApply(); if (this._loyDecay) this._loyDecay(2);   // 새 시즌: 오래된 불만·기쁨이 가라앉는다
     S.prospectsDone = null; S.scWatch = []; S.scPtr = 0; if (this.ensureProspects) this.ensureProspects();   // 이번 시즌의 드래프트 후보 풀 공개
     news(this, `${S.year} 시즌 개막 준비`);
