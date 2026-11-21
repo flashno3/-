@@ -18,7 +18,7 @@
   --gold: #E6C158; --gold-soft: #3A3017; --focus: #6AA6FF; --nav: #0B1A10; --nav-fg: #C9D8CE; --nav-act: #1E5A3B; color-scheme: dark;
 }
 * { box-sizing: border-box; }
-body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 14.5px; line-height: 1.5; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 14.5px; line-height: 1.5; word-break: keep-all; overflow-wrap: anywhere; }   /* 한글은 단어(띄어쓰기) 단위로만 줄바꿈 — '5안/타'처럼 글자 중간에서 꺾이지 않게 */
 h1, h2, h3 { font-family: var(--font-display); margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
 h1 { font-size: 24px; } h2 { font-size: 17px; } h3 { font-size: 14px; }
 .num, td.n, th.n { font-variant-numeric: tabular-nums; font-family: var(--font-display); }
@@ -133,7 +133,7 @@ textarea { width: 100%; min-height: 90px; background: var(--bg); border: 1px sol
 .dock { display: none; }
 @media (max-width: 860px) {
   .dock { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; gap: 10px; align-items: center; background: var(--surface); border-top: 3px solid var(--tp); padding: 8px max(12px, env(safe-area-inset-right, 0px)) max(8px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); }
-  .dock .dinfo { flex: 1; min-width: 0; font-size: 13px; line-height: 1.3; } .dock .dinfo b { font-family: var(--font-display); font-size: 15px; display: block; }
+  .dock .dinfo { flex: 1; min-width: 0; font-size: 13px; line-height: 1.3; } .dock .dinfo b { font-family: var(--font-display); font-size: 15px; display: block; } .dock .dinfo .muted { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .dock button { min-height: 46px; font-size: 15px; padding: 8px 16px; white-space: nowrap; }
   .top .primary { display: none; } .content { padding-bottom: 104px; }
   .top .info { gap: 2px 12px; }
