@@ -52,11 +52,13 @@
       const high = clamp(Math.round(gauss(r, 48 + (hi ? 8 : -2), 10)), 30, 82), univ = clamp(Math.round(gauss(r, 48 + (hi ? -2 : 8), 10)), 30, 82), abroad = clamp(Math.round(gauss(r, 40 + (ab ? 22 : 0), 9)), 25, 82);
       out.push({ id: `SC${S.year}-${i + 1}`, name, age: 40 + Math.floor(r.random() * 22), high, univ, abroad, salary: this._scoutSalary(high, univ, abroad) });
     }
+    { const r2 = rngFor(S.seed, S.year, 7305);   // 전문 분야·평가 항목 능력(기존 후보 값은 그대로 두려고 별도 난수열 사용)
+      out.forEach(c => { const u = r2.random(); c.spec = u < 0.3 ? 'P' : u < 0.6 ? 'B' : '-'; c.tool = clamp(Math.round(gauss(r2, 50, 10)), 30, 82); c.proj = clamp(Math.round(gauss(r2, 50, 10)), 30, 82); c.char = clamp(Math.round(gauss(r2, 50, 10)), 30, 82); c.salary = this._scoutSalary(c.high, c.univ, c.abroad, c); }); }
     const ex = (S.hof || []).filter(h => h.y === S.year - 1 || h.y === S.year).slice(-1)[0];   // 우리 구단에서 은퇴한 헌액 선수가 있으면 스카우트 후보로 합류
-    if (ex) { const rr = rngFor(S.seed, S.year, 7310), high = clamp(Math.round(gauss(rr, 60, 6)), 45, 80), univ = clamp(Math.round(gauss(rr, 60, 6)), 45, 80), abroad = clamp(Math.round(gauss(rr, 45, 8)), 30, 70); out[5] = { id: `SC${S.year}-EX`, name: ex.name, age: ex.age || 40, high, univ, abroad, salary: this._scoutSalary(high, univ, abroad), ex: true, tn: ex.tn }; }
+    if (ex) { const rr = rngFor(S.seed, S.year, 7310), high = clamp(Math.round(gauss(rr, 60, 6)), 45, 80), univ = clamp(Math.round(gauss(rr, 60, 6)), 45, 80), abroad = clamp(Math.round(gauss(rr, 45, 8)), 30, 70); { const r3 = rngFor(S.seed, S.year, 7306); const e5 = { id: `SC${S.year}-EX`, name: ex.name, age: ex.age || 40, high, univ, abroad, ex: true, tn: ex.tn, spec: '-', tool: clamp(Math.round(gauss(r3, 58, 6)), 40, 80), proj: clamp(Math.round(gauss(r3, 58, 6)), 40, 80), char: clamp(Math.round(gauss(r3, 62, 6)), 40, 80) }; e5.salary = this._scoutSalary(high, univ, abroad, e5); out[5] = e5; } }   // 은퇴 선수 출신은 성격 파악이 강점
     S.scoutMkt = out;
   };
-  proto._scoutSalary = function (h, u, a) { return Math.round(clamp(0.5 + 0.04 * ((h + u) / 2 - 40) + 0.01 * ((a === undefined ? 50 : a) - 50), 0.5, 2.8) * 10) / 10; };
+  proto._scoutSalary = function (h, u, a, x) { const base = 0.5 + 0.04 * ((h + u) / 2 - 40) + 0.01 * ((a === undefined ? 50 : a) - 50), prem = x && x.tool !== undefined ? 0.012 * ((x.tool + x.proj + x.char) / 3 - 50) + (x.spec && x.spec !== '-' ? 0.05 : 0) : 0; return Math.round(clamp(base + prem, 0.5, 3.0) * 10) / 10; };   // 평가 항목 능력(툴·성장·성격) 평균과 전문 분야 프리미엄(⚠ 가정)
   proto.scoutLimit = function () { return SCOUT_MAX + (this.investSlots ? this.investSlots() : 0); };   // 스카우팅 센터 투자: 한도 +1~2
   proto.scoutCap = function (s) { return clamp(3 + Math.floor(((s.high + s.univ) / 2 - 50) / 10), 2, 6) + (this.investObs ? this.investObs() : 0); };   // 한 스카우트의 주간 관찰 수
   proto.scouts = function () { return (this.S.scouts || []).slice(); };
@@ -65,9 +67,18 @@
     const S = this.S; this.ensureProspects(); const c = (S.scoutMkt || []).find(x => x.id === id); if (!c) return '영입할 수 없는 스카우트입니다.';
     S.scouts = S.scouts || []; if (S.scouts.length >= this.scoutLimit()) return `스카우트는 ${this.scoutLimit()}명까지 둘 수 있습니다.`;
     const room = this.faRoom(S.userTeam); if (room < c.salary) return `예산 부족: 연봉 ${c.salary}억이 FA 여유자금 ${room.toFixed(1)}억을 넘습니다.`;
-    S.scouts.push({ id: c.id, name: c.name, age: c.age, high: c.high, univ: c.univ, abroad: c.abroad === undefined ? 45 : c.abroad, salary: c.salary, y: S.year, ex: !!c.ex }); S.scoutMkt = S.scoutMkt.filter(x => x.id !== id); this.invalidate();
-    this._scoutNews(`스카우트 영입: ${c.name}${c.ex ? '(은퇴 선수 출신)' : ''}(고교 ${c.high} · 대학 ${c.univ} · 해외 ${c.abroad === undefined ? 45 : c.abroad}) 연봉 ${c.salary}억`); return null;
+    S.scouts.push({ id: c.id, name: c.name, age: c.age, high: c.high, univ: c.univ, abroad: c.abroad === undefined ? 45 : c.abroad, salary: c.salary, y: S.year, ex: !!c.ex, spec: c.spec, tool: c.tool, proj: c.proj, char: c.char, focus: 'auto' }); S.scoutMkt = S.scoutMkt.filter(x => x.id !== id); this.invalidate();
+    this._scoutNews(`스카우트 영입: ${c.name}${c.ex ? '(은퇴 선수 출신)' : ''}(고교 ${c.high} · 대학 ${c.univ} · 해외 ${c.abroad === undefined ? 45 : c.abroad}${c.tool !== undefined ? ` · 툴 ${c.tool} · 성장 ${c.proj} · 성격 ${c.char}${c.spec && c.spec !== '-' ? ' · ' + (c.spec === 'P' ? '투수' : '타자') + ' 전문' : ''}` : ''}) 연봉 ${c.salary}억`); return null;
   };
+  /* 스카우트 배치(담당): auto(전체) · high(고교만) · univ(대학만) · P(투수만) · B(타자만) · foreign(해외 후보군 전담) */
+  const FOCUS = { auto: '자동(전체)', high: '고교', univ: '대학', P: '투수', B: '타자', foreign: '해외 전담' };
+  proto.scoutFocusLabel = function (k) { return FOCUS[k || 'auto'] || '자동(전체)'; };
+  proto.scoutFocusKeys = function () { return Object.keys(FOCUS); };
+  proto.setScoutFocus = function (id, f) { const sc = (this.S.scouts || []).find(x => x.id === id); if (!sc) return '스카우트를 찾을 수 없습니다.'; if (!FOCUS[f]) return '알 수 없는 담당입니다.'; sc.focus = f; this.invalidate(); return null; };
+  const focusOk = (sc, p) => { const f = sc.focus || 'auto'; if (f === 'auto') return true; if (f === 'foreign') return false; if (f === 'high') return !(p.pro && p.pro.univ); if (f === 'univ') return !!(p.pro && p.pro.univ); return p.type === f; };
+  /* 관찰 잡음 보정: 스카우트의 성장 평가 능력(proj)·전문 분야 일치 여부. 새로 영입한 스카우트에게만 적용(필드가 없는 기존 스카우트는 이전과 같음) */
+  const projMul = (sc, p) => sc.proj === undefined ? 1 : clamp(1 - 0.006 * (sc.proj - 50), 0.75, 1.25) * (sc.spec && sc.spec !== '-' ? (sc.spec === p.type ? 0.85 : 1.15) : 1);
+  const toolMul = (sc, p) => sc.tool === undefined ? 1 : clamp(1 - 0.008 * (sc.tool - 50), 0.6, 1.4) * (sc.spec && sc.spec !== '-' ? (sc.spec === p.type ? 0.9 : 1.1) : 1);
   proto.scoutFire = function (id) {
     const S = this.S, n = (S.scouts || []).length; S.scouts = (S.scouts || []).filter(s => s.id !== id); if (S.scouts.length === n) return '해임할 수 없습니다.'; this.invalidate(); return null;   // 이미 얻은 관찰 정보는 남는다
   };
@@ -93,7 +104,7 @@
     if (!p || !p.scout) return null; const sc = p.sc, by = sc ? sc.by : {};
     let pc = 1 / (SD0_C * SD0_C), nc = p.scout.ceil * pc, po = 1 / (SD0_O * SD0_O), no = p.scout.o * po, n = 0;
     for (const id of Object.keys(by)) { const b = by[id]; if (!b.n) continue; n += b.n;
-      const se2 = b.v2 !== undefined ? b.v2 / b.n : b.se * b.se, vc = BIAS_C * BIAS_C + se2 / b.n, vo = BIAS_O * BIAS_O + SE_O * SE_O / b.n; pc += 1 / vc; nc += (b.mc / b.n) / vc; po += 1 / vo; no += (b.mo / b.n) / vo; }
+      const se2 = b.v2 !== undefined ? b.v2 / b.n : b.se * b.se, vc = BIAS_C * BIAS_C + se2 / b.n, vo = BIAS_O * BIAS_O + (b.vo2 !== undefined ? b.vo2 / b.n : SE_O * SE_O) / b.n; pc += 1 / vc; nc += (b.mc / b.n) / vc; po += 1 / vo; no += (b.mo / b.n) / vo; }
     const ceil = clamp(nc / pc, 25, 85), ceilSd = Math.sqrt(1 / pc), o = no / po, oSd = Math.sqrt(1 / po);
     const conf = ceilSd >= 12 ? '낮음' : ceilSd >= 8 ? '보통' : '높음';
     return { o: r1(o), oSd: r1(oSd), ceil: r1(ceil), ceilSd: r1(ceilSd), n, conf, lo: tier(ceil - ceilSd), hi: tier(ceil + ceilSd), grade: tier(ceil), score: 0.35 * o + 0.65 * ceil };
@@ -103,16 +114,23 @@
   /* ---------------- 주간 관찰 ---------------- */
   proto._scoutDay = function () { const S = this.S; if (this._subDay) this._subDay(); if (S.phase !== 'regular' || !S.scouts || !S.scouts.length || !S.day || S.day % 7 !== 0) return; this._scoutWeek(); S.scoutObs = (S.scoutObs || 0) + this._scoutWeekForeign(); };
   proto._scoutObserve = function (id, sc, week, idx) {
-    const S = this.S, p = S.players[id]; if (!p || p.team !== 'DRAFT') return false; const rating = p.pro && p.pro.univ ? sc.univ : sc.high, se = clamp(16 - 0.17 * (rating - 40), 7, 16) * (p.pro && p.pro.cls === 2 ? 1.25 : 1);   // 내년 후보는 더 어려서 관찰 잡음 ×1.25
+    const S = this.S, p = S.players[id]; if (!p || p.team !== 'DRAFT') return false; const rating = p.pro && p.pro.univ ? sc.univ : sc.high, se = clamp(16 - 0.17 * (rating - 40), 7, 16) * (p.pro && p.pro.cls === 2 ? 1.25 : 1) * projMul(sc, p), seo = SE_O * toolMul(sc, p);   // 내년 후보는 더 어려서 관찰 잡음 ×1.25
     const si = idn(sc.id), rb = rngFor(S.seed, S.year, idn(id) * 997 + si, 7410), bc = gauss(rb, 0, BIAS_C), bo = gauss(rb, 0, BIAS_O);   // 스카우트×선수 고정 편향
     const rn = rngFor(S.seed, S.year, idn(id) * 131 + week * 7 + idx, 7420 + si % 50);
-    const mc = clamp(p.peak + bc + gauss(rn, 0, se), 20, 90), mo = this.ovr(p) + bo + gauss(rn, 0, SE_O);
-    p.sc = p.sc || { by: {} }; const b = p.sc.by[sc.id] = p.sc.by[sc.id] || { n: 0, mc: 0, mo: 0, se: Math.round(se * 10) / 10 }; if (b.v2 === undefined) b.v2 = b.n * b.se * b.se; b.n++; b.mc += mc; b.mo += mo; b.v2 += se * se; b.se = Math.round(se * 10) / 10; p.sc.last = S.day;
+    const mc = clamp(p.peak + bc + gauss(rn, 0, se), 20, 90), mo = this.ovr(p) + bo + gauss(rn, 0, seo);
+    p.sc = p.sc || { by: {} }; const b = p.sc.by[sc.id] = p.sc.by[sc.id] || { n: 0, mc: 0, mo: 0, se: Math.round(se * 10) / 10 }; if (b.v2 === undefined) b.v2 = b.n * b.se * b.se; if (seo !== SE_O && b.vo2 === undefined) b.vo2 = b.n * SE_O * SE_O; b.n++; b.mc += mc; b.mo += mo; b.v2 += se * se; if (b.vo2 !== undefined) b.vo2 += seo * seo; b.se = Math.round(se * 10) / 10; p.sc.last = S.day;
     S.scoutObs = (S.scoutObs || 0) + 1; return true;
   };
   proto._scoutWeek = function () {
     const S = this.S, pr = S.prospects; if (!pr || pr.y !== S.year) return; const watch = this.scoutWatchList(); if (!watch.length) return;
     const order = []; for (const w of watch) { order.push(w.id); if (w.star) order.push(w.id); }
+    if ((S.scouts || []).some(sc => sc.focus && sc.focus !== 'auto')) {   // 담당이 정해진 스카우트가 있으면 각자 담당 후보만 돌아가며 관찰(전부 '자동'이면 아래 기존 방식)
+      const week = Math.floor(S.day / 7); let total = 0; const touched = new Set();
+      (S.scouts || []).forEach((sc, si) => { const mine = order.filter(id => S.players[id] && focusOk(sc, S.players[id])); if (!mine.length) return; let k = (sc.ptr || 0) % mine.length; const cap = this.scoutCap(sc);
+        for (let i = 0; i < cap; i++) { const id = mine[k % mine.length]; k++; if (this._scoutObserve(id, sc, week, i)) { total++; touched.add(id); } } sc.ptr = k % mine.length; });
+      for (const id of touched) { const p = S.players[id], e = this.scoutEst(p); if (e.ceil >= 66 && e.ceilSd <= 9 && !p.sc.found) { p.sc.found = S.day; this._scoutNews(`스카우트 보고: ${p.ko}(${p.pro ? p.pro.school : ''}) — 성장 상한 ${e.grade}급 가능성(추정 ${e.ceil}±${e.ceilSd}, 확신도 ${e.conf})`); } }
+      (S.scoutLog = S.scoutLog || []).unshift({ y: S.year, d: S.day, n: total, who: touched.size }); if (S.scoutLog.length > 20) S.scoutLog.pop(); return;
+    }
     const week = Math.floor(S.day / 7); let k = (S.scPtr || 0) % order.length, total = 0; const touched = new Set();   // 주마다 이어서 돌아가며 관찰(관심 목록이 많아도 골고루)
     (S.scouts || []).forEach((sc, si) => { const cap = this.scoutCap(sc); for (let i = 0; i < cap; i++) { const id = order[k % order.length]; k++; if (this._scoutObserve(id, sc, week, i)) { total++; touched.add(id); } } });
     S.scPtr = k % order.length;
@@ -128,6 +146,11 @@
     return { est: e, strengths: e.n >= 2 ? sorted.slice(0, 2).filter(x => x[1] >= mean + 2).map(x => x[0]) : [], weaknesses: e.n >= 2 ? sorted.slice(-1).filter(x => x[1] <= mean - 2).map(x => x[0]) : [], detail: e.n >= 2, hand: p.type === 'B' ? (p.bats === 'L' ? '좌타' : p.bats === 'S' ? '양타' : '우타') : (p.throws === 'L' ? '좌투' : '우투'), school: p.pro ? p.pro.school : '', univ: !!(p.pro && p.pro.univ), by: Object.entries((p.sc && p.sc.by) || {}).map(([id, b]) => ({ id, n: b.n, name: ((S.scouts || []).find(s => s.id === id) || {}).name || '이전 스카우트' })), trait: this.scoutTraitView(p), cls: p.pro ? p.pro.cls : 1 };
   };
 
+  /* 평가 항목별 확신도(리포트): 현재 능력(툴) · 성장 상한 · 성격. 항목마다 오차 크기에 따라 확신도를 따로 보여 준다 */
+  proto.scoutItems = function (p) {
+    const e = this.scoutEst(p); if (!e) return null; const tv = this.scoutTraitView(p), oc = sd => sd >= 2.6 ? '낮음' : sd >= 1.7 ? '보통' : '높음';
+    return [{ k: 'tool', label: '현재 능력', text: `${Math.round(e.o)} ± ${e.oSd}`, conf: oc(e.oSd) }, { k: 'proj', label: '성장 상한', text: `${e.grade}급 (${e.ceil} ± ${e.ceilSd})`, conf: e.conf }, { k: 'char', label: '성격', text: tv.known ? tv.label : '미조사', conf: tv.known ? tv.conf : '미조사' }];
+  };
   /* ---------------- 드래프트 연동 ---------------- */
   proto._scoutCarry = function (p) {   // 내가 지명한 선수는 스카우팅으로 얻은 추정치를 이후 평가의 출발점으로 삼는다
     if (p.sc && p.sc.tr && Object.keys(p.sc.tr).length) { const truth = this.traitOf(p), ops = Object.values(p.sc.tr), hit = ops.filter(o => o.t === truth).length; this._scoutNews(`인성 조사 결과 확인: ${p.ko}의 실제 성격은 ${this.traitName(truth)} — 스카우트 의견 ${ops.length}건 중 ${hit}건 일치`); }
@@ -145,7 +168,7 @@
     const S = this.S, p = S.players[id]; if (!p || p.team !== 'DRAFT') return '조사할 수 있는 후보가 아닙니다.'; const sc = (S.scouts || []).find(x => x.id === scoutId); if (!sc) return '조사를 맡을 스카우트를 고르세요.';
     p.sc = p.sc || { by: {} }; p.sc.tr = p.sc.tr || {}; if (p.sc.tr[scoutId]) return '이 스카우트가 이미 조사했습니다.';
     const bad = spend(this, PROBE_COST); if (bad) return bad;
-    const truth = this.traitOf(p), rating = p.pro && p.pro.univ ? sc.univ : sc.high, acc = clamp(0.5 + 0.005 * (rating - 40), 0.5, 0.85), r = rngFor(S.seed, S.year, idn(id) * 53 + idn(scoutId) % 997, 7510);
+    const truth = this.traitOf(p), rating = p.pro && p.pro.univ ? sc.univ : sc.high, acc = clamp(0.5 + 0.005 * (rating - 40) + (sc.char !== undefined ? 0.004 * (sc.char - 50) : 0), 0.5, 0.9), r = rngFor(S.seed, S.year, idn(id) * 53 + idn(scoutId) % 997, 7510);
     let rep = truth; if (r.random() >= acc) { const others = TRAIT_KEYS.filter(k => k !== truth); rep = others[Math.floor(r.random() * others.length)]; }
     p.sc.tr[scoutId] = { t: rep, acc: Math.round(acc * 100) / 100 }; return null;
   };
@@ -248,7 +271,7 @@
   proto._scoutWeekForeign = function () {
     const S = this.S, watch = this.foreignWatchList(); if (!watch.length) return 0; const order = []; for (const w of watch) { order.push(w.id); if (w.star) order.push(w.id); }
     const week = Math.floor(S.day / 7); let k = (S.fPtr || 0) % order.length, total = 0;
-    (S.scouts || []).forEach(sc => { for (let i = 0; i < this.scoutFCap(sc); i++) { const p = S.players[order[k % order.length]]; k++; if (p && p.fpool) { this._fObs(p, sc, 1, week * 5 + i, false); total++; } } });
+    (S.scouts || []).forEach(sc => { const fo = sc.focus || 'auto'; if (fo !== 'auto' && fo !== 'foreign') return; const extra = fo === 'foreign' ? 1 : 0; for (let i = 0; i < this.scoutFCap(sc) + extra; i++) { const p = S.players[order[k % order.length]]; k++; if (p && p.fpool) { this._fObs(p, sc, 1, week * 5 + i, false); total++; } } });
     S.fPtr = k % order.length; return total;
   };
 

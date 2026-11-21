@@ -54,6 +54,9 @@ function drive(L,R,tag,kind){
   return acts;
 }
 function randTrain(L,R,tag){
+  {const S0=L.S,gi=L.trainGroupInfo(),g=gi[Math.floor(R()*gi.length)],z=R();   // 역할·포지션 그룹 방침, 약점 보완 훈련 무작위
+   if(z<0.2){const ks=L.trainFocusKeys(g.side).concat(['inherit']);L.setTrainGroup(g.key,'focus',ks[Math.floor(R()*ks.length)])}else if(z<0.3){L.setTrainGroup(g.key,'inten',['light','normal','heavy','inherit'][Math.floor(R()*4)])}
+   else if(z<0.4){const w=L.trainWeakList(5);if(w.length)L.slotAddWeak(w[Math.floor(R()*w.length)].p.id)}}
   const S=L.S,t=S.userTeam,x=R();const side=R()<0.5?'B':'P';const keys=L.trainFocusKeys(side),ints=['light','normal','heavy'];
   if(x<0.25)L.setTrainSide(side,'focus',keys[Math.floor(R()*keys.length)]);else if(x<0.4)L.setTrainSide(side,'inten',ints[Math.floor(R()*3)]);
   else if(x<0.55){const ps=L.trainPresets();L.applyTrainPreset(ps[Math.floor(R()*ps.length)].id)}
@@ -81,7 +84,7 @@ function randInvest(L,R,tag){   // 구단 투자: 무작위 착공 시도(예산
   const ig=L.integrity().errors.filter(z=>/^invest/.test(z.code));ok(ig.length===0,`${tag} 투자 무결성 ${JSON.stringify(ig)}`);
 }
 function randScout(L,R,tag){
-  const S=L.S,x=R();
+  const S=L.S,x=R();{const sc0=L.scouts();if(sc0.length&&R()<0.3){const ks=L.scoutFocusKeys();L.setScoutFocus(sc0[Math.floor(R()*sc0.length)].id,ks[Math.floor(R()*ks.length)])}}
   if(x<0.2&&S.scoutMkt&&S.scoutMkt.length)L.scoutHire(S.scoutMkt[Math.floor(R()*S.scoutMkt.length)].id);else if(x<0.3){const sc=L.scouts();if(sc.length)L.scoutFire(sc[Math.floor(R()*sc.length)].id)}
   else if(x<0.6){L.scoutAutoWatch(1+Math.floor(R()*10))}else if(x<0.8){const ps=L.prospectList();if(ps.length)L.scoutWatch(ps[Math.floor(R()*ps.length)].id)}else if(x<0.9){const w=L.scoutWatchList();if(w.length)L.scoutStar(w[Math.floor(R()*w.length)].id)}
   const y=R();if(y<0.3){const ps=L.prospectAll(),sc=L.scouts();if(ps.length&&sc.length)L.scoutProbe(ps[Math.floor(R()*ps.length)].id,sc[Math.floor(R()*sc.length)].id)}else if(y<0.6){const hf=L.faList().filter(q=>L.hiddenForeign(q)),sc=L.scouts();if(hf.length&&sc.length)L.scoutForeign(hf[Math.floor(R()*hf.length)].id,sc[Math.floor(R()*sc.length)].id)}else if(y<0.7)L.scoutAutoWatch(1+Math.floor(R()*6),R()<0.5?1:2);else if(y<0.8){const fl=L.foreignPoolList();if(fl.length)L.foreignWatch(fl[Math.floor(R()*fl.length)].id)}else if(y<0.88)L.foreignAutoWatch(1+Math.floor(R()*4));else if(y<0.94){const w=L.foreignWatchList();if(w.length)L.foreignStar(w[Math.floor(R()*w.length)].id)}

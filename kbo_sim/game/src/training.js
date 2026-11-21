@@ -44,11 +44,11 @@
   /* ---------------- 설정 (구 설정 호환) ---------------- */
   proto.trainCfg = function () {
     const S = this.S, T = S.train || {};
-    if (T.B && T.P) return { B: { focus: T.B.focus || 'none', inten: T.B.inten || 'normal' }, P: { focus: T.P.focus || 'none', inten: T.P.inten || 'normal' }, slots: T.slots || [] };
+    if (T.B && T.P) return { B: { focus: T.B.focus || 'none', inten: T.B.inten || 'normal' }, P: { focus: T.P.focus || 'none', inten: T.P.inten || 'normal' }, slots: T.slots || [], groups: T.groups || {} };
     const it = T.inten || 'normal', m = { none: ['none', 'none'], bat: ['all', 'none'], pit: ['none', 'all'], def: ['def', 'none'], cond: ['cond', 'cond'] }[T.focus || 'none'] || ['none', 'none'];   // 구 설정(집중 분야 1개·강도 1개) → 타자/투수 분리
-    return { B: { focus: m[0], inten: it }, P: { focus: m[1], inten: it }, slots: T.slots || [] };
+    return { B: { focus: m[0], inten: it }, P: { focus: m[1], inten: it }, slots: T.slots || [], groups: T.groups || {} };
   };
-  proto._trainSave = function (cfg) { this.S.train = { B: cfg.B, P: cfg.P, slots: cfg.slots }; };
+  proto._trainSave = function (cfg) { this.S.train = { B: cfg.B, P: cfg.P, slots: cfg.slots, groups: cfg.groups || {} }; };
   proto._trainLog = function (text) { const S = this.S; (S.trainLog = S.trainLog || []).unshift({ y: S.year, d: S.day, ph: S.phase, text }); if (S.trainLog.length > 40) S.trainLog.pop(); };
   proto.setTrainSide = function (side, k, v) {
     const cfg = this.trainCfg(); if (!cfg[side]) return false;
@@ -67,6 +67,31 @@
     this._trainSave(cfg); return true;
   };
 
+  /* ---------------- 역할·포지션 그룹별 훈련 방침 ----------------
+     타자 = 포수·내야수·외야수·지명타자, 투수 = 선발·구원·마무리. 그룹마다 집중 분야·강도를 따로 정하면 팀(타자/투수) 설정보다 우선한다(우선순위: 개별 훈련 > 그룹 > 팀).
+     각 항목은 '팀 설정 따름'(inherit)으로 되돌릴 수 있고, 그룹을 따로 정하지 않으면 이전과 결과가 같다. */
+  const GROUPS = { B: { C: '포수', IF: '내야수', OF: '외야수', DH: '지명타자' }, P: { SP: '선발', RP: '구원', CL: '마무리' } };
+  proto.trainGroupOf = function (p) {
+    if (p.type === 'P') { const S = this.S, set = S.teams[p.team] && S.teams[p.team].set; return set && set.bullpen && set.bullpen.closer === p.id ? 'CL' : p.role === 'SP' ? 'SP' : 'RP'; }
+    return p.pos === 'C' ? 'C' : ['1B', '2B', '3B', 'SS'].includes(p.pos) ? 'IF' : ['LF', 'CF', 'RF'].includes(p.pos) ? 'OF' : 'DH';
+  };
+  const groupSide = g => GROUPS.B[g] ? 'B' : 'P';
+  proto.trainEffCfg = function (p, cfg) {   // 이 선수에게 실제로 적용되는 훈련: 개별 슬롯 > 그룹 > 팀
+    cfg = cfg || this.trainCfg(); const side = sideOf(p), sl = cfg.slots.find(x => x.id === p.id); if (sl) return { focus: sl.focus, inten: sl.inten, src: 'slot' };
+    const o = (cfg.groups || {})[this.trainGroupOf(p)] || {}; return { focus: o.focus || cfg[side].focus, inten: o.inten || cfg[side].inten, src: o.focus || o.inten ? 'group' : 'team' };
+  };
+  proto.trainGroupInfo = function () {
+    const cfg = this.trainCfg(), t = this.S.userTeam, pl = this.players(t), out = [];
+    for (const side of ['B', 'P']) for (const k of Object.keys(GROUPS[side])) { const o = (cfg.groups || {})[k] || {}; out.push({ key: k, side, name: GROUPS[side][k], n: pl.filter(p => sideOf(p) === side && this.trainGroupOf(p) === k).length, focus: o.focus || cfg[side].focus, inten: o.inten || cfg[side].inten, ownFocus: !!o.focus, ownInten: !!o.inten }); }
+    return out;
+  };
+  proto.setTrainGroup = function (g, k, v) {
+    const side = groupSide(g); if (!GROUPS[side][g]) return '알 수 없는 그룹입니다.'; if (k !== 'focus' && k !== 'inten') return '잘못된 설정입니다.';
+    const cfg = this.trainCfg(); cfg.groups = Object.assign({}, cfg.groups); const o = Object.assign({}, cfg.groups[g]);
+    if (v === 'inherit') delete o[k]; else { if (k === 'focus' && !FOC[side][v]) return '이 그룹에 맞지 않는 훈련입니다.'; if (k === 'inten' && !INT[v]) return '잘못된 강도입니다.'; o[k] = v; }
+    if (Object.keys(o).length) cfg.groups[g] = o; else delete cfg.groups[g];
+    this._trainSave(cfg); this._trainLog(`${GROUPS[side][g]} ${k === 'focus' ? '집중 분야 → ' + (v === 'inherit' ? '팀 설정 따름' : FOC[side][v].n) : '강도 → ' + (v === 'inherit' ? '팀 설정 따름' : INT_KO[v])}`); this.invalidate(); return null;
+  };
   /* ---------------- 일일 누적 ---------------- */
   proto._trainAcc = function () {
     const S = this.S, a = S.trainAcc = S.trainAcc || { total: 0 };
@@ -77,12 +102,14 @@
   };
   proto._trainDay = function () {
     const S = this.S; if (S.phase !== 'regular' && S.phase !== 'preseason') return;
-    const cfg = this.trainCfg(), a = this._trainAcc(); a.total++;
-    for (const side of ['B', 'P']) a[side][cfg[side].focus] = (a[side][cfg[side].focus] || 0) + (INT[cfg[side].inten] || 1);
+    const cfg = this.trainCfg(), a = this._trainAcc();
+    if (!a.g) { a.g = {}; for (const side of ['B', 'P']) for (const k of Object.keys(GROUPS[side])) a.g[k] = Object.assign({}, a[side] || {}); }   // 그룹 누적: 처음 만들 때까지의 팀 누적을 그대로 복사(그룹을 따로 정하지 않았다면 팀 누적과 같다)
+    a.total++;
+    for (const side of ['B', 'P']) { a[side][cfg[side].focus] = (a[side][cfg[side].focus] || 0) + (INT[cfg[side].inten] || 1); for (const k of Object.keys(GROUPS[side])) { const o = (cfg.groups || {})[k] || {}, f = o.focus || cfg[side].focus, it = o.inten || cfg[side].inten; a.g[k][f] = (a.g[k][f] || 0) + (INT[it] || 1); } }
     for (const id of S.trainTrack || []) {   // 개별 훈련 슬롯에 들어간 적이 있는 선수는 자기 누적을 따로 센다
       const p = S.players[id]; if (!p || p.team !== S.userTeam || !p.tr || p.tr.y !== S.year) continue; p.tr.total++;
       if (this.isInj(p)) continue;   // 부상 기간에는 훈련 효과가 쌓이지 않는다
-      const sl = cfg.slots.find(x => x.id === id), side = sideOf(p), f = sl ? sl.focus : cfg[side].focus, it = sl ? sl.inten : cfg[side].inten; p.tr.acc[f] = (p.tr.acc[f] || 0) + (INT[it] || 1);
+      const ef = this.trainEffCfg(p, cfg), f = ef.focus, it = ef.inten; p.tr.acc[f] = (p.tr.acc[f] || 0) + (INT[it] || 1);
     }
   };
 
@@ -96,6 +123,7 @@
   proto._trainShares = function (p) {
     const S = this.S, a = this._trainAcc(), side = sideOf(p);
     if (p.tr && p.tr.y === S.year && p.tr.total > 0) return { acc: p.tr.acc, total: p.tr.total };
+    const gk = this.trainGroupOf(p); if (a.g && a.g[gk]) return { acc: a.g[gk], total: a.total };
     return { acc: a[side] || {}, total: a.total };
   };
   proto._trainEff = function (p) {
@@ -112,13 +140,13 @@
   };
   proto._trainMult = function (p) { return this._trainEff(p).mult; };
   proto._trainInjFor = function (p) {
-    const cfg = this.trainCfg(), side = sideOf(p), sl = cfg.slots.find(x => x.id === p.id), f = sl ? sl.focus : cfg[side].focus, it = sl ? sl.inten : cfg[side].inten;
+    const ef = this.trainEffCfg(p), f = ef.focus, it = ef.inten;
     return (INT_INJ[it] || 1) * (f === 'cond' ? 0.88 : 1);
   };
   proto._trainInj = function () { const c = this.trainCfg(), v = s => (INT_INJ[c[s].inten] || 1) * (c[s].focus === 'cond' ? 0.88 : 1); return (v('B') + v('P')) / 2; };
   proto.trainRisk = function (p) {   // 훈련으로 인한 부상 위험(기본 대비 %)과 사유
     const cfg = this.trainCfg(), side = sideOf(p), sl = cfg.slots.find(x => x.id === p.id), m = this._trainInjFor(p), pct = Math.round((m - 1) * 100), why = [];
-    if (sl && sl.inten === 'heavy') why.push('개별 훈련 강하게'); else if (!sl && cfg[side].inten === 'heavy') why.push(`${side === 'B' ? '타자' : '투수'} 팀 훈련 강하게`);
+    { const ef = this.trainEffCfg(p, cfg); if (ef.inten === 'heavy') why.push(ef.src === 'slot' ? '개별 훈련 강하게' : ef.src === 'group' ? `${GROUPS[side][this.trainGroupOf(p)]} 훈련 강하게` : `${side === 'B' ? '타자' : '투수'} 팀 훈련 강하게`); }
     if (p.age >= 33) why.push(`${p.age}세 고령(기본 위험 +30%)`); if (p.age <= 24) why.push('젊은 선수(기본 위험 −10%)'); if ((p.fat || 0) >= 35) why.push('피로 누적');
     const lvl = pct >= 15 && p.age >= 33 ? 'high' : pct >= 15 || (p.fat || 0) >= 35 && pct > 0 ? 'mid' : pct < 0 ? 'low' : 'normal';
     return { pct, level: lvl, why, mult: m };
@@ -135,7 +163,8 @@
   };
   proto.trainPreview = function () {   // 지금 설정을 시즌 끝까지 유지했을 때의 연말 성장 보정(추정)
     const S = this.S, a = this._trainAcc(), cfg = this.trainCfg(), left = Math.max(0, SEASON_DAYS - a.total), out = {};
-    const save = S.trainAcc, proj = JSON.parse(JSON.stringify(save)); proj.total += left; for (const side of ['B', 'P']) proj[side][cfg[side].focus] = (proj[side][cfg[side].focus] || 0) + left * (INT[cfg[side].inten] || 1);
+    const save = S.trainAcc, proj = JSON.parse(JSON.stringify(save)); if (!proj.g) { proj.g = {}; for (const side of ['B', 'P']) for (const k of Object.keys(GROUPS[side])) proj.g[k] = Object.assign({}, proj[side] || {}); } proj.total += left;
+    for (const side of ['B', 'P']) { proj[side][cfg[side].focus] = (proj[side][cfg[side].focus] || 0) + left * (INT[cfg[side].inten] || 1); for (const k of Object.keys(GROUPS[side])) { const o = (cfg.groups || {})[k] || {}, f = o.focus || cfg[side].focus, it = o.inten || cfg[side].inten; proj.g[k][f] = (proj.g[k][f] || 0) + left * (INT[it] || 1); } }
     S.trainAcc = proj;
     try {
       for (const side of ['B', 'P']) {
@@ -160,7 +189,7 @@
     cfg.slots.push({ id, focus, inten }); this._trainSave(cfg); this._slotTrack(p); this._trainLog(`${p.ko} 개별 훈련 시작: ${FOC[side][focus].n}(${INT_KO[inten]})`); this.invalidate(); return null;
   };
   proto._slotTrack = function (p) {   // 슬롯에 들어간 시점까지의 팀 누적을 복사해 이후는 개별로 센다
-    const S = this.S, a = this._trainAcc(), side = sideOf(p); if (p.tr && p.tr.y === S.year) return; p.tr = { y: S.year, total: a.total, acc: Object.assign({}, a[side] || {}) }; S.trainTrack = S.trainTrack || []; if (!S.trainTrack.includes(p.id)) S.trainTrack.push(p.id);
+    const S = this.S, a = this._trainAcc(), side = sideOf(p); if (p.tr && p.tr.y === S.year) return; p.tr = { y: S.year, total: a.total, acc: Object.assign({}, (a.g && a.g[this.trainGroupOf(p)]) || a[side] || {}) }; S.trainTrack = S.trainTrack || []; if (!S.trainTrack.includes(p.id)) S.trainTrack.push(p.id);
   };
   proto.slotSet = function (id, k, v) {
     const cfg = this.trainCfg(), sl = cfg.slots.find(x => x.id === id), p = this.S.players[id]; if (!sl || !p) return '개별 훈련 중인 선수가 아닙니다.'; const side = sideOf(p);
@@ -177,6 +206,30 @@
     return out.sort((a, b) => b.sc - a.sc).slice(0, 8);
   };
 
+  /* ---------------- 약점 보완 훈련 ----------------
+     선수의 세부 능력(컨택·선구·구위·제구 등)을 같은 유형 리그 평균과 비교해 가장 뒤처진 항목을 찾고, 그 능력치를 키우는 개별 훈련(집중 분야)을 추천한다.
+     효과는 기존 개별 훈련과 같은 규칙(집중 분야 가중·코치 보정)이며, 약점 보완으로 시작하면 슬롯에 '약점 보완: ○○'가 표시된다. */
+  const WEAK_MAP = { B: { '컨택': 'contact', '타구질': 'contact', '선구': 'eye', '파워': 'power', '장타': 'power', '주력': 'run', '수비': 'def' }, P: { '구위': 'stuff', '피홈런': 'stuff', '제구': 'control', '타구억제': 'control', '체력': 'stamina' } };
+  proto._leagueSubAvg = function (type) {
+    const S = this.S, key = type + '|' + S.year + '|' + S.day; if (this._lsa && this._lsa.key === key) return this._lsa.v;
+    const sum = {}, cnt = {}; for (const p of Object.values(S.players)) { if (p.type !== type || !(p.team in S.teams) || p.foreign) continue; const sub = this.sub(p); for (const k in sub) { sum[k] = (sum[k] || 0) + sub[k]; cnt[k] = (cnt[k] || 0) + 1; } }
+    const v = {}; for (const k in sum) v[k] = sum[k] / cnt[k]; this._lsa = { key, v }; return v;
+  };
+  proto.trainWeakness = function (p) {   // 이 선수의 약점 순위(리그 평균 대비 격차가 큰 순): [{ stat, focus, val, avg, gap }]
+    if (!p || (p.type !== 'B' && p.type !== 'P')) return []; const sub = this.sub(p), avg = this._leagueSubAvg(p.type), map = WEAK_MAP[p.type], seen = {}, out = [];
+    for (const k of Object.keys(map)) { if (sub[k] === undefined || avg[k] === undefined) continue; const f = map[k], gap = avg[k] - sub[k]; if (!seen[f] || gap > seen[f].gap) seen[f] = { stat: k, focus: f, val: Math.round(sub[k]), avg: Math.round(avg[k]), gap: Math.round(gap * 10) / 10 }; }
+    for (const f of Object.keys(seen)) out.push(seen[f]); return out.sort((a, b) => b.gap - a.gap);
+  };
+  proto.trainWeakList = function (n) {   // 팀에서 약점 보완 효과가 클 선수: 약점 격차 × 나이 계수(젊을수록 큼)
+    const S = this.S, t = S.userTeam, inSlot = new Set(this.trainSlots().map(x => x.id)), out = [];
+    for (const p of this.players(t)) { if (p.foreign || inSlot.has(p.id) || this.isInj(p) || p.age > 32) continue; const w = this.trainWeakness(p)[0]; if (!w || w.gap < 4) continue;
+      const af = p.age <= 25 ? 1.3 : p.age <= 29 ? 1 : p.age <= 31 ? 0.6 : 0.4; out.push({ p, w, score: w.gap * af, why: `${w.stat} ${w.val} (리그 평균 ${w.avg}) — 약점` }); }
+    return out.sort((a, b) => b.score - a.score).slice(0, n || 8);
+  };
+  proto.slotAddWeak = function (id, focus) {   // 약점을 겨냥한 개별 훈련 시작(focus를 주지 않으면 가장 큰 약점, 강도는 보통)
+    const p = this.S.players[id]; if (!p) return '선수를 찾을 수 없습니다.'; const ws = this.trainWeakness(p), w = focus ? ws.find(x => x.focus === focus) : ws[0]; if (!w) return '보완할 약점을 찾지 못했습니다.';
+    const e = this.slotAdd(id, w.focus, 'normal'); if (e) return e; const cfg = this.trainCfg(); cfg.slots = cfg.slots.map(x => x.id === id ? Object.assign({}, x, { weak: w.stat }) : x); this._trainSave(cfg); return null;
+  };
   /* ---------------- 프리셋 ---------------- */
   const BUILTIN = [
     { id: 'b_bal', name: '균형 육성', cfg: { B: { focus: 'all', inten: 'normal' }, P: { focus: 'all', inten: 'normal' } }, tip: '타자·투수 모두 종합 훈련(보통)' },
@@ -188,13 +241,13 @@
   proto.trainPresets = function () { return BUILTIN.map(x => Object.assign({ builtin: true }, x)).concat((this.S.trainPresets || []).map(x => Object.assign({ builtin: false }, x))); };
   proto.applyTrainPreset = function (id) {
     const pr = this.trainPresets().find(x => x.id === id); if (!pr) return '프리셋을 찾을 수 없습니다.'; const cfg = this.trainCfg();
-    cfg.B = Object.assign({}, pr.cfg.B); cfg.P = Object.assign({}, pr.cfg.P); if (pr.cfg.slots) { cfg.slots = []; for (const s of pr.cfg.slots) if (this.S.players[s.id] && this.S.players[s.id].team === this.S.userTeam && cfg.slots.length < this.slotLimit()) { cfg.slots.push(Object.assign({}, s)); this._slotTrack(this.S.players[s.id]); } }
+    cfg.B = Object.assign({}, pr.cfg.B); cfg.P = Object.assign({}, pr.cfg.P); cfg.groups = JSON.parse(JSON.stringify(pr.cfg.groups || {})); if (pr.cfg.slots) { cfg.slots = []; for (const s of pr.cfg.slots) if (this.S.players[s.id] && this.S.players[s.id].team === this.S.userTeam && cfg.slots.length < this.slotLimit()) { cfg.slots.push(Object.assign({}, s)); this._slotTrack(this.S.players[s.id]); } }
     this._trainSave(cfg); this._trainLog(`프리셋 적용: ${pr.name}`); return null;
   };
   proto.saveTrainPreset = function (name) {
     const S = this.S; name = String(name || '').trim().slice(0, 12); if (!name) return '이름을 입력하세요.'; S.trainPresets = S.trainPresets || []; if (S.trainPresets.length >= 3) return '내 프리셋은 3개까지 저장할 수 있습니다.';
     if (S.trainPresets.some(x => x.name === name) || BUILTIN.some(x => x.name === name)) return '같은 이름의 프리셋이 있습니다.'; const cfg = this.trainCfg();
-    S.trainPresets.push({ id: 'u' + (S.trainPresetSeq = (S.trainPresetSeq || 0) + 1), name, cfg: { B: Object.assign({}, cfg.B), P: Object.assign({}, cfg.P), slots: this.trainSlots().map(x => Object.assign({}, x)) } }); return null;
+    S.trainPresets.push({ id: 'u' + (S.trainPresetSeq = (S.trainPresetSeq || 0) + 1), name, cfg: { B: Object.assign({}, cfg.B), P: Object.assign({}, cfg.P), groups: JSON.parse(JSON.stringify(cfg.groups || {})), slots: this.trainSlots().map(x => Object.assign({}, x)) } }); return null;
   };
   proto.deleteTrainPreset = function (id) { const S = this.S; const n = (S.trainPresets || []).length; S.trainPresets = (S.trainPresets || []).filter(x => x.id !== id); return S.trainPresets.length === n ? '삭제할 수 없습니다.' : null; };
 
