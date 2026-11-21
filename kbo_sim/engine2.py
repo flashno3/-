@@ -18,7 +18,8 @@ STINT={'Matt Davidson 데이비슨':[('Dinos',1,60,0.93),('Heroes',61,144,0.81)]
        'Ah-seop Son 손아섭':[('Bears',1,144,54/144)],'Seung Min Ryu 류승민':[('Bears',1,144,43/144)],
        'Jeong-bum Lee 이정범':[('Wiz',1,144,9/144)]}
 PMOVE={'Hyeong-beom Lee 이형범':[('Tigers',1,95),('Eagles',96,144)]}
-ENV={'gdp':0.185,'sf':0.40,'adv13':0.33,'sc2on1':0.65,'sc1on2':0.48,'roe':0.016,'hrs':0.88,'wp':0.0215,'sb_mult':1.6,'prod':0.30}
+TTO=[[1.0806,0.9732,0.9183,0.9826],[0.9766,1.0092,1.0495,0.9969],[0.9189,1.0248,1.0495,1.0280]]
+ENV={'gdp':0.185,'sf':0.40,'adv13':0.33,'sc2on1':0.65,'sc1on2':0.48,'roe':0.016,'hrs':0.88,'bbs':1.02,'hfa':0.0075,'wp':0.0215,'sb_mult':1.6,'prod':0.30}
 odds=lambda p:p/(1-p)
 def comb(pb,pp,pl):
     o=odds(pb)*odds(pp)/odds(pl);return o/(1+o)
@@ -79,9 +80,18 @@ def def_mods(team,assign):
             rr=fr['range'] if fr else 50;avg=F['team_avg_range'][team].get(pos,50);s+=WD[pos]*(rr-avg)/10
         er=fr['err_reg'] if fr else ERRLG[pos];e+=SHARE[pos]*er/ERRLG[pos];wsum+=SHARE[pos]
     return TEAMDEF.get(team,0.0)-K2*s,e/wsum,cs
-def pa(b,p,rng,dm):
+def home_mod(sgn):
+    h=ENV['hfa']
+    return {'babip':1+sgn*h,'hr':1+sgn*2.5*h,'bb':1+sgn*0.5*h,'k':1.0} if h else None
+def mul_mod(a,t):
+    return {'k':(a['k'] if a else 1)*t[0],'bb':(a['bb'] if a else 1)*t[1],'hr':(a['hr'] if a else 1)*t[2],'babip':(a['babip'] if a else 1)*t[3]}
+def pa(b,p,rng,dm,mod=None):
     bp,pp=b.p,p.p
-    k=comb(bp['k'],pp['k'],LB['k']);bb=comb(bp['bb'],pp['bb'],LB['bb']);hbp=comb(bp['hbp'],pp['hbp'],LB['hbp']);hr=comb(bp['hr'],pp['hr'],LB['hr'])*CURPF['hr']*ENV['hrs']
+    k=comb(bp['k'],pp['k'],LB['k']);bb=comb(bp['bb'],pp['bb'],LB['bb'])*ENV['bbs'];hbp=comb(bp['hbp'],pp['hbp'],LB['hbp']);hr=comb(bp['hr'],pp['hr'],LB['hr'])*CURPF['hr']*ENV['hrs']
+    if mod:
+        if mod.get('k'): k*=mod['k']
+        if mod.get('bb'): bb*=mod['bb']
+        if mod.get('hr'): hr*=mod['hr']
     r=rng.random()
     if r<k: return 'K'
     r-=k
@@ -91,6 +101,7 @@ def pa(b,p,rng,dm):
     r-=hbp
     if r<hr: return 'HR'
     babip=comb(bp['babip'],pp['babip'],LB['babip']);babip=comb(babip,LB['babip']+dm[0]+BOFF,LB['babip'])
+    if mod and mod.get('babip'): babip*=mod['babip']
     xb=bp['xbh'];tr=bp['tri']
     p1=babip*(1-xb)*CURPF['b1'];p2=babip*xb*(1-tr)*CURPF['b2'];p3=babip*xb*tr*CURPF['b3'];x=rng.random()
     if x<p1: return '1B'
@@ -102,7 +113,7 @@ class StaffState:
     def __init__(s,S,rng):
         st=[p for p in S if p.GS>0];s.rel=[p for p in S if p.relief_ip>1] or S
         s.sp=rng.choices(st,[p.GS for p in st])[0];s.sp_outs=max(3,int(rng.gauss(s.sp.ipgs*3,4)))
-        s.cur=s.sp;s.o=0;s.runs=0;s.rng=rng;s.used={s.sp.name}
+        s.cur=s.sp;s.o=0;s.runs=0;s.rng=rng;s.used={s.sp.name};s.bf=0
     def end_inning(s):
         s.o+=3
         if s.cur is s.sp:
@@ -111,7 +122,7 @@ class StaffState:
     def change(s):
         el=[p for p in s.rel if p.name not in s.used] or s.rel
         s.cur=s.rng.choices(el,[p.relief_ip for p in el])[0];s.used.add(s.cur.name);s.o=0
-def half(L,idx,ss,rng,stats,dm,limit=None):
+def half(L,idx,ss,rng,stats,dm,limit=None,mod=None):
     outs=0;bases=[None,None,None];runs=0
     while outs<3:
         p=ss.cur;b=L[idx%9];idx+=1
@@ -123,7 +134,10 @@ def half(L,idx,ss,rng,stats,dm,limit=None):
             stats['WP']+=1
             if bases[2]: runs+=1
             bases=[None,bases[0],bases[1]]
-        e=pa(b,p,rng,dm);stats['PA']+=1;stats[e]+=1
+        m=mod
+        if ss.cur is ss.sp:
+            m=mul_mod(m,TTO[min(2,ss.bf//9)]);ss.bf+=1
+        e=pa(b,p,rng,dm,m);stats['PA']+=1;stats[e]+=1
         if TRACK:
             c=PLAYER[b.key];c['PA']+=1;c[e]+=1
         if e=='K': outs+=1
@@ -175,10 +189,10 @@ def game(home,away,gh,ga,rng,stats):
     dmH=def_mods(home,AH);dmA=def_mods(away,AA)
     rh=ra=0;ih=ia=0
     for inn in range(1,12):
-        r,ia=half(LA,ia,SH,rng,stats,dmH);ra+=r;SH.end_inning()
+        r,ia=half(LA,ia,SH,rng,stats,dmH,mod=home_mod(-1));ra+=r;SH.end_inning()
         if inn>=9 and rh>ra: break
         lim=(ra-rh) if inn>=9 else None
-        r,ih=half(LH,ih,SA,rng,stats,dmA,limit=lim);rh+=r;SA.end_inning()
+        r,ih=half(LH,ih,SA,rng,stats,dmA,limit=lim,mod=home_mod(1));rh+=r;SA.end_inning()
         if inn>=9 and rh!=ra: break
     PARKR[PARKNAME[home]][0]+=rh+ra;PARKR[PARKNAME[home]][1]+=1
     return rh,ra

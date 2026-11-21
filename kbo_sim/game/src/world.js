@@ -483,11 +483,11 @@
     const ctx = this.startUserGame(g, idx), live = ctx.live, osp = live.staff[oppSide].sp; if (!osp) return null;
     const dm = live.dm[oppSide], pf = (E.pfs && E.pfs[home]) || null;
     const tn = this.tonightOf(), spec = ctx.prep.spec, src = tn ? 'tonight' : ctx.prep.presetUsed ? 'preset' : 'set';
-    const batters = spec.map(x => E.batById[x.id]), probs = batters.map(b => E.paProbs(b, osp, dm, home));
+    const hm = E.homeMod ? E.homeMod(userSide === 'home' ? 1 : -1) : null, batters = spec.map(x => E.batById[x.id]), probs = batters.map(b => E.paProbs(b, osp, dm, home, hm));   // 홈 어드밴티지 반영
     const EN = E.env, INN = 9, TRsp = buildTrans(probs, EN);
     // 상대 불펜: 구원 투수들의 타석 확률을 구원 이닝 비중으로 평균(선발 강판 이후 이닝에 사용). spAll 이면 선발이 끝까지 던진다고 가정(검증용)
     const rel = live.staff[oppSide].rel || [], rw = rel.reduce((a, x) => a + (x.relief_ip || 1), 0) || 1;
-    const penProbs = batters.map(b => { const o = {}; for (const k of EVK) o[k] = 0; for (const x of rel) { const pr = E.paProbs(b, x, dm, home), q = (x.relief_ip || 1) / rw; for (const k of EVK) o[k] += pr[k] * q; } return o; });
+    const penProbs = batters.map(b => { const o = {}; for (const k of EVK) o[k] = 0; for (const x of rel) { const pr = E.paProbs(b, x, dm, home, hm), q = (x.relief_ip || 1) / rw; for (const k of EVK) o[k] += pr[k] * q; } return o; });
     const TRs = opt && opt.spAll || !rel.length ? [TRsp] : [TRsp, buildTrans(penProbs, EN)];
     // 선발 소화 이닝: 엔진과 같은 분포(평균 ipgs×3 아웃, 표준편차 4아웃)에서 k이닝을 선발이 시작할 확률
     const mu = (osp.ipgs || 5.2) * 3, Phi = z => 0.5 * (1 + (z < 0 ? -1 : 1) * Math.sqrt(1 - Math.exp(-2 * z * z / Math.PI)));

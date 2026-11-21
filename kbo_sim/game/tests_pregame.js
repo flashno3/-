@@ -13,10 +13,10 @@ const userGame=(L,away)=>{for(let i=0;i<80;i++){const rd=L.S.schedule[L.S.day],g
   const gm=new E.LiveGame({home,away,lineups:{away:ul,home:ol},staff:st,rng:r,maxInn:9,penal:{away:true},fatigue:false});gm.step();const x=gm.log.find(y=>y.k==='PA');cnt[x.e]=(cnt[x.e]||0)+1}
  for(const k of Object.keys(pr)){const f=(cnt[k]||0)/N,se=Math.sqrt(pr[k]*(1-pr[k])/N);ok(Math.abs(f-pr[k])<=4.5*se+0.002,`첫 타석 ${k}: 엔진 ${f.toFixed(4)} vs 모델 ${pr[k].toFixed(4)}`)}
  // 2) 기대 득점 모델 vs 엔진 몬테카를로(도루·폭투 끔, 상대 선발이 9회까지 던지는 조건 — 모델과 같은 가정)
- const envSave={sb:E.env.sb_mult,wp:E.env.wp};E.env.sb_mult=0;E.env.wp=0;
+ const envSave={sb:E.env.sb_mult,wp:E.env.wp,tto:E.env.tto};E.env.sb_mult=0;E.env.wp=0;E.env.tto=0;   // 선발 9이닝 가정 검증은 3바퀴째 효과 없이(선발 평균 이닝 구조에서만 평균이 맞도록 정규화되어 있음)
  const mc=sp=>{let tot=0,M=5000;for(let i=0;i<M;i++){const r=rngFor(99,i,1,2),st={away:new E.StaffState(E.staff(away,1+S.day),r,E.pitById[c.prep.sp.id]),home:new E.StaffState(E.staff(home,1+S.day),r,E.pitById[spId])};st.home.change=function(){};
   const gm=new E.LiveGame({home,away,lineups:{away:E.makeLineup(sp),home:ol},staff:st,rng:r,maxInn:9,penal:{away:true},fatigue:false});let k=0;while(!gm.finished&&k++<4000)gm.step();gm.inns.slice(0,9).forEach(x=>tot+=x[0])}return tot/M};
- const m1=mc(spec);E.env.sb_mult=envSave.sb;E.env.wp=envSave.wp;ok(E.env.sb_mult===envSave.sb,'환경 복원');
+ const m1=mc(spec);E.env.tto=envSave.tto;E.env.sb_mult=envSave.sb;E.env.wp=envSave.wp;ok(E.env.sb_mult===envSave.sb,'환경 복원');
  ok(Math.abs(m1-pg.curExp)<0.12,`기대 득점 모델 ${pg.curExp.toFixed(3)} vs 엔진 ${m1.toFixed(3)}`);
  {const pb=L.preGame();E.env.sb_mult=0;E.env.wp=0;let tot=0,M=6000;for(let i=0;i<M;i++){const r=rngFor(77,i,1,2),st={away:new E.StaffState(E.staff(away,1+S.day),r,E.pitById[c.prep.sp.id]),home:new E.StaffState(E.staff(home,1+S.day),r,E.pitById[spId])};
   const gm=new E.LiveGame({home,away,lineups:{away:E.makeLineup(spec),home:ol},staff:st,rng:r,maxInn:9,penal:{away:true},fatigue:false});let k=0;while(!gm.finished&&k++<4000)gm.step();gm.inns.slice(0,9).forEach(x=>tot+=x[0])}

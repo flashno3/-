@@ -562,6 +562,12 @@
     if (after > cap + 1e-9 && after > before + 1e-9) return `경쟁균형세 상한(${cap.toFixed(1)}억)을 넘게 되어 영입할 수 없습니다(상위 40명 합계 ${before} → ${after}억). 1~2년 상한을 깨고 우승에 도전하는 시즌이라면 경쟁균형세 카드에서 '상한 초과 영입 허용'을 켜세요(초과분 기금 납부·연속 초과 시 지명권 하락).`;
     return null;
   };
+  proto.capBlockTrade = function (t, incoming, outgoing) {   // 트레이드로 받는 선수(보수 합 증가)가 상위 40명 합계를 상한 위로 올리면 막는다(FA 영입과 같은 규칙·같은 허용 토글)
+    const S = this.S; if (S.cbt && S.cbt.allowOver) return null; const next = S.phase === 'offseason', y = S.year + (next ? 1 : 0), cap = this.cbtCap(y), exc = this.cbtExc(t), eid = exc ? exc.id : null, k = S.calib.cbtK || 1, out = new Set(outgoing.map(p => p.id));
+    const base = this.players(t).filter(q => q.rookie !== y && !q.foreign).map(q => ({ id: q.id, v: this.cbtVal(q) * (q.id === eid ? 0.5 : 1) })), top = a => Math.round(a.slice().sort((x, z) => z - x).slice(0, 40).reduce((u, v) => u + v, 0) * k * 10) / 10;
+    const before = top(base.map(x => x.v)), after = top(base.filter(x => !out.has(x.id)).map(x => x.v).concat(incoming.filter(q => q.rookie !== y && !q.foreign).map(q => this.cbtVal(q))));
+    return after > cap + 1e-9 && after > before + 1e-9 ? `경쟁균형세 상한(${cap.toFixed(1)}억)을 넘게 되어 트레이드할 수 없습니다(상위 40명 합계 ${before} → ${after}억). 1~2년 상한을 깨고 우승에 도전하는 시즌이라면 경쟁균형세 카드에서 '상한 초과 영입 허용'을 켜세요.` : null;
+  };
   proto.setAllowOver = function (on) { const S = this.S; S.cbt = S.cbt || { over: {}, under: {}, drop: {}, fees: {}, log: [] }; S.cbt.allowOver = !!on; return null; };
   proto._compPay = function (signer, old, amt, label) {
     const S = this.S; amt = Math.round(amt * 10) / 10; if (!amt || !S.fin) return;
@@ -1343,6 +1349,7 @@
     const aiN = S.teams[aiTeam].ids.length - tp.length + gp.length, myN = S.teams[me].ids.length + tp.length - gp.length;
     if (aiN > ROSTER_MAX || myN > ROSTER_MAX) return { ok: false, why: `보유 선수 ${ROSTER_MAX}명 제한을 넘습니다.` };
     if (aiN < ROSTER_MIN || myN < ROSTER_MIN) return { ok: false, why: `보유 선수 최소 ${ROSTER_MIN}명이 필요합니다.` };
+    { const cb = this.capBlockTrade(me, tp, gp); if (cb) return { ok: false, why: cb }; }   // 내 구단도 FA 영입과 같은 상한 규칙
     // AI 구단은 트레이드로 상한을 넘기지 않는다
     const aiPay = this.cbtPay(aiTeam) + (S.calib.cbtK || 1) * (gp.reduce((a, p) => a + (p.rookie === S.year || p.foreign ? 0 : p.contract.salary), 0) - tp.reduce((a, p) => a + (p.rookie === S.year || p.foreign ? 0 : p.contract.salary), 0));
     if (aiPay > this.cbtCap() && aiPay > this.cbtPay(aiTeam)) return { ok: false, why: `${aiTeam} 구단이 연봉 상한(${this.cbtCap()}억)을 넘게 되어 수락하지 않습니다.` };

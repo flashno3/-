@@ -80,7 +80,10 @@
   const PARKNAME = { Bears: '잠실', Twins: '잠실', Heroes: '고척', Landers: '문학', Wiz: '수원', Eagles: '대전', Tigers: '광주', Giants: '사직', Dinos: '창원', Lions: '대구' };
   const ORDER = ['C', 'SS', 'CF', '2B', '3B', '1B', 'LF', 'RF'];
   const WD = { '2B': .18, 'SS': .22, '3B': .16, '1B': .07, 'LF': .10, 'CF': .17, 'RF': .10 };
-  const ENV = { gdp: 0.185, sf: 0.40, adv13: 0.33, sc2on1: 0.65, sc1on2: 0.48, roe: 0.016, hrs: 0.88, wp: 0.0215, sb_mult: 1.6, prod: 0.30 };
+  const ENV = { gdp: 0.185, sf: 0.40, adv13: 0.33, sc2on1: 0.65, sc1on2: 0.48, roe: 0.016, hrs: 0.88, bbs: 1.02, hfa: 0.0075, tto: [[1.0806, 0.9732, 0.9183, 0.9826], [0.9766, 1.0092, 1.0495, 0.9969], [0.9189, 1.0248, 1.0495, 1.0280]], wp: 0.0215, sb_mult: 1.6, prod: 0.30 };
+  /* 홈 어드밴티지(ENV.hfa): 홈팀 타자는 타구 질·홈런·볼넷을 올리고 원정팀은 같은 폭만큼 내린다(리그 평균 불변, 홈 승률 보정). 3바퀴째 효과(ENV.tto): 선발 투수를 상대하는 누적 타자 수(1~9 · 10~18 · 19~)별 삼진·볼넷·홈런·BABIP 배율 [k, bb, hr, babip] */
+  const homeMod = sgn => ENV.hfa ? { babip: 1 + sgn * ENV.hfa, hr: 1 + sgn * 2.5 * ENV.hfa, bb: 1 + sgn * 0.5 * ENV.hfa } : null;   // sgn +1 홈 / −1 원정(리그 평균은 그대로, 홈-원정 격차만 만든다)
+  const mulMod = (a, t) => ({ k: (a && a.k || 1) * t[0], bb: (a && a.bb || 1) * t[1], hr: (a && a.hr || 1) * t[2], babip: (a && a.babip || 1) * t[3] });
   const K2 = 0.004, BOFF = 0.003;
   // 좌우 매치업(플래툰). 단위 u: 타자 입장에서 유리할수록 +. 타자 유형별 평균 노출(투수 우투 약 72%)을 빼서 리그 평균은 변하지 않게 맞춘다.
   const PL = { dk: -0.07, dbb: 0.035, dhr: 0.16, dbabip: 0.02 };
@@ -190,7 +193,7 @@
 
     function pa(b, p, rng, dm, mod) {
       const bp = b.p, pp = p.p;
-      let k = comb(bp.k, pp.k, LB.k), bb = comb(bp.bb, pp.bb, LB.bb); const hbp = comb(bp.hbp, pp.hbp, LB.hbp); let hr = comb(bp.hr, pp.hr, LB.hr) * CURPF.hr * ENV.hrs;
+      let k = comb(bp.k, pp.k, LB.k), bb = comb(bp.bb, pp.bb, LB.bb) * ENV.bbs; const hbp = comb(bp.hbp, pp.hbp, LB.hbp); let hr = comb(bp.hr, pp.hr, LB.hr) * CURPF.hr * ENV.hrs;
       const pm = M.platoon ? platoonMod(b, p) : null;
       if (pm) { k *= pm.k; bb *= pm.bb; hr *= pm.hr; }
       if (mod) { if (mod.k) k *= mod.k; if (mod.bb) bb *= mod.bb; if (mod.hr) hr *= mod.hr; }
@@ -215,7 +218,7 @@
       const save = CURPF; if (home && PFS[home]) CURPF = PFS[home];
       try {
         const bp = b.p, pp = p.p;
-        let k = comb(bp.k, pp.k, LB.k), bb = comb(bp.bb, pp.bb, LB.bb); const hbp = comb(bp.hbp, pp.hbp, LB.hbp); let hr = comb(bp.hr, pp.hr, LB.hr) * CURPF.hr * ENV.hrs;
+        let k = comb(bp.k, pp.k, LB.k), bb = comb(bp.bb, pp.bb, LB.bb) * ENV.bbs; const hbp = comb(bp.hbp, pp.hbp, LB.hbp); let hr = comb(bp.hr, pp.hr, LB.hr) * CURPF.hr * ENV.hrs;
         const pm = M.platoon ? platoonMod(b, p) : null;
         if (pm) { k *= pm.k; bb *= pm.bb; hr *= pm.hr; }
         if (mod) { if (mod.k) k *= mod.k; if (mod.bb) bb *= mod.bb; if (mod.hr) hr *= mod.hr; }
@@ -315,7 +318,8 @@
         bases[2] = bases[1]; bases[1] = bases[0]; bases[0] = null;
         if (h.log) h.log.push({ k: 'WP' });
       }
-      const e = pa(b, p, rng, dm, h.mod); stats.PA++; stats[e]++;
+      let mod = h.mod; if (ss.cur === ss.sp) { const n = ss.bf || 0; if (ENV.tto) mod = mulMod(mod, ENV.tto[Math.min(2, Math.floor(n / 9))]); ss.bf = n + 1; }   // 선발 상대 타자 수(3바퀴째 효과)
+      const e = pa(b, p, rng, dm, mod); stats.PA++; stats[e]++;
       const tc = track(b, e), rb = h.runs, oa = h.outs;
       const sig = applyEvent(h, e, b, rng, stats, tc);
       if (e !== 'ROE' && sig !== 'CONT') tc.RBI += h.runs - rb;
@@ -326,8 +330,8 @@
       return h.limit !== null && h.runs > h.limit;
     }
 
-    function half(L, idx, ss, rng, stats, dm, limit) {
-      const h = { L, idx, outs: 0, bases: [null, null, null], runs: 0, limit, log: null };
+    function half(L, idx, ss, rng, stats, dm, limit, mod) {
+      const h = { L, idx, outs: 0, bases: [null, null, null], runs: 0, limit, log: null, mod: mod || undefined };
       while (h.outs < 3) { if (advance(h, ss, rng, stats, dm)) break; }
       ss.runs += h.runs;
       return [h.runs, h.idx];
@@ -342,11 +346,11 @@
       const dmH = defMods(home, AH), dmA = defMods(away, AA);
       let rh = 0, ra = 0, ih = 0, ia = 0; const inns = [];
       for (let inn = 1; inn <= maxInn; inn++) {
-        let r; [r, ia] = half(LA, ia, SHh, rng, stats, dmH, null); ra += r; SHh.endInning();
+        let r; [r, ia] = half(LA, ia, SHh, rng, stats, dmH, null, homeMod(-1)); ra += r; SHh.endInning();
         if (inn >= 9 && rh > ra) { inns.push([r, null]); break; }
         const lim = inn >= 9 ? (ra - rh) : null;
         const away_r = r;
-        [r, ih] = half(LH, ih, SAa, rng, stats, dmA, lim); rh += r; SAa.endInning();
+        [r, ih] = half(LH, ih, SAa, rng, stats, dmA, lim, homeMod(1)); rh += r; SAa.endInning();
         inns.push([away_r, r]);
         if (inn >= 9 && rh !== ra) break;
       }
@@ -405,6 +409,7 @@
         h.sfMult = 1;
         if (this.tact[bat].bat === 'contact' && h.bases[2] && h.outs < 2) h.sfMult = 1.35;   // 3루 주자: 컨택 접근은 땅볼·플라이로도 불러들인다
         if (this.tact[fld].inf && h.bases[2] && h.outs < 2) { mul('babip', 1.07); h.sfMult *= 0.55; }
+        { const hm = homeMod(bat === 'home' ? 1 : -1); if (hm) { mul('babip', hm.babip); mul('hr', hm.hr); mul('bb', hm.bb); } }   // 홈 어드밴티지(원정은 반대로)
         h.mod = mod || undefined;
       }
       _endHalf() {
@@ -630,7 +635,7 @@
       TEAMS, PARKNAME, PyRandom, Season, playPostseason, leaders, game, newStats,
       parkRuns: () => PARKR, teamOf: t => t,
       bats: () => bats, pits: () => pits,
-      LiveGame, StaffState, liveAI, makeLineup, defMods, staff, lineup, batById, pitById, pfs: PFS, paProbs, env: ENV,
+      LiveGame, StaffState, liveAI, makeLineup, defMods, staff, lineup, batById, pitById, pfs: PFS, paProbs, env: ENV, homeMod,
       tracking: () => ({ bat: PLAYER, pit: PITCH }), resetTracking: () => { PLAYER = {}; PITCH = {}; }
     };
   }
