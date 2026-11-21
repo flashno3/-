@@ -505,7 +505,7 @@
         if (x < 0.66) {   // 성공: 타자 아웃, 주자 한 베이스씩
           res = 'SH'; h.outs++; if (bs[2]) { h.runs++; bs[2] = null; } if (bs[1]) { bs[2] = bs[1]; bs[1] = null; } if (bs[0]) { bs[1] = bs[0]; bs[0] = null; }
         } else if (x < 0.82) { res = 'OUT'; h.outs++; }                                   // 실패: 타자만 아웃
-        else if (x < 0.92) { res = 'FC'; const lead = bs[2] ? 2 : (bs[1] ? 1 : 0); bs[lead] = null; h.outs++; bs[0] = b; } // 야수선택: 선두 주자 아웃
+        else if (x < 0.92) { res = 'FC'; const lead = bs[2] ? 2 : (bs[1] ? 1 : 0); bs[lead] = null; h.outs++; if (bs[0]) { if (bs[1]) { if (bs[2]) h.runs++; bs[2] = bs[1]; } bs[1] = bs[0]; } bs[0] = b; } // 야수선택: 선두 주자 아웃, 타자는 1루 — 1루 주자는 타자에게 밀려(강제) 진루하고 뒤 주자도 연쇄로 밀린다(주자가 사라지지 않게)
         else { res = '1B'; const e = '1B'; this.stats['1B']++; const tc = track(b, e); applyEvent(h, e, b, this.rng, this.stats, tc); tc.RBI += h.runs - r0; }
         if (res !== '1B') { const c = PLAYER[b.id] || (PLAYER[b.id] = { PA: 0, K: 0, BB: 0, HBP: 0, HR: 0, '1B': 0, '2B': 0, '3B': 0, ROE: 0, OUT: 0, SF: 0, RBI: 0, SB: 0, CS: 0 }); c.PA++; if (res === 'SH') c.SF++; else c.OUT++; }
         trackP(ss.cur, res === '1B' ? '1B' : null, h.outs - o0, h.runs - r0);
