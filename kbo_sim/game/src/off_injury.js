@@ -158,7 +158,7 @@
     const rel = plan === 'contact' ? cr('contact') : plan === 'power' ? cr('power') : plan === 'eye' ? cr('eye') : plan === 'defense' ? cr('defense') : plan === 'speed' ? cr('speed') : (cr('contact') + cr('power') + cr('eye')) / 3;
     return { plan, w, mul: clamp(1 + 0.009 * (rel - 62) + mg, 0.75, 1.35), stamina: 0, speed: plan === 'speed' ? 0.06 * cr('speed') / 50 : 0, range: plan === 'defense' ? 1.2 * cr('defense') / 50 : 0 };
   };
-  proto._devRole = function (p, plan) { const manual = p.dev && !p.dev.auto; if (plan === 'SP') { if (manual || (p.stamina >= 50 && p.role !== 'SP')) p.role = 'SP'; } else if (p.role === 'SP' && plan !== 'SP' && manual) p.role = 'RP'; };
+  proto._devRole = function (p, plan) { if (p.roleMan) return; const manual = p.dev && !p.dev.auto; if (plan === 'SP') { if (manual || (p.stamina >= 50 && p.role !== 'SP')) p.role = 'SP'; } else if (p.role === 'SP' && plan !== 'SP' && manual) p.role = 'RP'; };
   /* 육성 방향별 성장 경로 예측: 같은 선수를 방향마다 3시즌 진행해 평균(12회) */
   proto.devForecast = function (p, years) {
     years = years || 3; const out = {}, base = JSON.parse(JSON.stringify({ p: p.p, stamina: p.stamina, age: p.age, peak: p.peak, pot: p.pot, scout: p.scout, role: p.role, fr: p.fr, gs: p.gs, pos: p.pos, type: p.type, bats: p.bats, throws: p.throws, cs: p.cs, GS: p.GS, G: p.G, IP: p.IP, PA: p.PA, ipgs: p.ipgs, team: p.team, id: p.id, ko: p.ko }));

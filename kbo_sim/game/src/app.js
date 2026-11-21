@@ -207,7 +207,7 @@
     const tab = ui.mtab || 'sum', chips = `${pot}${dhChip}${draftChip}${birthChip}${holdChip} ${loyChip}${moodChip(p)}${myChip(p)}${traitChip(p)}${fChip}${faStatus(p)}${src}${milChip}`;
     const contract = `<div class="small muted">${teamTag(p.team in KO ? p.team : U())} · 연봉 ${money(p.contract.salary)}${p.contract.amort ? ' + 계약금 상각 ' + p.contract.amort + '억/년' : ''} · 계약 ${p.contract.years}년 남음${p.contract.total ? ` · FA 계약 총 ${p.contract.total}억${p.contract.bonus ? '(계약금 ' + p.contract.bonus + '억)' : ''}${p.contract.end ? ' ~' + p.contract.end : ''}${p.contract.opt ? ' · 옵션 ' + esc(p.contract.opt) : ''}${p.contract.est ? ' · 기간 추정' : ''}` : ''} · 시장 가치 ${money(L.marketValue(p))}</div>`;
     const evalHtml = p.eval ? `<div class="card" style="margin:8px 0"><b>평가(사용자 제공)</b><div class="small">${esc(p.eval.text)}</div><div class="small muted">${esc(p.eval.src)} — 잠재력 하한 ${esc(p.eval.floor)}등급 이상으로 반영${p.eval.role === 'SP' ? ', 선발 후보 보직' : ''}</div></div>` : '';
-    const dev = devBlock(p) || (mine ? `<div class="card" style="margin:8px 0"><b>육성 방향</b><div class="small muted">${!L.S.coach ? '코치진 정보가 없어 육성 방향을 정할 수 없습니다.' : '30세 이상 선수는 육성 방향을 정하지 않습니다(성장보다 유지 단계). 대신 팀 훈련 방침이 적용됩니다.'}</div></div>` : '<div class="small muted">우리 팀 선수만 육성·훈련을 정할 수 있습니다.</div>');
+    const dev = devBlock(p) || roleBlock(p) + (mine ? `<div class="card" style="margin:8px 0"><b>육성 방향</b><div class="small muted">${!L.S.coach ? '코치진 정보가 없어 육성 방향을 정할 수 없습니다.' : '30세 이상 선수는 육성 방향을 정하지 않습니다(성장보다 유지 단계). 대신 팀 훈련 방침이 적용됩니다.'}</div></div>` : '<div class="small muted">우리 팀 선수만 육성·훈련을 정할 수 있습니다.</div>');
     const slotNow = mine ? L.trainSlots().find(x => x.id === p.id) : null, trainInfo = mine ? `<div class="card" style="margin:8px 0"><b>훈련</b><div class="small muted">팀 훈련(타자/투수 집중 분야·강도)은 훈련 센터에서, 선수별 육성 방향은 위에서 정합니다. 이 선수만 따로 훈련시키려면 개별 훈련에 추가하세요.</div>${slotNow ? `<div class="small" style="margin-top:4px">개별 훈련 중: <b>${esc(L.trainFocusInfo(p.type === 'P' ? 'P' : 'B')[slotNow.focus].n)}</b> (${L.trainIntenName(slotNow.inten)}) ${riskChip(L.trainRisk(p))}</div>` : `<div class="small muted" style="margin-top:4px">${riskChip(L.trainRisk(p))}</div>`}<div class="row" style="gap:6px;margin-top:6px"><button class="sm primary" data-act="goTrain">훈련 센터 열기</button>${slotNow ? `<button class="sm" data-act="slotRemoveA" data-a="${p.id}">개별 훈련 종료</button>` : `<button class="sm" data-act="slotAddDo" data-a="${p.id}">개별 훈련에 추가</button>`}</div></div>` : '';
     const body = tab === 'sum' ? `${injBlock(p)}${ovrTrend(p)}${prospectBlockFor(p)}<div class="pbars">${bars}</div>${fits}<div class="small">올 시즌 1군 기록: ${statLine(p)}</div>${(L.S.stats2.bat[p.id] || L.S.stats2.pit[p.id]) ? `<div class="small">올 시즌 2군 기록: ${p.type === 'B' ? batLine(p.id, true) : pitLine(p.id, true)}</div>` : ''}${p.lockUntil > L.S.day && p.team === U() && !p.active ? `<div class="small muted">1군 재등록 잠금: ${L.lockLeft(p)}경기일 남음</div>` : ''}`
       : tab === 'car' ? careerPanel(p) : tab === 'grow' ? `${dev}${trainInfo}` : `${contract}${negEntry}<div class="row" style="gap:6px">${chips}</div>${evalHtml}`;
@@ -322,7 +322,9 @@
     const item = p => { const lk = L.lockLeft(p), fm = formOf(p), line = p.type === 'B' ? batLine(p.id, true) : pitLine(p.id, true); return `<div class="pli" data-act="player" data-a="${p.id}"><div class="pl-main"><div class="pl-top"><b>${esc(p.ko)}</b> <span class="muted small">${pos(p)} · ${p.age}세</span>${p.age <= 25 ? ` <span class="chip">잠재 ${L.potLetter(p)}</span>` : ''}</div><div class="small muted">${line}${fm ? ' · 최근 ' + esc(fm.txt) : ''}</div>${p.type === 'P' ? `<div>${gauge(p)}</div>` : ''}</div><div class="pl-r">${ovrChip(L.ovr(p))}<span data-stop="1">${lk ? `<span class="chip">잠금 ${lk}일</span>` : `<button class="sm primary" data-act="toggleActive" data-a="${p.id}">${full ? '콜업' : '1군 등록'}</button>`}</span></div></div>`; };
     const chips = [['all', '전체'], ['B', '타자'], ['SP', '선발'], ['RP', '구원'], ['young', '유망주']].map(([k, t]) => `<button class="sm" aria-pressed="${f === k}" data-act="farmF" data-a="${k}">${t} ${farm.filter(fl[k]).length}</button>`).join('');
     const sorts = [['ovr', '능력치순'], ['form', '최근 폼순'], ['age', '어린 순']].map(([k, t]) => `<button class="sm ${sk === k ? 'primary' : ''}" data-act="farmS" data-a="${k}">${t}</button>`).join('');
-    return `<div class="card"><div class="row"><h2 style="margin:0">2군 선수 ${rows.length}명</h2></div><div class="chips">${chips}</div><div class="row small" style="gap:6px">정렬 ${sorts}</div><div class="plist">${rows.map(item).join('') || '<div class="muted small">해당하는 2군 선수가 없습니다.</div>'}</div></div>`;
+    const grp = [['선발투수', p => p.type === 'P' && p.role === 'SP'], ['구원투수', p => p.type === 'P' && p.role !== 'SP'], ['포수', p => p.pos === 'C'], ['내야수', p => ['1B', '2B', '3B', 'SS'].includes(p.pos)], ['외야수·지명타자', p => p.type === 'B' && !['C', '1B', '2B', '3B', 'SS'].includes(p.pos)]];
+    const body = grp.map(([nm, g]) => { const r = rows.filter(g); if (!r.length) return ''; return foldGroup('fm_l_' + nm + f, nm, `${r.length}명 · 평균 OVR ${(r.reduce((a, p) => a + L.ovr(p), 0) / r.length).toFixed(1)}`, `<div class="plist">${r.map(item).join('')}</div>`, r.length <= 10); }).join('');
+    return `<div class="card"><div class="row"><h2 style="margin:0">2군 선수 ${rows.length}명</h2></div><div class="chips">${chips}</div><div class="row small" style="gap:6px">정렬 ${sorts}</div></div>${body || '<div class="card muted small">해당하는 2군 선수가 없습니다.</div>'}`;
   }
   function screenFarm() {
     const S = L.S, me = U(), all = L.players(me), farm = all.filter(p => !p.active && !L.isInj(p)).sort((a, b) => L.ovr(b) - L.ovr(a)), injd = all.filter(p => !p.active && L.isInj(p)), act = all.filter(p => p.active);
@@ -333,12 +335,12 @@
     const rec = recs.length ? recs.map(r => `<div class="row small"><span>↑ <b>${esc(r.up.p.ko)}</b> (OVR ${L.ovr(r.up.p)}${r.up.f ? ' · 최근 ' + r.up.f.txt : ''}) ↔ ↓ <b>${esc(r.down.ko)}</b> (OVR ${L.ovr(r.down)})</span><span class="sp"></span><button class="sm" data-act="swapFarm" data-a="${r.up.p.id}|${r.down.id}">교체</button></div>`).join('') : '<div class="small muted">지금 1군 후보보다 확실히 나은 2군 선수가 없습니다.</div>';
     const th = '<thead><tr><th class="l">선수</th><th class="l">포지션</th><th>나이</th><th>OVR</th><th class="l">2군 기록</th><th class="l">최근 10경기</th><th></th></tr></thead>';
     return `<div class="card"><div class="row"><h2>2군 (퓨처스)</h2><span class="muted small">1군 ${act.length}/${L.activeMax()} · 2군 ${farm.length}명 · 2군 성적 ${my2.w}승 ${my2.l}패 ${my2.d}무 (${my2.rank}위)</span></div>
-      <div class="small muted">1군 말소 후 10경기일(약 열흘) 동안은 재등록할 수 없습니다. 2군에서 꾸준히 뛴 어린 선수는 성장이 빠르고, 출전하지 못하면 성장이 더딥니다. 추천은 능력치와 최근 10경기 성적을 함께 본 참고용입니다.</div></div>
+      <div class="small muted">1군 말소 후 10경기일은 재등록할 수 없습니다. 2군에서 꾸준히 뛴 어린 선수는 성장이 빠릅니다.</div></div>
       <div class="card"><h2>콜업 추천</h2>${rec}</div>
-      ${farmList(farm, full)}${trainCard()}
+      ${farmList(farm, full)}${foldGroup('fm_train', '2군 훈련·육성', '훈련 방침 · 개별 훈련', trainCard(), false)}
       ${injd.length ? `<div class="card"><details><summary><b>부상자 명단 ${injd.length}명</b> <span class="muted small">콜업 불가 · 복귀하면 알려드립니다</span></summary><div class="tablewrap"><table>${th}<tbody>${injd.map(frow).join('')}</tbody></table></div></details></div>` : ''}
-      <div class="card"><h2>1군 엔트리</h2><div class="tablewrap"><table><thead><tr><th class="l">선수</th><th class="l">포지션</th><th>나이</th><th>OVR</th><th class="l">1군 기록</th><th></th></tr></thead><tbody>${act.sort((a, b) => (a.type > b.type ? 1 : a.type < b.type ? -1 : L.ovr(b) - L.ovr(a))).map(arow).join('')}</tbody></table></div></div>
-      ${milCard()}
+      ${foldGroup('fm_act', '1군 엔트리', `${act.length}명`, `<div class="card"><div class="tablewrap"><table><thead><tr><th class="l">선수</th><th class="l">포지션</th><th>나이</th><th>OVR</th><th class="l">1군 기록</th><th></th></tr></thead><tbody>${act.sort((a, b) => (a.type > b.type ? 1 : a.type < b.type ? -1 : L.ovr(b) - L.ovr(a))).map(arow).join('')}</tbody></table></div></div>`, false)}
+      ${foldGroup('fm_mil', '상무 야구단', '입대·전역 현황', milCard(), false)}
       <div class="card"><h2>${S.year} 2군 순위</h2><div class="tablewrap"><table><thead><tr><th class="l">순위</th><th class="l">팀</th><th>승</th><th>패</th><th>무</th><th>승률</th><th>득점</th><th>실점</th></tr></thead><tbody>${st2.map(x => `<tr class="${x.team === me ? 'me' : ''}"><td class="l n">${x.rank}</td><td class="l">${teamTag(x.team)}</td><td class="n">${x.w}</td><td class="n">${x.l}</td><td class="n">${x.d}</td><td class="n">${pct3(x.pct)}</td><td class="n">${x.rs}</td><td class="n">${x.ra}</td></tr>`).join('')}</tbody></table></div></div>`;
   }
 
@@ -492,6 +494,14 @@
       <div class="card"><h2>${KO[T.team]} 선수 (영입)</h2><div class="tablewrap" style="max-height:480px;overflow-y:auto"><table>${th}<tbody>${theirs.map(p => playerRow(p, T.get.has(p.id), 'tget')).join('')}</tbody></table></div></div></div>`;
   }
   const f1 = x => (Math.round(x * 10) / 10).toFixed(1);
+  /* ---- 보직(30세 이상 투수) ---- */
+  function roleBlock(p) {
+    if (p.team !== U() || p.type !== 'P' || p.age < 30) return '';
+    const cur = p.role === 'SP' ? 'SP' : 'RP', man = p.roleMan, low = p.stamina < 50;
+    return `<div class="card" style="margin:8px 0"><b>보직</b> <span class="small muted">30세 이상은 육성 방향 대신 보직만 정할 수 있습니다.</span>
+      <div class="row" style="gap:6px;margin:6px 0"><button class="sm ${cur === 'SP' ? 'primary' : ''}" data-act="rolePick" data-a="${p.id}|SP">선발${cur === 'SP' && man === 'SP' ? ' (지정)' : ''}</button><button class="sm ${cur === 'RP' ? 'primary' : ''}" data-act="rolePick" data-a="${p.id}|RP">구원${cur === 'RP' && man === 'RP' ? ' (지정)' : ''}</button></div>
+      <div class="small muted">체력 ${p.stamina}${low ? ' — 50 미만이라 선발로 쓰면 이닝이 짧습니다' : ''}. 선발로 지정하면 1군·2군 선발 로테이션 후보에 우선 편성되고, 구원으로 지정하면 선발 후보에서 빠집니다. 표시 보직도 바로 바뀝니다.</div></div>`;
+  }
   /* ---- 육성 방향 ---- */
   function devBlock(p) {
     if (p.team !== U() || p.age > 29 || !L.S.coach) return '';
@@ -1714,6 +1724,7 @@
     negDone() { negSync(); L.negClose(); ui.negOpen = false; ui.negIn = null; negBackTo(); autosave(); },
     integrityRun() { ui.integ = L.integrity(); render(); },
     storyTab(a) { ui.storyTab = a; render(); }, storyMin(a) { ui.storyMin = +a; render(); },
+    rolePick(a) { const [id, r] = a.split('|'), e = L.setRole(id, r); if (e) toast(e); else { toast(`${P(id).ko}: ${r === 'SP' ? '선발' : '구원'}로 지정`); autosave(); } render(); },
     devPlan(a) { const [id, pl] = a.split('|'), e = L.setDevPlan(id, pl); if (e) toast(e); else { toast(`${P(id).ko}: 육성 방향 ${L.planName(pl)}`); autosave(); } render(); },
     hireCoach(a) { const e = L.hireCoach(a); if (e) toast(e); else { toast('코치를 영입했습니다.'); autosave(); } render(); },
     fireCoach(a) { const e = L.fireCoach(a); if (e) toast(e); else autosave(); render(); },

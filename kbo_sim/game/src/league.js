@@ -392,6 +392,13 @@
     }
     /* 리그 규정 제14조: 현역선수 등록 29명, 9월 1일 이후 정규시즌 막바지에는 5명을 추가해 34명(확대 엔트리). 포스트시즌은 다시 29명으로 둔다(실제 30명·출장 28명은 별도 확인 필요) */
     _lnews(text) { if (this._news) this._news(text); else { const S = this.S; S.news.unshift({ year: S.year, day: S.day, text }); if (S.news.length > 120) S.news.length = 120; } }   // 모듈 로드 순서와 무관하게 소식 기록
+    /* 보직(선발/구원) 직접 지정 — 30세 이상은 육성 방향을 정할 수 없어 이 방법으로만 바꿀 수 있다. 지정하면 1·2군 로테이션 편성에서 선발은 우선, 구원은 선발 후보에서 제외한다 */
+    setRole(id, role) {
+      const S = this.S, p = S.players[id]; if (!p || p.team !== S.userTeam || p.type !== 'P') return '우리 팀 투수가 아닙니다.'; if (role !== 'SP' && role !== 'RP') return '알 수 없는 보직입니다.';
+      if (p.age < 30) return '30세 미만 선수는 육성 방향으로 보직을 정합니다(육성·훈련 탭).';
+      p.role = role; p.roleMan = role; const set = S.teams[p.team].set; if (role === 'RP') set.rotation = (set.rotation || []).filter(x => x !== id);
+      this._f2dirty = true; this._engDirty = true; this.assignUsage(p.team); this.assignUsage(p.team, true); this.repairSettings(p.team); this.invalidate(); return null;
+    }
     activeMax() { const S = this.S; if (S.phase === 'regular' && S.schedule && S.day < S.schedule.length && this.todayN() >= Date.UTC(S.year, 8, 1) / 864e5) return ACTIVE_MAX + 5; return ACTIVE_MAX; }
     _trimActive(t) {   // 엔트리가 한도를 넘으면 주전·선발 등 핵심을 제외하고 가치가 낮은 순으로 2군에 내린다(경기일 잠금 없음)
       const S = this.S, max = this.activeMax(), set = S.teams[t].set; let A = this.players(t).filter(x => x.active); if (A.length <= max) return 0;
@@ -434,7 +441,7 @@
       const bench = H.filter(p => !starters.has(p.id)).sort((a, b) => this._runsB(b, true) - this._runsB(a, true)), BP = [300, 220, 150, 100, 70, 45];
       bench.forEach((p, i) => { const u = U(p); u.PA = BP[i] || 12; u.G = Math.min(144, Math.round(u.PA / 4.15 * 1.4)); });
       // 투수
-      const man = p => !!(p.dev && !p.dev.auto && p.dev.plan === 'SP'), spv = p => this._runsP(p) + 0.2 * (p.stamina - 50) + (farm && man(p) ? 60 : 0), nSP = farm ? 6 : 5, spc = P.filter(p => p.role === 'SP' || p.stamina >= 52 || man(p)).sort((a, b) => spv(b) - spv(a)).slice(0, nSP);   // 직접 정한 선발 육성 투수는 2군 로테이션(6인)에 우선 편성
+      const man = p => !!(p.dev && !p.dev.auto && p.dev.plan === 'SP'), mr = p => (p.team === S.userTeam ? p.roleMan : null), spv = p => this._runsP(p) + 0.2 * (p.stamina - 50) + (farm && man(p) ? 60 : 0) + (mr(p) === 'SP' ? 60 : 0), nSP = farm ? 6 : 5, spc = P.filter(p => mr(p) !== 'RP' && (p.role === 'SP' || p.stamina >= 52 || man(p) || mr(p) === 'SP')).sort((a, b) => spv(b) - spv(a)).slice(0, nSP);   // 직접 정한 선발 육성 투수는 2군 로테이션(6인)에 우선 편성
       if (spc.length < Math.min(5, P.length)) { const have = new Set(spc.map(p => p.id)); spc.push(...P.filter(p => !have.has(p.id)).sort((a, b) => b.stamina - a.stamina).slice(0, Math.min(5, P.length) - spc.length)); }   // 선발감이 모자라면 체력 높은 순으로 메운다
       const GSs = [30, 29, 29, 28, 26, 22], sid = new Set();
       spc.forEach((p, i) => { const u = U(p); if (!farm) p.role = 'SP'; u.GS = GSs[i]; u.G = u.GS; u.ipgs = clamp(5.3 + (p.stamina - 50) * 0.05, 4.2, 6.8); u.IP = Math.round(u.GS * u.ipgs * 10) / 10; sid.add(p.id); });
