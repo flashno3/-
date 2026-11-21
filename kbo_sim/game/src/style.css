@@ -318,3 +318,17 @@ table.cf { width: 100%; border-collapse: collapse; margin: 8px 0; } table.cf th,
 .dprog { position: relative; height: 10px; background: var(--surface2); border-radius: 5px; margin-top: 8px; overflow: visible; } .dprog i { display: block; height: 100%; background: var(--accent); border-radius: 5px; } .dprog b.mk { position: absolute; top: -3px; width: 4px; height: 16px; margin-left: -2px; background: var(--gold); border-radius: 2px; }
 table.dboard { border-collapse: collapse; width: 100%; font-size: 11px; } table.dboard th, table.dboard td { border: 1px solid var(--line); padding: 3px 4px; text-align: center; white-space: nowrap; } table.dboard td.dc { min-width: 62px; } table.dboard td.dc span { display: inline-block; max-width: 56px; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; } table.dboard td.dc img, table.dboard td.dc svg { vertical-align: middle; }
 table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transparent); font-weight: 700; } table.dboard td.cur { outline: 2px solid var(--accent); } table.dboard td.steal { box-shadow: inset 0 -3px 0 var(--pos, #2e9e57); } table.dboard td.reach { box-shadow: inset 0 -3px 0 var(--warn); }
+
+/* 접이식 묶음(고급 설정·분석·후보 풀 등): 화면을 짧게 유지하고 필요할 때만 펼친다 */
+.foldgroup { margin: 0 0 12px; }
+.foldgroup > summary { cursor: pointer; padding: 12px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; list-style: none; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; min-height: 44px; }
+.foldgroup > summary::-webkit-details-marker { display: none; }
+.foldgroup > summary::before { content: '▸'; color: var(--muted); }
+.foldgroup[open] > summary::before { content: '▾'; }
+.foldgroup[open] > summary { margin-bottom: 10px; }
+.foldgroup > .foldbody > .card:last-child { margin-bottom: 0; }
+.foldmini { margin-top: 4px; }
+.foldmini > summary { cursor: pointer; list-style: none; }
+.foldmini > summary::-webkit-details-marker { display: none; }
+.foldmini > summary::before { content: '▸ '; }
+.foldmini[open] > summary::before { content: '▾ '; }

@@ -25,7 +25,7 @@ for(let season=0;season<2;season++){
   await click('button[data-act="toOff"]');await pg.waitForTimeout(300);await sweep(`오프시즌${season}`);
   // 비시즌 캠프 설정
   await nav('선수단','훈련');await sweep(`훈련 센터(오프시즌${season})`);ok(await pg.evaluate(()=>/유망주 노트/.test(document.body.innerText)),`훈련 센터 유망주 노트${season}`);ok(await pg.evaluate(()=>[...document.querySelectorAll('button[data-act="campSet"]')].some(b=>!b.disabled)),`오프시즌 캠프 활성${season}`);
-  await click('button[data-act="campSet"][data-a^="B:power:"]:not([data-a$=":0"])');await click('button[data-act="campSet"][data-a^="B:"][data-a$=":2"]');await click('button[data-act="campSet"][data-a^="P:"][data-a$=":1"]');await sweep('캠프 설정');ok(await pg.evaluate(()=>/예약 비용/.test(document.body.innerText)),`캠프 예약 비용 표시${season}`);
+  await pg.evaluate(()=>document.querySelectorAll('details[data-fold]:not([open])').forEach(d=>{d.open=true}));await pg.waitForTimeout(60);await click('button[data-act="campSet"][data-a^="B:power:"]:not([data-a$=":0"])');await click('button[data-act="campSet"][data-a^="B:"][data-a$=":2"]');await click('button[data-act="campSet"][data-a^="P:"][data-a$=":1"]');await sweep('캠프 설정');ok(await pg.evaluate(()=>/예약 비용/.test(document.body.innerText)),`캠프 예약 비용 표시${season}`);
   await nav('선수단','로스터');await click('button[data-act="go"][data-a="offseason"]');await pg.evaluate(()=>{const b=[...document.querySelectorAll('nav button')].find(b=>b.innerText.includes('오프시즌'));if(b)b.click()});await pg.waitForTimeout(200);
   // 연말 성장 공개
   ok(await pg.evaluate(()=>/성장 공개/.test(document.body.innerText)),`성장 공개 배너${season}`);await sweep('성장 배너');

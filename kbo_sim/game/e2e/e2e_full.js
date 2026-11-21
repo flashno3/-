@@ -9,7 +9,7 @@ async function run(vp,label,team){
   const click=async s=>pg.evaluate(s=>{const e=document.querySelector(s);if(e&&!e.disabled){e.dispatchEvent(new MouseEvent('click',{bubbles:true}));return true}return false},s);
   const text=async()=>pg.evaluate(()=>document.body.innerText);
   const sweep=async(tag)=>{const t=await text();const m=t.match(BAD);ok(!m,`${label} ${tag}: 화면에 오류 문자열 ${m?m[0]:''}`);const w=await pg.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);ok(w<=2,`${label} ${tag}: 가로 넘침 ${w}px`)};
-  const nav=async(g,s)=>{await pg.evaluate(n=>{const b=[...document.querySelectorAll('nav button, .side button')].find(b=>b.innerText.includes(n));if(b)b.click()},g);await pg.waitForTimeout(120);if(s){await pg.evaluate(n=>{const b=[...document.querySelectorAll('.tabs.sub button')].find(b=>b.innerText.trim()===n);if(b)b.click()},s);await pg.waitForTimeout(150)}};
+  const nav=async(g,s)=>{await pg.evaluate(n=>{const b=[...document.querySelectorAll('nav button, .side button')].find(b=>b.innerText.includes(n));if(b)b.click()},g);await pg.waitForTimeout(120);if(s){await pg.evaluate(n=>{const b=[...document.querySelectorAll('.tabs.sub button')].find(b=>b.innerText.trim()===n);if(b)b.click()},s);await pg.waitForTimeout(150)}await pg.evaluate(()=>document.querySelectorAll('details[data-fold]:not([open])').forEach(d=>{d.open=true}));await pg.waitForTimeout(60)};   // 접이식 묶음은 모두 펼쳐 점검
   const confirm=async()=>{await pg.evaluate(()=>{for(const b of document.querySelectorAll('button'))if(['확인','닫기'].includes(b.innerText.trim())&&b.closest('.sheet'))b.click()})};
   await pg.goto(FILE);await pg.waitForTimeout(400);
   await pg.evaluate(()=>window.scrollTo(0,800));await pg.click(`text=${team}`);await pg.click('text=감독 시작');await pg.waitForTimeout(1200);
@@ -59,6 +59,10 @@ async function run(vp,label,team){
   ok(await pg.evaluate(()=>/약점 보완 훈련/.test(document.body.innerText)),`${label}: 약점 보완 카드`);const wk=await pg.$('button[data-act="slotAddWeakDo"]:not([disabled])');if(wk){await wk.click();await pg.waitForTimeout(150);ok(await pg.evaluate(()=>/약점 보완: /.test(document.body.innerText)),`${label}: 약점 보완 개별 훈련 시작`)}
   ok(await pg.evaluate(()=>/기술 습득 프로젝트/.test(document.body.innerText)&&/훈련 효과 분석/.test(document.body.innerText)),`${label}: 기술 프로젝트·훈련 효과 분석 카드`);
   ok(await pg.evaluate(()=>/훈련 보고/.test(document.body.innerText)&&!!document.querySelector('select[data-sel="rpttrain"]')),`${label}: 훈련 보고 카드`);
+  // 접이식 묶음: 닫으면 다시 그려도 닫힌 채 유지, 기본은 닫힘(고급 설정·분석·캠프)
+  ok(await pg.evaluate(()=>['tr_adv','tr_ana','tr_camp'].every(k=>!!document.querySelector(`details[data-fold="${k}"]`))),`${label}: 훈련 화면 접이식 묶음 3개`);
+  await pg.evaluate(()=>{const d=document.querySelector('details[data-fold="tr_adv"]');d.open=false});await pg.waitForTimeout(80);await click('button[data-act="trainSide"][data-a="B:inten:normal"]');await pg.waitForTimeout(120);
+  ok(await pg.evaluate(()=>document.querySelector('details[data-fold="tr_adv"]').open===false),`${label}: 접은 상태가 다시 그려도 유지`);await pg.evaluate(()=>{document.querySelector('details[data-fold="tr_adv"]').open=true});await pg.waitForTimeout(60);
   {const sb=await pg.$('button[data-act="skillStartA"]');if(sb){await sb.click();await pg.waitForTimeout(150);ok(await pg.evaluate(()=>/0\/80일|\d+% \(/.test(document.body.innerText)&&/중단/.test(document.body.innerText)),`${label}: 기술 프로젝트 시작·진행 표시`);await click('button[data-act="skillCancelA"]')}}
   await sweep('기술 프로젝트');
   await sweep('약점 보완');await click('button[data-act="undo"]');
