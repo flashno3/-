@@ -235,7 +235,7 @@
   proto.faDefaultOffer = function (p, t, years) {
     const tm = this.faTerms(p, t), y = clamp(years || tm.pref, 1, tm.maxYears), total = tm.req(y) * y;
     if (!tm.graded) return { years: 1, salary: Math.ceil(tm.req(1) * 10) / 10, bonus: 0 };
-    const bonus = Math.round(total * BONUS_SHARE * 10) / 10, salary = Math.ceil(((total - bonus) / y) * 10 - 1e-9) / 10;
+    const bonus = y >= 2 ? Math.round(total * BONUS_SHARE * 10) / 10 : 0, salary = Math.ceil(((total - bonus) / y) * 10 - 1e-9) / 10;   // 계약금은 2년 이상 계약에만(단년 계약은 연봉만)
     return { years: y, salary, bonus };
   };
   proto.faEvaluate = function (p, offer, t) {
@@ -243,6 +243,7 @@
     if (!(y >= 1 && y <= tm.maxYears)) return { ok: false, msg: tm.graded ? `계약 기간은 1~${tm.maxYears}년이어야 합니다.` : 'FA 자격이 없는 선수는 1년 계약만 가능합니다.' };
     if (!(sal >= 0.3)) return { ok: false, msg: '연봉은 최소 0.3억입니다.' };
     if (bon < 0 || (!tm.graded && bon > 0)) return { ok: false, msg: tm.graded ? '계약금은 0 이상이어야 합니다.' : '자격이 없는 선수에게는 계약금을 줄 수 없습니다.' };
+    if (bon > 0 && y < 2) return { ok: false, msg: '계약금은 2년 이상 계약에만 줄 수 있습니다. 단년 계약은 연봉만 제시하세요.' };
     const per = (bon + sal * y) / y, req = tm.req(y);
     if (bon > 0.7 * (bon + sal * y)) return { ok: false, msg: '계약금은 총액의 70%를 넘을 수 없습니다.', per, req, tm };
     if (per + 1e-9 < req) return { ok: false, msg: `거절: 제시 총액 ${(per * y).toFixed(1)}억(연 ${per.toFixed(1)}억 × ${y}년)이 요구액 ${(req * y).toFixed(1)}억(연 ${req.toFixed(1)}억)에 못 미칩니다.${per >= req * 0.9 ? ' 근접합니다.' : ''}`, per, req, tm };
@@ -483,6 +484,7 @@
     for (const nm of AQ_NAMES) { if (n >= 9) break; if (used.has(nm)) continue;
       const p = this.makeForeign(r, r.random() < 0.7 ? 'P' : 'B', true, { name: nm }); p.team = 'FA'; p.active = false; p.pool27 = true; (S.fa = S.fa || []).push(p.id); n++; }
   };
+  proto.foreignSignable = function (p, t) { t = t || this.S.userTeam; return this.askSalary(p) * 0.93 <= this.foreignCap(p, t) + 1e-9; };   // 호감도로 낮출 수 있는 최대 폭(−7%)을 감안해도 상한을 넘는 선수는 영입 불가
   proto.foreignCap = function (p, t) {
     const k = p.aq ? 'aq' : 'gen', base = FOREIGN_NEW[k];
     let cap = p.faInfo && p.faInfo.from === t ? Math.max(base, (p.faInfo.prev || 0) + FOREIGN_RAISE[k]) : base;
@@ -545,6 +547,17 @@
   proto.compValue = function (q) { return this.marketValue(q) * 2 + (q.scout && q.age <= 26 ? Math.max(0, q.scout.ceil - this.ovr(q)) * 0.04 : 0); };
   proto.compCandidates = function (t, p, g) { const prot = new Set(this.compProtected(t, g)); return this._compEligible(t, p).filter(x => !prot.has(x.id) && !x.compHold).sort((a, b) => this.compValue(b) - this.compValue(a)); };   // 다른 보상 결정에 제시 중인 선수는 제외
   proto.setProtect = function (ids) { this.S.protect = Array.from(new Set(ids)).slice(0, 25); };   // 내 팀 보호선수(최대 25명, A등급은 그중 가치 상위 20명)
+  /* 경쟁균형세(샐러리캡) 초과 영입 차단: 이 영입으로 상위 40명 합계가 상한을 넘게 되면(예산 여유와 무관하게) 막는다.
+     1~2년 상한을 깨고 우승에 도전하는 시즌이면 경쟁균형세 카드의 '상한 초과 영입 허용'을 켜서 허용한다. per: 영입 선수의 산정 보수(연평균). 막히면 안내 문구, 아니면 null */
+  proto.capBlock = function (t, per) {
+    const S = this.S; if (S.cbt && S.cbt.allowOver) return null;
+    const next = S.phase === 'offseason', y = S.year + (next ? 1 : 0), cap = this.cbtCap(y), exc = this.cbtExc(t), eid = exc ? exc.id : null, k = S.calib.cbtK || 1;
+    const vals = this.players(t).filter(q => q.rookie !== y && !q.foreign).map(q => this.cbtVal(q) * (q.id === eid ? 0.5 : 1)), top = a => Math.round(a.slice().sort((x, z) => z - x).slice(0, 40).reduce((u, v) => u + v, 0) * k * 10) / 10;
+    const before = top(vals), after = top(vals.concat([per]));
+    if (after > cap + 1e-9 && after > before + 1e-9) return `경쟁균형세 상한(${cap.toFixed(1)}억)을 넘게 되어 영입할 수 없습니다(상위 40명 합계 ${before} → ${after}억). 1~2년 상한을 깨고 우승에 도전하는 시즌이라면 경쟁균형세 카드에서 '상한 초과 영입 허용'을 켜세요(초과분 기금 납부·연속 초과 시 지명권 하락).`;
+    return null;
+  };
+  proto.setAllowOver = function (on) { const S = this.S; S.cbt = S.cbt || { over: {}, under: {}, drop: {}, fees: {}, log: [] }; S.cbt.allowOver = !!on; return null; };
   proto._compPay = function (signer, old, amt, label) {
     const S = this.S; amt = Math.round(amt * 10) / 10; if (!amt || !S.fin) return;
     const a = S.fin.teams[signer], b = S.fin.teams[old]; if (a) a.dead = (a.dead || []).concat([{ year: this._finYear(), amt, who: label }]); if (b) b.evRev = Math.round(((b.evRev || 0) + amt) * 10) / 10;
@@ -643,6 +656,7 @@
     }
     if (typeof offer !== 'object' || offer === null) offer = this.faDefaultOffer(p, t, typeof offer === 'number' ? offer : undefined);   // 숫자만 주면 요구 조건에 맞춘 기본 제시
     const ev = this.faEvaluate(p, offer, t); if (!ev.ok) return ev.msg;
+    { const cb = this.capBlock(t, ev.per); if (cb) return cb; }
     const comp = this.faCompCost(p, t), cost = ev.sal + ev.bon / ev.y + comp, room = this.faRoom(t);   // 계약금은 계약 기간 동안 균등 상각 + 올 시즌 FA 보상금
     if (room < cost) return `예산 부족: 연간 비용(연봉 ${ev.sal.toFixed(1)} + 계약금 상각 ${(ev.bon / ev.y).toFixed(1)}${comp ? ' + FA 보상금 ' + comp.toFixed(1) : ''} = ${cost.toFixed(1)}억)이 FA 여유자금 ${room.toFixed(1)}억을 넘습니다. 이사회가 승인하지 않습니다.`;
     const m = S.faMkt, best = m && graded ? this._bestBid(id) : null;
@@ -727,7 +741,7 @@
   proto.faBeat = function (p, t, years) {
     const tm = this.faTerms(p, t), y = clamp(years || tm.pref, 1, tm.maxYears), best = p.id && this._bestBid(p.id), req = tm.req(y);
     for (let per = req; per < req * 2; per += 0.05) {
-      const tot = per * y, bon = Math.round(tot * BONUS_SHARE * 10) / 10, sal = Math.ceil(((tot - bon) / y) * 10 - 1e-9) / 10;
+      const tot = per * y, bon = y >= 2 ? Math.round(tot * BONUS_SHARE * 10) / 10 : 0, sal = Math.ceil(((tot - bon) / y) * 10 - 1e-9) / 10;
       if (!best || this._offerScore(p, t, y, sal, bon) > best.score + 1e-9) return { years: y, salary: sal, bonus: bon, per: (bon + sal * y) / y };
     }
     return this.faDefaultOffer(p, t, y);
@@ -737,7 +751,7 @@
     return { n: bs.length, best: best ? best.b : null, bestScore: best ? best.score : 0, pend: pe, pendLeft: pe ? Math.max(0, pe.day + 5 - m.day) : 0, bids: bs.map(b => ({ team: b.team, per: b.per, y: b.y })).sort((a, b) => b.per - a.per) };
   };
   proto._aiSign = function (t, p, per, y, d) {   // 입찰 금액으로 계약(여유자금·로스터 확인). 성공 여부 반환
-    const S = this.S, bon = Math.round(per * y * BONUS_SHARE * 10) / 10, sal = Math.ceil(((per * y - bon) / y) * 10 - 1e-9) / 10;
+    const S = this.S, bon = y >= 2 ? Math.round(per * y * BONUS_SHARE * 10) / 10 : 0, sal = Math.ceil(((per * y - bon) / y) * 10 - 1e-9) / 10;
     if (S.teams[t].ids.length >= ROSTER_MAX - 2) return false;
     const g = p.faInfo && p.faInfo.grade, from = p.faInfo && p.faInfo.from, room = this.faRoom(t), cost = sal + bon / y;
     if (room < cost) {   // 프랜차이즈 스타는 이사회 특별 승인으로 예산을 넘겨 계약
@@ -776,7 +790,7 @@
   };
   proto._userSignPend = function (p, pe) {   // 보류 제시가 이기면 계약(예산·인원 재확인)
     const S = this.S, t = S.userTeam, tm = this.faTerms(p, t), per = (pe.bonus + pe.salary * pe.years) / pe.years;
-    if (S.teams[t].ids.length >= ROSTER_MAX || this.faRoom(t) < pe.salary + pe.bonus / pe.years || (tm.ext && this._faCount(t) >= EXT_LIMIT) || per + 1e-9 < tm.req(pe.years)) return false;
+    if (S.teams[t].ids.length >= ROSTER_MAX || this.faRoom(t) < pe.salary + pe.bonus / pe.years || (tm.ext && this._faCount(t) >= EXT_LIMIT) || per + 1e-9 < tm.req(pe.years) || this.capBlock(t, per)) return false;
     this._doSign(t, p, pe.years, pe.salary, pe.bonus);
     news(this, `FA ${p.ko} 영입 — 경쟁 끝에 계약 (${pe.years}년 총 ${(per * pe.years).toFixed(1)}억 = 계약금 ${pe.bonus.toFixed(1)} + 연봉 ${pe.salary.toFixed(1)}×${pe.years})`); return true;
   };
@@ -870,6 +884,7 @@
   proto.persuadeBoard = function (id, offer) {
     const S = this.S, t = S.userTeam, o = this.boardOdds(id, offer); if (!o.ok) return { ok: false, msg: o.msg };
     const f = S.fin.teams[t], p = S.players[id]; f.pers = f.pers || { n: 0, last: -99 };
+    { const cb = this.capBlock(t, o.ev.per); if (cb) return { ok: false, msg: cb }; }
     if (o.need <= 0) return { ok: false, msg: '예산 안에서 영입할 수 있습니다. 설득이 필요 없습니다.' };
     if (f.pers.n >= o.max) return { ok: false, msg: `이사회 설득은 시즌당 ${o.max}회까지입니다.` };
     if (o.left > 0) return { ok: false, msg: `이사회가 재논의를 거부합니다. ${o.left}일 뒤에 다시 요청하세요.` };
