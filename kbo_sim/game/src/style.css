@@ -333,3 +333,5 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
 .foldmini > summary::-webkit-details-marker { display: none; }
 .foldmini > summary::before { content: '▸ '; }
 .foldmini[open] > summary::before { content: '▾ '; }
+
+.rbar > summary { cursor: pointer; list-style: none; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; } .rbar > summary::-webkit-details-marker { display: none; } .rbar > summary::after { content: '▾'; margin-left: auto; color: var(--muted); } .rbar[open] > summary::after { content: '▴'; }
