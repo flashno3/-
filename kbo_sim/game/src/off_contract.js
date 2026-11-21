@@ -6,7 +6,7 @@
   /* [오프시즌 분할] 오프시즌 계약·FA 시장가·구단 충성도 — 원본 offseason.js 순서 그대로. 공용 심볼은 off_common.js(LG.OFFC). */
   const { proto, clamp, TEAMS, FA_END, BONUS_SHARE, rngFor, news, FOREIGN_NEW, FOREIGN_RAISE } = LG.OFFC;
   /* ---------------- 오프시즌 ---------------- */
-  proto.askSalary = function (p) { return Math.max(0.3, Math.round(this.price(p) * (p.age >= 34 ? 0.9 : 1.12) * 10) / 10); };
+  proto.askSalary = function (p) { return Math.max(this.minSal(), Math.round(this.price(p) * (p.age >= 34 ? 0.9 : 1.12) * 10) / 10); };
   /* ---------------- FA 시장가·제시(계약금 포함) ----------------
    * 시장가(mv) = 연 보수(계약금 + 연봉 합계 ÷ 계약 연수). FA 승인 선수 풀에서 가치 순위(WAR + 최근 연봉 평균의 10%)를 매겨 실제 FA 계약 분포로 환산한다.
    * 2025·2026 FA 계약(연 보수): 1위권 25~28억 · 상위 10% 20억 · 20% 16.5억 · 35% 13억 · 중간 10억 · 65% 7.5억 · 80% 5억 · 하위 2.5억.
@@ -44,9 +44,9 @@
     if (!p || p.foreign || p.team !== 'FA' || !p.faInfo || !t || p.faInfo.from !== t || this.war(p) < 1.0) return null;
     const l = this.loyalty(p, t); if (!l || l.team !== t || l.v < 70) return null; return { v: l.v, s: clamp((l.v - 70) / 30, 0, 1) };
   };
-  proto._blendAsk = function (p) { const cur = p.contract.salary, ask = this.askSalary(p); return Math.max(0.3, Math.round((cur + (ask > cur ? 0.6 : 0.4) * (ask - cur)) * 10) / 10); };
+  proto._blendAsk = function (p) { const cur = p.contract.salary, ask = this.askSalary(p); return Math.max(this.minSal(), Math.round((cur + (ask > cur ? 0.6 : 0.4) * (ask - cur)) * 10) / 10); };
   proto.resignAsk = function (p) {
-    const ld = 1 - 0.5 * this.loyDiscount(p, p.team), base = Math.max(0.3, Math.round(this._blendAsk(p) * ld * 10) / 10); if (p.foreign || !this.faEligible(p)) return base;
+    const ld = 1 - 0.5 * this.loyDiscount(p, p.team), base = Math.max(this.minSal(), Math.round(this._blendAsk(p) * ld * 10) / 10); if (p.foreign || !this.faEligible(p)) return base;
     const sc = this._fvScore(p); let n = 0, rank = 0; for (const t of TEAMS) for (const q of this.players(t)) if (!q.foreign && this.faEligible(q)) { n++; if (this._fvScore(q) > sc) rank++; }
     const mv = faCurve(Math.min(1, rank / Math.max(1, 0.27 * n)));
     return Math.max(base, Math.round(0.8 * mv * ld * 10) / 10);
@@ -55,7 +55,7 @@
   proto._marketDecay = function () { const S = this.S, m = S.faMkt; return m ? faDecayAt(m.day) : S.phase === 'offseason' ? 1 : faDecayAt(FA_END) * (1 - Math.min(0.2, 0.003 * (S.day || 0))); };   // 개막 후에는 추가로 -0.3%/일(최대 -20%)
   proto.faTerms = function (p, t, noAdj) {
     const S = this.S; t = t || S.userTeam; const info = p.faInfo, graded = !!(info && info.grade) && !p.foreign, decay = this._marketDecay() * (noAdj || !this._negAdj ? 1 : this._negAdj(p, t));   // 협상 중 호감도 보정(±7%)
-    if (!graded) { const ask = Math.round(this.askSalary(p) * decay * 10) / 10; return { graded: false, pref: 1, maxYears: 1, mv: ask, ext: false, comp: 1, req: () => Math.max(0.3, ask) }; }
+    if (!graded) { const ask = Math.round(this.askSalary(p) * decay * 10) / 10; return { graded: false, pref: 1, maxYears: 1, mv: ask, ext: false, comp: 1, req: () => Math.max(this.minSal(), ask) }; }
     const mv = this.faMV(p), pref = this._prefYears(p), ext = info.from !== t;
     let n = 0; for (const x of TEAMS) if (x !== t && x !== S.userTeam && this.faRoom(x) >= mv && this.cbtPay(x, this.S.phase === 'offseason') + mv < this.cbtCap() * 0.97) n++;
     const comp = info.grade === 'C' ? 1 : 1 + 0.015 * Math.min(4, n), disc = ext ? 0 : this.loyDiscount(p, t), base = mv * decay * (ext ? (this._hometown(p, t) ? 1.0 : 1.04) : 1 - disc) * comp;
@@ -71,7 +71,7 @@
   proto.faEvaluate = function (p, offer, t) {
     const tm = this.faTerms(p, t), y = Math.round(offer.years), sal = +offer.salary, bon = +offer.bonus || 0;
     if (!(y >= 1 && y <= tm.maxYears)) return { ok: false, msg: tm.graded ? `계약 기간은 1~${tm.maxYears}년이어야 합니다.` : 'FA 자격이 없는 선수는 1년 계약만 가능합니다.' };
-    if (!(sal >= 0.3)) return { ok: false, msg: '연봉은 최소 0.3억입니다.' };
+    if (!(sal >= this.minSal() - 1e-9)) return { ok: false, msg: `연봉은 최소 ${this.minSal()}억입니다.` };
     if (bon < 0 || (!tm.graded && bon > 0)) return { ok: false, msg: tm.graded ? '계약금은 0 이상이어야 합니다.' : '자격이 없는 선수에게는 계약금을 줄 수 없습니다.' };
     if (bon > 0 && y < 2) return { ok: false, msg: '계약금은 2년 이상 계약에만 줄 수 있습니다. 단년 계약은 연봉만 제시하세요.' };
     const per = (bon + sal * y) / y, req = tm.req(y);

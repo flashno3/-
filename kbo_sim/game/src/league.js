@@ -57,6 +57,7 @@
       if (L._addDraftClass) L._addDraftClass(base.draft2027);   // 2027 신인 드래프트 지명 결과(실제 지명·가상 능력치)
       for (const t of TEAMS) L.initTeam(t);
       if (L._initFinance) L._initFinance(base.finance);   // 재정: 초기 보수 합계로 운영비를 역산
+      L._liftMinSal();   // 2027년부터 최저연봉 3,300만원(규약 제71조): 운영비 역산 뒤에 올려 증가분이 손익에 그대로 반영되게 한다
       if (L._initCoaches) L._initCoaches(base.coaches || []);
       if (L.openFAMarket) L.openFAMarket();   // 2027 FA 협상 기간: 1월 1일 시작   // 코칭스태프(보도 기반 일부 + 가상)
       S.calib.base = L.talentLevel(undefined, true);
@@ -181,6 +182,9 @@
      * 비용 쪽 운영비 +5%, 시장 연봉 +5%(2028년부터; 경쟁균형세 상한 증액 5%와 같은 속도). S.econ 으로 조정·끄기(on:false = 이전과 동일). */
     econ() { return Object.assign({ on: true, price: 0.0575, priceJam: 0.0275, jamJump: 0.30, par: 0.025, cost: 0.05, sal: 0.05, mdK: 1.3 }, this.S.econ || {}); }
     salInfl() { const E = this.econ(); if (!E.on) return 1; const y = this.S.phase === 'offseason' ? this.S.year + 1 : this.S.year; return Math.pow(1 + E.sal, Math.max(0, y - 2027)); }   // 시장 연봉 물가(오프시즌에는 다음 시즌 기준)
+    /* 최저연봉(규약 제71조): 2027년부터 3,300만원(육성선수 제외). 2026년 이전은 3,000만원 */
+    minSal(y) { y = y === undefined ? this.S.year : y; return y >= 2027 ? 0.33 : 0.3; }
+    _liftMinSal() { const S = this.S, m = this.minSal(); S.minLift = {}; for (const t of TEAMS) { let d = 0; for (const p of this.players(t)) if (p.contract && p.contract.salary > 0 && p.contract.salary < m) { d += m - p.contract.salary; p.contract.salary = m; } S.minLift[t] = Math.round(d * 100) / 100; } }   // minLift: 구단별 증가분(억, 기록용)
     price(p) { return Math.round((0.3 + 0.9 * Math.pow(this.war(p), 1.35) * (this.S.calib.salK || 1) * this.salInfl()) * 10) / 10; }   // 최저연봉 0.3억 + 가치분(실제 KBO 연봉 규모로 환산)
     /* 시장 가치(억 원 환산): 나이·잠재력 반영 */
     marketValue(p) {

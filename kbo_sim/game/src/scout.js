@@ -453,8 +453,8 @@
    * - 시즌 중(정규시즌) 외국인 교체 영입은 연 2회까지. 부상 대체 영입은 횟수에서 제외하고, 정식 전환할 때만 1회 차감.
    * - 부상 대체: 내 일반 외국인이 6주(42일) 이상 부상이면 재활 선수명단에 올리고 대체 선수를 월 최대 10만$(1.4억)로 계약. 대체 선수는 3명 한도 밖이다.
    *   비용 = 월 1.4억 × 개월을 계약 시점에 지급 확정(선수 연봉에는 넣지 않고 올해 계약 정리 비용으로 계상 → 연봉 합계·경쟁균형세에 이중 반영되지 않음).
-   *   통역·숙소 등 부대 비용은 재정의 선수단 운영비(보정값)에 이미 들어 있어 따로 더하지 않는다. 아시아쿼터는 대체 대상이 아니라고 가정(⚠). */
-  const FOREIGN_TOTAL = 56, SUB_MONTHLY = 1.4, SUB_MIN_DAYS = 42, SWAP_MAX = 2;
+   *   통역·숙소 등 부대 비용은 재정의 선수단 운영비(보정값)에 이미 들어 있어 따로 더하지 않는다. 아시아쿼터도 대체 대상이며 월 2만$(0.28억) 한도(규약 확인). */
+  const FOREIGN_TOTAL = 56, SUB_MONTHLY = 1.4, SUB_MONTHLY_AQ = 0.28, SUB_MIN_DAYS = 42, SWAP_MAX = 2;
   const todayAug15 = S => Math.floor(Date.UTC(S.year, 7, 15) / 864e5);
   proto.foreignGenPay = function (t, excl) {
     const rep = this._replacing || (this.S.neg && this.S.neg.kind === 'foreign' ? this.S.neg.replace : null);
@@ -480,29 +480,29 @@
   };
   proto.subEligible = function () {
     const S = this.S, t = S.userTeam; if (S.phase !== 'regular') return [];
-    return this.foreignOf(t).filter(p => !p.aq && !p.sub && !p.rehab && this.isInj(p) && injDays(this, p) >= SUB_MIN_DAYS).map(p => ({ p, days: injDays(this, p), left: this.injLeft(p) }));
+    return this.foreignOf(t).filter(p => !p.sub && !p.rehab && this.isInj(p) && injDays(this, p) >= SUB_MIN_DAYS).map(p => ({ p, days: injDays(this, p), left: this.injLeft(p) }));
   };
-  proto.subCands = function () {   // 대체 후보: 외국인 FA 시장(일반) + 해외 후보군(일반)
-    const S = this.S, out = []; for (const id of S.fa || []) { const q = S.players[id]; if (q && q.foreign && !q.aq && q.team === 'FA') out.push(q); }
-    const fp = S.fpool && S.fpool.y === S.year && !S.fpool.released ? S.fpool.ids : []; for (const id of fp) { const q = S.players[id]; if (q && q.fpool && !q.aq && q.team === 'DRAFT') out.push(q); }
+  proto.subCands = function (aq) {   // 대체 후보: 외국인 FA 시장 + 해외 후보군(원래 선수와 같은 유형: 일반↔일반, 아시아쿼터↔아시아쿼터)
+    aq = !!aq;
+    const S = this.S, out = []; for (const id of S.fa || []) { const q = S.players[id]; if (q && q.foreign && !!q.aq === aq && q.team === 'FA') out.push(q); }
+    const fp = S.fpool && S.fpool.y === S.year && !S.fpool.released ? S.fpool.ids : []; for (const id of fp) { const q = S.players[id]; if (q && q.fpool && !!q.aq === aq && q.team === 'DRAFT') out.push(q); }
     return out;
   };
   proto.subMaxMonths = function () { const S = this.S, left = Math.max(0, (S.schedule || []).length - (S.day || 0)); return clamp(Math.ceil(left / 30.4), 1, 6); };
-  proto.subCost = function (months) { return r1(SUB_MONTHLY * months); };
+  proto.subCost = function (months, aq) { return r1((aq ? SUB_MONTHLY_AQ : SUB_MONTHLY) * months); };   // 규약(외국인선수 고용규정 제8조②): 잔여 계약기간 1개월당 일반 US$10만(1.4억), 아시아쿼터 US$2만(0.28억)
   proto.subSign = function (origId, candId, months) {
     const S = this.S, t = S.userTeam, orig = S.players[origId], c = S.players[candId]; months = Math.round(months);
     if (S.phase !== 'regular') return '부상 대체 영입은 정규시즌 중에만 할 수 있습니다.';
     if (!orig || orig.team !== t || !orig.foreign) return '대체 대상 외국인 선수를 찾을 수 없습니다.';
-    if (orig.aq) return '아시아쿼터 선수는 부상 대체 영입 대상이 아닙니다(가정).';
     if (!this.subEligible().some(x => x.p.id === origId)) return '6주(42일) 이상 치료가 필요한 부상이어야 하고, 이미 대체 선수가 있으면 안 됩니다.';
-    if (!c || !c.foreign || c.aq || !(c.team === 'FA' || (c.fpool && c.team === 'DRAFT'))) return '대체로 영입할 수 있는 일반 외국인 후보가 아닙니다.';
+    if (!c || !c.foreign || !!c.aq !== !!orig.aq || !(c.team === 'FA' || (c.fpool && c.team === 'DRAFT'))) return orig.aq ? '대체로 영입할 수 있는 아시아쿼터 후보가 아닙니다.' : '대체로 영입할 수 있는 일반 외국인 후보가 아닙니다.';
     if (!(months >= 1 && months <= this.subMaxMonths())) return `계약 기간은 1~${this.subMaxMonths()}개월입니다.`;
     if (S.teams[t].ids.length >= 130) return '보유 선수 130명 제한입니다.';
-    const cost = this.subCost(months), room = this.finReady() ? this.faRoom(t) : 1e9; if (room < cost) return `예산 부족: 대체 계약 ${cost}억(월 ${SUB_MONTHLY}억 × ${months}개월)이 여유자금 ${room.toFixed(1)}억을 넘습니다.`;
+    const mon = orig.aq ? SUB_MONTHLY_AQ : SUB_MONTHLY, cost = this.subCost(months, orig.aq), room = this.finReady() ? this.faRoom(t) : 1e9; if (room < cost) return `예산 부족: 대체 계약 ${cost}억(월 ${mon}억 × ${months}개월)이 여유자금 ${room.toFixed(1)}억을 넘습니다.`;
     const f = S.fin && S.fin.teams[t]; if (!f && this.finReady()) return '재정 정보가 없습니다.';
     if (c.team === 'FA') S.fa = (S.fa || []).filter(x => x !== candId); else if (S.fpool) { S.fpool.ids = S.fpool.ids.filter(x => x !== candId); S.fWatch = (S.fWatch || []).filter(w => w.id !== candId); }
     c.fpool = false; c.deep = false; c.team = t; c.active = false; S.teams[t].ids.push(candId); c.contract = { salary: 0, years: 1 }; c.myFrom = { y: S.year, how: '대체 외국인 영입' };
-    c.sub = { for: origId, mo: months, monthly: SUB_MONTHLY, start: S.day, end: S.day + Math.round(months * 30.4), cost, back: null }; orig.rehab = { sub: candId, day: S.day };
+    c.sub = { for: origId, mo: months, monthly: mon, start: S.day, end: S.day + Math.round(months * 30.4), cost, back: null }; orig.rehab = { sub: candId, day: S.day };
     if (f) { f.dead = (f.dead || []).concat([{ year: this._finYear(), amt: cost, who: `${c.ko}(대체 계약 ${months}개월)` }]); }
     this._foreignJoin(c); if (this.postDeadline().passed) c.noPost = S.year; this.invalidate();
     this._news(`부상 대체 외국인: ${orig.ko}(${orig.inj ? orig.inj.dx : '부상'}) 재활 선수명단 등재 → ${c.ko} ${months}개월 계약(${cost}억)${c.noPost ? ' · 8월 15일 이후라 포스트시즌 출전 불가' : ''}`);
@@ -512,7 +512,7 @@
     const S = this.S, t = S.userTeam, c = S.players[subId]; months = Math.round(months); if (!c || c.team !== t || !c.sub) return '대체 선수를 찾을 수 없습니다.';
     const orig = S.players[c.sub.for]; if (!orig || orig.team !== t || !this.isInj(orig)) return '원래 선수가 복귀했거나 팀에 없어 연장할 수 없습니다.';
     if (!(months >= 1 && months <= this.subMaxMonths())) return `연장 기간은 1~${this.subMaxMonths()}개월입니다.`;
-    const cost = this.subCost(months), room = this.finReady() ? this.faRoom(t) : 1e9; if (room < cost) return `예산 부족: ${cost}억이 여유자금 ${room.toFixed(1)}억을 넘습니다.`;
+    const cost = this.subCost(months, c.aq), room = this.finReady() ? this.faRoom(t) : 1e9; if (room < cost) return `예산 부족: ${cost}억이 여유자금 ${room.toFixed(1)}억을 넘습니다.`;
     const f = S.fin && S.fin.teams[t]; if (f) f.dead = (f.dead || []).concat([{ year: this._finYear(), amt: cost, who: `${c.ko}(대체 계약 연장 ${months}개월)` }]);
     c.sub.mo += months; c.sub.end += Math.round(months * 30.4); c.sub.cost = r1(c.sub.cost + cost); this._news(`대체 외국인 ${c.ko} 계약 ${months}개월 연장(${cost}억)`); return null;
   };
@@ -535,7 +535,7 @@
   proto._subEnd = function () { const S = this.S, t = S.userTeam; for (const p of this.players(t).filter(x => x.sub)) this._subDrop(p, '시즌 종료'); for (const p of this.players(t).filter(x => x.rehab)) delete p.rehab; };
   proto.subConvertPreview = function (subId) {   // 정식 전환 시 새 계약·위약금·교체 횟수(읽기 전용)
     const S = this.S, t = S.userTeam, c = S.players[subId]; if (!c || c.team !== t || !c.sub) return null; const o = S.players[c.sub.for];
-    const rem = Math.max(0.5, (Math.floor(Date.UTC(S.year, 10, 30) / 864e5) - this.todayN()) / 30.4), sal = r1(Math.max(0.3, SUB_MONTHLY * rem));
+    const rem = Math.max(0.5, (Math.floor(Date.UTC(S.year, 10, 30) / 864e5) - this.todayN()) / 30.4), sal = r1(Math.max(this.minSal(), (c.aq ? SUB_MONTHLY_AQ : SUB_MONTHLY) * rem));
     return { ok: !!(o && o.team === t), c, o, rem, sal, rel: o ? this.releaseCost(o.id) : null, sw: this.fSwapInfo() };
   };
   proto.subDecide = function (subId, choice) {

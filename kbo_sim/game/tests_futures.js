@@ -56,7 +56,7 @@ ok(S.nextId>Math.max(...Object.keys(S.players).map(id=>parseInt(id.slice(1)))),'
 // 2e) 2027 실제 드래프트 지명
 {const LF=League.create(base,'Lions',9),SF=LF.S,dr=Object.values(SF.players).filter(p=>p.draft);ok(dr.length===110,'지명 110명 '+dr.length);
  ok(Object.keys(SF.teams).every(t=>dr.filter(p=>p.team===t).length===11),'팀당 11명');
- ok(dr.every(p=>p.ko==='최지만'||p.rookie===SF.year&&!p.active&&p.contract.salary===0.3),'신인 연봉 0.3억·2군·신인 표시');
+ ok(dr.every(p=>p.ko==='최지만'||p.rookie===SF.year&&!p.active&&p.contract.salary===LF.minSal()),'신인 연봉 최저연봉(2027년~0.33억)·2군·신인 표시');
  ok(dr.every(p=>p.age>=19&&p.age<=23||p.ko==='최지만'),'신인 나이 범위');
  const hy=dr.find(p=>p.ko==='하현승');ok(hy&&hy.bonus===16&&hy.twoWay&&hy.type==='P','하현승 16억 투타겸업');
  ok(dr.every(p=>p.ko==='최지만'||LF.ovr(p)<=62),'신인 현재 능력치 과도하지 않음');

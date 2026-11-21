@@ -68,7 +68,7 @@ L.buildDraft();L.draftAutoRest();L.finishDraft();
 // 시장의 등급 FA를 내가 4명 영입 시도(한도 3)
 const marketAll=L.faList().filter(p=>p.faInfo&&p.faInfo.grade&&p.faInfo.from!==U);console.log('시장 등급 FA',marketAll.length,['A','B','C'].map(x=>x+':'+marketAll.filter(p=>p.faInfo.grade===x).length).join(' '));
 let signed=0,errs=[];for(const p of marketAll.sort((a,b)=>L.war(b)-L.war(a)).slice(0,5)){const e=L.signFA(p.id,2);if(e)errs.push(e);else signed++}
-ok(signed===3,'외부 FA는 3명까지 '+signed);ok(errs.some(e=>e.includes('3명')),'4번째는 거절: '+errs[0]);
+const lim=L.faExtLimit();ok(lim>=1&&lim<=4&&signed===Math.min(lim,5),'외부 FA는 신청자 수에 따른 한도('+lim+'명)까지 '+signed);ok(errs.some(e=>e.includes(lim+'명')),'한도 초과는 거절: '+errs[0]);
 ok((S.compLog||[]).length>=signed-1,'보상 기록 '+(S.compLog||[]).length);console.log('보상 로그',(S.compLog||[]).map(c=>`${c.grade}등급 ${c.from}→${c.to}: ${c.text}`).join(' | '));
 // 시장의 외국인 영입 규칙
 const f=L.foreignOf(U);const fm=L.faList().filter(p=>p.foreign);

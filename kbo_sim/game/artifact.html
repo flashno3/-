@@ -1043,6 +1043,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
       if (L._addDraftClass) L._addDraftClass(base.draft2027);   // 2027 신인 드래프트 지명 결과(실제 지명·가상 능력치)
       for (const t of TEAMS) L.initTeam(t);
       if (L._initFinance) L._initFinance(base.finance);   // 재정: 초기 보수 합계로 운영비를 역산
+      L._liftMinSal();   // 2027년부터 최저연봉 3,300만원(규약 제71조): 운영비 역산 뒤에 올려 증가분이 손익에 그대로 반영되게 한다
       if (L._initCoaches) L._initCoaches(base.coaches || []);
       if (L.openFAMarket) L.openFAMarket();   // 2027 FA 협상 기간: 1월 1일 시작   // 코칭스태프(보도 기반 일부 + 가상)
       S.calib.base = L.talentLevel(undefined, true);
@@ -1167,6 +1168,9 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
      * 비용 쪽 운영비 +5%, 시장 연봉 +5%(2028년부터; 경쟁균형세 상한 증액 5%와 같은 속도). S.econ 으로 조정·끄기(on:false = 이전과 동일). */
     econ() { return Object.assign({ on: true, price: 0.0575, priceJam: 0.0275, jamJump: 0.30, par: 0.025, cost: 0.05, sal: 0.05, mdK: 1.3 }, this.S.econ || {}); }
     salInfl() { const E = this.econ(); if (!E.on) return 1; const y = this.S.phase === 'offseason' ? this.S.year + 1 : this.S.year; return Math.pow(1 + E.sal, Math.max(0, y - 2027)); }   // 시장 연봉 물가(오프시즌에는 다음 시즌 기준)
+    /* 최저연봉(규약 제71조): 2027년부터 3,300만원(육성선수 제외). 2026년 이전은 3,000만원 */
+    minSal(y) { y = y === undefined ? this.S.year : y; return y >= 2027 ? 0.33 : 0.3; }
+    _liftMinSal() { const S = this.S, m = this.minSal(); S.minLift = {}; for (const t of TEAMS) { let d = 0; for (const p of this.players(t)) if (p.contract && p.contract.salary > 0 && p.contract.salary < m) { d += m - p.contract.salary; p.contract.salary = m; } S.minLift[t] = Math.round(d * 100) / 100; } }   // minLift: 구단별 증가분(억, 기록용)
     price(p) { return Math.round((0.3 + 0.9 * Math.pow(this.war(p), 1.35) * (this.S.calib.salK || 1) * this.salInfl()) * 10) / 10; }   // 최저연봉 0.3억 + 가치분(실제 KBO 연봉 규모로 환산)
     /* 시장 가치(억 원 환산): 나이·잠재력 반영 */
     marketValue(p) {
@@ -2096,7 +2100,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
       const pickNo = (pk[d.round] = (pk[d.round] || 0) + 1), tilt = d.bonus ? Math.min(1.2, 0.12 * Math.max(0, d.bonus - 2.5)) : 0;   // 지명 슬롯은 실제 분포(사전), 계약금은 추가 기울기
       const p = this.makeRookie(r, type, pos, { name: d.name, age: 2027 - by, tilt, prior: slotPrior({ round: d.round, pick: pickNo }) });
       p.team = d.team; p.rookie = S.year; p.draft = { round: d.round, school: d.school }; if (d.bonus) p.bonus = d.bonus; if (d.name === '윤예성') p.bonusUnknown = true; if (d.pos === '투타겸업') p.twoWay = true; if (ageEst) p.ageEst = true;
-      p.contract = { salary: 0.3, years: 1 }; p.fa.univ = !!univ; S.teams[d.team].ids.push(p.id);
+      p.contract = { salary: this.minSal(), years: 1 }; p.fa.univ = !!univ; S.teams[d.team].ids.push(p.id);
     }
     this.invalidate();
   };
@@ -2126,7 +2130,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
       p.stamina = clamp(gauss(r, 45, 12), 25, 70); p.role = p.stamina >= 50 && r.random() < 0.7 ? 'SP' : 'RP'; p.GS = 0; p.G = 5; p.IP = 8; p.ipgs = null;
     }
     if (type === 'B') p.bats = r.random() < 0.06 ? 'S' : r.random() < 0.35 ? 'L' : 'R'; else p.throws = r.random() < 0.27 ? 'L' : 'R';   // 가상 신인의 투타
-    p.contract = { salary: 0.3, years: 1 }; p.fa = { svc: 0, used: 0, last: null, regDays: 0, rem: 0, univ: false }; p.salHist = [0.3];
+    p.contract = { salary: this.minSal(), years: 1 }; p.fa = { svc: 0, used: 0, last: null, regDays: 0, rem: 0, univ: false }; p.salHist = [this.minSal()];
     S.players[id] = p;
     p.peak = this.rollPeak(r, opts.tilt, opts.prior);   // 숨은 정점 OVR
     const target = Math.min(clamp(p.peak - (27 - p.age) * 2.0 - 4 + gauss(r, 0, 7), 20, p.peak), 38 + (p.age - 18) * 4);   // 어린 신인이 곧바로 주전급이 되지 않도록 현재 능력치 상한   // 현재 능력치를 정점에 맞춰 정렬(어릴수록 격차 큼)
@@ -2147,7 +2151,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
   /* [오프시즌 분할] 오프시즌 계약·FA 시장가·구단 충성도 — 원본 offseason.js 순서 그대로. 공용 심볼은 off_common.js(LG.OFFC). */
   const { proto, clamp, TEAMS, FA_END, BONUS_SHARE, rngFor, news, FOREIGN_NEW, FOREIGN_RAISE } = LG.OFFC;
   /* ---------------- 오프시즌 ---------------- */
-  proto.askSalary = function (p) { return Math.max(0.3, Math.round(this.price(p) * (p.age >= 34 ? 0.9 : 1.12) * 10) / 10); };
+  proto.askSalary = function (p) { return Math.max(this.minSal(), Math.round(this.price(p) * (p.age >= 34 ? 0.9 : 1.12) * 10) / 10); };
   /* ---------------- FA 시장가·제시(계약금 포함) ----------------
    * 시장가(mv) = 연 보수(계약금 + 연봉 합계 ÷ 계약 연수). FA 승인 선수 풀에서 가치 순위(WAR + 최근 연봉 평균의 10%)를 매겨 실제 FA 계약 분포로 환산한다.
    * 2025·2026 FA 계약(연 보수): 1위권 25~28억 · 상위 10% 20억 · 20% 16.5억 · 35% 13억 · 중간 10억 · 65% 7.5억 · 80% 5억 · 하위 2.5억.
@@ -2185,9 +2189,9 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
     if (!p || p.foreign || p.team !== 'FA' || !p.faInfo || !t || p.faInfo.from !== t || this.war(p) < 1.0) return null;
     const l = this.loyalty(p, t); if (!l || l.team !== t || l.v < 70) return null; return { v: l.v, s: clamp((l.v - 70) / 30, 0, 1) };
   };
-  proto._blendAsk = function (p) { const cur = p.contract.salary, ask = this.askSalary(p); return Math.max(0.3, Math.round((cur + (ask > cur ? 0.6 : 0.4) * (ask - cur)) * 10) / 10); };
+  proto._blendAsk = function (p) { const cur = p.contract.salary, ask = this.askSalary(p); return Math.max(this.minSal(), Math.round((cur + (ask > cur ? 0.6 : 0.4) * (ask - cur)) * 10) / 10); };
   proto.resignAsk = function (p) {
-    const ld = 1 - 0.5 * this.loyDiscount(p, p.team), base = Math.max(0.3, Math.round(this._blendAsk(p) * ld * 10) / 10); if (p.foreign || !this.faEligible(p)) return base;
+    const ld = 1 - 0.5 * this.loyDiscount(p, p.team), base = Math.max(this.minSal(), Math.round(this._blendAsk(p) * ld * 10) / 10); if (p.foreign || !this.faEligible(p)) return base;
     const sc = this._fvScore(p); let n = 0, rank = 0; for (const t of TEAMS) for (const q of this.players(t)) if (!q.foreign && this.faEligible(q)) { n++; if (this._fvScore(q) > sc) rank++; }
     const mv = faCurve(Math.min(1, rank / Math.max(1, 0.27 * n)));
     return Math.max(base, Math.round(0.8 * mv * ld * 10) / 10);
@@ -2196,7 +2200,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
   proto._marketDecay = function () { const S = this.S, m = S.faMkt; return m ? faDecayAt(m.day) : S.phase === 'offseason' ? 1 : faDecayAt(FA_END) * (1 - Math.min(0.2, 0.003 * (S.day || 0))); };   // 개막 후에는 추가로 -0.3%/일(최대 -20%)
   proto.faTerms = function (p, t, noAdj) {
     const S = this.S; t = t || S.userTeam; const info = p.faInfo, graded = !!(info && info.grade) && !p.foreign, decay = this._marketDecay() * (noAdj || !this._negAdj ? 1 : this._negAdj(p, t));   // 협상 중 호감도 보정(±7%)
-    if (!graded) { const ask = Math.round(this.askSalary(p) * decay * 10) / 10; return { graded: false, pref: 1, maxYears: 1, mv: ask, ext: false, comp: 1, req: () => Math.max(0.3, ask) }; }
+    if (!graded) { const ask = Math.round(this.askSalary(p) * decay * 10) / 10; return { graded: false, pref: 1, maxYears: 1, mv: ask, ext: false, comp: 1, req: () => Math.max(this.minSal(), ask) }; }
     const mv = this.faMV(p), pref = this._prefYears(p), ext = info.from !== t;
     let n = 0; for (const x of TEAMS) if (x !== t && x !== S.userTeam && this.faRoom(x) >= mv && this.cbtPay(x, this.S.phase === 'offseason') + mv < this.cbtCap() * 0.97) n++;
     const comp = info.grade === 'C' ? 1 : 1 + 0.015 * Math.min(4, n), disc = ext ? 0 : this.loyDiscount(p, t), base = mv * decay * (ext ? (this._hometown(p, t) ? 1.0 : 1.04) : 1 - disc) * comp;
@@ -2212,7 +2216,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
   proto.faEvaluate = function (p, offer, t) {
     const tm = this.faTerms(p, t), y = Math.round(offer.years), sal = +offer.salary, bon = +offer.bonus || 0;
     if (!(y >= 1 && y <= tm.maxYears)) return { ok: false, msg: tm.graded ? `계약 기간은 1~${tm.maxYears}년이어야 합니다.` : 'FA 자격이 없는 선수는 1년 계약만 가능합니다.' };
-    if (!(sal >= 0.3)) return { ok: false, msg: '연봉은 최소 0.3억입니다.' };
+    if (!(sal >= this.minSal() - 1e-9)) return { ok: false, msg: `연봉은 최소 ${this.minSal()}억입니다.` };
     if (bon < 0 || (!tm.graded && bon > 0)) return { ok: false, msg: tm.graded ? '계약금은 0 이상이어야 합니다.' : '자격이 없는 선수에게는 계약금을 줄 수 없습니다.' };
     if (bon > 0 && y < 2) return { ok: false, msg: '계약금은 2년 이상 계약에만 줄 수 있습니다. 단년 계약은 연봉만 제시하세요.' };
     const per = (bon + sal * y) / y, req = tm.req(y);
@@ -2324,6 +2328,15 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
   /* [오프시즌 분할] 드래프트 — 원본 offseason.js 순서 그대로. 공용 심볼은 off_common.js(LG.OFFC). */
   const { proto, rngFor, news, ROSTER_MAX } = LG.OFFC;
   /* ---------- 드래프트 ---------- */
+  const DRAFT_ROUNDS = 11;   // 규약 제110조 ③ 11라운드까지 지명, ④ 구단은 반드시 대졸 예정 선수를 1명 이상 지명
+  /* 대졸 예정 의무: 이 구단의 마지막 지명 차례인데 아직 대졸 예정자를 뽑지 않았으면 대졸 예정자만 지명할 수 있다(후보에 대졸이 남아 있을 때) */
+  proto._draftUnivOnly = function (t) {
+    const S = this.S, d = S.off.draft, isU = id => { const p = S.players[id]; return !!(p && p.pro && p.pro.univ); };
+    if (d.order.slice(d.pick + 1).includes(t)) return false;   // 아직 이 구단의 지명 차례가 남아 있다
+    if (d.picks.some(x => x.team === t && isU(x.id))) return false;
+    return d.pool.some(isU);
+  };
+  proto._draftIsUniv = function (id) { const p = this.S.players[id]; return !!(p && p.pro && p.pro.univ); };
   proto.buildDraft = function () {
     const S = this.S, r = rngFor(S.seed, S.year, 41); let pool = [];
     const pr = this.ensureProspects ? this.ensureProspects() : null;   // 시즌 시작 때 미리 공개된 후보 풀(스카우팅 대상)을 그대로 사용
@@ -2331,12 +2344,12 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
     else for (let i = 0; i < 120; i++) pool.push(this.makeRookie(r, i % 2 === 0 ? 'B' : 'P').id);   // 구 저장 파일·예외 시 기존 방식
     const st = this.standings().slice().reverse().map(x => x.team), order = [], st1 = st.slice();
     for (const t of st) if (S.cbt && S.cbt.drop && S.cbt.drop[t]) { const i = st1.indexOf(t); st1.splice(i, 1); st1.splice(Math.min(i + 9, st1.length), 0, t); }   // 경쟁균형세 3회 연속 초과: 1라운드 지명 9단계 하락
-    order.push(...st1); for (let k = 1; k < 10; k++) order.push(...st);
-    S.off.draft = { pool, order, pick: 0, picks: [], rounds: 10, board: this.userScore ? pool.slice().sort((a, b) => this.userScore(S.players[b]) - this.userScore(S.players[a])) : null }; return S.off.draft;   // board: 드래프트 시작 시점 내 스카우트 평가 순위(드래프트 데이 해설용)
+    order.push(...st1); for (let k = 1; k < DRAFT_ROUNDS; k++) order.push(...st);   // 규약 제110조 ③: 11라운드
+    S.off.draft = { pool, order, pick: 0, picks: [], rounds: DRAFT_ROUNDS, board: this.userScore ? pool.slice().sort((a, b) => this.userScore(S.players[b]) - this.userScore(S.players[a])) : null }; return S.off.draft;   // board: 드래프트 시작 시점 내 스카우트 평가 순위(드래프트 데이 해설용)
   };
   proto.draftOnClock = function () { const d = this.S.off.draft; return d.pick < d.order.length ? d.order[d.pick] : null; };
   proto._draftTake = function (t, id) {
-    const S = this.S, d = S.off.draft, p = S.players[id]; d.pool = d.pool.filter(x => x !== id); p.team = t; p.contract = { salary: 0.3, years: 1 }; S.teams[t].ids.push(id);
+    const S = this.S, d = S.off.draft, p = S.players[id]; d.pool = d.pool.filter(x => x !== id); p.team = t; p.contract = { salary: this.minSal(), years: 1 }; S.teams[t].ids.push(id);
     d.picks.push({ pick: d.pick + 1, team: t, id }); d.pick++; this.invalidate();
     if (t === S.userTeam && this._scoutCarry) this._scoutCarry(p);
     if (t === S.userTeam) { p.myFrom = { y: S.year, how: `드래프트 ${Math.ceil(d.pick / 10)}라운드 지명` }; news(this, `드래프트 ${Math.ceil(d.pick / 10)}라운드: ${p.ko} 지명`); }
@@ -2348,12 +2361,12 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
   };
   proto.draftPick = function (id) {
     const S = this.S, d = S.off.draft; if (this.draftOnClock() !== S.userTeam) return '아직 내 순서가 아닙니다.';
-    if (!d.pool.includes(id)) return '이미 지명된 선수입니다.'; if (S.teams[S.userTeam].ids.length >= ROSTER_MAX) return `보유 선수 ${ROSTER_MAX}명 제한입니다. 먼저 선수를 정리하세요.`;
+    if (!d.pool.includes(id)) return '이미 지명된 선수입니다.'; if (this._draftUnivOnly(S.userTeam) && !this._draftIsUniv(id)) return '규약상 구단은 대졸 예정 선수를 1명 이상 지명해야 합니다. 마지막 지명에서는 대졸 예정 선수를 선택하세요.'; if (S.teams[S.userTeam].ids.length >= ROSTER_MAX) return `보유 선수 ${ROSTER_MAX}명 제한입니다. 먼저 선수를 정리하세요.`;
     this._draftTake(S.userTeam, id); return null;
   };
   proto.draftAutoRest = function () {   // 내 순서도 자동 지명(추천 순)
     const S = this.S, d = S.off.draft;
-    while (d.pick < d.order.length) { if (this.draftOnClock() === S.userTeam) { if (S.teams[S.userTeam].ids.length >= ROSTER_MAX) { d.pick++; continue; } const best = d.pool.map(id => ({ id, s: this.draftBoardScore ? this.draftBoardScore(S.players[id]) : this.userScore ? this.userScore(S.players[id]) : this.scoutScore(S.players[id]) })).sort((a, b) => b.s - a.s)[0]; this._draftTake(S.userTeam, best.id); } else this.draftAiUntilUser(); }
+    while (d.pick < d.order.length) { if (this.draftOnClock() === S.userTeam) { if (S.teams[S.userTeam].ids.length >= ROSTER_MAX) { d.pick++; continue; } const uo = this._draftUnivOnly(S.userTeam), best = d.pool.filter(id => !uo || this._draftIsUniv(id)).map(id => ({ id, s: this.draftBoardScore ? this.draftBoardScore(S.players[id]) : this.userScore ? this.userScore(S.players[id]) : this.scoutScore(S.players[id]) })).sort((a, b) => b.s - a.s)[0]; this._draftTake(S.userTeam, best.id); } else this.draftAiUntilUser(); }
   };
   proto.finishDraft = function () {
     const S = this.S, d = S.off.draft; if (this._scoutSettle) this._scoutSettle();   // 스카우트 적중률 정산(후보의 숨은 정점이 사라지기 전에)
@@ -2517,7 +2530,11 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
   proto._foreignJoin = function (p) {   // 외국인은 영입 즉시 1군 엔트리에 등록한다(자리가 없으면 2군 대기)
     const S = this.S, t = S.userTeam; p.reg1 = true; p.lockUntil = 0; if (this.players(t).filter(x => x.active).length < ACTIVE_MAX && !this.isInj(p)) p.active = true; if (this.repairSettings) this.repairSettings(t); this.invalidate();   // 부상 중인 외국인은 영입해도 부상자 명단(2군) 대기
   };
-  proto._faCount = function (t, d) { const S = this.S, k = S.off ? S.off.year : S.year; S.faSign = S.faSign && S.faSign.k === k ? S.faSign : { k, c: {} }; if (d) S.faSign.c[t] = (S.faSign.c[t] || 0) + d; return S.faSign.c[t] || 0; };
+  /* 규약 제173조: 구단이 계약할 수 있는 외부 FA 수 = FA 권리 행사자 10명 이하 1명 / 11~20명 2명 / 21~30명 3명 / 31명 이상 4명.
+   행사자 수는 시장이 열릴 때(오프시즌 FA 풀, 2027년 시작 시점은 승인 22명) 한 번 정해 그해 내내 유지한다. 시즌 중 잔여 FA만 남은 때는 기존 상한(3명)을 쓴다. */
+  proto._faApplicants = function () { const S = this.S; if (S.off) return (S.fa || []).filter(id => { const p = S.players[id]; return p && p.faInfo && p.faInfo.grade && !p.foreign; }).length; return S.year === 2027 && S.faClass2027 ? S.faClass2027.length : null; };
+  proto.faExtLimit = function () { const S = this.S; this._faCount(S.userTeam); const n = S.faSign.n; return n === null || n === undefined ? EXT_LIMIT : n <= 10 ? 1 : n <= 20 ? 2 : n <= 30 ? 3 : 4; };
+  proto._faCount = function (t, d) { const S = this.S, k = S.off ? 'o' + S.off.year : S.year; S.faSign = S.faSign && S.faSign.k === k ? S.faSign : { k, c: {}, n: this._faApplicants() }; if (d) S.faSign.c[t] = (S.faSign.c[t] || 0) + d; return S.faSign.c[t] || 0; };
   /* 보상: 보호선수(A 20명·B 25명)를 뺀 가장 가치 높은 선수 또는 보상금. 원소속 구단이 선수가 쓸 만하면 선수, 아니면 보상금(옵션2) */
   /* ---------------- FA 보상(KBO 규정 단순화) ----------------
      A등급: 보호선수 20명 외 1명 + 전년 연봉 200%, 또는 전년 연봉 300% / B등급: 보호선수 25명 외 1명 + 100%, 또는 200% / C등급: 전년 연봉 150%.
@@ -2623,10 +2640,10 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
     const pr = 0.01 + 0.2 * Math.exp(-d / 14), r = rngFor(S.seed, S.year, d, 5000), teams = TEAMS.filter(t => t !== S.userTeam).sort(() => r.random() - 0.5);
     for (const t of teams) {
       if (r.random() > pr) continue;
-      if (this._faCount(t) >= EXT_LIMIT || S.teams[t].ids.length >= ROSTER_MAX - 4) continue;
+      if (this._faCount(t) >= this.faExtLimit() || S.teams[t].ids.length >= ROSTER_MAX - 4) continue;
       let deal = null;
       const cand = this.faList().filter(p => !p.foreign).sort((a, b) => this.war(b) - this.war(a)).find(p => {
-        if (this.war(p) < 1.0 || !((!(p.faInfo && p.faInfo.grade)) || p.faInfo.from === t || this._faCount(t) < EXT_LIMIT) || !(r.random() < (this.war(p) >= 2 ? 0.7 : 0.45))) return false;
+        if (this.war(p) < 1.0 || !((!(p.faInfo && p.faInfo.grade)) || p.faInfo.from === t || this._faCount(t) < this.faExtLimit()) || !(r.random() < (this.war(p) >= 2 ? 0.7 : 0.45))) return false;
         deal = this._aiDeal(t, p); return !!deal;
       });
       if (!cand) continue;
@@ -2640,7 +2657,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
     const S = this.S, p = S.players[id], t = S.userTeam; if (!p || p.team !== 'FA') return '이미 계약된 선수입니다.';
     if (S.teams[t].ids.length >= ROSTER_MAX) return `보유 선수 ${ROSTER_MAX}명 제한입니다.`;
     const info = p.faInfo, graded = info && info.grade, ext = graded && info.from !== t;
-    if (ext && this._faCount(t) >= EXT_LIMIT) return `외부 FA는 한 시즌에 ${EXT_LIMIT}명까지만 영입할 수 있습니다.`;
+    if (ext && this._faCount(t) >= this.faExtLimit()) return `외부 FA는 올해 FA 권리 행사자 수에 따라 ${this.faExtLimit()}명까지만 영입할 수 있습니다(규약 제173조).`;
     if (p.foreign) {
       if (!this.foreignOK(t, p)) return p.aq ? '아시아쿼터는 구단당 1명입니다.' : '일반 외국인은 3명까지이며 같은 포지션 3명은 안 됩니다.';
       if (this.fSwapBlock && this.fSwapBlock()) return this.fSwapBlock();
@@ -2678,7 +2695,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
       let n = 0; const need = k => this.players(t).filter(p => p.type === k).length;
       const pool = this.faList().sort((a, b) => this.war(b) - this.war(a));
       for (const p of pool) {
-        if (this._faCount(t) >= EXT_LIMIT || S.teams[t].ids.length >= ROSTER_MAX - 4) break;
+        if (this._faCount(t) >= this.faExtLimit() || S.teams[t].ids.length >= ROSTER_MAX - 4) break;
         if (p.foreign) continue;   // 외국인은 아래에서 슬롯별로 채운다
         if (this.war(p) < 1.0) continue; const deal = this._aiDeal(t, p); if (!deal) continue;   // AI 구단은 상한·여유자금을 지킨다
         if (r.random() < (this.war(p) >= 2 ? 0.75 : 0.5)) this._doSign(t, p, deal.years, deal.salary, deal.bonus);
@@ -2686,20 +2703,20 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
       this._fillForeign(t, r);
       // 연봉 하한(2027~) 미달이면 하한을 넘길 때까지 FA를 영입한다(미달 시 기금 납부를 피하려고)
       { const fl = this.cbtFloor(); if (fl !== null) for (let k = 0; k < 6 && this.cbtPay(t) < fl * 1.03 && S.teams[t].ids.length < ROSTER_MAX; k++) {
-        let dl = null; const p = this.faList().filter(x => !x.foreign && !(x.faInfo && x.faInfo.grade && x.faInfo.from !== t && this._faCount(t) >= EXT_LIMIT)).sort((a, b) => this.war(b) - this.war(a)).find(x => { dl = this._aiDeal(t, x); return !!dl; }); if (!p) break;
+        let dl = null; const p = this.faList().filter(x => !x.foreign && !(x.faInfo && x.faInfo.grade && x.faInfo.from !== t && this._faCount(t) >= this.faExtLimit())).sort((a, b) => this.war(b) - this.war(a)).find(x => { dl = this._aiDeal(t, x); return !!dl; }); if (!p) break;
         this._doSign(t, p, dl.years, dl.salary, dl.bonus);   // 연봉 하한 미달 팀의 보강 영입(계약금 포함)
       } }
       // 핵심 포지션(포수·유격수·중견수·2루수·3루수)에 주포지션 선수가 2명 미만이면 보강
       for (const pos of ['C', 'SS', 'CF', '2B', '3B']) {
         while (this.hitters(t).filter(x => x.pos === pos).length < 2) {
           const fa = this.faList().filter(x => x.type === 'B' && x.pos === pos && !x.foreign && !(x.faInfo && x.faInfo.grade && x.faInfo.from !== t)).sort((a, b) => this.war(b) - this.war(a))[0], np = fa || this.makeRookie(r, 'B', pos);
-          if (fa) S.fa = S.fa.filter(x => x !== fa.id); np.team = t; np.contract = { salary: Math.max(0.3, Math.min(this.askSalary(np), 0.8)), years: 1 }; S.teams[t].ids.push(np.id);
+          if (fa) S.fa = S.fa.filter(x => x !== fa.id); np.team = t; np.contract = { salary: Math.max(this.minSal(), Math.min(this.askSalary(np), 0.8)), years: 1 }; S.teams[t].ids.push(np.id);
         }
       }
       // 최소 인원 보장
       for (const kind of ['B', 'P']) while (need(kind) < (kind === 'B' ? 24 : 26)) {
         const p = this.faList().filter(x => x.type === kind && !x.foreign && !(x.faInfo && x.faInfo.grade && x.faInfo.from !== t)).sort((a, b) => this.war(b) - this.war(a))[0] || this.makeRookie(r, kind);
-        if (p.team === 'FA') S.fa = S.fa.filter(x => x !== p.id); p.team = t; p.contract = { salary: Math.max(0.3, Math.min(this.askSalary(p), 0.6)), years: 1 }; S.teams[t].ids.push(p.id);
+        if (p.team === 'FA') S.fa = S.fa.filter(x => x !== p.id); p.team = t; p.contract = { salary: Math.max(this.minSal(), Math.min(this.askSalary(p), 0.6)), years: 1 }; S.teams[t].ids.push(p.id);
       }
       while (S.teams[t].ids.length > ROSTER_MAX) { const w = this.players(t).filter(x => !x.compHold).sort((a, b) => this.marketValue(a) - this.marketValue(b))[0]; if (!w) break; this._retireOrRelease(t, w.id); }   // 보상 후보로 제시된 선수는 결정 전까지 방출 대상에서 제외
     }
@@ -2773,11 +2790,11 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
     }
     for (const t of teams) {
       if (r.random() > pr) continue;
-      if (this._faCount(t) >= EXT_LIMIT || S.teams[t].ids.length >= ROSTER_MAX - 4) continue;
+      if (this._faCount(t) >= this.faExtLimit() || S.teams[t].ids.length >= ROSTER_MAX - 4) continue;
       if (pool.filter(p => (m.bids[p.id] || []).some(b => b.team === t)).length >= 2) continue;   // 동시 입찰 2명까지
       for (const p of pool) {
         if (p.team !== 'FA' || (m.bids[p.id] || []).some(b => b.team === t)) continue;
-        const g = p.faInfo && p.faInfo.grade; if (g && p.faInfo.from !== t && this._faCount(t) >= EXT_LIMIT) continue;
+        const g = p.faInfo && p.faInfo.grade; if (g && p.faInfo.from !== t && this._faCount(t) >= this.faExtLimit()) continue;
         if (!(r.random() < (this.war(p) >= 2 ? 0.7 : 0.45))) continue;
         const deal = this._aiDeal(t, p); if (!deal) continue;
         (m.bids[p.id] = m.bids[p.id] || []).push({ team: t, per: Math.round(deal.per * 100) / 100, ceil: Math.round(deal.per * (1.02 + 0.1 * r.random()) * 100) / 100, y: deal.years, day: d }); if (this._faFeedAdd) this._faFeedAdd('bid', `${KO0[t]}이(가) ${p.ko}에게 ${deal.years}년 연 ${deal.per.toFixed(1)}억을 제시했습니다.`, p.id); break;
@@ -2786,7 +2803,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
   };
   proto._userSignPend = function (p, pe) {   // 보류 제시가 이기면 계약(예산·인원 재확인)
     const S = this.S, t = S.userTeam, tm = this.faTerms(p, t), per = (pe.bonus + pe.salary * pe.years) / pe.years;
-    if (S.teams[t].ids.length >= ROSTER_MAX || this.faRoom(t) < pe.salary + pe.bonus / pe.years || (tm.ext && this._faCount(t) >= EXT_LIMIT) || per + 1e-9 < tm.req(pe.years) || this.capBlock(t, per)) return false;
+    if (S.teams[t].ids.length >= ROSTER_MAX || this.faRoom(t) < pe.salary + pe.bonus / pe.years || (tm.ext && this._faCount(t) >= this.faExtLimit()) || per + 1e-9 < tm.req(pe.years) || this.capBlock(t, per)) return false;
     this._doSign(t, p, pe.years, pe.salary, pe.bonus);
     news(this, `FA ${p.ko} 영입 — 경쟁 끝에 계약 (${pe.years}년 총 ${(per * pe.years).toFixed(1)}억 = 계약금 ${pe.bonus.toFixed(1)} + 연봉 ${pe.salary.toFixed(1)}×${pe.years})`); return true;
   };
@@ -3829,7 +3846,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
   proto._negTerms = function (p, kind) {
     const S = this.S, t = S.userTeam;
     if (kind === 'fa') { const tm = this.faTerms(p, t, true); return { minY: 1, maxY: tm.maxYears, pref: tm.pref, graded: tm.graded, bonusOK: tm.graded, req: tm.req, label: 'FA 계약' }; }
-    if (kind === 'foreign') { const ask = Math.max(0.3, this.askSalary(p)), cap = this.foreignCap(p, t); return { minY: 1, maxY: 1, pref: 1, graded: false, bonusOK: false, req: () => r2(ask), cap, label: p.aq ? '아시아쿼터 계약' : '외국인 계약' }; }
+    if (kind === 'foreign') { const ask = Math.max(this.minSal(), this.askSalary(p)), cap = this.foreignCap(p, t); return { minY: 1, maxY: 1, pref: 1, graded: false, bonusOK: false, req: () => r2(ask), cap, label: p.aq ? '아시아쿼터 계약' : '외국인 계약' }; }
     if (kind === 'resign') { const base = this.resignAsk(p), multi = !p.foreign && !this.faEligible(p), pref = multi ? this._extPref(p) : 1; return { minY: 1, maxY: multi ? 4 : 1, pref, graded: false, bonusOK: multi, multi, req: y => r2(base * (multi ? shape(pref, y) * (p.age <= 27 && y >= 3 ? 1.04 : 1) : 1)), cap: p.foreign ? this.foreignCap(p, t) : null, label: multi ? '재계약(비FA 다년 가능)' : '재계약(1년)' }; }
     const pref = this._extPref(p), base = Math.max(p.contract.salary + (p.contract.amort || 0), this.askSalary(p)) * (p.age <= 27 ? 1.06 : p.age >= 33 ? 0.97 : 1);   // 비FA 다년계약: 성장 프리미엄(≤27세 +6%)·고령 안정 할인(≥33세 −3%) 가정
     return { minY: 1, maxY: 5, pref, graded: false, bonusOK: true, multi: true, req: y => r2(base * shape(pref, y)), cap: null, label: '비FA 다년계약' };
@@ -3839,7 +3856,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
     if (kind === 'fa') return this.faEvaluate(p, offer, t);
     const tm = this._negTerms(p, kind), y = Math.round(offer.years), sal = +offer.salary, bon = +offer.bonus || 0;
     if (!(y >= tm.minY && y <= tm.maxY)) return { ok: false, msg: `계약 기간은 ${tm.minY}~${tm.maxY}년이어야 합니다.` };
-    if (!(sal >= 0.3)) return { ok: false, msg: '연봉은 최소 0.3억입니다.' };
+    if (!(sal >= this.minSal() - 1e-9)) return { ok: false, msg: `연봉은 최소 ${this.minSal()}억입니다.` };
     if (bon < 0 || (bon > 0 && !(tm.bonusOK && y >= 2))) return { ok: false, msg: tm.bonusOK ? '계약금은 2년 이상 계약에만 줄 수 있습니다.' : '이 계약에는 계약금을 줄 수 없습니다.' };
     const per = (bon + sal * y) / y, req = tm.req(y) * this._negAdj(p, t);
     if (bon > 0.7 * (bon + sal * y)) return { ok: false, msg: '계약금은 총액의 70%를 넘을 수 없습니다.', per, req };
@@ -3857,7 +3874,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
   };
   proto._negMin = function (p, kind, years, shareBonus) {   // 요구액을 충족하는 최소 제시(계약금 비율은 현재 구조 유지)
     const tm = this._negTerms(p, kind), t = this.S.userTeam, y = clamp(years || tm.pref, tm.minY, tm.maxY), req = tm.req(y) * this._negAdj(p, t), total = req * y;
-    if (!(tm.bonusOK && y >= 2)) { const cap = tm.cap || 1e9; return { years: y, salary: Math.min(cap, Math.ceil(Math.max(0.3, req) * 10 - 1e-9) / 10), bonus: 0 }; }
+    if (!(tm.bonusOK && y >= 2)) { const cap = tm.cap || 1e9; return { years: y, salary: Math.min(cap, req <= this.minSal() + 1e-9 ? this.minSal() : Math.ceil(req * 10 - 1e-9) / 10), bonus: 0 }; }
     const bonus = Math.round(total * (shareBonus === undefined ? 0.35 : shareBonus) * 10) / 10, salary = Math.ceil(((total - bonus) / y) * 10 - 1e-9) / 10; return { years: y, salary: Math.max(0.3, salary), bonus };
   };
 
@@ -3895,7 +3912,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
     const S = this.S, p = S.players[id], t = S.userTeam; if (!p) return '선수를 찾을 수 없습니다.';
     if (kind !== 'meeting' && p.negLock && p.negLock.until > this._negClock() && p.negLock.team === t) return `${p.ko}은(는) 방금 협상이 결렬되어 ${p.negLock.until - this._negClock()}일 뒤에 다시 협상할 수 있습니다.`;
     if (kind === 'fa' || kind === 'foreign') { if (p.team !== 'FA') return '이미 계약된 선수입니다.'; if (!!p.foreign !== (kind === 'foreign')) return '계약 종류가 맞지 않습니다.'; if (S.teams[t].ids.length >= ROSTER_MAX) return `보유 선수 ${ROSTER_MAX}명 제한입니다.`; }
-    if (kind === 'fa') { const info = p.faInfo, ext = info && info.grade && info.from !== t; if (ext && this._faCount(t) >= 3) return '외부 FA는 한 시즌에 3명까지만 영입할 수 있습니다.'; }
+    if (kind === 'fa') { const info = p.faInfo, ext = info && info.grade && info.from !== t; if (ext && this._faCount(t) >= this.faExtLimit()) return `외부 FA는 올해 FA 권리 행사자 수에 따라 ${this.faExtLimit()}명까지만 영입할 수 있습니다(규약 제173조).`; }
     if (kind === 'foreign') {
       if (rep) { const r = S.players[rep]; if (!r || r.team !== t || !r.foreign) return '교체할 외국인 선수를 찾을 수 없습니다.'; }
       if (this.fSwapBlock && this.fSwapBlock()) return this.fSwapBlock();
@@ -4350,7 +4367,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
   proto.draftAiStep = function () {   // AI 구단의 지명 1건. 반환: { done, userTurn, pick }
     const S = this.S, d = S.off.draft; if (d.pick >= d.order.length) return { done: true };
     const t = d.order[d.pick]; if (t === S.userTeam) return { userTurn: true };
-    const r = rngFor(S.seed, S.year, 42, d.pick), best = d.pool.map(id => { const p = S.players[id]; return { id, s: (this.aiScoutScore ? this.aiScoutScore(t, p) : this.scoutScore(p)) + (r.random() - 0.5) * 4 }; }).sort((a, b) => b.s - a.s)[0];
+    const r = rngFor(S.seed, S.year, 42, d.pick), uo = this._draftUnivOnly(t), best = d.pool.filter(id => !uo || this._draftIsUniv(id)).map(id => { const p = S.players[id]; return { id, s: (this.aiScoutScore ? this.aiScoutScore(t, p) : this.scoutScore(p)) + (r.random() - 0.5) * 4 }; }).sort((a, b) => b.s - a.s)[0];
     this._draftTake(t, best.id); return { pick: d.picks[d.picks.length - 1] };
   };
   proto.draftIntro = function (id) {
@@ -5561,8 +5578,8 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
    * - 시즌 중(정규시즌) 외국인 교체 영입은 연 2회까지. 부상 대체 영입은 횟수에서 제외하고, 정식 전환할 때만 1회 차감.
    * - 부상 대체: 내 일반 외국인이 6주(42일) 이상 부상이면 재활 선수명단에 올리고 대체 선수를 월 최대 10만$(1.4억)로 계약. 대체 선수는 3명 한도 밖이다.
    *   비용 = 월 1.4억 × 개월을 계약 시점에 지급 확정(선수 연봉에는 넣지 않고 올해 계약 정리 비용으로 계상 → 연봉 합계·경쟁균형세에 이중 반영되지 않음).
-   *   통역·숙소 등 부대 비용은 재정의 선수단 운영비(보정값)에 이미 들어 있어 따로 더하지 않는다. 아시아쿼터는 대체 대상이 아니라고 가정(⚠). */
-  const FOREIGN_TOTAL = 56, SUB_MONTHLY = 1.4, SUB_MIN_DAYS = 42, SWAP_MAX = 2;
+   *   통역·숙소 등 부대 비용은 재정의 선수단 운영비(보정값)에 이미 들어 있어 따로 더하지 않는다. 아시아쿼터도 대체 대상이며 월 2만$(0.28억) 한도(규약 확인). */
+  const FOREIGN_TOTAL = 56, SUB_MONTHLY = 1.4, SUB_MONTHLY_AQ = 0.28, SUB_MIN_DAYS = 42, SWAP_MAX = 2;
   const todayAug15 = S => Math.floor(Date.UTC(S.year, 7, 15) / 864e5);
   proto.foreignGenPay = function (t, excl) {
     const rep = this._replacing || (this.S.neg && this.S.neg.kind === 'foreign' ? this.S.neg.replace : null);
@@ -5588,29 +5605,29 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
   };
   proto.subEligible = function () {
     const S = this.S, t = S.userTeam; if (S.phase !== 'regular') return [];
-    return this.foreignOf(t).filter(p => !p.aq && !p.sub && !p.rehab && this.isInj(p) && injDays(this, p) >= SUB_MIN_DAYS).map(p => ({ p, days: injDays(this, p), left: this.injLeft(p) }));
+    return this.foreignOf(t).filter(p => !p.sub && !p.rehab && this.isInj(p) && injDays(this, p) >= SUB_MIN_DAYS).map(p => ({ p, days: injDays(this, p), left: this.injLeft(p) }));
   };
-  proto.subCands = function () {   // 대체 후보: 외국인 FA 시장(일반) + 해외 후보군(일반)
-    const S = this.S, out = []; for (const id of S.fa || []) { const q = S.players[id]; if (q && q.foreign && !q.aq && q.team === 'FA') out.push(q); }
-    const fp = S.fpool && S.fpool.y === S.year && !S.fpool.released ? S.fpool.ids : []; for (const id of fp) { const q = S.players[id]; if (q && q.fpool && !q.aq && q.team === 'DRAFT') out.push(q); }
+  proto.subCands = function (aq) {   // 대체 후보: 외국인 FA 시장 + 해외 후보군(원래 선수와 같은 유형: 일반↔일반, 아시아쿼터↔아시아쿼터)
+    aq = !!aq;
+    const S = this.S, out = []; for (const id of S.fa || []) { const q = S.players[id]; if (q && q.foreign && !!q.aq === aq && q.team === 'FA') out.push(q); }
+    const fp = S.fpool && S.fpool.y === S.year && !S.fpool.released ? S.fpool.ids : []; for (const id of fp) { const q = S.players[id]; if (q && q.fpool && !!q.aq === aq && q.team === 'DRAFT') out.push(q); }
     return out;
   };
   proto.subMaxMonths = function () { const S = this.S, left = Math.max(0, (S.schedule || []).length - (S.day || 0)); return clamp(Math.ceil(left / 30.4), 1, 6); };
-  proto.subCost = function (months) { return r1(SUB_MONTHLY * months); };
+  proto.subCost = function (months, aq) { return r1((aq ? SUB_MONTHLY_AQ : SUB_MONTHLY) * months); };   // 규약(외국인선수 고용규정 제8조②): 잔여 계약기간 1개월당 일반 US$10만(1.4억), 아시아쿼터 US$2만(0.28억)
   proto.subSign = function (origId, candId, months) {
     const S = this.S, t = S.userTeam, orig = S.players[origId], c = S.players[candId]; months = Math.round(months);
     if (S.phase !== 'regular') return '부상 대체 영입은 정규시즌 중에만 할 수 있습니다.';
     if (!orig || orig.team !== t || !orig.foreign) return '대체 대상 외국인 선수를 찾을 수 없습니다.';
-    if (orig.aq) return '아시아쿼터 선수는 부상 대체 영입 대상이 아닙니다(가정).';
     if (!this.subEligible().some(x => x.p.id === origId)) return '6주(42일) 이상 치료가 필요한 부상이어야 하고, 이미 대체 선수가 있으면 안 됩니다.';
-    if (!c || !c.foreign || c.aq || !(c.team === 'FA' || (c.fpool && c.team === 'DRAFT'))) return '대체로 영입할 수 있는 일반 외국인 후보가 아닙니다.';
+    if (!c || !c.foreign || !!c.aq !== !!orig.aq || !(c.team === 'FA' || (c.fpool && c.team === 'DRAFT'))) return orig.aq ? '대체로 영입할 수 있는 아시아쿼터 후보가 아닙니다.' : '대체로 영입할 수 있는 일반 외국인 후보가 아닙니다.';
     if (!(months >= 1 && months <= this.subMaxMonths())) return `계약 기간은 1~${this.subMaxMonths()}개월입니다.`;
     if (S.teams[t].ids.length >= 130) return '보유 선수 130명 제한입니다.';
-    const cost = this.subCost(months), room = this.finReady() ? this.faRoom(t) : 1e9; if (room < cost) return `예산 부족: 대체 계약 ${cost}억(월 ${SUB_MONTHLY}억 × ${months}개월)이 여유자금 ${room.toFixed(1)}억을 넘습니다.`;
+    const mon = orig.aq ? SUB_MONTHLY_AQ : SUB_MONTHLY, cost = this.subCost(months, orig.aq), room = this.finReady() ? this.faRoom(t) : 1e9; if (room < cost) return `예산 부족: 대체 계약 ${cost}억(월 ${mon}억 × ${months}개월)이 여유자금 ${room.toFixed(1)}억을 넘습니다.`;
     const f = S.fin && S.fin.teams[t]; if (!f && this.finReady()) return '재정 정보가 없습니다.';
     if (c.team === 'FA') S.fa = (S.fa || []).filter(x => x !== candId); else if (S.fpool) { S.fpool.ids = S.fpool.ids.filter(x => x !== candId); S.fWatch = (S.fWatch || []).filter(w => w.id !== candId); }
     c.fpool = false; c.deep = false; c.team = t; c.active = false; S.teams[t].ids.push(candId); c.contract = { salary: 0, years: 1 }; c.myFrom = { y: S.year, how: '대체 외국인 영입' };
-    c.sub = { for: origId, mo: months, monthly: SUB_MONTHLY, start: S.day, end: S.day + Math.round(months * 30.4), cost, back: null }; orig.rehab = { sub: candId, day: S.day };
+    c.sub = { for: origId, mo: months, monthly: mon, start: S.day, end: S.day + Math.round(months * 30.4), cost, back: null }; orig.rehab = { sub: candId, day: S.day };
     if (f) { f.dead = (f.dead || []).concat([{ year: this._finYear(), amt: cost, who: `${c.ko}(대체 계약 ${months}개월)` }]); }
     this._foreignJoin(c); if (this.postDeadline().passed) c.noPost = S.year; this.invalidate();
     this._news(`부상 대체 외국인: ${orig.ko}(${orig.inj ? orig.inj.dx : '부상'}) 재활 선수명단 등재 → ${c.ko} ${months}개월 계약(${cost}억)${c.noPost ? ' · 8월 15일 이후라 포스트시즌 출전 불가' : ''}`);
@@ -5620,7 +5637,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
     const S = this.S, t = S.userTeam, c = S.players[subId]; months = Math.round(months); if (!c || c.team !== t || !c.sub) return '대체 선수를 찾을 수 없습니다.';
     const orig = S.players[c.sub.for]; if (!orig || orig.team !== t || !this.isInj(orig)) return '원래 선수가 복귀했거나 팀에 없어 연장할 수 없습니다.';
     if (!(months >= 1 && months <= this.subMaxMonths())) return `연장 기간은 1~${this.subMaxMonths()}개월입니다.`;
-    const cost = this.subCost(months), room = this.finReady() ? this.faRoom(t) : 1e9; if (room < cost) return `예산 부족: ${cost}억이 여유자금 ${room.toFixed(1)}억을 넘습니다.`;
+    const cost = this.subCost(months, c.aq), room = this.finReady() ? this.faRoom(t) : 1e9; if (room < cost) return `예산 부족: ${cost}억이 여유자금 ${room.toFixed(1)}억을 넘습니다.`;
     const f = S.fin && S.fin.teams[t]; if (f) f.dead = (f.dead || []).concat([{ year: this._finYear(), amt: cost, who: `${c.ko}(대체 계약 연장 ${months}개월)` }]);
     c.sub.mo += months; c.sub.end += Math.round(months * 30.4); c.sub.cost = r1(c.sub.cost + cost); this._news(`대체 외국인 ${c.ko} 계약 ${months}개월 연장(${cost}억)`); return null;
   };
@@ -5643,7 +5660,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
   proto._subEnd = function () { const S = this.S, t = S.userTeam; for (const p of this.players(t).filter(x => x.sub)) this._subDrop(p, '시즌 종료'); for (const p of this.players(t).filter(x => x.rehab)) delete p.rehab; };
   proto.subConvertPreview = function (subId) {   // 정식 전환 시 새 계약·위약금·교체 횟수(읽기 전용)
     const S = this.S, t = S.userTeam, c = S.players[subId]; if (!c || c.team !== t || !c.sub) return null; const o = S.players[c.sub.for];
-    const rem = Math.max(0.5, (Math.floor(Date.UTC(S.year, 10, 30) / 864e5) - this.todayN()) / 30.4), sal = r1(Math.max(0.3, SUB_MONTHLY * rem));
+    const rem = Math.max(0.5, (Math.floor(Date.UTC(S.year, 10, 30) / 864e5) - this.todayN()) / 30.4), sal = r1(Math.max(this.minSal(), (c.aq ? SUB_MONTHLY_AQ : SUB_MONTHLY) * rem));
     return { ok: !!(o && o.team === t), c, o, rem, sal, rel: o ? this.releaseCost(o.id) : null, sw: this.fSwapInfo() };
   };
   proto.subDecide = function (subId, choice) {
@@ -6326,25 +6343,25 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
     const btns = sc.map(s => { const done = p.fsc && p.fsc.by[s.id] && p.fsc.by[s.id].n >= 1; return `<button class="sm" data-act="scoutFor" data-a="${p.id}:${s.id}" ${done ? 'disabled' : ''} title="${esc(s.name)} 해외 ${s.abroad === undefined ? 45 : s.abroad} · 조사비 ${L.scoutProbeCost()}억">${esc(s.name)}${done ? ' ✓' : ''}</button>`; }).join(' ');
     return `<div class="small muted">KBO 기록이 없는 선수라 능력이 불확실합니다(조사 ${e.n}회 · 확신도 ${e.conf}).</div>${rp ? `<span class="sub">${Object.entries(rp.sub).map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join('')}</span><div class="small muted">세부 능력 ±${rp.sd}</div>` : ''}${sc.length ? `<div class="chips wrap" style="margin-top:4px">${btns}</div>` : '<div class="small muted">스카우트를 고용하면 조사할 수 있습니다(운영 ▸ 스카우팅).</div>'}`;
   }
-  function subCard() {   // 부상 대체 외국인(정규시즌 · 일반 외국인 · 6주 이상 부상)
+  function subCard() {   // 부상 대체 외국인(정규시즌 · 일반 외국인·아시아쿼터 · 6주 이상 부상)
     const S = L.S, el = L.subEligible(), subs = L.subList(), sw = L.fSwapInfo(), dl = L.postDeadline();
     const head = `<div class="row"><h2 style="margin:0">부상 대체 외국인</h2><span class="sp"></span><span class="small muted">시즌 중 교체 ${sw.n}/${sw.max}회 · 포스트시즌 등록 마감 ${dl.str.slice(5).replace('-', '월 ')}일${dl.passed ? '(지남)' : ''}</span></div>`;
-    const rule = `<div class="small muted" style="margin:4px 0">일반 외국인이 6주(42일) 이상 치료가 필요한 부상이면 재활 선수명단에 올리고 대체 선수를 월 최대 10만 달러(1.4억)에 계약할 수 있습니다. 교체 횟수는 차감되지 않으며 3명 한도 밖에 둡니다. 선수가 복귀하면 7일 안에 대체 선수를 해지하거나 정식 전환(교체 1회 차감, 기존 선수 웨이버)해야 합니다. 비용은 계약 시 올해 비용으로 확정되며, 계약이 끝나면 즉시 FA로 공시됩니다. 8월 15일 이후 계약한 선수는 포스트시즌에 나갈 수 없습니다. 아시아쿼터는 대상이 아닌 것으로 가정했습니다(⚠).</div>`;
+    const rule = `<div class="small muted" style="margin:4px 0">외국인 선수(일반·아시아쿼터)가 6주(42일) 이상 치료가 필요한 부상이면 재활 선수명단에 올리고 같은 유형의 대체 선수를 월 최대 10만 달러(1.4억, 아시아쿼터는 2만 달러 0.28억)에 계약할 수 있습니다. 교체 횟수는 차감되지 않으며 3명 한도 밖에 둡니다. 선수가 복귀하면 7일 안에 대체 선수를 해지하거나 정식 전환(교체 1회 차감, 기존 선수 웨이버)해야 합니다. 비용은 계약 시 올해 비용으로 확정되며, 계약이 끝나면 즉시 FA로 공시됩니다. 8월 15일 이후 계약한 선수는 포스트시즌에 나갈 수 없습니다. 아시아쿼터는 대상이 아닌 것으로 가정했습니다(⚠).</div>`;
     const rowEl = x => `<div class="slotrow"><div class="row" style="flex-wrap:nowrap"><div style="flex:1;min-width:0"><button class="linkbtn" data-act="player" data-a="${x.p.id}"><b>${esc(x.p.ko)}</b></button> <span class="muted small">${pos(x.p)} · ${esc(x.p.inj ? x.p.inj.dx : '부상')} · 총 ${x.days}일 · 복귀 ${esc(L.injDateStr(x.p))}</span></div><button class="sm primary" data-act="subOpen" data-a="${x.p.id}">대체 선수 영입</button></div></div>`;
     const rowSub = x => { const c = x.p, o = x.orig, bk = !!c.sub.back, left = bk ? Math.max(0, 7 - (S.day - c.sub.back)) : null;
       return `<div class="slotrow"><div class="row" style="flex-wrap:nowrap"><div style="flex:1;min-width:0"><b>${esc(c.ko)}</b> <span class="muted small">${pos(c)} · OVR ${L.ovr(c)} · ${c.sub.mo}개월(~${L.dateStr(c.sub.end)}) · ${c.sub.cost}억</span><div class="small">${o ? `대체 대상 ${esc(o.ko)} ${bk ? '<span class="chip in">복귀 — ' + left + '일 안에 결정</span>' : '<span class="chip warn">재활 중</span>'}` : ''}</div></div></div>
-        <div class="chips">${bk ? '' : `<button class="sm" data-act="subExtendA" data-a="${c.id}">1개월 연장(+${L.subCost(1)}억)</button>`}<button class="sm" data-act="subDecideA" data-a="${c.id}:release">계약 해지</button>${bk ? `<button class="sm primary" data-act="subDecideA" data-a="${c.id}:convert" ${sw.n >= sw.max ? 'disabled' : ''} title="기존 선수 웨이버 · 교체 1회 차감">정식 전환</button>` : ''}</div></div>`; };
+        <div class="chips">${bk ? '' : `<button class="sm" data-act="subExtendA" data-a="${c.id}">1개월 연장(+${L.subCost(1, c.aq)}억)</button>`}<button class="sm" data-act="subDecideA" data-a="${c.id}:release">계약 해지</button>${bk ? `<button class="sm primary" data-act="subDecideA" data-a="${c.id}:convert" ${sw.n >= sw.max ? 'disabled' : ''} title="기존 선수 웨이버 · 교체 1회 차감">정식 전환</button>` : ''}</div></div>`; };
     if (S.phase !== 'regular' && !subs.length) return `<div class="card">${head}${rule}<div class="small muted">정규시즌에만 이용할 수 있습니다.</div></div>`;
     return `<div class="card">${head}${rule}${subs.map(rowSub).join('')}${el.map(rowEl).join('')}${!subs.length && !el.length ? '<div class="small muted">지금 대체 대상이 없습니다(6주 이상 부상인 일반 외국인이 없음).</div>' : ''}</div>`;
   }
   function subSheet() {
     const id = ui.subFor; if (!id || !L) return ''; const o = P(id), el = L.subEligible().find(x => x.p.id === id); if (!o || !el) { ui.subFor = null; return ''; }
-    const cands = L.subCands().map(c => ({ c, e: L.fEst(c) })).sort((a, b) => b.e.o - a.e.o).slice(0, 40), mx = L.subMaxMonths(), mo = Math.min(mx, ui.subMo || Math.min(2, mx)), cur = ui.subCand && cands.some(x => x.c.id === ui.subCand) ? ui.subCand : (cands[0] ? cands[0].c.id : ''), dl = L.postDeadline();
+    const cands = L.subCands(o.aq).map(c => ({ c, e: L.fEst(c) })).sort((a, b) => b.e.o - a.e.o).slice(0, 40), mx = L.subMaxMonths(), mo = Math.min(mx, ui.subMo || Math.min(2, mx)), cur = ui.subCand && cands.some(x => x.c.id === ui.subCand) ? ui.subCand : (cands[0] ? cands[0].c.id : ''), dl = L.postDeadline();
     return `<div class="sheet-bg" data-act="subClose"><div class="sheet" data-stop="1" role="dialog" aria-label="부상 대체 외국인 영입"><div class="grabber"></div>
       <h2>${esc(o.ko)} 대체 선수 영입</h2><div class="small muted">${esc(o.inj ? o.inj.dx : '부상')} · 총 ${el.days}일 · 복귀 예정 ${esc(L.injDateStr(o))} · 재활 선수명단에 등재됩니다.</div>
       <div class="row" style="margin-top:8px"><select data-sel="subcand" style="flex:1;min-width:0">${cands.map(x => `<option value="${x.c.id}" ${x.c.id === cur ? 'selected' : ''}>${esc(x.c.ko)} · ${x.c.type === 'P' ? (x.c.role === 'SP' ? '선발' : '구원') : posName[x.c.pos]} · ${x.c.age}세 · 추정 ${Math.round(x.e.o)}${x.e.exact ? '' : '±' + x.e.sd}${x.c.team === 'DRAFT' ? ' · 해외 후보' : ' · FA'}</option>`).join('')}</select>
         <select data-sel="submo">${Array.from({ length: mx }, (_, i) => i + 1).map(v => `<option value="${v}" ${v === mo ? 'selected' : ''}>${v}개월</option>`).join('')}</select></div>
-      <div class="small" style="margin-top:6px">비용 <b>${L.subCost(mo)}억</b>(월 1.4억 × ${mo}개월) · FA 여유자금 ${L.faRoom(U()).toFixed(1)}억${dl.passed ? ' · <span class="chip warn">8월 15일 이후라 포스트시즌 출전 불가</span>' : ''}</div>
+      <div class="small" style="margin-top:6px">비용 <b>${L.subCost(mo, o.aq)}억</b>(월 ${o.aq ? '0.28' : '1.4'}억 × ${mo}개월) · FA 여유자금 ${L.faRoom(U()).toFixed(1)}억${dl.passed ? ' · <span class="chip warn">8월 15일 이후라 포스트시즌 출전 불가</span>' : ''}</div>
       <div class="small muted" style="margin-top:4px">해외 후보는 스카우트 관찰로 능력 추정이 정교해집니다. 계약하면 올해 비용이 바로 확정됩니다.</div>
       <div class="row" style="margin-top:10px"><button class="sm primary" data-act="subSignA" data-a="${id}" ${cands.length ? '' : 'disabled'}>계약</button><button class="sm" data-act="subClose">닫기</button></div></div></div>`;
   }
@@ -6443,7 +6460,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
     const bo = n.budgetOffer ? L.boardOdds(n.id, n.budgetOffer) : null, board = bo && bo.ok && bo.need > 0 ? `<div class="neg-counter"><span>${bo.star ? '<span class="chip in">프랜차이즈 스타</span> 충성도 ' + bo.star.v + ' — 이사회 특별 승인 가능 · ' : ''}예산 ${bo.need.toFixed(1)}억 초과 — 이사회 설득 성공 확률 <b>${Math.round(bo.prob * 100)}%</b>${bo.star ? ' <span class="muted small">(신뢰도 하락 절반 · 시도 ' + bo.max + '회까지)</span>' : ''}</span><button class="sm primary" data-act="negBoard" ${bo.left > 0 ? 'disabled' : ''}>이사회 설득</button></div>` : '';
     const cnt = board + (n.counter ? `<div class="neg-counter"><b>선수 역제안</b> ${n.counter.years}년 · 연봉 ${n.counter.salary}억${n.counter.bonus ? ' + 계약금 ' + n.counter.bonus + '억' : ''}<button class="sm primary" data-act="negCounter">수락하고 체결</button></div>` : '');
     return `${cnt}<div class="neg-offer"><label>기간 <select data-sel="negyears" ${tm.maxY === tm.minY ? 'disabled' : ''}>${opts}</select></label>
-      <label>연봉(억) <input class="num" type="number" step="0.1" min="0.3" data-sel="negsal" value="${inn.salary}"></label>
+      <label>연봉(억) <input class="num" type="number" step="0.1" min="${L.minSal()}" data-sel="negsal" value="${inn.salary}"></label>
       ${tm.bonusOK && y >= 2 ? `<label>계약금(억) <input class="num" type="number" step="0.1" min="0" data-sel="negbon" value="${bon}"></label>` : ''}</div>
       <div class="small muted">총 ${tot}억 · 연평균 <b>${per}</b>억${n.range && n.range[1] > 0 ? ` · 선수 기대 연 ${n.range[0].toFixed(1)}~${n.range[1].toFixed(1)}억(추정)` : ''}${tm.cap ? ` · 연봉 상한 ${tm.cap}억` : ''}${bi && bi.n ? ` · 경쟁 입찰 ${bi.n}곳(최고 연 ${bi.best ? bi.best.per.toFixed(1) : '-'}억)` : ''} · FA 여유자금 ${L.faRoom(U()).toFixed(1)}억</div>
       <div class="row"><button class="primary" data-act="negSend">이 조건으로 제안</button><button class="sm" data-act="negFill" title="호감도를 반영한 요구액을 막 넘는 조건을 채웁니다">요구 충족 조건 채우기</button></div>`;
@@ -6841,7 +6858,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
       const lastPk = d.picks[d.picks.length - 1], stage = lastPk ? `<div class="draftstage"><div class="small muted">${Math.ceil(lastPk.pick / 10)}라운드 ${((lastPk.pick - 1) % 10) + 1}순위 · ${KO[lastPk.team]}</div><div class="dname">${esc(P(lastPk.id).ko)}${lastPk.team === U() ? ' <span class="chip in">우리 구단 지명</span>' : ''}</div><div class="small">${esc(L.draftIntro(lastPk.id))}</div>${L.draftDay().lastRx ? `<div class="small" style="margin-top:4px">${rxChip(L.draftDay().lastRx)} ${esc(L.draftDay().lastRx.text)}</div>` : ''}</div>` : '';
       const topPk = mine ? `<div class="card"><h2>스카우트 추천</h2><div class="small muted">내 스카우트 추정 기준 상위 3명입니다. 확신도가 낮으면 실제와 크게 다를 수 있습니다(스카우팅 탭에서 관찰해 오차를 줄일 수 있습니다).</div>${pool.slice(0, 3).map(p => `<div class="row small" style="margin-top:6px"><b>${esc(p.ko)}</b> <span class="muted">${progLabel(p)} · ${p.age}세</span> ${estChips(p)}<span class="sp"></span><button class="sm primary" data-act="draftPick" data-a="${p.id}">지명</button></div>`).join('')}</div>` : '';
       return `${bar}${draftDayCard()}${stage}${topPk}<div class="card"><div class="row"><h2>신인 드래프트</h2><span class="muted small">${d.pick}/${d.order.length}번째 지명 · ${onClock ? (mine ? '<b class="pos">내 차례</b>' : KO[onClock] + ' 차례') : '종료'}</span><span class="sp"></span>${onClock && !mine ? (ui.draftT ? '<button data-act="draftSkip">건너뛰기</button>' : '<button data-act="draftSim">발표 보기</button><button data-act="draftSkip">내 차례까지 바로</button>') : ''}${onClock ? '<button data-act="draftAuto">나머지 자동 지명</button>' : '<button class="primary" data-act="toFA">FA 시장으로</button>'}</div>
-        <p class="small muted" style="margin:6px 0">스카우트 평가(능력치·성장 상한 등급)는 오차가 있어 지명 순번이 높아도 크게 못 클 수 있고, 하위 지명에서 대성하기도 합니다. 지명 순서는 정규시즌 성적 역순이고 10라운드까지 진행합니다. 신인은 2군으로 들어옵니다. 내 지명: ${myp || '없음'}</p></div>
+        <p class="small muted" style="margin:6px 0">스카우트 평가(능력치·성장 상한 등급)는 오차가 있어 지명 순번이 높아도 크게 못 클 수 있고, 하위 지명에서 대성하기도 합니다. 지명 순서는 정규시즌 성적 역순이고 11라운드까지 진행합니다(규약 제110조). 구단은 대졸 예정 선수를 1명 이상 지명해야 하므로, 아직 없다면 마지막 지명은 대졸 예정자만 고를 수 있습니다. 신인은 2군으로 들어옵니다. 내 지명: ${myp || '없음'}</p></div>
         <div class="grid"><div class="card"><h2>지명 가능 선수</h2><div class="small muted" style="margin:2px 0">포지션 보유 현황: ${Object.values(needs).map(n => `<span class="${n.level === 'high' ? 'neg' : n.level === 'mid' ? 'warn' : ''}">${esc(n.name)} ${n.have}/${n.target}</span>`).join(' · ')}</div><label class="row small" style="gap:6px;margin:4px 0"><input type="checkbox" data-act="draftNeed" ${L.S.draftNeedOn ? 'checked' : ''}>필요 포지션 가중(보드 점수 최대 +4) <span class="muted">· 끄면 스카우트 추정 순위 그대로</span></label><div class="tablewrap" style="max-height:520px;overflow-y:auto"><table><thead><tr><th class="l">선수</th><th class="l">유형</th><th>나이</th><th>OVR(추정)</th><th class="l">태그</th><th title="AI 구단들의 평가 합의 순위. 내 지명 순번까지 남아 있을 가능성">AI 순위</th><th class="l">성장 상한·확신도</th><th></th></tr></thead><tbody>${pr}</tbody></table></div></div>
         <div class="card"><h2>최근 지명</h2><div class="tablewrap"><table><tbody>${picks || '<tr><td class="muted">아직 없습니다.</td></tr>'}</tbody></table></div></div></div>${draftBoardCard()}${draftReportCard()}`;
     }
@@ -7585,8 +7602,8 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
     subOpen(a) { ui.subFor = a; ui.subCand = null; ui.subMo = null; render(); }, subClose() { ui.subFor = null; render(); },
     subSignA(a) {
       const c = P(ui.subCand || ($('[data-sel="subcand"]') || {}).value), mo = ui.subMo || +($('[data-sel="submo"]') || {}).value || 1, o = P(a); if (!c) { toast('후보를 고르세요.'); return; }
-      const cost = L.subCost(mo), room = L.finReady() ? L.faRoom(U()) : 1e9, dl = L.postDeadline();
-      askConfirm({ title: `${c.ko} 대체 외국인 계약`, ok: '계약 확정', disabled: room < cost, rows: [['대체 대상', `${esc(o.ko)} (${esc(o.inj ? o.inj.dx : '부상')} · 복귀 ${esc(L.injDateStr(o))}) → 재활 선수명단`], ['대체 선수', `${esc(c.ko)} <span class="muted small">(${pos(c)} ${c.age}세 · ${L.hiddenForeign(c) ? '추정 ' + Math.round(L.fEst(c).o) : 'OVR ' + L.ovr(c)})</span>`], ['계약 기간', `${mo}개월`], ['비용', `<b>${cost}억</b> (월 1.4억 × ${mo}개월, 올해 비용으로 즉시 확정)`], ['FA 여유자금', `${room.toFixed(1)}억 → ${(room - cost).toFixed(1)}억`], ['일반 외국인 한도', '3명 한도 밖(대체 계약)'], ['포스트시즌', dl.passed ? '<b class="neg">8월 15일 이후라 출전 불가</b>' : '출전 가능(8월 15일 이전)']], notes: [{ t: '계약이 끝나거나 해지하면 즉시 FA로 공시되며 지급한 비용은 돌려받지 못합니다.' }], run: () => A.subSignDo(a) });
+      const cost = L.subCost(mo, o.aq), room = L.finReady() ? L.faRoom(U()) : 1e9, dl = L.postDeadline();
+      askConfirm({ title: `${c.ko} 대체 외국인 계약`, ok: '계약 확정', disabled: room < cost, rows: [['대체 대상', `${esc(o.ko)} (${esc(o.inj ? o.inj.dx : '부상')} · 복귀 ${esc(L.injDateStr(o))}) → 재활 선수명단`], ['대체 선수', `${esc(c.ko)} <span class="muted small">(${pos(c)} ${c.age}세 · ${L.hiddenForeign(c) ? '추정 ' + Math.round(L.fEst(c).o) : 'OVR ' + L.ovr(c)})</span>`], ['계약 기간', `${mo}개월`], ['비용', `<b>${cost}억</b> (월 ${o.aq ? '0.28' : '1.4'}억 × ${mo}개월, 올해 비용으로 즉시 확정)`], ['FA 여유자금', `${room.toFixed(1)}억 → ${(room - cost).toFixed(1)}억`], ['일반 외국인 한도', '3명 한도 밖(대체 계약)'], ['포스트시즌', dl.passed ? '<b class="neg">8월 15일 이후라 출전 불가</b>' : '출전 가능(8월 15일 이전)']], notes: [{ t: '계약이 끝나거나 해지하면 즉시 FA로 공시되며 지급한 비용은 돌려받지 못합니다.' }], run: () => A.subSignDo(a) });
     },
     subSignDo(a) { const e = L.subSign(a, ui.subCand || ($('[data-sel="subcand"]') || {}).value, ui.subMo || +($('[data-sel="submo"]') || {}).value || 1); if (e) toast(e); else { toast('대체 외국인을 영입했습니다.'); ui.subFor = null; autosave(); } render(); },
     subExtendA(a) { const e = L.subExtend(a, 1); if (e) toast(e); else { toast('계약을 1개월 연장했습니다.'); autosave(); } render(); },

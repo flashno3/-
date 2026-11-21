@@ -31,7 +31,8 @@ const gen=(L)=>L.foreignOf(L.S.userTeam).filter(p=>!p.aq);
 // 5) 부상 대체: 자격·계약·비용·한도 밖 슬롯
 {const L=reg(21,60),S=L.S,t=S.userTeam;const f=S.fin.teams[t];const g=gen(L)[0];ok(L.subEligible().length===0,'부상 없으면 대상 없음');
  hurt(L,g,30);ok(L.subEligible().length===0,'30일 부상은 대상 아님');hurt(L,g,50);const el=L.subEligible();ok(el.length===1&&el[0].p.id===g.id&&el[0].days>=50,'50일 부상은 대상');
- const aq=L.foreignOf(t).find(x=>x.aq);if(aq){hurt(L,aq,60);ok(!L.subEligible().some(x=>x.p.id===aq.id),'아시아쿼터 제외(가정)');delete aq.inj;aq.active=true}
+ const aq=L.foreignOf(t).find(x=>x.aq);if(aq){hurt(L,aq,60);ok(L.subEligible().some(x=>x.p.id===aq.id),'아시아쿼터도 대상(규약 확인)');
+  const ac=L.subCands(true);ok(ac.length>=1&&ac.every(c=>c.aq),'아시아쿼터 후보만');ok(L.subCost(2,true)===0.6,'월 0.28억');const e=L.subSign(aq.id,ac[0].id,2);ok(!e,'AQ 대체 계약 '+e);const cc=S.players[ac[0].id];ok(cc.sub&&Math.abs(cc.sub.monthly-0.28)<1e-9&&cc.aq,'대체 월 0.28억');ok(L.subSign(aq.id,L.subCands(false)[0].id,2),'이미 대체 중');L._subDrop(cc,'테스트');delete aq.inj;aq.active=true}
  const cands=L.subCands();ok(cands.length>=60&&cands.every(c=>!c.aq),'일반 외국인 후보만');
  const c=cands[0],pay0=L.finPay(t),dead0=L.deadNow(t),sal0=L.payroll(t);ok(L.subMaxMonths()>=1&&L.subMaxMonths()<=6,'기간 한도');
  ok(/기간/.test(L.subSign(g.id,c.id,0)||''),'0개월 불가');ok(/기간/.test(L.subSign(g.id,c.id,9)||''),'9개월 불가');

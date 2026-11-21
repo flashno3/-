@@ -127,7 +127,7 @@
   proto._negTerms = function (p, kind) {
     const S = this.S, t = S.userTeam;
     if (kind === 'fa') { const tm = this.faTerms(p, t, true); return { minY: 1, maxY: tm.maxYears, pref: tm.pref, graded: tm.graded, bonusOK: tm.graded, req: tm.req, label: 'FA 계약' }; }
-    if (kind === 'foreign') { const ask = Math.max(0.3, this.askSalary(p)), cap = this.foreignCap(p, t); return { minY: 1, maxY: 1, pref: 1, graded: false, bonusOK: false, req: () => r2(ask), cap, label: p.aq ? '아시아쿼터 계약' : '외국인 계약' }; }
+    if (kind === 'foreign') { const ask = Math.max(this.minSal(), this.askSalary(p)), cap = this.foreignCap(p, t); return { minY: 1, maxY: 1, pref: 1, graded: false, bonusOK: false, req: () => r2(ask), cap, label: p.aq ? '아시아쿼터 계약' : '외국인 계약' }; }
     if (kind === 'resign') { const base = this.resignAsk(p), multi = !p.foreign && !this.faEligible(p), pref = multi ? this._extPref(p) : 1; return { minY: 1, maxY: multi ? 4 : 1, pref, graded: false, bonusOK: multi, multi, req: y => r2(base * (multi ? shape(pref, y) * (p.age <= 27 && y >= 3 ? 1.04 : 1) : 1)), cap: p.foreign ? this.foreignCap(p, t) : null, label: multi ? '재계약(비FA 다년 가능)' : '재계약(1년)' }; }
     const pref = this._extPref(p), base = Math.max(p.contract.salary + (p.contract.amort || 0), this.askSalary(p)) * (p.age <= 27 ? 1.06 : p.age >= 33 ? 0.97 : 1);   // 비FA 다년계약: 성장 프리미엄(≤27세 +6%)·고령 안정 할인(≥33세 −3%) 가정
     return { minY: 1, maxY: 5, pref, graded: false, bonusOK: true, multi: true, req: y => r2(base * shape(pref, y)), cap: null, label: '비FA 다년계약' };
@@ -137,7 +137,7 @@
     if (kind === 'fa') return this.faEvaluate(p, offer, t);
     const tm = this._negTerms(p, kind), y = Math.round(offer.years), sal = +offer.salary, bon = +offer.bonus || 0;
     if (!(y >= tm.minY && y <= tm.maxY)) return { ok: false, msg: `계약 기간은 ${tm.minY}~${tm.maxY}년이어야 합니다.` };
-    if (!(sal >= 0.3)) return { ok: false, msg: '연봉은 최소 0.3억입니다.' };
+    if (!(sal >= this.minSal() - 1e-9)) return { ok: false, msg: `연봉은 최소 ${this.minSal()}억입니다.` };
     if (bon < 0 || (bon > 0 && !(tm.bonusOK && y >= 2))) return { ok: false, msg: tm.bonusOK ? '계약금은 2년 이상 계약에만 줄 수 있습니다.' : '이 계약에는 계약금을 줄 수 없습니다.' };
     const per = (bon + sal * y) / y, req = tm.req(y) * this._negAdj(p, t);
     if (bon > 0.7 * (bon + sal * y)) return { ok: false, msg: '계약금은 총액의 70%를 넘을 수 없습니다.', per, req };
@@ -155,7 +155,7 @@
   };
   proto._negMin = function (p, kind, years, shareBonus) {   // 요구액을 충족하는 최소 제시(계약금 비율은 현재 구조 유지)
     const tm = this._negTerms(p, kind), t = this.S.userTeam, y = clamp(years || tm.pref, tm.minY, tm.maxY), req = tm.req(y) * this._negAdj(p, t), total = req * y;
-    if (!(tm.bonusOK && y >= 2)) { const cap = tm.cap || 1e9; return { years: y, salary: Math.min(cap, Math.ceil(Math.max(0.3, req) * 10 - 1e-9) / 10), bonus: 0 }; }
+    if (!(tm.bonusOK && y >= 2)) { const cap = tm.cap || 1e9; return { years: y, salary: Math.min(cap, req <= this.minSal() + 1e-9 ? this.minSal() : Math.ceil(req * 10 - 1e-9) / 10), bonus: 0 }; }
     const bonus = Math.round(total * (shareBonus === undefined ? 0.35 : shareBonus) * 10) / 10, salary = Math.ceil(((total - bonus) / y) * 10 - 1e-9) / 10; return { years: y, salary: Math.max(0.3, salary), bonus };
   };
 
@@ -193,7 +193,7 @@
     const S = this.S, p = S.players[id], t = S.userTeam; if (!p) return '선수를 찾을 수 없습니다.';
     if (kind !== 'meeting' && p.negLock && p.negLock.until > this._negClock() && p.negLock.team === t) return `${p.ko}은(는) 방금 협상이 결렬되어 ${p.negLock.until - this._negClock()}일 뒤에 다시 협상할 수 있습니다.`;
     if (kind === 'fa' || kind === 'foreign') { if (p.team !== 'FA') return '이미 계약된 선수입니다.'; if (!!p.foreign !== (kind === 'foreign')) return '계약 종류가 맞지 않습니다.'; if (S.teams[t].ids.length >= ROSTER_MAX) return `보유 선수 ${ROSTER_MAX}명 제한입니다.`; }
-    if (kind === 'fa') { const info = p.faInfo, ext = info && info.grade && info.from !== t; if (ext && this._faCount(t) >= 3) return '외부 FA는 한 시즌에 3명까지만 영입할 수 있습니다.'; }
+    if (kind === 'fa') { const info = p.faInfo, ext = info && info.grade && info.from !== t; if (ext && this._faCount(t) >= this.faExtLimit()) return `외부 FA는 올해 FA 권리 행사자 수에 따라 ${this.faExtLimit()}명까지만 영입할 수 있습니다(규약 제173조).`; }
     if (kind === 'foreign') {
       if (rep) { const r = S.players[rep]; if (!r || r.team !== t || !r.foreign) return '교체할 외국인 선수를 찾을 수 없습니다.'; }
       if (this.fSwapBlock && this.fSwapBlock()) return this.fSwapBlock();

@@ -55,7 +55,7 @@
       const pickNo = (pk[d.round] = (pk[d.round] || 0) + 1), tilt = d.bonus ? Math.min(1.2, 0.12 * Math.max(0, d.bonus - 2.5)) : 0;   // 지명 슬롯은 실제 분포(사전), 계약금은 추가 기울기
       const p = this.makeRookie(r, type, pos, { name: d.name, age: 2027 - by, tilt, prior: slotPrior({ round: d.round, pick: pickNo }) });
       p.team = d.team; p.rookie = S.year; p.draft = { round: d.round, school: d.school }; if (d.bonus) p.bonus = d.bonus; if (d.name === '윤예성') p.bonusUnknown = true; if (d.pos === '투타겸업') p.twoWay = true; if (ageEst) p.ageEst = true;
-      p.contract = { salary: 0.3, years: 1 }; p.fa.univ = !!univ; S.teams[d.team].ids.push(p.id);
+      p.contract = { salary: this.minSal(), years: 1 }; p.fa.univ = !!univ; S.teams[d.team].ids.push(p.id);
     }
     this.invalidate();
   };
@@ -85,7 +85,7 @@
       p.stamina = clamp(gauss(r, 45, 12), 25, 70); p.role = p.stamina >= 50 && r.random() < 0.7 ? 'SP' : 'RP'; p.GS = 0; p.G = 5; p.IP = 8; p.ipgs = null;
     }
     if (type === 'B') p.bats = r.random() < 0.06 ? 'S' : r.random() < 0.35 ? 'L' : 'R'; else p.throws = r.random() < 0.27 ? 'L' : 'R';   // 가상 신인의 투타
-    p.contract = { salary: 0.3, years: 1 }; p.fa = { svc: 0, used: 0, last: null, regDays: 0, rem: 0, univ: false }; p.salHist = [0.3];
+    p.contract = { salary: this.minSal(), years: 1 }; p.fa = { svc: 0, used: 0, last: null, regDays: 0, rem: 0, univ: false }; p.salHist = [this.minSal()];
     S.players[id] = p;
     p.peak = this.rollPeak(r, opts.tilt, opts.prior);   // 숨은 정점 OVR
     const target = Math.min(clamp(p.peak - (27 - p.age) * 2.0 - 4 + gauss(r, 0, 7), 20, p.peak), 38 + (p.age - 18) * 4);   // 어린 신인이 곧바로 주전급이 되지 않도록 현재 능력치 상한   // 현재 능력치를 정점에 맞춰 정렬(어릴수록 격차 큼)

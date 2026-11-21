@@ -161,7 +161,7 @@
   proto.draftAiStep = function () {   // AI 구단의 지명 1건. 반환: { done, userTurn, pick }
     const S = this.S, d = S.off.draft; if (d.pick >= d.order.length) return { done: true };
     const t = d.order[d.pick]; if (t === S.userTeam) return { userTurn: true };
-    const r = rngFor(S.seed, S.year, 42, d.pick), best = d.pool.map(id => { const p = S.players[id]; return { id, s: (this.aiScoutScore ? this.aiScoutScore(t, p) : this.scoutScore(p)) + (r.random() - 0.5) * 4 }; }).sort((a, b) => b.s - a.s)[0];
+    const r = rngFor(S.seed, S.year, 42, d.pick), uo = this._draftUnivOnly(t), best = d.pool.filter(id => !uo || this._draftIsUniv(id)).map(id => { const p = S.players[id]; return { id, s: (this.aiScoutScore ? this.aiScoutScore(t, p) : this.scoutScore(p)) + (r.random() - 0.5) * 4 }; }).sort((a, b) => b.s - a.s)[0];
     this._draftTake(t, best.id); return { pick: d.picks[d.picks.length - 1] };
   };
   proto.draftIntro = function (id) {
