@@ -29,4 +29,10 @@ for(const [seed,team] of [[5,'Lions'],[9,'Tigers']]){const L=League.create(base,
 // 입단 경로 표기: 어색한 '내가 외국인 선수 계약' 대신 짧고 자연스러운 표현
 {const L=League.create(base,'Lions',5);const f=(how,aq)=>L.fromLabel({myFrom:{y:2027,how},aq});
  ok(f('드래프트 2라운드 지명')==='2라운드 지명','지명');ok(f('FA 영입')==='FA 영입','FA');ok(f('외국인 선수 계약')==='외국인 영입','옛 표기 변환');ok(f('외국인 선수 계약',true)==='아시아쿼터 영입','아시아쿼터');ok(f('트레이드(KIA)')==='트레이드 영입(KIA)','트레이드');ok(f('부상 대체 외국인')==='대체 외국인 영입','대체');ok(L.fromLabel({})==='','없음')}
+// 내가 FA를 영입하면 소식·요약에 계약 내용과 원소속 구단의 보상(보상선수·보상금)이 나온다
+for(const nm of ['박동원','김태군']){const L=League.create(base,'Lions',5);const S=L.S,t=S.userTeam;S.fin.teams[t].lastRev+=400;const p=S.fa.map(id=>S.players[id]).find(q=>q.ko===nm);const g=p.faInfo.grade,old=p.faInfo.from;
+ const ids0=S.teams[old].ids.length,rev0=S.fin.teams[old].evRev||0;S.faMkt.bids={};ok(L.signFA(p.id,L.faDefaultOffer(p,t))===null,'영입');
+ ok(S.news.slice(0,4).some(x=>x.text.includes('영입')),'영입 소식');ok(S.news.slice(0,4).some(x=>/FA 보상/.test(x.text)),'보상 소식');
+ const sm=L.signSummary(p.id);ok(sm&&sm.lines.length&&sm.comp&&sm.comp.from===old,'요약에 보상 포함');ok((S.fin.teams[old].evRev||0)>rev0,'원소속 구단 수입에 보상금 반영');
+ if(g==='A'||g==='B')ok(sm.comp.player&&S.players[(S.compLog.slice(-1)[0]).pid].team===old&&S.teams[old].ids.length===ids0+1,'보상선수가 원소속 구단으로 이적')}
 console.log('fares tests ok',n);

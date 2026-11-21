@@ -303,6 +303,7 @@
     if (neg.promises && neg.promises.length) p.promise = neg.promises[neg.promises.length - 1];
     { const txt = `${p.ko} ${({ fa: 'FA 영입', foreign: p.aq ? '아시아쿼터 영입' : '외국인 영입', resign: '재계약', extend: '비FA 다년계약' })[neg.kind]} — ${offer.years}년 총 ${tot}억`, imp = offer.years >= 3 || tot >= 30 ? 3 : 2, top = (S.story || [])[0];
       if (top && top.kind === 'deal' && top.d === S.day && top.text.includes(p.ko)) { top.text = txt; top.imp = Math.max(top.imp, imp); } else this.story('deal', txt, imp); }   // 같은 계약의 뉴스 기반 항목이 있으면 합친다
+    if (neg.kind === 'fa') { const sm = this.signSummary(neg.id); if (sm && sm.comp) neg.evMsg = (neg.evMsg ? neg.evMsg + ' ' : '') + `FA 보상(${KO[sm.comp.from] || sm.comp.from}): ${sm.comp.text}`; }   // 원소속 구단이 가져간 보상을 결과 카드에 표시
     this._press(neg.kind === 'fa' ? 'sign' : neg.kind, { p, offer, tot, neg });
     this.invalidate();
   };

@@ -654,6 +654,14 @@
     this._doSign(t, p, ev.y, ev.sal, ev.bon);   // 경쟁균형세 상한 초과는 허용(시즌 종료 시 야구발전기금 부과)
     news(this, `FA ${p.ko} 영입 (${graded ? `${graded}등급, ` : ''}${ev.y}년 총 ${(ev.per * ev.y).toFixed(1)}억 = 계약금 ${ev.bon.toFixed(1)} + 연봉 ${ev.sal.toFixed(1)}×${ev.y})`); return null;
   };
+  /* 내가 FA를 영입한 직후 보여 줄 요약: 계약 내용 + 원소속 구단이 가져간 보상(보상선수·보상금)과 예산 반영 */
+  proto.signSummary = function (id) {
+    const S = this.S, p = S.players[id], t = S.userTeam; if (!p || p.team !== t) return null;
+    const c = p.contract, tot = Math.round(((c.bonus || 0) + c.salary * c.years) * 10) / 10, lines = [`${c.years}년 총 ${tot}억 (연봉 ${c.salary.toFixed(1)}억${c.bonus ? ' + 계약금 ' + c.bonus + '억' : ''})`];
+    const cl = (S.compLog || []).slice().reverse().find(x => x.id === id && x.to === t && x.year === S.year), out = { name: p.ko, lines, comp: null };
+    if (cl) { const pl = cl.pid ? S.players[cl.pid] : null; out.comp = { from: cl.from, text: cl.text, player: pl ? { name: pl.ko, ovr: this.ovr(pl), age: pl.age } : null }; }
+    return out;
+  };
   proto.finishFA = function () {   // AI 팀이 남은 FA를 영입하고 로스터를 채운다
     const S = this.S, r = rngFor(S.seed, S.year, 51), teams = TEAMS.filter(t => t !== S.userTeam).sort(() => r.random() - 0.5);
     for (const t of teams) {
