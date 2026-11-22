@@ -2266,7 +2266,9 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
     if (!p || p.foreign || p.team !== 'FA' || !p.faInfo || !t || p.faInfo.from !== t || this.war(p) < 1.0) return null;
     const l = this.loyalty(p, t); if (!l || l.team !== t || l.v < 70) return null; return { v: l.v, s: clamp((l.v - 70) / 30, 0, 1) };
   };
-  proto._blendAsk = function (p) { const cur = p.contract.salary, ask = this.askSalary(p); return Math.max(this.minSal(), Math.round((cur + (ask > cur ? 0.6 : 0.4) * (ask - cur)) * 10) / 10); };
+  /* 재계약(비FA) 요구액: 현재 연봉에서 올해 가치 기준 요구액 쪽으로 올릴 땐 0.6·내릴 땐 0.4만큼 이동하되, 한 해 인상은 +100%(×2)까지로 제한한다.
+     이전에는 한 시즌 WAR가 튀면 ×3 이상을 요구하고 그 인상이 다음 해 기준이 돼 리그 상위 40명 평균 연봉이 3년 만에 +33%(상한의 97%)까지 쌓였다. 상한 ×2에서 5년 +19%(연 3.5%)로 완만해진다. ⚠ 한도 값은 실제 인상률 자료가 없는 보정값. */
+  proto._blendAsk = function (p) { const cur = p.contract.salary, ask = this.askSalary(p), v = cur + (ask > cur ? 0.6 : 0.4) * (ask - cur); return Math.max(this.minSal(), Math.round(Math.min(v, cur * 2 + 0.2) * 10) / 10); };
   proto.resignAsk = function (p) {
     const ld = 1 - 0.5 * this.loyDiscount(p, p.team), base = Math.max(this.minSal(), Math.round(this._blendAsk(p) * ld * 10) / 10); if (p.foreign || !this.faEligible(p)) return base;
     const sc = this._fvScore(p); let n = 0, rank = 0; for (const t of TEAMS) for (const q of this.players(t)) if (!q.foreign && this.faEligible(q)) { n++; if (this._fvScore(q) > sc) rank++; }
