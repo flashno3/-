@@ -322,14 +322,14 @@
     const set = L.team(U()).set, A = L.pitchers(U(), true), slots = pitchSlots(), S = L.S, nextI = set.rotIdx % set.rotation.length, sel = ui.sel && ui.sel.kind === 'p' ? ui.sel : null;
     const label = {}; slots.forEach(s => { label[s.id] = s.l; });
     const rows = slots.map(s => { const p = P(s.id); if (!p) return ''; const isSel = sel && sel.k === s.k && sel.i === s.i;
-      return `<tr class="click pslot ${isSel ? 'sel' : ''}" data-act="pTap" data-a="${s.k}:${s.i}"><td class="l small muted">${s.l}</td><td class="l"><b>${esc(p.ko)}</b>${s.k === 'rot' && s.i === nextI ? ' <span class="chip in">다음 선발</span>' : ''}${injChip(p)}${moodChip(p)}<div class="small muted">${pitLine(p.id)}</div></td><td>${ovrChip(L.ovr(p))}</td><td class="l">${gauge(p)}</td></tr>`; }).join('');
+      return `<tr class="click pslot ${isSel ? 'sel' : ''}" data-act="pTap" data-a="${s.k}:${s.i}"><td class="l small muted">${s.l}</td><td class="l"><b>${esc(p.ko)}</b>${s.k === 'rot' && s.i === nextI ? ' <span class="chip in" title="다음 선발">다음</span>' : ''}${statusMini(p)}</td><td>${ovrChip(L.ovr(p))}</td><td class="l">${gauge(p)}</td><td class="l small hm">${pitLine(p.id)}</td></tr>`; }).join('');
     const cur = sel ? slots.find(s => s.k === sel.k && s.i === sel.i) : null;
     const cands = A.slice().sort((x, y) => L.restInfo(y).left - L.restInfo(x).left || L.ovr(y) - L.ovr(x));
-    const candRows = cands.map(q => `<tr class="click" data-act="pAssign" data-a="${q.id}"><td class="l"><b>${esc(q.ko)}</b> <span class="muted small">${q.role === 'SP' ? '선발' : '구원'}${label[q.id] ? ' · 현재 ' + label[q.id] : ''}</span><div>${gauge(q)}</div></td><td>${ovrChip(L.ovr(q))}</td><td class="l small">${pitLine(q.id)}</td></tr>`).join('');
+    const candRows = cands.map(q => `<tr class="click" data-act="pAssign" data-a="${q.id}"><td class="l"><b>${esc(q.ko)}</b><span class="muted small"> ${q.role === 'SP' ? '선발' : '구원'}${label[q.id] ? '·' + label[q.id] : ''}</span></td><td>${ovrChip(L.ovr(q))}</td><td class="l">${gauge(q)}</td><td class="l small hm">${pitLine(q.id)}</td></tr>`).join('');
     return `<div class="card"><div class="row"><h2>투수진 운용</h2><span class="sp"></span><button data-act="autoPitch">자동 설정</button></div>
       <p class="small muted" style="margin:0 0 8px">자리를 누른 뒤 후보를 누르면 바뀝니다(다른 자리의 투수를 고르면 서로 맞바꿈). 선발은 로테이션 순서대로 등판하고 4일 이상 쉬어야 합니다. 불펜은 마무리(세이브 상황)·셋업(7~8회 박빙)·롱릴리프(큰 점수 차)·중간 순으로 투입되며, 체력이 낮은 투수는 쉬어야 합니다. 경기 중에는 직접 교체할 수 있습니다.</p>
-      <div class="tablewrap"><table><thead><tr><th class="l">역할</th><th class="l">선수</th><th>OVR</th><th class="l">체력 · 등판 가능</th></tr></thead><tbody>${rows}</tbody></table></div></div>
-      ${sel ? `<div class="card selcard"><div class="row"><h2 style="margin:0">${cur ? cur.l : ''} 후보</h2><span class="sp"></span><button class="sm" data-act="selClear">선택 취소</button></div><div class="small muted">체력이 많은 투수부터 보여줍니다. 누르면 ${cur ? esc(P(cur.id).ko) : ''}와 바뀝니다.</div><div class="tablewrap"><table><tbody>${candRows}</tbody></table></div></div>` : '<div class="small muted">자리를 눌러 선수를 바꾸세요.</div>'}`;
+      <div class="tablewrap"><table class="rost lu"><thead><tr><th class="l">역할</th><th class="l">선수</th><th>OVR</th><th class="l">체력·등판</th><th class="l hm">올 시즌</th></tr></thead><tbody>${rows}</tbody></table></div></div>
+      ${sel ? `<div class="card selcard"><div class="row"><h2 style="margin:0">${cur ? cur.l : ''} 후보</h2><span class="sp"></span><button class="sm" data-act="selClear">선택 취소</button></div><div class="small muted">체력이 많은 투수부터 보여줍니다. 누르면 ${cur ? esc(P(cur.id).ko) : ''}와 바뀝니다.</div><div class="tablewrap"><table class="rost lu"><tbody>${candRows}</tbody></table></div></div>` : '<div class="small muted">자리를 눌러 선수를 바꾸세요.</div>'}`;
   }
 
   function screenSchedule() {
@@ -1084,7 +1084,7 @@
       ${[['L', '좌투 상대'], ['R', '우투 상대']].map(([h, lab]) => `<div class="row small" style="gap:6px;margin-bottom:6px"><b style="min-width:64px">${lab}</b><span class="muted" style="flex:1">${esc(nm(pr[h]))}</span><button class="sm" data-act="presetSave" data-a="${h}">현재 라인업 저장</button>${pr[h] ? `<button class="sm" data-act="presetClear" data-a="${h}">삭제</button>` : ''}</div>`).join('')}</div>`;
   }
   /* ---------------- 체력 게이지 · 교체형 콜업 · 변경 요약 · 할 일 함 ---------------- */
-  const gauge = p => { if (!p || p.type !== 'P') return ''; const r = L.restInfo(p); return `<span class="gauge ${r.level}" title="남은 체력 ${r.left} · ${r.label}"><span class="gbar"><i style="width:${r.left}%"></i></span><span class="gtxt">체력 ${r.left} · ${r.label}</span></span>`; };
+  const gauge = p => { if (!p || p.type !== 'P') return ''; const r = L.restInfo(p); return `<span class="gauge ${r.level}" title="남은 체력 ${r.left} · ${r.label}"><span class="gbar"><i style="width:${r.left}%"></i></span><span class="gtxt"><span class="gl">체력 </span>${r.left}<span class="gl"> · ${r.label}</span></span></span>`; };
   function openSwap(upId, ev) { const p = P(upId); if (!p) return; if (L.isInj(p)) { toast(`${p.ko}은(는) 부상자 명단입니다.`); return; } const lk = L.lockLeft(p); if (lk > 0) { toast(`${p.ko}은(는) 2군 말소 후 10경기일이 지나야 1군에 등록할 수 있습니다. (${lk}일 남음)`); return; } ui.swap = { up: upId, ev: ev || null }; render(); }
   function swapSheet() {
     const sw = ui.swap; if (!sw || !L) return ''; const up = P(sw.up); if (!up || up.active) { ui.swap = null; return ''; }

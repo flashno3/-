@@ -341,3 +341,4 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
 .rost.lu td { white-space: nowrap; } .rost.lu td .chip { font-size: 10.5px; }   /* 라인업·후보 표: 한 줄 행 */
 .rost.lu td:first-child { min-width: 0; }
 @media (max-width: 420px) { .rost.lu .sm { padding: 4px 7px; min-height: 30px; font-size: 13px; } .rost.lu td, .rost.lu th { padding-left: 3px; padding-right: 3px; } .rost.lu .dgrip { display: none; } }
+@media (max-width: 560px) { .rost.lu .gauge .gl { display: none; } .rost.lu .gauge .gbar { width: 40px; } }   /* 투수진 표: 체력은 막대와 숫자만(설명은 마우스 올리면) */
