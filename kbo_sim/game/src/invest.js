@@ -90,6 +90,6 @@
   proto.investFacilities = function () { const out = {}; for (const t of Object.keys(FAC)) out[t] = { name: FAC[t][0], cost: FAC[t][1], note: FAC[t][2] }; return out; };
   proto.investLeagueAtt = function () {
     const S = this.S, t = S.userTeam, f = S.fin && S.fin.teams && S.fin.teams[t];
-    return { table: LEAGUE_ATT, mine: f ? { att: f.att0, cap: this.finCap(t), occ: Math.round(f.att0 / this.finCap(t) * 1000) / 10 } : null };
+    return { table: LEAGUE_ATT, mine: f ? (() => { const att = this.finAtt(t); return { att, cap: this.finCap(t), occ: Math.round(att / this.finCap(t) * 1000) / 10, dem: Math.round(this._dem(f)) }; })() : null };
   };
 });

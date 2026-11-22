@@ -35,7 +35,7 @@ const toNewSeason=L=>{const S=L.S;const off=L.startOffseason();for(const id of o
 // 4) 효과의 크기: 훈련 보정 ×1.05~1.15, 팬 경험은 구장 한도까지만
 {const mkLv=(lv)=>{const L=mk(8,'Lions',20),S=L.S;S.invest={eff:{train:lv},queue:{},paid:{train:lv?8:0},spent:{},log:[]};const p=L.players(S.userTeam).find(x=>x.type==='B'&&x.age<=30);S.trainAcc={total:60,B:{all:60},P:{}};return {L,p}};
  const a=mkLv(0),b=mkLv(1),c=mkLv(3);const m0=a.L._trainEff(a.p).mult-1,m1=b.L._trainEff(b.p).mult-1,m3=c.L._trainEff(c.p).mult-1;ok(m0>0&&Math.abs(m1/m0-1.05)<1e-9&&Math.abs(m3/m0-1.15)<1e-9,`훈련 보정 배율 ${m1/m0} ${m3/m0}`);
- const L=mk(8,'Lions',20),S=L.S,t=S.userTeam,f=S.fin.teams[t];f.cap=100000;const att0=L.finAtt(t);f.attMult=1.022;ok(L.finAtt(t)>att0,'관중 증가');f.attMult=1.5;f.cap=Math.round(att0*1.01);ok(L.finAtt(t)===f.cap,'구장 수용 한계까지만');
+ const L=mk(8,'Lions',20),S=L.S,t=S.userTeam,f=S.fin.teams[t];f.cap=100000;const att0=L.finAtt(t);f.attMult=1.022;ok(L.finAtt(t)>att0,'관중 증가');f.attMult=1.5;f.cap=Math.round(att0*1.01);{const a=L.finAtt(t);ok(a<=f.cap&&a>=f.cap*0.93,'구장 수용 한계 근처까지만(기대 관중=E[min(수요,좌석)]) '+a+'/'+f.cap)}
  const e=L.investEstimate('fan',1);ok(/수용/.test(e)&&/입장 수입/.test(e),'추정 문구');}
 // 5) 의무·육성 효과의 방향: 부상 확률 곱, 성장 출전 비중 보정
 {const L=mk(9,'Lions',20),S=L.S;S.invest={eff:{med:3,farm:3},queue:{},paid:{med:52,farm:52},spent:{},log:[]};ok(L.investMult('med')===0.88&&L.investDur()===0.85&&Math.abs(L.investFarm()-0.12)<1e-12,'3단계 값(since 없음 = 도달률 100%)');

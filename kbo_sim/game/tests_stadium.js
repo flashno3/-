@@ -18,8 +18,8 @@ ok(L.isBigMatch('Twins','Bears')&&L.isBigMatch('Bears','Twins'),'라이벌전은
 if(day5>=0){const f=S.fin.teams.Twins,g0=f.games;f.games=7;S.day=day5;ok(L.isBigMatch('Twins','Lions')&&!L.isBigMatch('Lions','Twins'),'어린이날 잠실 홈경기는 빅매치(다른 구단은 아님)');S.day=0;f.games=g0}
 S.year=2032;ok(!L.isBigMatch('Twins','Bears'),'2032 이후에는 이원화 없음');S.year=2027;
 // 관중 상한: 일반 13,000, 빅매치는 24,000까지(수요가 충분할 때)
-{const f=S.fin.teams.Twins;ok(L.finAtt('Twins',false)===18000,'일반 경기 18,000 상한');const big=L.finAtt('Twins',true);ok(big>18000&&big<=30000,'빅매치는 더 많이(3층 개방) '+big);ok(L.finAtt('Lions',true)===L.finAtt('Lions',false),'이원화 구장이 아니면 빅매치 구분 없음');
- const g=L.finGateAvg('Twins');ok(Math.abs(g-((1-10/72)*18000+10/72*big)*f.price*f.pm*1.12)<1e-9,'예상 평균 입장 수입(이원화 가중)');ok(Math.abs(L.finGateAvg('Lions')-L.finAtt('Lions')*S.fin.teams.Lions.price*S.fin.teams.Lions.pm)<1e-12,'다른 구단은 기존 식 그대로');}
+{const f=S.fin.teams.Twins;{const a=L.finAtt('Twins',false);ok(a<=18000&&a>=17000,'일반 경기 18,000 상한(기대 관중) '+a)}const big=L.finAtt('Twins',true);ok(big>18000&&big<=30000,'빅매치는 더 많이(3층 개방) '+big);ok(L.finAtt('Lions',true)===L.finAtt('Lions',false),'이원화 구장이 아니면 빅매치 구분 없음');
+ const g=L.finGateAvg('Twins');ok(Math.abs(g-((1-10/72)*L.finAtt('Twins',false)+10/72*big)*f.price*f.pm*1.12)<1e-9,'예상 평균 입장 수입(이원화 가중)');ok(Math.abs(L.finGateAvg('Lions')-L.finAtt('Lions')*S.fin.teams.Lions.price*S.fin.teams.Lions.pm)<1e-12,'다른 구단은 기존 식 그대로');}
 // 시즌 시뮬레이션: 잠실 구단 입장 수입이 정규 18,000 상한·객단가 1.12 배율로 누적, 다른 구단은 그대로
 {const A=League.create(base,'Lions',5);A.faAdvance(75);A.closeFA();A.advance(300,false);const fa=A.S.fin.teams;
  for(const t of ['Twins','Bears']){const f=fa[t];ok(f.games>=60,'홈경기 수 '+f.games);const per=f.gate/f.games/(f.price*f.pm*1.12);ok(per<=30000&&per>=15000,`${t} 홈경기 평균 관중 ${Math.round(per)} (18,000 상한 + 빅매치 소수)`);ok(per>17000&&per<21500,`${t} 대부분 18,000 근처 ${Math.round(per)}`)}
