@@ -344,3 +344,10 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
 @media (max-width: 560px) { .rost.lu .gauge .gl { display: none; } .rost.lu .gauge .gbar { width: 40px; } }   /* 투수진 표: 체력은 막대와 숫자만(설명은 마우스 올리면) */
 
 .arc{padding:8px 0;border-top:1px solid var(--line,#2a3140)}.arc:first-of-type{border-top:0}.arcdots{display:inline-flex;gap:4px}.arcdot{width:9px;height:9px;border-radius:50%;background:#3a4357}.arcdot.on{background:#4ec36f}.arcdot.cur{background:#e6b422}
+
+/* 선수 기록 표: 순위 칸은 좁게, 선수 이름 칸은 가로로 넘겨도 고정 */
+table.rec { width: auto; min-width: 100%; } table.rec th, table.rec td { padding: 6px 7px; } table.rec td:first-child, table.rec th:first-child { width: 1.8em; padding-left: 4px; padding-right: 2px; text-align: right; }
+table.rec th:nth-child(2), table.rec td:nth-child(2) { position: sticky; left: 0; background: var(--surface); z-index: 1; padding-left: 6px; }
+table.rec tr.me td:nth-child(2) { background: var(--accent-soft); } table.rec th.sorted, table.rec td.sorted { color: var(--fg); font-weight: 600; }
+@media (max-width: 560px) { .rost td.n .yr { display: block; line-height: 1.1; text-align: right; } .rost td, .rost th { padding-left: 3px; padding-right: 3px; } }   /* 계약 연수는 연봉 밑에: 이동 버튼이 잘리지 않게 */
+@media (max-width: 340px) { .rost td, .rost th { font-size: 12.5px; } }

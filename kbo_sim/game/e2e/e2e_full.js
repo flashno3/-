@@ -154,7 +154,7 @@ async function run(vp,label,team){
   console.log(`  [${label}] 라이브 ${liveDone}경기 · 이 순간 카드 ${momentSeen?'확인':'미발생'} · 결정 되짚기 ${reviewSeen?'확인':'미발생(결정 없음)'}`);
   // 선수 기록(세부 성적): 시즌 진행 뒤 표·정렬·필터
   await nav('리그','선수 기록');{const rows=()=>pg.evaluate(()=>document.querySelector('table.rec')?document.querySelector('table.rec').rows.length-1:-1);ok((await rows())>=1,`${label}: 선수 기록 타자 행 `+await rows());
-    const first=()=>pg.evaluate(()=>{const r=document.querySelector('table.rec tbody tr');return r?r.innerText:''});const a=await first();if(process.env.SHOT)await pg.screenshot({path:'/tmp/rec_'+label.replace(/\W/g,'')+'.png'});await click('th[data-a="HR"]');await pg.waitForTimeout(100);await sweep('기록 HR정렬');
+    const first=()=>pg.evaluate(()=>{const r=document.querySelector('table.rec tbody tr');return r?r.innerText:''});const a=await first();if(process.env.SHOT)await pg.screenshot({path:'/tmp/rec_'+vp.width+'.png'});await click('th[data-a="HR"]');await pg.waitForTimeout(100);await sweep('기록 HR정렬');
     await click('button[data-act="recSet"][data-a="t|P"]');await pg.waitForTimeout(100);ok(await pg.evaluate(()=>/이닝/.test(document.querySelector('table.rec').innerText)),`${label}: 투수 기록 열`);await click('th[data-a="K/9"]');await sweep('기록 투수 정렬');
     await click('button[data-act="recSet"][data-a="farm|1"]');await pg.waitForTimeout(100);await sweep('기록 2군');await click('button[data-act="recSet"][data-a="farm|0"]');await click('button[data-act="recSet"][data-a="q|0"]');await pg.waitForTimeout(100);ok((await rows())>=1,`${label}: 규정 해제 후 행`);await sweep('기록 규정해제')}
   // 8) 저장 → 새로고침 → 이어하기

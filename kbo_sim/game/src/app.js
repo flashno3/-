@@ -207,7 +207,7 @@
     /* 정렬 기준에 해당하는 값 하나만 오른쪽에 보여준다(능력치순은 연봉) */
     const valHead = sk === 'age' ? '나이' : '연봉';   // 잠재는 정렬과 상관없이 항상 별도 열로 보여준다
     const potCell = p => `<td>${hasPot(p) && p.age <= 25 ? `<span class="pot" data-l="${L.potLetter(p)}" title="잠재력 ${L.potLetter(p)} · ${L.tierLabel(potv(p))}">${L.potLetter(p)}</span>` : `<span class="muted" title="${p.foreign ? '외국인은 잠재력을 표시하지 않습니다' : '26세 이상은 성장 여력을 표시하지 않습니다(완성 단계)'}">-</span>`}</td>`;
-    const valCell = p => { if (sk === 'age') return `<td class="n">${p.age}세</td>`; const c = p.contract; return `<td class="n">${money(c.salary)}${c.amort ? '<span class="muted small">+</span>' : ''}${c.years > 1 ? `<span class="small muted"> ${c.years}년</span>` : ''}</td>`; };   // 1년 계약은 표시를 생략(다년만 연수 표기)
+    const valCell = p => { if (sk === 'age') return `<td class="n">${p.age}세</td>`; const c = p.contract; return `<td class="n">${money(c.salary)}${c.amort ? '<span class="muted small">+</span>' : ''}${c.years > 1 ? `<span class="small muted yr"> ${c.years}년</span>` : ''}</td>`; };   // 1년 계약은 표시를 생략(다년만 연수 표기)
     const status = p => `${p.foreign ? ` <span class="chip">${p.aq ? 'AQ' : '외'}</span>` : ''}${injChip(p).replace(/>부상 ~[^<]*</, '>부상<')}${moodChip(p).replace(/>(▲호조|▼부진)[\d.]+</, (m, a) => '>' + a[0] + '<')}${L.S.captain === p.id ? ' <span class="chip in" title="주장">C</span>' : ''}`;   // 목록에서는 상태를 짧은 아이콘으로(자세한 내용은 칩에 마우스를 올리거나 상세에서)
     const mgBtn = p => p.active ? `<button class="sm" data-act="toggleActive" data-a="${p.id}" title="2군으로 내림">2군</button>` : L.isInj(p) ? '<span class="muted small" title="복귀 전 등록 불가">IL</span>' : `<button class="sm primary" data-act="toggleActive" data-a="${p.id}" title="1군 등록">1군</button>`;
     const rowOf = p => `<tr class="click${p.active ? '' : ' dim'}" data-act="player" data-a="${p.id}"><td class="l"><b>${esc(p.ko)}</b>${status(p)}<span class="small muted vm"> ${pos(p)}·${p.age}세</span></td><td class="l hm">${pos(p)} · ${p.age}세</td><td>${ovrChip(L.ovr(p))}</td>${potCell(p)}${valCell(p)}<td class="l hm">${subHtml(p)}</td><td class="l small hm">${statLine(p)}</td><td data-stop="1">${mgBtn(p)}</td></tr>`;
@@ -523,7 +523,7 @@
     const th = `<thead><tr><th class="l n">#</th><th class="l">선수</th><th class="l">팀</th>${cols.map(([key, lab]) => `<th class="n sortable ${key === k ? 'sorted' : ''}" data-act="recSort" data-a="${key}" title="${lab} 순 정렬" style="cursor:pointer">${lab}${key === k ? (d < 0 ? ' ▼' : ' ▲') : ''}</th>`).join('')}</tr></thead>`;
     const body = shown.map((x, i) => `<tr class="click ${x.p.team === me ? 'me' : ''}" data-act="player" data-a="${x.p.id}"><td class="l n">${i + 1}</td><td class="l"><b>${esc(x.p.ko)}</b><span class="muted small"> ${R.t === 'B' ? posName[x.p.pos] || x.p.pos : x.p.role === 'SP' ? '선발' : '구원'}·${x.p.age}</span></td><td class="l">${x.p.team in KO ? esc(KO[x.p.team]) : '<span class="muted">' + esc(x.p.team) + '</span>'}</td>${cols.map(([key]) => `<td class="n ${key === k ? 'sorted' : ''}">${recFmt(key, x[key])}</td>`).join('')}</tr>`).join('');
     return `<div class="card"><div class="row"><h2 style="margin:0">선수 기록</h2><span class="sp"></span><span class="small muted">${L.S.year} ${R.farm ? '2군(퓨처스)' : '1군 정규시즌'} · ${rows.length}명${rows.length > shown.length ? ' 중 상위 ' + shown.length + '명' : ''}</span></div>${ctl}
-      <div class="tablewrap" style="max-height:70vh;overflow:auto;margin-top:8px"><table class="rost rec">${th}<tbody>${body || `<tr><td class="muted" colspan="${cols.length + 3}">조건에 맞는 기록이 아직 없습니다.</td></tr>`}</tbody></table></div>
+      <div class="tablewrap" style="max-height:70vh;overflow:auto;margin-top:8px"><table class="rec">${th}<tbody>${body || `<tr><td class="muted" colspan="${cols.length + 3}">조건에 맞는 기록이 아직 없습니다.</td></tr>`}</tbody></table></div>
       ${rows.length > shown.length ? `<div class="row" style="margin-top:8px"><button class="sm" data-act="recMore">더 보기 (+50)</button></div>` : ''}
       <p class="small muted" style="margin-top:8px">열 머리를 누르면 그 지표로 정렬합니다(같은 열을 다시 누르면 방향 반전). 이 게임의 경기 엔진이 추적하는 항목만 보여 줍니다 — 자책점·승패·세이브·경기 수 같은 항목은 아직 집계하지 않습니다. 정규시즌 기록이며 포스트시즌은 포함되지 않습니다.</p></div>`;
   }
@@ -1715,7 +1715,7 @@
   function stackTables(root) {
     if (!window.matchMedia || !window.matchMedia('(max-width: 560px)').matches) return;
     root.querySelectorAll('.tablewrap').forEach(w => {
-      const t = w.querySelector('table'); if (!t || t.classList.contains('rost') || w.scrollWidth <= w.clientWidth + 2) return;   // 로스터 표는 카드형으로 바꾸지 않고(행 높이가 제각각이 됨) 항상 한 줄 행을 유지한다
+      const t = w.querySelector('table'); if (!t || t.classList.contains('rost') || t.classList.contains('rec') || w.scrollWidth <= w.clientWidth + 2) return;   // 로스터 표는 카드형으로 바꾸지 않고(행 높이가 제각각이 됨) 항상 한 줄 행을 유지한다
       const heads = Array.from(t.querySelectorAll('thead th')).map(th => th.textContent.trim()); t.classList.add('rt');
       t.querySelectorAll('tbody tr').forEach(tr => Array.from(tr.children).forEach((td, i) => { if (heads[i] && td.tagName === 'TD' && !td.getAttribute('colspan')) td.dataset.l = heads[i]; }));
     });
