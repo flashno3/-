@@ -200,7 +200,7 @@ details.card > summary { cursor: pointer; font-family: var(--font-display); font
 .vm { display: none; }
 @media (max-width: 560px) { .vm { display: inline; } .kpi .v { font-size: 17px; } .rost td, .rost th { padding-left: 5px; padding-right: 5px; } }
 
-@media (max-width: 560px) { .rost td { padding-top: 6px; padding-bottom: 6px; } .rost td:first-child { white-space: nowrap; min-width: 112px; }   /* 이름·포지션·나이는 항상 한 줄 */ .rost .chip { white-space: nowrap; } .rost .wrapok { white-space: normal; } .rost .chip { font-size: 10.5px; padding: 1px 5px; } .rost td.n { white-space: nowrap; } }
+@media (max-width: 560px) { .rost td { padding-top: 6px; padding-bottom: 6px; } .rost td, .rost th { padding-left: 4px; padding-right: 4px; } .rost td:first-child { min-width: 0; } .rost td:first-child { white-space: nowrap; min-width: 112px; }   /* 이름·포지션·나이는 항상 한 줄 */ .rost .chip { white-space: nowrap; } .rost .wrapok { white-space: normal; } .rost .chip { font-size: 10.5px; padding: 1px 5px; } .rost td.n { white-space: nowrap; } }
 
 .rost tr.sub td { background: var(--bg); padding-top: 4px; padding-bottom: 4px; }
 
@@ -335,3 +335,5 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
 .foldmini[open] > summary::before { content: '▾ '; }
 
 .rbar > summary { cursor: pointer; list-style: none; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; } .rbar > summary::-webkit-details-marker { display: none; } .rbar > summary::after { content: '▾'; margin-left: auto; color: var(--muted); } .rbar[open] > summary::after { content: '▴'; }
+
+@media (max-width: 380px) { .rost td, .rost th { font-size: 13px; padding-left: 3px; padding-right: 3px; } .rost .chip { font-size: 10px; padding: 1px 4px; } .rost .num, .rost .ovr { font-size: 13px; } }
