@@ -128,7 +128,7 @@ async function run(vp,label,team){
       let st=0;while(await pg.$('.livecols')&&st++<400){
         if(await pg.$('.momentcard'))momentSeen=true;
         if(await pg.$('button[data-act="liveFinish"]')){await sweep('라이브종료');await click('button[data-act="liveFinish"]');await pg.waitForTimeout(250);if(await pg.evaluate(()=>/내 결정 되짚기/.test(document.body.innerText)))reviewSeen=true;await sweep('결과시트');await confirm();liveDone++;break}
-        if(st===3){await click('button[data-act="liveAdv"][data-a="pcOpen"]');await click('button[data-act="liveDo"][data-a="pc"]')}
+        if(st===3){await click('button[data-act="liveAdv"][data-a="pcOpen"]');ok(await pg.evaluate(()=>{const f=[...document.querySelectorAll('.picker button[data-a="pc"]')].map(b=>/선발/.test(b.innerText));const i=f.indexOf(true);return i<0||f.slice(i).every(Boolean)}),`${label}: 투수 교체 목록에서 선발은 맨 아래`);await click('button[data-act="liveDo"][data-a="pc"]')}
         if(st===6&&!(await click('button[data-act="liveAdv"][data-a="bunt"]'))){}
         if(!tapDone&&await pg.$('.fieldsvg')){const hb=await pg.$('.fieldsvg g.tap[data-a="b0"], .fieldsvg g.tap[data-a="b1"], .fieldsvg g.tap[data-a="b2"]');if(hb){
           await click('.fieldsvg g.tap[data-a="b0"], .fieldsvg g.tap[data-a="b1"], .fieldsvg g.tap[data-a="b2"]');ok(!!(await pg.$('.sheet.pop')),`${label}: 주자를 누르면 지시 팝업`);await sweep('주자 팝업');
