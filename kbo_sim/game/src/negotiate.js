@@ -223,6 +223,7 @@
     const ko = KIND_OPEN[kind] || [''], kp = ko[Math.floor(r.random() * ko.length)];
     const pr = neg.prios[0], pool = OPEN[pr] || OPEN.money, c = this._nCtx(neg), tonePool = neg.speaker === 'ag' ? AG_TONE[agent] : TONE[tr], pre = tonePool[Math.floor(r.random() * tonePool.length)];
     this._nSay(neg, neg.speaker, (kind === 'foreign' ? '' : kp) + (r.random() < 0.6 ? pre : '') + fill(this._nPick(neg, 'open', pool), c));
+    if (kind === 'resign' && !p.foreign && this.salaryReview) { const rv = this.salaryReview(p); this._nSys(neg, `전년 연봉 ${rv.prev}억 → 요구 ${rv.ask}억(${rv.pct > 0 ? '+' : ''}${Math.round(rv.pct * 100)}%) · ${rv.reasons.join(' · ')}`); }
     if (kind === 'extend' || kind === 'resign') this._nSys(neg, tm.multi ? `${p.ko}의 희망 계약은 ${tm.pref}년 안팎입니다. 비FA 다년계약은 1~${tm.maxY}년까지 가능합니다.` : `${tm.label}입니다. FA 자격이 있거나 외국인은 1년 계약만 가능합니다.`);
     if (neg.replace) { const old = S.players[neg.replace], rc = this.releaseCost(neg.replace); this._nSys(neg, `교체 계약: 합의되면 ${old.ko}와의 계약을 해지(방출)합니다(위약금 ${rc.total}억).`, 'warn'); }
     if (kind === 'foreign') this._nSys(neg, `외국인 연봉 상한 ${tm.cap}억(약 ${Math.round(tm.cap / (1335 / 1e8) / 1e4)}만$). 호감도가 낮아 요구액이 상한을 넘으면 계약할 수 없습니다.`);

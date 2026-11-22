@@ -9,5 +9,5 @@ let over=0,cnt=0;for(const p of Object.values(S.players)){if(!(p.team in S.teams
 const hi=Object.values(S.players).filter(p=>p.team in S.teams&&!p.foreign).sort((a,b)=>L.price(b)/b.contract.salary-L.price(a)/a.contract.salary)[0];
 ok(L.price(hi)>hi.contract.salary*2.2,'테스트용 가치 급등 선수 '+hi.ko+' '+hi.contract.salary+'→'+L.price(hi));ok(L._blendAsk(hi)<=hi.contract.salary*2+0.25,'급등 선수도 ×2 이내 '+L._blendAsk(hi));
 const lo=Object.values(S.players).filter(p=>p.team in S.teams&&!p.foreign&&p.contract.salary>=3).sort((a,b)=>L.price(a)/a.contract.salary-L.price(b)/b.contract.salary)[0];
-const exp=Math.max(L.minSal(),Math.round((lo.contract.salary+0.4*(L.askSalary(lo)-lo.contract.salary))*10)/10);ok(Math.abs(L._blendAsk(lo)-exp)<0.11,'인하 방향은 기존 0.4 비율 '+L._blendAsk(lo)+' vs '+exp);
+const ak=L.askSalary(lo)*(1+L._teamFactor(lo)),cu=lo.contract.salary,exp=Math.max(L.minSal(),Math.round(Math.max(cu+0.4*(ak-cu),cu*0.7)*10)/10);ok(Math.abs(L._blendAsk(lo)-exp)<0.11,'인하 방향은 0.4 비율(팀 성적 보정·삭감 한도 −30%) '+L._blendAsk(lo)+' vs '+exp);
 console.log('raise tests ok',n);

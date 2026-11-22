@@ -46,12 +46,13 @@
   };
   /* 재계약(비FA) 요구액: 현재 연봉에서 올해 가치 기준 요구액 쪽으로 올릴 땐 0.6·내릴 땐 0.4만큼 이동하되, 한 해 인상은 +100%(×2)까지로 제한한다.
      이전에는 한 시즌 WAR가 튀면 ×3 이상을 요구하고 그 인상이 다음 해 기준이 돼 리그 상위 40명 평균 연봉이 3년 만에 +33%(상한의 97%)까지 쌓였다. 상한 ×2에서 5년 +19%(연 3.5%)로 완만해진다. ⚠ 한도 값은 실제 인상률 자료가 없는 보정값. */
-  proto._blendAsk = function (p) { const cur = p.contract.salary, ask = this.askSalary(p), v = cur + (ask > cur ? 0.6 : 0.4) * (ask - cur); return Math.max(this.minSal(), Math.round(Math.min(v, cur * 2 + 0.2) * 10) / 10); };
+  proto._blendAsk = function (p) { const cur = p.contract.salary, ask = this.askSalary(p) * (1 + (this._teamFactor ? this._teamFactor(p) : 0)), v = cur + (ask > cur ? 0.6 : 0.4) * (ask - cur); return Math.max(this.minSal(), Math.round(Math.max(Math.min(v, cur * 2 + 0.2), cur * 0.7) * 10) / 10); };   // 팀 성적 보정(가을야구 실패 시 삭감 방향)·삭감 한도 −30%
   proto.resignAsk = function (p) {
     const ld = 1 - 0.5 * this.loyDiscount(p, p.team), base = Math.max(this.minSal(), Math.round(this._blendAsk(p) * ld * 10) / 10); if (p.foreign || !this.faEligible(p)) return base;
     const sc = this._fvScore(p); let n = 0, rank = 0; for (const t of TEAMS) for (const q of this.players(t)) if (!q.foreign && this.faEligible(q)) { n++; if (this._fvScore(q) > sc) rank++; }
     const mv = faCurve(Math.min(1, rank / Math.max(1, 0.27 * n)));
-    return Math.max(base, Math.round(0.8 * mv * ld * 10) / 10);
+    /* FA 자격자는 올해 성적에 비례한 시장가(0.8 × FA 시장가 곡선)를 요구한다. 성적이 나쁘면 요구가 현재 연봉보다 낮아질 수 있다(삭감 한도 −30%, 팀 성적 보정은 개인이 뛰어나지 않을 때만) */
+    const cur = p.contract.salary, mk = 0.8 * mv * ld * (1 + (this._teamFactor ? this._teamFactor(p) : 0)); return Math.max(this.minSal(), Math.round((mk < cur ? Math.max(mk, cur * 0.7) : mk) * 10) / 10);
   };
   const faDecayAt = d => 1 - Math.min(0.3, 0.0015 * d + 0.00004 * d * d);   // 미계약 기간이 길수록 요구액 하락이 가속: 30일 -8%, 60일 -23%, 75일 -30%(한도)
   proto._marketDecay = function () { const S = this.S, m = S.faMkt; return m ? faDecayAt(m.day) : S.phase === 'offseason' ? 1 : faDecayAt(FA_END) * (1 - Math.min(0.2, 0.003 * (S.day || 0))); };   // 개막 후에는 추가로 -0.3%/일(최대 -20%)
@@ -168,8 +169,8 @@
     const S = this.S, off = S.off; if (this._releaseForeignPool) this._releaseForeignPool();   // 해외 후보군도 외국인 FA 시장에 합류
     for (const id of off.rep.expiring.slice()) {
       const p = S.players[id];
-      if (p && !p.foreign && !this.faEligible(p)) {   // FA 자격(등록일수)이 없는 선수는 구단 보유권이 있어 시장에 나갈 수 없다 → 재계약하지 않았어도 시장 요구액으로 1년 자동 재계약
-        const a = this._blendAsk(p); p.contract = this._newContract(p, a, 1); p.salHist = (p.salHist || []).slice(-2).concat([a]); off.rep.auto = (off.rep.auto || 0) + 1; continue;
+      if (p && !p.foreign && !this.faEligible(p)) {   // FA 자격이 없는 선수는 구단 보유권이 있어 시장에 나갈 수 없다 → 합의하지 못했으면 연봉조정(활동 3년 이상) 또는 구단 제시액 계약(3년 미만)
+        if (this._arbSettle(id)) continue;
       }
       this.release(S.userTeam, id, true);
     }

@@ -2268,12 +2268,13 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
   };
   /* 재계약(비FA) 요구액: 현재 연봉에서 올해 가치 기준 요구액 쪽으로 올릴 땐 0.6·내릴 땐 0.4만큼 이동하되, 한 해 인상은 +100%(×2)까지로 제한한다.
      이전에는 한 시즌 WAR가 튀면 ×3 이상을 요구하고 그 인상이 다음 해 기준이 돼 리그 상위 40명 평균 연봉이 3년 만에 +33%(상한의 97%)까지 쌓였다. 상한 ×2에서 5년 +19%(연 3.5%)로 완만해진다. ⚠ 한도 값은 실제 인상률 자료가 없는 보정값. */
-  proto._blendAsk = function (p) { const cur = p.contract.salary, ask = this.askSalary(p), v = cur + (ask > cur ? 0.6 : 0.4) * (ask - cur); return Math.max(this.minSal(), Math.round(Math.min(v, cur * 2 + 0.2) * 10) / 10); };
+  proto._blendAsk = function (p) { const cur = p.contract.salary, ask = this.askSalary(p) * (1 + (this._teamFactor ? this._teamFactor(p) : 0)), v = cur + (ask > cur ? 0.6 : 0.4) * (ask - cur); return Math.max(this.minSal(), Math.round(Math.max(Math.min(v, cur * 2 + 0.2), cur * 0.7) * 10) / 10); };   // 팀 성적 보정(가을야구 실패 시 삭감 방향)·삭감 한도 −30%
   proto.resignAsk = function (p) {
     const ld = 1 - 0.5 * this.loyDiscount(p, p.team), base = Math.max(this.minSal(), Math.round(this._blendAsk(p) * ld * 10) / 10); if (p.foreign || !this.faEligible(p)) return base;
     const sc = this._fvScore(p); let n = 0, rank = 0; for (const t of TEAMS) for (const q of this.players(t)) if (!q.foreign && this.faEligible(q)) { n++; if (this._fvScore(q) > sc) rank++; }
     const mv = faCurve(Math.min(1, rank / Math.max(1, 0.27 * n)));
-    return Math.max(base, Math.round(0.8 * mv * ld * 10) / 10);
+    /* FA 자격자는 올해 성적에 비례한 시장가(0.8 × FA 시장가 곡선)를 요구한다. 성적이 나쁘면 요구가 현재 연봉보다 낮아질 수 있다(삭감 한도 −30%, 팀 성적 보정은 개인이 뛰어나지 않을 때만) */
+    const cur = p.contract.salary, mk = 0.8 * mv * ld * (1 + (this._teamFactor ? this._teamFactor(p) : 0)); return Math.max(this.minSal(), Math.round((mk < cur ? Math.max(mk, cur * 0.7) : mk) * 10) / 10);
   };
   const faDecayAt = d => 1 - Math.min(0.3, 0.0015 * d + 0.00004 * d * d);   // 미계약 기간이 길수록 요구액 하락이 가속: 30일 -8%, 60일 -23%, 75일 -30%(한도)
   proto._marketDecay = function () { const S = this.S, m = S.faMkt; return m ? faDecayAt(m.day) : S.phase === 'offseason' ? 1 : faDecayAt(FA_END) * (1 - Math.min(0.2, 0.003 * (S.day || 0))); };   // 개막 후에는 추가로 -0.3%/일(최대 -20%)
@@ -2390,8 +2391,8 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
     const S = this.S, off = S.off; if (this._releaseForeignPool) this._releaseForeignPool();   // 해외 후보군도 외국인 FA 시장에 합류
     for (const id of off.rep.expiring.slice()) {
       const p = S.players[id];
-      if (p && !p.foreign && !this.faEligible(p)) {   // FA 자격(등록일수)이 없는 선수는 구단 보유권이 있어 시장에 나갈 수 없다 → 재계약하지 않았어도 시장 요구액으로 1년 자동 재계약
-        const a = this._blendAsk(p); p.contract = this._newContract(p, a, 1); p.salHist = (p.salHist || []).slice(-2).concat([a]); off.rep.auto = (off.rep.auto || 0) + 1; continue;
+      if (p && !p.foreign && !this.faEligible(p)) {   // FA 자격이 없는 선수는 구단 보유권이 있어 시장에 나갈 수 없다 → 합의하지 못했으면 연봉조정(활동 3년 이상) 또는 구단 제시액 계약(3년 미만)
+        if (this._arbSettle(id)) continue;
       }
       this.release(S.userTeam, id, true);
     }
@@ -3801,6 +3802,74 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
   };
 });
 
+/* 재계약 연봉 산정(성적·팀 성적 반영, 전년 연봉 비교) + 연봉조정(중재).
+ * 규약 제75~80조: 구단과 보류선수가 연봉에 합의하지 못하면 선수 또는 구단이 연봉중재를 신청한다(활동 개시 후 만 3년 경과 선수만). 각자 원하는 연봉을 제출하고
+ * 중재위원회가 결정하며, 결정은 구속력이 있다(선수가 거부하면 임의해지, 구단이 거부하면 자유계약선수). 규약에는 위원회의 결정 방식이 적혀 있지 않다 —
+ * ⚠ 이 게임은 야구계 관행(양자택일)대로 두 제시액 중 위원회 평가액에 더 가까운 쪽을 채택한다. 신청 마감(1/10)·결정(1/30) 일정은 단순화해 즉시 처리한다. */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) factory(require('./league.js'), require('../../web/src/engine.js'));
+  else factory(root.KBOLeague, root.KBOEngine);
+})(typeof self !== 'undefined' ? self : this, function (LG, Engine) {
+  'use strict';
+  const { proto, clamp, rngFor, news } = LG.OFFC;
+  const CUT_MAX = 0.30;   // 한 해 삭감 한도(−30%). 규약에는 삭감 한도가 없다(최저연봉만 지킴) — ⚠ 게임 균형용 가정값
+  /* 팀 성적 보정: 가을야구(5위 이내)를 못 하면 구단이 삭감을 요구한다. 선수 개인이 뛰어나면(WAR 1.5 이상) 팀 성적과 무관 — ⚠ 가정값 */
+  proto.teamPerf = function (t) {
+    const S = this.S, key = S.year + ':' + S.day + ':' + S.phase; if (!this._tp || this._tp.key !== key) { const st = this.standings(), m = {}; for (const x of st) m[x.team] = x.rank; this._tp = { key, m }; }
+    const rank = this._tp.m[t] || 5; return { rank, post: rank <= 5, factor: rank <= 3 ? 0.02 : rank <= 5 ? 0 : rank <= 7 ? -0.03 : -0.06 };
+  };
+  proto._teamFactor = function (p) { return this.war(p) >= 1.5 ? 0 : this.teamPerf(p.team).factor; };
+  /* 성적 기준 적정액(= 올해 가치에 팀 성적 보정). 재계약 요구·구단 제시·위원회 평가의 기준 */
+  proto.fairSalary = function (p) { return Math.max(this.minSal(), Math.round(this.price(p) * (1 + this._teamFactor(p)) * 10) / 10); };
+  /* 재계약 시점 비교 자료: 전년 연봉 → 요구액, 증감률, 성적·팀 성적 사유 */
+  proto.salaryReview = function (p) {
+    const prev = p.contract.salary, ask = this.resignAsk(p), pct = prev > 0 ? (ask - prev) / prev : 0, war = this.war(p), tp = this.teamPerf(p.team), reasons = [];
+    const perf = war >= 2.5 ? '정상급' : war >= 1.5 ? '호조' : war >= 0.6 ? '보통' : war >= 0.2 ? '부진' : '매우 부진';
+    if (pct > 0.05) reasons.push(`개인 성적 ${perf}(WAR ${war.toFixed(1)})`); else if (pct < -0.05) reasons.push(`개인 성적 ${perf}(WAR ${war.toFixed(1)})`); else reasons.push(`성적 보통(WAR ${war.toFixed(1)})`);
+    if (tp.factor < 0 && war < 1.5) reasons.push(`팀 ${tp.rank}위 · 가을야구 실패`); else if (tp.factor > 0 && war < 1.5) reasons.push(`팀 ${tp.rank}위 · 상위권`);
+    return { prev, ask, pct, war, perf, team: tp, reasons, cut: pct < -0.05 };
+  };
+  /* ---- 연봉조정 ---- */
+  proto.arbEligible = function (p) { return !!(p && !p.foreign && p.fa && !this.faEligible(p) && p.fa.svc >= 3); };   // FA 대상 외 + 활동 개시 만 3년 경과
+  proto.arbClubDefault = function (p) { const cur = p.contract.salary, fair = this.fairSalary(p), ask = this.resignAsk(p); return Math.max(this.minSal(), Math.min(ask, Math.max(cur * (1 - CUT_MAX), Math.round((cur + 0.5 * (fair - cur)) * 10) / 10))); };
+  proto._arbRef = function (p) { const r = rngFor(this.S.seed, this.S.year, 6600 + parseInt(String(p.id).replace(/\D/g, '') || 0)); return Math.round(this.fairSalary(p) * (1 + (r.random() - 0.5) * 0.12) * 10) / 10; };   // 위원회 평가액(공개되지 않음, 적정액 ±6%)
+  proto.arbCase = function (id) {
+    const S = this.S, p = S.players[id], off = S.off; if (!p || !off || !off.rep.expiring.includes(id) || p.team !== S.userTeam) return null;
+    const fair = this.fairSalary(p), ask = this.resignAsk(p), club = this.arbClubDefault(p);
+    return { p, eligible: this.arbEligible(p), prev: p.contract.salary, playerAsk: ask, clubDefault: club, fair, hint: [Math.round(fair * 0.92 * 10) / 10, Math.round(fair * 1.08 * 10) / 10], review: this.salaryReview(p), svc: Math.round((p.fa ? p.fa.svc : 0) * 10) / 10 };
+  };
+  /* 중재 결정: 두 제시액 중 위원회 평가액에 더 가까운 쪽(같으면 구단안) */
+  proto.arbDecide = function (id, clubFig) {
+    const S = this.S, c = this.arbCase(id); if (!c) return '연봉조정 대상이 아닙니다.'; if (!c.eligible) return 'FA 자격이 없고 활동 개시 후 만 3년이 지난 선수만 연봉조정을 신청할 수 있습니다.';
+    clubFig = Math.round(clamp(+clubFig || c.clubDefault, this.minSal(), Math.max(c.playerAsk, c.clubDefault)) * 10) / 10;
+    const ref = this._arbRef(c.p), pa = c.playerAsk, win = Math.abs(pa - ref) < Math.abs(clubFig - ref) ? 'player' : 'club';
+    return { win, final: win === 'player' ? pa : clubFig, clubFig, playerAsk: pa, ref };
+  };
+  /* 신청: 위원회가 결정(저장만 하고 계약은 수용 때 체결) → 수용 또는 거부(규약 제79조) */
+  proto.arbFile = function (id, clubFig) {
+    const off = this.S.off, d = this.arbDecide(id, clubFig); if (typeof d === 'string') return d;
+    (off.arbPending = off.arbPending || {})[id] = d; return d;
+  };
+  proto.arbAccept = function (id) {
+    const S = this.S, off = S.off, p = S.players[id], d = off && off.arbPending && off.arbPending[id]; if (!d) return '위원회 결정이 없습니다.';
+    const prev = p.contract.salary; p.contract = this._newContract(p, d.final, 1); p.salHist = (p.salHist || []).slice(-2).concat([d.final]); off.rep.expiring = off.rep.expiring.filter(x => x !== id); delete off.arbPending[id];
+    p.loyAdj = clamp((p.loyAdj || 0) - (d.win === 'club' ? 3 : 1), -15, 15);   // 조정을 거친 관계는 서로 불편해진다(선수가 지면 더 크게)
+    (off.rep.arb = off.rep.arb || []).push({ id, ko: p.ko, year: S.year, prev, playerAsk: d.playerAsk, clubFig: d.clubFig, win: d.win, final: d.final });
+    news(this, `${p.ko} 연봉조정: 선수 ${d.playerAsk}억 vs 구단 ${d.clubFig}억 → ${d.win === 'player' ? '선수안' : '구단안'} ${d.final}억 채택(1년 계약)`);
+    this.invalidate(); return null;
+  };
+  proto.arbRefuse = function (id) {   // 구단이 중재금액으로 계약을 거부 → 자유계약선수(규약 제79조 ③)
+    const S = this.S, off = S.off, p = S.players[id]; if (!off || !off.rep.expiring.includes(id) || p.team !== S.userTeam || !this.arbEligible(p)) return '연봉조정 대상이 아닙니다.';
+    off.rep.expiring = off.rep.expiring.filter(x => x !== id); if (off.arbPending) delete off.arbPending[id]; this.release(S.userTeam, id, false); news(this, `${p.ko}: 구단이 연봉조정 결과를 거부해 자유계약선수로 공시`); return null;
+  };
+  /* 오프시즌 확정 시 아직 합의되지 않은 FA 대상 외 선수: 3년 이상이면 연봉조정, 3년 미만은 구단 제시액으로 계약 */
+  proto._arbSettle = function (id) {
+    const S = this.S, p = S.players[id]; if (!p || p.foreign || this.faEligible(p)) return false;
+    if (this.arbEligible(p)) { const r = this.arbFile(id); if (typeof r !== 'string' && !this.arbAccept(id)) return true; }
+    const a = this.arbClubDefault(p); p.contract = this._newContract(p, a, 1); p.salHist = (p.salHist || []).slice(-2).concat([a]); S.off.rep.expiring = S.off.rep.expiring.filter(x => x !== id); S.off.rep.auto = (S.off.rep.auto || 0) + 1; return true;
+  };
+});
+
 /* 구단 역사(1층: 확인된 개괄 정보 · 2층: 역사에서 만들어지는 서사 문구).
  * 1층 데이터는 보도·위키 검색으로 확인한 값(창단·명칭 변천·한국시리즈 우승 횟수·영구결번)이며, 연도 목록 중 검색에서 직접 확인되지 않은 것은 yv:false 로 표시한다(우승 횟수와는 대조함).
  * 2층은 이 데이터와 게임 안에서 쌓인 기록(S.history)으로 문구만 만든다 — 난수·경기 결과·재정에 영향 없음. */
@@ -4085,6 +4154,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
     const ko = KIND_OPEN[kind] || [''], kp = ko[Math.floor(r.random() * ko.length)];
     const pr = neg.prios[0], pool = OPEN[pr] || OPEN.money, c = this._nCtx(neg), tonePool = neg.speaker === 'ag' ? AG_TONE[agent] : TONE[tr], pre = tonePool[Math.floor(r.random() * tonePool.length)];
     this._nSay(neg, neg.speaker, (kind === 'foreign' ? '' : kp) + (r.random() < 0.6 ? pre : '') + fill(this._nPick(neg, 'open', pool), c));
+    if (kind === 'resign' && !p.foreign && this.salaryReview) { const rv = this.salaryReview(p); this._nSys(neg, `전년 연봉 ${rv.prev}억 → 요구 ${rv.ask}억(${rv.pct > 0 ? '+' : ''}${Math.round(rv.pct * 100)}%) · ${rv.reasons.join(' · ')}`); }
     if (kind === 'extend' || kind === 'resign') this._nSys(neg, tm.multi ? `${p.ko}의 희망 계약은 ${tm.pref}년 안팎입니다. 비FA 다년계약은 1~${tm.maxY}년까지 가능합니다.` : `${tm.label}입니다. FA 자격이 있거나 외국인은 1년 계약만 가능합니다.`);
     if (neg.replace) { const old = S.players[neg.replace], rc = this.releaseCost(neg.replace); this._nSys(neg, `교체 계약: 합의되면 ${old.ko}와의 계약을 해지(방출)합니다(위약금 ${rc.total}억).`, 'warn'); }
     if (kind === 'foreign') this._nSys(neg, `외국인 연봉 상한 ${tm.cap}억(약 ${Math.round(tm.cap / (1335 / 1e8) / 1e4)}만$). 호감도가 낮아 요구액이 상한을 넘으면 계약할 수 없습니다.`);
@@ -6070,6 +6140,21 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
     return `<div class="row" style="margin-top:8px"><b class="small">1군 엔트리 ${n1.length}/${L.activeMax()}</b>${chip('투수', cnt.P, 13)}${chip('타자', cnt.B, 13)}${chip('포수', cnt.C, 2)}<span class="small muted">행 오른쪽 <b>1군/2군</b> 버튼으로 바로 이동합니다(2군 말소 후 10경기일은 재등록 불가).</span></div>`;
   }
   /* 상단 한 줄 요약: 1군 인원·구성 + 점검/변경 배지. 누르면 변경 내역·확정/취소·점검 목록이 펼쳐진다 */
+  function arbSheet() {   // 연봉조정(중재) 신청·결과
+    const id = ui.arb; if (!id || !L || !L.S.off) return ''; const c = L.arbCase(id); if (!c) { ui.arb = null; return ''; }
+    const p = c.p, off = L.S.off, d = off.arbPending && off.arbPending[id], rv = c.review;
+    const body = d ? `<div class="small" style="margin-top:6px">선수 희망 <b>${money(d.playerAsk)}</b> vs 구단 제시 <b>${money(d.clubFig)}</b> → 위원회가 <b>${d.win === 'player' ? '선수안' : '구단안'}</b>을 채택했습니다.</div>
+        <div class="kpis" style="margin-top:8px"><div class="kpi"><div class="l">중재 금액(1년)</div><div class="v">${money(d.final)}</div><div class="small muted">전년 ${money(c.prev)}</div></div></div>
+        <div class="small muted" style="margin-top:6px">중재 결과는 구속력이 있습니다. 수용하면 이 금액으로 1년 계약하고, 거부하면 선수는 자유계약선수가 됩니다. 조정을 거치면 선수와의 관계가 다소 불편해집니다${d.win === 'club' ? '(선수가 졌으니 더 큼)' : ''}.</div>
+        <div class="row" style="margin-top:10px;gap:8px"><button class="primary" data-act="arbAccept" data-a="${id}">수용하고 계약</button><button class="sm" data-act="arbRefuse" data-a="${id}">거부(자유계약)</button></div>`
+      : `<div class="small muted" style="margin-top:4px">구단과 선수가 각자 원하는 연봉을 내고, 중재위원회가 평가액에 더 가까운 쪽을 채택합니다(규약 제75~80조 · 결정 방식은 관행에 따른 ⚠ 가정). 활동 ${c.svc}년.</div>
+        <div class="tablewrap" style="margin-top:8px"><table><tbody><tr><td class="l">전년 연봉</td><td class="n"><b>${money(c.prev)}</b></td></tr><tr><td class="l">선수 희망(요구)</td><td class="n"><b>${money(c.playerAsk)}</b> <span class="muted small">${rv.pct > 0 ? '+' : ''}${Math.round(rv.pct * 100)}%</span></td></tr>
+        <tr><td class="l">구단 제시 <span class="muted small">(직접 정하세요)</span></td><td class="n"><input class="num" type="number" step="0.1" min="${L.minSal()}" max="${c.playerAsk}" data-sel="arbclub" value="${ui.arbClub !== null && ui.arbClub !== undefined ? ui.arbClub : c.clubDefault}"></td></tr>
+        <tr><td class="l">위원회 평가 예상</td><td class="n">${money(c.hint[0])} ~ ${money(c.hint[1])}</td></tr></tbody></table></div>
+        <div class="small muted" style="margin-top:6px">근거: ${rv.reasons.map(esc).join(' · ')}. 구단안을 평가액에 가깝게 낼수록 채택될 가능성이 높지만, 너무 낮으면 선수안이 채택되어 요구액을 그대로 지급합니다.</div>
+        <div class="row" style="margin-top:10px;gap:8px"><button class="primary" data-act="arbFile" data-a="${id}">연봉조정 신청</button><button class="sm" data-act="arbRefuse" data-a="${id}" title="합의를 거부하고 자유계약선수로 공시">합의 거부(FA 공시)</button></div>`;
+    return `<div class="sheet-bg" data-act="arbClose"><div class="sheet" data-stop="1" role="dialog" aria-label="연봉조정"><div class="grabber"></div><h2>${esc(p.ko)} 연봉조정 <span class="muted small">${pos(p)} · OVR ${L.ovr(p)}</span></h2>${body}<button style="width:100%;min-height:44px;margin-top:8px" data-act="arbClose">닫기</button></div></div>`;
+  }
   function changeBar() {
     const d = L.diffSinceBase(), w = L.validateEntry().filter(x => !/^1군 엔트리/.test(x) || true); if (!d && !w.length) return '';
     const items = d ? d.up.map(p => `↑ ${esc(p.ko)} 콜업`).concat(d.down.map(p => `↓ ${esc(p.ko)} 강등`), d.ch.map(esc)) : [];
@@ -7012,9 +7097,10 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
     if (cur === 'review') {
       const h = S.history[S.history.length - 1], prog = off.rep.prog.slice().sort((a, b) => b.d - a.d);
       const pr = prog.map(x => `<tr class="click" data-act="player" data-a="${x.id}"><td class="l">${esc(P(x.id).ko)}</td><td class="n">${P(x.id).age}</td><td>${ovrChip(L.ovr(P(x.id)))}</td><td class="n ${x.d > 0 ? 'pos' : x.d < 0 ? 'neg' : ''}">${x.d > 0 ? '▲' : x.d < 0 ? '▼' : ''}${Math.abs(x.d)}</td></tr>`).join('');
-      const ex = off.rep.expiring.map(id => { const p = P(id), ask = L.resignAsk(p); return `<tr><td class="l"><b>${esc(p.ko)}</b></td><td class="l">${pos(p)}</td><td class="n">${p.age}</td><td>${ovrChip(L.ovr(p))}</td><td class="l">${faStatus(p) || '<span class="muted small">외국인(1년 계약)</span>'}</td><td class="n">${money(ask)}${L.loyDiscount(p, p.team) > 0 ? `<div class="small pos">충성 할인 −${Math.round(L.loyDiscount(p, p.team) * 500) / 10}%</div>` : ''}</td><td><button class="sm primary" data-act="negOpen" data-a="${id}|resign">협상</button> <button class="sm" data-act="resign" data-a="${id}" title="요구액 그대로 1년 재계약">1년 바로 계약</button></td></tr>`; }).join('');
+      const pctTxt = x => (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(Math.round(x * 100)) + '%';
+      const ex = off.rep.expiring.map(id => { const p = P(id), ask = L.resignAsk(p), rv = L.salaryReview(p), arbOk = L.arbEligible(p), pend = off.arbPending && off.arbPending[id]; return `<tr><td class="l"><b>${esc(p.ko)}</b><div class="small muted">${pos(p)} · ${p.age}세</div></td><td>${ovrChip(L.ovr(p))}</td><td class="l">${faStatus(p) || '<span class="muted small">외국인(1년 계약)</span>'}</td><td class="n">${money(rv.prev)}</td><td class="n">${money(ask)} <span class="chip ${rv.pct > 0.05 ? 'warn' : rv.pct < -0.05 ? 'in' : ''}" title="전년 연봉 대비">${pctTxt(rv.pct)}</span>${L.loyDiscount(p, p.team) > 0 ? `<div class="small pos">충성 할인 −${Math.round(L.loyDiscount(p, p.team) * 500) / 10}%</div>` : ''}<div class="small muted">${rv.reasons.map(esc).join(' · ')}</div></td><td><button class="sm primary" data-act="negOpen" data-a="${id}|resign">협상</button> <button class="sm" data-act="resign" data-a="${id}" title="요구액 그대로 1년 재계약">1년 바로 계약</button>${arbOk ? ` <button class="sm" data-act="arbOpen" data-a="${id}" title="연봉에 합의하지 못하면 연봉조정(중재)을 신청합니다">${pend ? '조정 결과' : '연봉조정'}</button>` : ''}</td></tr>`; }).join('');
       return `${bar}${growthBanner()}<div class="card"><h2>${S.year} 시즌 결산</h2><p style="margin:0">${S.year}년 최종 ${h.userRank}위 (${h.userRec.w}승 ${h.userRec.l}패 ${h.userRec.d}무) · 우승 ${h.champion ? teamTag(h.champion) : '-'}</p>${off.rep.retired.length ? `<p class="small muted">은퇴: ${off.rep.retired.map(id => esc(P(id).ko)).join(', ')}</p>` : ''}</div>
-        <div class="card"><h2>계약 만료 선수</h2>${off.rep.auto ? `<p class="small muted" style="margin:0 0 6px">연봉 2억 미만·35세 미만의 FA 자격 없는 선수 ${off.rep.auto}명은 시장 요구액으로 자동 재계약되었습니다.</p>` : ''}${ex ? '<div class="row" style="margin-bottom:6px"><button class="sm" data-act="resignAll">외국인 제외 전원 재계약(1년)</button></div>' : ''}${ex ? `<div class="tablewrap"><table><thead><tr><th class="l">선수</th><th class="l">포지션</th><th>나이</th><th>OVR</th><th class="l">FA</th><th>1년 연봉</th><th></th></tr></thead><tbody>${ex}</tbody></table></div>` : '<p class="muted">계약이 만료된 선수가 없습니다.</p>'}<p class="small muted">재계약은 모두 1년(연봉 계약)입니다. 여러 해 계약은 FA 시장에서 계약금을 포함해 협상합니다. FA 자격이 있는 선수를 재계약하지 않으면 FA 시장으로 나가며(등급에 따라 보상 발생), FA 자격이 없는 선수는 구단 보유권으로 시장 요구액에 1년 자동 재계약됩니다.</p></div>
+        <div class="card"><h2>계약 만료 선수</h2>${off.rep.auto ? `<p class="small muted" style="margin:0 0 6px">연봉 2억 미만·35세 미만의 FA 자격 없는 선수 ${off.rep.auto}명은 시장 요구액으로 자동 재계약되었습니다.</p>` : ''}${ex ? '<div class="row" style="margin-bottom:6px"><button class="sm" data-act="resignAll">외국인 제외 전원 재계약(1년)</button></div>' : ''}${ex ? `<div class="tablewrap"><table><thead><tr><th class="l">선수</th><th>OVR</th><th class="l">FA</th><th title="올해 연봉">전년 연봉</th><th title="선수 요구 1년 연봉(전년 대비)">요구 연봉</th><th></th></tr></thead><tbody>${ex}</tbody></table></div>` : '<p class="muted">계약이 만료된 선수가 없습니다.</p>'}<p class="small muted">재계약은 모두 1년(연봉 계약)입니다. 요구 연봉은 올해 성적(WAR)에 비례하고, 팀이 가을야구에 실패했으면 우수 선수가 아닌 경우 삭감 방향으로 보정됩니다(삭감 한도 −30%). 여러 해 계약은 FA 시장에서 계약금을 포함해 협상합니다. FA 자격이 있는 선수를 재계약하지 않으면 FA 시장으로 나가며(등급에 따라 보상 발생), FA 자격이 없는 선수와 합의하지 못하면 <b>연봉조정</b>(활동 3년 이상, 규약 제75~80조)을 거칩니다. 3년 미만은 구단 제시액으로 계약합니다.</p></div>${(off.rep.arb || []).length ? `<div class="card"><h2>연봉조정 결과</h2>${off.rep.arb.map(a => `<div class="small"><b>${esc(a.ko)}</b> 전년 ${money(a.prev)} · 선수 ${money(a.playerAsk)} vs 구단 ${money(a.clubFig)} → <b>${a.win === 'player' ? '선수안' : '구단안'} ${money(a.final)}</b></div>`).join('')}</div>` : ''}
         ${foldGroup('off_growth', '연말 성장·노화 리포트', `내 선수 ${off.rep.prog.length}명 · 결산 리포트·성장 하이라이트 포함`, `${reportCard()}${risersCard()}        <div class="card"><h2>선수 성장·노화 (내 팀)</h2><div class="tablewrap" style="max-height:360px;overflow-y:auto"><table><thead><tr><th class="l">선수</th><th>나이</th><th>OVR</th><th>변화</th></tr></thead><tbody>${pr}</tbody></table></div></div>
 `, false)}
         <div class="row"><button class="primary big" data-act="toDraft">계약 확정 · 드래프트로</button></div>`;
@@ -7590,7 +7676,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
     const S = ui.screen, f = { invest: screenInvest, desk: screenDesk, home: () => goalCard() + pressCard() + reportsCard() + screenHome() + foldGroup('home_ev', '최근 소식 처리', '', evHistory().replace(/^<div class="card">|<\/div>$/g, ''), false), roster: () => screenRoster(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, story: screenStory, mood: screenMood, train: screenTrain, scout: screenScout, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
     document.body.classList.toggle('modal-open', !!ui.modal);
     const keep = snapInner(root);   // 체크박스·버튼으로 다시 그려도 안쪽 스크롤 상자와 펼침 상태를 유지한다
-    root.innerHTML = shell((S === 'home' || S === 'market' || S === 'offseason' ? eventCards() + excPromptCard() : evBanner()) + f()) + (ui.modal ? modalPlayer(ui.modal) : '') + sheetHtml() + firedModal() + quickSheet() + swapSheet() + posPickSheet() + fslotSheet() + scoutSheet() + growthSheet() + subSheet() + confirmSheet() + cmpSheet() + searchSheet() + cmpTray() + negView() + toastHtml();
+    root.innerHTML = shell((S === 'home' || S === 'market' || S === 'offseason' ? eventCards() + excPromptCard() : evBanner()) + f()) + (ui.modal ? modalPlayer(ui.modal) : '') + arbSheet() + sheetHtml() + firedModal() + quickSheet() + swapSheet() + posPickSheet() + fslotSheet() + scoutSheet() + growthSheet() + subSheet() + confirmSheet() + cmpSheet() + searchSheet() + cmpTray() + negView() + toastHtml();
     window.scrollTo(0, scroll); stackTables(root); restoreInner(root, keep);
     { const ch = root.querySelector('.neg-chat'); if (ch) ch.scrollTop = ch.scrollHeight; document.body.classList.toggle('modal-open', !!(ui.modal || (ui.negOpen && L.S.neg))); }
     const cur = root.querySelector('.side button[aria-current=true]'); if (cur && cur.scrollIntoView) { try { cur.scrollIntoView({ inline: 'center', block: 'nearest' }); } catch (e) { /* 일부 브라우저 */ } }
@@ -7673,6 +7759,10 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
     postAuto() { const c = L.startUserPostGame(); L.playAuto(c); const r = L.finishUserPostGame(c); openPostSheet([r]); autosave(); render(); },
     toOff() { L.startOffseason(); ui.screen = 'offseason'; autosave(); render(); },
     rfilter(a) { ui.rf.f = a; ui.rmore = {}; render(); },
+    arbOpen(a) { ui.arb = a; ui.arbClub = null; render(); }, arbClose() { ui.arb = null; render(); },
+    arbFile(a) { const v = +($('[data-sel="arbclub"]') || {}).value, r = L.arbFile(a, v); if (typeof r === 'string') toast(r); else { autosave(); } render(); },
+    arbAccept(a) { const e = L.arbAccept(a); if (e) toast(e); else { toast('연봉조정 결과로 1년 계약했습니다.'); ui.arb = null; autosave(); } render(); },
+    arbRefuse(a) { const e = L.arbRefuse(a); if (e) toast(e); else { toast('합의를 거부해 자유계약선수로 공시했습니다.'); ui.arb = null; autosave(); } render(); },
     autoCallup() { const r = L.autoCallup(), nm = { C: '포수', SP: '선발', IF: '내야', OF: '외야', RP: '구원' }; if (!r.done.length) toast(r.skipped.length ? r.skipped[0][1] : '콜업할 2군 선수가 없습니다.'); else { toast(`${r.done.length}명 콜업: ` + r.done.slice(0, 4).map(x => `${P(x.id).ko}(${nm[x.group]})`).join(', ') + (r.done.length > 4 ? ' 외' : '')); autosave(); } render(); },
     rmore(a) { ui.rmore = ui.rmore || {}; ui.rmore[a] = (ui.rmore[a] || 20) + 20; render(); },
     rview(a) { ui.rf.v = a; ui.rmore = {}; render(); },
