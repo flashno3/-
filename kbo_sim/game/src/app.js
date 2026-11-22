@@ -1649,7 +1649,7 @@
   function stackTables(root) {
     if (!window.matchMedia || !window.matchMedia('(max-width: 560px)').matches) return;
     root.querySelectorAll('.tablewrap').forEach(w => {
-      const t = w.querySelector('table'); if (!t || w.scrollWidth <= w.clientWidth + 2) return;
+      const t = w.querySelector('table'); if (!t || t.classList.contains('rost') || w.scrollWidth <= w.clientWidth + 2) return;   // 로스터 표는 카드형으로 바꾸지 않고(행 높이가 제각각이 됨) 항상 한 줄 행을 유지한다
       const heads = Array.from(t.querySelectorAll('thead th')).map(th => th.textContent.trim()); t.classList.add('rt');
       t.querySelectorAll('tbody tr').forEach(tr => Array.from(tr.children).forEach((td, i) => { if (heads[i] && td.tagName === 'TD' && !td.getAttribute('colspan')) td.dataset.l = heads[i]; }));
     });

@@ -203,7 +203,7 @@ details.card > summary { cursor: pointer; font-family: var(--font-display); font
 .vm { display: none; }
 @media (max-width: 560px) { .vm { display: inline; } .kpi .v { font-size: 17px; } .rost td, .rost th { padding-left: 5px; padding-right: 5px; } }
 
-@media (max-width: 560px) { .rost td { padding-top: 6px; padding-bottom: 6px; } .rost td:first-child { white-space: normal; min-width: 112px; max-width: 190px; word-break: keep-all; } .rost .chip { white-space: nowrap; } .rost .wrapok { white-space: normal; } .rost .chip { font-size: 10.5px; padding: 1px 5px; } .rost td.n { white-space: nowrap; } }
+@media (max-width: 560px) { .rost td { padding-top: 6px; padding-bottom: 6px; } .rost td:first-child { white-space: nowrap; min-width: 112px; }   /* 이름·포지션·나이는 항상 한 줄 */ .rost .chip { white-space: nowrap; } .rost .wrapok { white-space: normal; } .rost .chip { font-size: 10.5px; padding: 1px 5px; } .rost td.n { white-space: nowrap; } }
 
 .rost tr.sub td { background: var(--bg); padding-top: 4px; padding-bottom: 4px; }
 
@@ -7533,7 +7533,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
   function stackTables(root) {
     if (!window.matchMedia || !window.matchMedia('(max-width: 560px)').matches) return;
     root.querySelectorAll('.tablewrap').forEach(w => {
-      const t = w.querySelector('table'); if (!t || w.scrollWidth <= w.clientWidth + 2) return;
+      const t = w.querySelector('table'); if (!t || t.classList.contains('rost') || w.scrollWidth <= w.clientWidth + 2) return;   // 로스터 표는 카드형으로 바꾸지 않고(행 높이가 제각각이 됨) 항상 한 줄 행을 유지한다
       const heads = Array.from(t.querySelectorAll('thead th')).map(th => th.textContent.trim()); t.classList.add('rt');
       t.querySelectorAll('tbody tr').forEach(tr => Array.from(tr.children).forEach((td, i) => { if (heads[i] && td.tagName === 'TD' && !td.getAttribute('colspan')) td.dataset.l = heads[i]; }));
     });
