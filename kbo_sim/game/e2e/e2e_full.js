@@ -101,7 +101,7 @@ async function run(vp,label,team){
   if(await click('button[data-act="investAsk"]:not([disabled])')){await pg.waitForTimeout(100);ok(await pg.evaluate(()=>/착공 확정/.test(document.body.innerText)&&/올해 예상 손익/.test(document.body.innerText)&&/선수단 예산·경쟁균형세/.test(document.body.innerText)),`${label}: 착공 전 요약`);await sweep('착공 요약');
     await click('button[data-act="cfDo"]');await pg.waitForTimeout(150);ok(await pg.evaluate(()=>/공사 중/.test(document.body.innerText)&&/투자 이력/.test(document.body.innerText)&&/착공/.test(document.body.innerText)),`${label}: 착공 후 공사 중 표시`);await sweep('착공 후')}
   // 5) 전 화면 순회
-  const groups=[['대시보드',[]],['선수단',['로스터','라인업','투수진','훈련','분위기']],['리그',['일정·결과','순위·기록','팀 정보','스토리']],['운영',['재정','투자 센터','코치진','스카우팅','이적시장']],['설정',[]]];
+  const groups=[['대시보드',[]],['선수단',['로스터','라인업','투수진','훈련','분위기']],['리그',['일정·결과','순위·기록','선수 기록','팀 정보','스토리']],['운영',['재정','투자 센터','코치진','스카우팅','이적시장']],['설정',[]]];
   for(const [g,subs] of groups){await nav(g);await sweep(g);for(const s of subs){await nav(g,s);await sweep(g+'/'+s)}}
   // 스토리 탭
   await nav('리그','스토리');for(const t of ['top','line','press','chal','hist']){await click(`button[data-act="storyTab"][data-a="${t}"]`);await sweep('스토리'+t)}
@@ -152,6 +152,11 @@ async function run(vp,label,team){
   ok(liveDone>=1,`${label}: 라이브 경기 진행`);
   ok(fbw.length>=3&&fbw.every(w=>w>=0&&w<=100),`${label}: 투수 체력 바는 남은 체력(처음 가득) ${fbw.slice(0,8)}`);ok(fbw.some((w,i)=>i>0&&w<fbw[i-1]),`${label}: 체력 바 감소 확인`);ok(/▶ /.test(feedAll)||true,'해설');ok(!/땅볼|뜬공|플라이/.test(feedAll),`${label}: 중계에 지어낸 타구 설명 없음`);ok(/\d아웃 (주자 없음|\d)/.test(feedAll)&&/회(초|말) 종료 — \d+안타/.test(feedAll),`${label}: 중계에 아웃·주자 상황과 이닝 요약 표시`);
   console.log(`  [${label}] 라이브 ${liveDone}경기 · 이 순간 카드 ${momentSeen?'확인':'미발생'} · 결정 되짚기 ${reviewSeen?'확인':'미발생(결정 없음)'}`);
+  // 선수 기록(세부 성적): 시즌 진행 뒤 표·정렬·필터
+  await nav('리그','선수 기록');{const rows=()=>pg.evaluate(()=>document.querySelector('table.rec')?document.querySelector('table.rec').rows.length-1:-1);ok((await rows())>=1,`${label}: 선수 기록 타자 행 `+await rows());
+    const first=()=>pg.evaluate(()=>{const r=document.querySelector('table.rec tbody tr');return r?r.innerText:''});const a=await first();if(process.env.SHOT)await pg.screenshot({path:'/tmp/rec_'+label.replace(/\W/g,'')+'.png'});await click('th[data-a="HR"]');await pg.waitForTimeout(100);await sweep('기록 HR정렬');
+    await click('button[data-act="recSet"][data-a="t|P"]');await pg.waitForTimeout(100);ok(await pg.evaluate(()=>/이닝/.test(document.querySelector('table.rec').innerText)),`${label}: 투수 기록 열`);await click('th[data-a="K/9"]');await sweep('기록 투수 정렬');
+    await click('button[data-act="recSet"][data-a="farm|1"]');await pg.waitForTimeout(100);await sweep('기록 2군');await click('button[data-act="recSet"][data-a="farm|0"]');await click('button[data-act="recSet"][data-a="q|0"]');await pg.waitForTimeout(100);ok((await rows())>=1,`${label}: 규정 해제 후 행`);await sweep('기록 규정해제')}
   // 8) 저장 → 새로고침 → 이어하기
   await nav('설정');await click('button[data-act="saveNow"]');await pg.reload();await pg.waitForTimeout(500);ok(!!(await click('button[data-act="continue"]')),`${label}: 이어하기 버튼`);await pg.waitForTimeout(500);await sweep('이어하기 후');
   ok(errs.length===0,`${label}: 콘솔·페이지 오류 ${errs.slice(0,3).join(' | ')}`);
