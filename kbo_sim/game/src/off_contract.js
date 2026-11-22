@@ -34,6 +34,7 @@
     if (this._hometown(p, t)) { v += 8; items.push(['연고 출신(' + dh.school + ')', 8]); }
     if (own && p.age >= 33) { v += 3; items.push(['베테랑', 3]); }
     if (p.loyAdj && t === p.team) { v += p.loyAdj; items.push(['최근 대우(면담·출전)', p.loyAdj]); }
+    if (p.arcLoy && t === p.team) for (const x of p.arcLoy) { const age = this.S.year - x.y, a = Math.round(x.v * (age <= 0 ? 1 : age === 1 ? 0.8 : age === 2 ? 0.5 : 0)); if (a) { v += a; items.push(['이야기: ' + x.t, a]); } }   // ⚠ 스토리 아크의 선택이 몇 해에 걸쳐 재계약·FA 협상에 반영(해마다 약해짐)
     return { team: t, v: clamp(Math.round(v), 0, 100), items };
   };
   proto._hometown = function (p, t) { const h = (this.S.schoolHome || {})[p.dh && p.dh.school]; return !!(h && h.includes(t)); };   // 고교 소재 지역이 해당 구단 연고

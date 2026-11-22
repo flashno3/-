@@ -32,3 +32,24 @@ ok(nat >= 3, '자연 발생 ' + nat);
 // 이벤트가 외부에서 닫혀도 단계가 복구됨
 { const L = mk(4); run(L, 20); const a = L.arcStart('ace'); ok(a, 'ace'); run(L, 1); const ev = L.eventsOpen().find(e => e.type === 'arc'); if (ev) { ev.status = 'done'; run(L, 5); ok(L.eventsOpen().some(e => e.type === 'arc') || a.status === 'done', '복구'); } }
 console.log('arcs tests ok', n);
+
+// ---- 개편(A·B): 선택이 실제 값으로 남고, 다음 시즌 후일담으로 돌아온다 ----
+{ // 힌트에 실제 수치(재발 위험·이탈 일수)가 노출되고, 결과가 컨디션·충성도에 반영
+  let L, a; for (let sd = 6; sd < 30; sd++) { L = mk(sd); run(L, 20); a = L.arcStart('ace'); if (a && !L.S.players[a.pid].foreign) break; } ok(a, 'ace'); run(L, 1);
+  const ev = L.eventsOpen().find(e => e.type === 'arc'); ok(ev && /재발 위험 \d+%/.test(ev.choices[0].hint) && /\d+일 이탈/.test(ev.choices[1].hint), '수치 노출 ' + (ev && ev.choices[0].hint));
+  const p = L.S.players[a.pid], l0 = L.loyalty(p).v; L.resolveEvent(ev.id, 'shut'); ok(p.arcLoy && p.arcLoy.some(x => x.k === 'ace' && x.v === 3), 'arcLoy 기록'); ok(L.loyalty(p).v >= l0 + 2 && L.loyalty(p).items.some(i => /이야기/.test(i[0])), '충성도에 반영 ' + l0 + '→' + L.loyalty(p).v); ok(p.inj && p.inj.arc === a.id, '재활 부상');
+  const yr = L.S.year; p.arcLoy[0].y = yr - 1; const v1 = L.loyalty(p).v; p.arcLoy[0].y = yr - 3; ok(L.loyalty(p).v < v1, '해가 지나면 약해짐');
+}
+{ // 후일담: 지난 시즌 기억이 있으면 다음 시즌 초에 echo 아크가 열리고 선택이 반영
+  let got = 0;
+  for (let s = 1; s <= 10 && got < 3; s++) {
+    const L = mk(s); run(L, 20); const p = L.players(L.S.userTeam).find(x => x.type === 'P' && x.active); L.S.year;
+    const keys = [['ace', { choice: 'rush', relapse: true, y: L.S.year - 1 }], ['ace', { choice: 'shut', relapse: false, y: L.S.year - 1 }], ['rising', { tone: 'good', res: 'ok', y: L.S.year - 1 }]], [key, m] = keys[s % 3];
+    p.arcMem = { [key]: m }; let a = null; for (let i = 0; i < 40 && !a; i++) { L.advance(1, false); a = L.arcs().list.find(x => x.kind === 'echo'); }
+    if (!a) continue; got++; ok(a.mem.key === key, 'echo 키'); L.advance(2, false);
+    const ev = L.eventsOpen().find(e => e.type === 'arc' && e.data.arc === a.id); ok(ev && ev.choices.length >= 2, 'echo 이벤트'); const k = ev.choices[0].k;
+    ok(L.resolveEvent(ev.id, k).ok && a.status === 'done' && p.arcMem[key].echoed === true, 'echo 종결·표시'); const again = L.arcs().list.filter(x => x.kind === 'echo' && x.pid === p.id).length; for (let i = 0; i < 30; i++) L.advance(1, false); ok(L.arcs().list.filter(x => x.kind === 'echo' && x.pid === p.id).length === again, '같은 기억은 한 번만');
+  }
+  ok(got >= 2, '후일담 발생 ' + got);
+}
+console.log('arcs2 ok', n);
