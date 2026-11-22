@@ -342,3 +342,5 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
 .rost.lu td:first-child { min-width: 0; }
 @media (max-width: 420px) { .rost.lu .sm { padding: 4px 7px; min-height: 30px; font-size: 13px; } .rost.lu td, .rost.lu th { padding-left: 3px; padding-right: 3px; } .rost.lu .dgrip { display: none; } }
 @media (max-width: 560px) { .rost.lu .gauge .gl { display: none; } .rost.lu .gauge .gbar { width: 40px; } }   /* 투수진 표: 체력은 막대와 숫자만(설명은 마우스 올리면) */
+
+.arc{padding:8px 0;border-top:1px solid var(--line,#2a3140)}.arc:first-of-type{border-top:0}.arcdots{display:inline-flex;gap:4px}.arcdot{width:9px;height:9px;border-radius:50%;background:#3a4357}.arcdot.on{background:#4ec36f}.arcdot.cur{background:#e6b422}

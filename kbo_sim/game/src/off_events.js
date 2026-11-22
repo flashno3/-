@@ -21,7 +21,7 @@
     if (this._promiseTick) this._promiseTick(d); if (this._loyDecay && d > 0 && d % 30 === 0) this._loyDecay(1);   // 충성도 보정 회복(30일마다 1)
     // 만료 → 기본 처리
     for (const e of this.eventsOpen()) if (d >= e.exp) this.resolveEvent(e.id, e.def || (e.choices[e.choices.length - 1] || {}).k, true);
-    const open = this.eventsOpen().length; if (open >= 3) return;
+    const open = this.eventsOpen().length; if (open >= (this.arcsActive && this.arcsActive().length ? 2 : 3)) return;
     // 1) 이사회 중간 점검: 72일·120일차(경기일)
     if ((d === 72 || d === 120) && !E.list.some(e => e.type === 'board' && e.year === S.year && e.data.at === d)) {
       const st = this.standings(), me = st.find(x => x.team === t), pays = TEAMS.map(x => [x, this.finPay(x)]).sort((a, b) => b[1] - a[1]), exp = pays.findIndex(x => x[0] === t) + 1, gap = me.rank - exp;   // 기대 순위 = 선수단 보수 순위
@@ -164,6 +164,7 @@
       else if (k === 'ask') { tr(-1); f.boardExtra = (f.boardExtra || 0) + 2; res = '소폭 증액(+2억), 신뢰도 −1.'; }
       else res = '현 전력을 유지합니다.';
     }
+    if (e.type === 'arc' && this._arcResolve) res = this._arcResolve(e, k, auto);
     e.status = 'done'; e.choice = k; e.result = res; e.auto = !!auto; news(this, `${e.title}: ${res}`); this.invalidate();
     return { ok: true, msg: res };
   };

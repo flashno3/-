@@ -64,7 +64,7 @@
   };
   /* 부상 복귀: 콜업할지 묻는 결정 카드(콜업 시 교체할 선수는 화면에서 고름). 부상 선수는 콜업 후보 목록에 나오지 않는다 */
   proto._returnEvent = function (p) {
-    const S = this.S; if (!S.events) S.events = { seq: 0, list: [] }; if (this.eventsOpen().some(e => e.type === 'return' && e.data.pid === p.id)) return;
+    const S = this.S; if (p.inj && p.inj.arc) return; if (!S.events) S.events = { seq: 0, list: [] }; if (this.eventsOpen().some(e => e.type === 'return' && e.data.pid === p.id)) return;
     const act = this.players(S.userTeam).filter(x => x.active && x.type === p.type), weak = act.sort((a, b) => this.ovr(a) - this.ovr(b))[0], rec = weak && this.ovr(p) >= this.ovr(weak) + 1 ? 'callup' : 'stay';
     this._evAdd({ type: 'return', title: `${p.ko} 부상 복귀`, ttl: 12, rec, def: 'stay', data: { pid: p.id }, text: `${p.ko}(${p.type === 'P' ? (p.role === 'SP' ? '선발' : '구원') : p.pos} · OVR ${this.ovr(p)})가 ${p.inj ? p.inj.dx : '부상'}에서 복귀했습니다. 1군에 콜업할까요? ${rec === 'callup' ? `(1군 최저 ${weak.ko} OVR ${this.ovr(weak)}보다 높아 콜업을 추천합니다)` : ''}`,
       choices: [{ k: 'callup', label: '콜업 (교체할 선수 선택)', hint: '1군 엔트리에서 같은 유형의 선수와 교체합니다' }, { k: 'stay', label: '2군에서 컨디션 조절', hint: '나중에 직접 올릴 수 있습니다' }] });
