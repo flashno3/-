@@ -337,3 +337,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
 .rbar > summary { cursor: pointer; list-style: none; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; } .rbar > summary::-webkit-details-marker { display: none; } .rbar > summary::after { content: '▾'; margin-left: auto; color: var(--muted); } .rbar[open] > summary::after { content: '▴'; }
 
 @media (max-width: 380px) { .rost td, .rost th { font-size: 13px; padding-left: 3px; padding-right: 3px; } .rost .chip { font-size: 10px; padding: 1px 4px; } .rost .num, .rost .ovr { font-size: 13px; } }
+
+.rost.lu td { white-space: nowrap; } .rost.lu td .chip { font-size: 10.5px; }   /* 라인업·후보 표: 한 줄 행 */
+.rost.lu td:first-child { min-width: 0; }
+@media (max-width: 420px) { .rost.lu .sm { padding: 4px 7px; min-height: 30px; font-size: 13px; } .rost.lu td, .rost.lu th { padding-left: 3px; padding-right: 3px; } .rost.lu .dgrip { display: none; } }
