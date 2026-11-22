@@ -84,7 +84,7 @@
     if (S.phase === 'regular_done') return my.rank <= 5 ? { label: '포스트시즌 시작', act: 'startPost' } : { label: '시즌 종료 · 오프시즌', act: 'startPost' };
     return { label: L.userGameToday() ? (ui.liveMode ? '경기 시작(직접 지휘)' : '다음 경기') : '하루 진행', act: 'adv', a: 1 };
   }
-  function phaseLabel() { const S = L.S; return S.phase === 'offseason' ? '오프시즌' : S.phase === 'post' || S.phase === 'post_done' ? '포스트시즌' : S.phase === 'regular_done' ? '정규시즌 종료' : L.dateStr(Math.min(S.day, 143)); }
+  function phaseLabel() { const S = L.S; return S.phase === 'offseason' ? '오프시즌' : S.phase === 'post' || S.phase === 'post_done' ? '포스트시즌 · ' + L.postDateStr() : S.phase === 'regular_done' ? '정규시즌 종료' : L.dateStr(Math.min(S.day, 143)); }
   function shell(content) {
     const S = L.S, st = L.standings(), my = st.find(x => x.team === U()), pr = primary(), grp = GROUPS.find(g => g[2].includes(ui.screen)) || GROUPS[0], nav = GROUPS.filter(g => g[0] !== 'offseason' || S.phase === 'offseason'), evn = L.eventsOpen().length;
     return `<div class="app"><nav class="side" aria-label="메뉴"><div class="club">${logo(U(), 34)}${KO[U()]}</div>

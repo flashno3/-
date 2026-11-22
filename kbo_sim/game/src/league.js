@@ -634,7 +634,8 @@
     FIRST_HALF_DAYS() { return 89; }
     dateOf(day) { const d = new Date(Date.UTC(this.S.year, 2, 28)), off = (6 - d.getUTCDay() + 7) % 7; d.setUTCDate(d.getUTCDate() + (off > 3 ? off - 7 : off)); /* 개막: 3월 28일에 가장 가까운 토요일 */ let k = 0, br = false; while (k < day) { if (k === 88 && !br) { br = true; d.setUTCDate(d.getUTCDate() + 6); } d.setUTCDate(d.getUTCDate() + 1); if (d.getUTCDay() !== 1) k++; } return d; }   // 월요일 휴식, 89경기일 뒤 올스타 휴식기(6일)
     /* ---- 부상 ---- 부상자는 1군 등록 불가(부상자 명단), 복귀 예정일(달력)이 지나면 복귀. */
-    todayN() { const S = this.S, ms = d => Math.floor(d.getTime() / 864e5); if (S.phase === 'offseason') return Math.floor(Date.UTC(S.year, 10, 20) / 864e5); return ms(this.dateOf(Math.min(S.day || 0, (S.schedule || []).length))); }
+    todayN() { const S = this.S, ms = d => Math.floor(d.getTime() / 864e5); if (S.phase === 'offseason') return Math.floor(Date.UTC(S.year, 10, 20) / 864e5); if ((S.phase === 'post' || S.phase === 'post_done') && S.post) return ms(this.dateOf((S.schedule || []).length)) + (S.post.day || 0);   /* 포스트시즌은 경기마다 하루씩 달력이 흐른다 */ return ms(this.dateOf(Math.min(S.day || 0, (S.schedule || []).length))); }
+    postDateStr() { const d = new Date(this.todayN() * 864e5); return `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`; }
     injRet(p) { if (!p.inj || !p.inj.ret) return null; if (p.inj.retN === undefined) { const t = Date.parse(p.inj.ret); p.inj.retN = isNaN(t) ? null : Math.floor(t / 864e5); } return p.inj.retN; }
     isInj(p) { if (!p.inj || p.inj.apply === false) return false; const r = this.injRet(p); return r !== null && r > this.todayN(); }
     injLeft(p) { return this.isInj(p) ? this.injRet(p) - this.todayN() : 0; }
@@ -928,7 +929,7 @@
     startPostseason() {
       this._tieGames(); this._applyActiveMax();
       const S = this.S, st = this.standings(), seeds = st.slice(0, 5).map(x => x.team), T = i => seeds[i];
-      S.post = { seeds, rounds: [], cur: null, stage: 0, done: false, champion: null };
+      S.post = { seeds, rounds: [], cur: null, stage: 0, done: false, champion: null, day: 0 };
       S.phase = 'post'; if (this._postElig) this._postElig(); this._mkSeries(0); this.invalidate(); return S.post;
     }
     _mkSeries(stage) {
@@ -970,6 +971,7 @@
     postRecord(home, away, rh, ra, info) {
       const P = this.S.post, s = P.cur, g = { home, away, rh, ra, inns: info.inns, spH: info.spH, spA: info.spA };
       if (rh === ra) g.draw = true; s.games.push(g);
+      P.day = (P.day || 0) + 1; this._decayFatigue();   // 경기마다 하루가 지난다: 부상 회복·투수 피로 회복이 시간에 맞춰 진행(이전에는 포스트시즌 동안 날짜가 멈춰 있었다)
       if (s.wc) {
         if (!g.draw) { if (rh > ra ? home === s.hi : away === s.hi) s.hiAdv = true; else s.loWins++; }
         if (s.hiAdv || s.games.length >= 2) { s.winner = (s.hiAdv || s.loWins < 2) ? s.hi : s.lo; s.w = { [s.hi]: 1 + s.games.filter(x => !x.draw && (x.rh > x.ra ? x.home === s.hi : x.away === s.hi)).length, [s.lo]: s.loWins }; return this._endSeries(); }
@@ -982,7 +984,7 @@
     _endSeries() {
       const P = this.S.post, s = P.cur;
       if (P.stage === 3) { P.done = true; P.champion = s.winner; P.runnerUp = s.winner === s.hi ? s.lo : s.hi; this.S.phase = 'post_done'; return true; }
-      this._mkSeries(P.stage + 1); return true;
+      P.day = (P.day || 0) + 1; this._mkSeries(P.stage + 1); return true;   // 시리즈 사이 하루 휴식(이동일)
     }
     /* AI 대 AI 포스트시즌 경기 1회 */
     simPostGame() {
