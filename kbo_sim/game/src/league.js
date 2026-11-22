@@ -496,6 +496,25 @@
       const e2 = this.moveActive(upId, true); if (e2) { dn.active = true; dn.lockUntil = prev; this.invalidate(); this.repairSettings(S.userTeam); return e2; }
       return null;
     }
+    /* 1군 빈 자리 자동 콜업: 필요 포지션 우선 → OVR 높은 순. 1군 목표 구성(포수 2·내야 6·외야/지명 5·선발 5·구원 9) 대비 부족한 그룹부터 채우고,
+       모두 채워지면 남은 2군(건강·재등록 가능) 중 OVR 순으로 채운다. 교체(1군 → 2군) 없이 2군 선수만 올린다. */
+    callupGroup(p) { return p.type === 'P' ? (p.role === 'SP' ? 'SP' : 'RP') : p.pos === 'C' ? 'C' : ['1B', '2B', '3B', 'SS'].includes(p.pos) ? 'IF' : 'OF'; }
+    callupPlan() {
+      const S = this.S, t = S.userTeam, T = { C: 2, SP: 5, IF: 6, OF: 5, RP: 9 }, ORD = ['C', 'SP', 'IF', 'OF', 'RP'], have = { C: 0, SP: 0, IF: 0, OF: 0, RP: 0 };
+      const all = this.players(t); let n = all.filter(p => p.active).length; for (const p of all) if (p.active) have[this.callupGroup(p)]++;
+      const pool = all.filter(p => !p.active && !this.isInj(p) && !this.lockLeft(p)).sort((a, b) => this.ovr(b) - this.ovr(a)), out = [];
+      while (n < this.activeMax() && pool.length) {
+        let g = null, best = 0; for (const k of ORD) { const d = T[k] - have[k]; if (d > best && pool.some(p => this.callupGroup(p) === k)) { best = d; g = k; } }
+        const i = g ? pool.findIndex(p => this.callupGroup(p) === g) : 0, p = pool.splice(i, 1)[0], grp = this.callupGroup(p);
+        out.push({ id: p.id, group: grp, need: !!g }); have[grp]++; n++;
+      }
+      return out;
+    }
+    openSlots() { return Math.max(0, this.activeMax() - this.players(this.S.userTeam).filter(p => p.active).length); }
+    autoCallup() {
+      const plan = this.callupPlan(), done = [], skipped = []; for (const x of plan) { const e = this.moveActive(x.id, true); if (e) skipped.push([x.id, e]); else done.push(x); }
+      this.repairSettings(this.S.userTeam); this.invalidate(); return { done, skipped, left: this.openSlots() };
+    }
     lockLeft(p) { const S = this.S; return S.day < S.schedule.length ? Math.max(0, (p.lockUntil || 0) - S.day) : 0; }
 
     /* ------------------------------------------------------------ 엔진 */

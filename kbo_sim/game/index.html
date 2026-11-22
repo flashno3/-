@@ -1495,6 +1495,25 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
       const e2 = this.moveActive(upId, true); if (e2) { dn.active = true; dn.lockUntil = prev; this.invalidate(); this.repairSettings(S.userTeam); return e2; }
       return null;
     }
+    /* 1군 빈 자리 자동 콜업: 필요 포지션 우선 → OVR 높은 순. 1군 목표 구성(포수 2·내야 6·외야/지명 5·선발 5·구원 9) 대비 부족한 그룹부터 채우고,
+       모두 채워지면 남은 2군(건강·재등록 가능) 중 OVR 순으로 채운다. 교체(1군 → 2군) 없이 2군 선수만 올린다. */
+    callupGroup(p) { return p.type === 'P' ? (p.role === 'SP' ? 'SP' : 'RP') : p.pos === 'C' ? 'C' : ['1B', '2B', '3B', 'SS'].includes(p.pos) ? 'IF' : 'OF'; }
+    callupPlan() {
+      const S = this.S, t = S.userTeam, T = { C: 2, SP: 5, IF: 6, OF: 5, RP: 9 }, ORD = ['C', 'SP', 'IF', 'OF', 'RP'], have = { C: 0, SP: 0, IF: 0, OF: 0, RP: 0 };
+      const all = this.players(t); let n = all.filter(p => p.active).length; for (const p of all) if (p.active) have[this.callupGroup(p)]++;
+      const pool = all.filter(p => !p.active && !this.isInj(p) && !this.lockLeft(p)).sort((a, b) => this.ovr(b) - this.ovr(a)), out = [];
+      while (n < this.activeMax() && pool.length) {
+        let g = null, best = 0; for (const k of ORD) { const d = T[k] - have[k]; if (d > best && pool.some(p => this.callupGroup(p) === k)) { best = d; g = k; } }
+        const i = g ? pool.findIndex(p => this.callupGroup(p) === g) : 0, p = pool.splice(i, 1)[0], grp = this.callupGroup(p);
+        out.push({ id: p.id, group: grp, need: !!g }); have[grp]++; n++;
+      }
+      return out;
+    }
+    openSlots() { return Math.max(0, this.activeMax() - this.players(this.S.userTeam).filter(p => p.active).length); }
+    autoCallup() {
+      const plan = this.callupPlan(), done = [], skipped = []; for (const x of plan) { const e = this.moveActive(x.id, true); if (e) skipped.push([x.id, e]); else done.push(x); }
+      this.repairSettings(this.S.userTeam); this.invalidate(); return { done, skipped, left: this.openSlots() };
+    }
     lockLeft(p) { const S = this.S; return S.day < S.schedule.length ? Math.max(0, (p.lockUntil || 0) - S.day) : 0; }
 
     /* ------------------------------------------------------------ 엔진 */
@@ -6107,6 +6126,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
     return `<div class="card"><div class="row"><h2 style="margin:0">로스터</h2><span class="muted small">${all.length}명</span><span class="sp"></span><select data-sel="rsort" aria-label="정렬 기준"><option value="ovr" ${sk === 'ovr' ? 'selected' : ''}>능력치순</option><option value="pot" ${sk === 'pot' ? 'selected' : ''}>잠재력순</option><option value="age" ${sk === 'age' ? 'selected' : ''}>나이순</option><option value="sal" ${sk === 'sal' ? 'selected' : ''}>연봉순</option></select></div>
       <div class="small muted" style="margin-top:6px">1군 평균 OVR ${avg(n1, p => L.ovr(p)).toFixed(1)} · ${avg(n1, p => p.age).toFixed(1)}세 · 연봉(상위 40) ${L.cbtPay(t)} / 상한 ${L.cbtCap().toFixed(1)}억</div></div>
       ${rosterBar(n1)}
+      ${L.openSlots() > 0 && L.callupPlan().length ? `<div class="card" style="border-color:var(--accent,#2a7)"><div class="row" style="flex-wrap:nowrap"><span class="small" style="flex:1"><b>1군 빈 자리 ${L.openSlots()}명</b><br><span class="muted">필요 포지션 → OVR 순으로 2군에서만 올립니다(교체 없음).</span></span><button class="primary" data-act="autoCallup">자동 콜업 ${Math.min(L.openSlots(), L.callupPlan().length)}명</button></div></div>` : ''}
       ${scopeBar}
       <div class="tabs sub" role="tablist" aria-label="보기"><button role="tab" aria-selected="${v === 'pos'}" data-act="rview" data-a="pos">포지션별</button><button role="tab" aria-selected="${v === 'stat'}" data-act="rview" data-a="stat">성적·폼</button><button role="tab" aria-selected="${v === 'list'}" data-act="rview" data-a="list">한 줄 목록</button></div>
       ${f === 'res' ? recBanner() : ''}${foldGroup('rg_more', '추가 필터', moreF.some(x => x[0] === f) ? '적용 중' : '계약 1년 이하 · 외국인 · 유망주', moreBar, moreF.some(x => x[0] === f))}
@@ -7649,6 +7669,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
     postAuto() { const c = L.startUserPostGame(); L.playAuto(c); const r = L.finishUserPostGame(c); openPostSheet([r]); autosave(); render(); },
     toOff() { L.startOffseason(); ui.screen = 'offseason'; autosave(); render(); },
     rfilter(a) { ui.rf.f = a; ui.rmore = {}; render(); },
+    autoCallup() { const r = L.autoCallup(), nm = { C: '포수', SP: '선발', IF: '내야', OF: '외야', RP: '구원' }; if (!r.done.length) toast(r.skipped.length ? r.skipped[0][1] : '콜업할 2군 선수가 없습니다.'); else { toast(`${r.done.length}명 콜업: ` + r.done.slice(0, 4).map(x => `${P(x.id).ko}(${nm[x.group]})`).join(', ') + (r.done.length > 4 ? ' 외' : '')); autosave(); } render(); },
     rmore(a) { ui.rmore = ui.rmore || {}; ui.rmore[a] = (ui.rmore[a] || 20) + 20; render(); },
     rview(a) { ui.rf.v = a; ui.rmore = {}; render(); },
     player(a) { if (ui.modal !== a) ui.mtab = 'sum'; ui.modal = a; ui.confirm = null; render(); },

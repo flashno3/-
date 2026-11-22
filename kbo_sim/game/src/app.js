@@ -213,6 +213,7 @@
     return `<div class="card"><div class="row"><h2 style="margin:0">로스터</h2><span class="muted small">${all.length}명</span><span class="sp"></span><select data-sel="rsort" aria-label="정렬 기준"><option value="ovr" ${sk === 'ovr' ? 'selected' : ''}>능력치순</option><option value="pot" ${sk === 'pot' ? 'selected' : ''}>잠재력순</option><option value="age" ${sk === 'age' ? 'selected' : ''}>나이순</option><option value="sal" ${sk === 'sal' ? 'selected' : ''}>연봉순</option></select></div>
       <div class="small muted" style="margin-top:6px">1군 평균 OVR ${avg(n1, p => L.ovr(p)).toFixed(1)} · ${avg(n1, p => p.age).toFixed(1)}세 · 연봉(상위 40) ${L.cbtPay(t)} / 상한 ${L.cbtCap().toFixed(1)}억</div></div>
       ${rosterBar(n1)}
+      ${L.openSlots() > 0 && L.callupPlan().length ? `<div class="card" style="border-color:var(--accent,#2a7)"><div class="row" style="flex-wrap:nowrap"><span class="small" style="flex:1"><b>1군 빈 자리 ${L.openSlots()}명</b><br><span class="muted">필요 포지션 → OVR 순으로 2군에서만 올립니다(교체 없음).</span></span><button class="primary" data-act="autoCallup">자동 콜업 ${Math.min(L.openSlots(), L.callupPlan().length)}명</button></div></div>` : ''}
       ${scopeBar}
       <div class="tabs sub" role="tablist" aria-label="보기"><button role="tab" aria-selected="${v === 'pos'}" data-act="rview" data-a="pos">포지션별</button><button role="tab" aria-selected="${v === 'stat'}" data-act="rview" data-a="stat">성적·폼</button><button role="tab" aria-selected="${v === 'list'}" data-act="rview" data-a="list">한 줄 목록</button></div>
       ${f === 'res' ? recBanner() : ''}${foldGroup('rg_more', '추가 필터', moreF.some(x => x[0] === f) ? '적용 중' : '계약 1년 이하 · 외국인 · 유망주', moreBar, moreF.some(x => x[0] === f))}
@@ -1755,6 +1756,7 @@
     postAuto() { const c = L.startUserPostGame(); L.playAuto(c); const r = L.finishUserPostGame(c); openPostSheet([r]); autosave(); render(); },
     toOff() { L.startOffseason(); ui.screen = 'offseason'; autosave(); render(); },
     rfilter(a) { ui.rf.f = a; ui.rmore = {}; render(); },
+    autoCallup() { const r = L.autoCallup(), nm = { C: '포수', SP: '선발', IF: '내야', OF: '외야', RP: '구원' }; if (!r.done.length) toast(r.skipped.length ? r.skipped[0][1] : '콜업할 2군 선수가 없습니다.'); else { toast(`${r.done.length}명 콜업: ` + r.done.slice(0, 4).map(x => `${P(x.id).ko}(${nm[x.group]})`).join(', ') + (r.done.length > 4 ? ' 외' : '')); autosave(); } render(); },
     rmore(a) { ui.rmore = ui.rmore || {}; ui.rmore[a] = (ui.rmore[a] || 20) + 20; render(); },
     rview(a) { ui.rf.v = a; ui.rmore = {}; render(); },
     player(a) { if (ui.modal !== a) ui.mtab = 'sum'; ui.modal = a; ui.confirm = null; render(); },
