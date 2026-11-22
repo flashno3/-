@@ -34,7 +34,7 @@ const offseason=L=>{const S=L.S,off=L.startOffseason();for(const id of off.rep.e
 {const L=League.create(base,U,24),S=L.S;L.faAdvance(40);ok(Array.isArray(S.faFeed)&&S.faFeed.length>0,'FA 속보 생성');ok(S.faFeed.every(x=>x.text&&x.kind&&x.pid),'속보 형식');ok(S.faFeed.some(x=>x.kind==='bid')&&S.faFeed.some(x=>x.kind==='sign'),'입찰·계약 속보');
  const p=L.faList().find(x=>!x.foreign);L.negStart(p.id,'fa');L._faFeedAdd('bid','테스트',p.id);ok(S.faFeed[0].mine,'협상 중 선수 속보는 내 관심으로 표시');}
 // 5) 드래프트 한 픽씩 진행 = 일괄 진행과 규칙 동일(풀 감소·로스터·순서)
-{const mk=()=>{const L=startSeason(25),S=L.S;L.advance(300,false);L.startOffseason();L.finishContracts();L.buildDraft();return L};
+{const mk=()=>{const L=startSeason(26),S=L.S;L.advance(300,false);L.startOffseason();L.finishContracts();L.buildDraft();return L};
  const L=mk(),S=L.S,d=S.off.draft;const pool0=d.pool.length;let steps=0,r;while(!(r=L.draftAiStep()).userTurn&&!r.done){steps++;ok(r.pick&&S.players[r.pick.id].team===r.pick.team,'지명 팀 일치');if(steps>200)break}
  ok(steps>0&&d.pool.length===pool0-steps&&d.picks.length===steps,'풀 감소=지명 수');ok(d.order[d.pick]===S.userTeam||d.pick>=d.order.length,'내 차례에서 멈춤');
  ok(L.draftIntro(d.picks[0].id).includes('스카우트'),'지명 소개');

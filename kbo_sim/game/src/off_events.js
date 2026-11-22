@@ -11,6 +11,7 @@
      - 새 이벤트가 생기면 advance()가 그날 멈춘다. 만료되면 기본 선택으로 자동 처리. */
   proto.eventsOpen = function () { const E = this.S.events; return E ? E.list.filter(e => e.status === 'open') : []; };
   proto._evAdd = function (e) { const S = this.S, E = S.events = S.events || { seq: 0, list: [] }; e.id = 'E' + (++E.seq); e.day = S.day; e.year = S.year; e.status = 'open'; e.exp = S.day + (e.ttl || 10); E.list.unshift(e); if (E.list.length > 60) E.list.length = 60; return e; };
+  proto.compOpen = function () { return this.eventsOpen().filter(e => e.type === 'comp'); };   // 아직 내가 고르지 않은 FA 보상 선택
   proto._evCount = function (type) { const E = this.S.events; return E ? E.list.filter(e => e.type === type && e.year === this.S.year).length : 0; };
   proto._evOpenOf = function (type) { return this.eventsOpen().some(e => e.type === type); };
   proto._eventDay = function (d) {
