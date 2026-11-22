@@ -351,3 +351,4 @@ table.rec th:nth-child(2), table.rec td:nth-child(2) { position: sticky; left: 0
 table.rec tr.me td:nth-child(2) { background: var(--accent-soft); } table.rec th.sorted, table.rec td.sorted { color: var(--fg); font-weight: 600; }
 @media (max-width: 560px) { .rost td.n .yr { display: block; line-height: 1.1; text-align: right; } .rost td, .rost th { padding-left: 3px; padding-right: 3px; } }   /* 계약 연수는 연봉 밑에: 이동 버튼이 잘리지 않게 */
 @media (max-width: 340px) { .rost td, .rost th { font-size: 12.5px; } }
+table.rec tr.tot td { border-top: 2px solid var(--line); background: var(--surface2); } table.rec tr.tot td:nth-child(2) { background: var(--surface2); }
