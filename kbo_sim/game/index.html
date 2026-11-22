@@ -3481,12 +3481,23 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
   /* ---------------- 트레이드 ---------------- */
   proto.canTrade = function () { const S = this.S; if (S.phase === 'offseason') return true; if (S.phase === 'preseason') return true; if (S.phase === 'regular' || S.phase === 'regular_done') return S.day < LIM_DEADLINE; return false; };
   proto.tradeValue = function (p, aiTeam) { let v = this.marketValue(p); if (p.team === aiTeam) v *= 1.18; return v; };
+  /* 묶음 가치: 선수별 가치에서 대체 수준(0.5억)을 뺀 뒤 큰 순서대로 비중(1 · 0.55 · 0.3 · 0.15 · 0.08 …)을 곱해 더한다.
+     여러 명을 모아 한 명의 핵심 선수와 바꾸는 '다대일'은 로스터 자리·출전 기회 때문에 가치가 합만큼 되지 않는다(상대 구단은 남는 선수를 정리해야 함). 한 명 대 한 명은 기존과 거의 같다. */
+  const LOT_R = 0.5, LOT_W = [1, 0.55, 0.3, 0.15, 0.08];
+  proto.tradeLot = function (ps, aiTeam) { return ps.map(p => Math.max(0, this.tradeValue(p, aiTeam) - LOT_R)).sort((a, b) => b - a).reduce((a, x, i) => a + x * (LOT_W[i] !== undefined ? LOT_W[i] : 0.04), 0); };
+  /* 양도 제한: 부상 대체 외국인(단기 계약)·재활선수명단에 올라 대체된 외국인은 양도할 수 없다. 외국인 양도 뒤에도 양쪽 구단이 외국인 한도(일반 3명·아시아쿼터 1명, 일반 3명 같은 포지션 불가)를 지켜야 한다. ⚠ 대체 외국인 양도 금지는 규약 문구 확인 전 가정 */
+  proto._tradeForeignBlock = function (me, aiTeam, gp, tp) {
+    const bad = [...gp, ...tp].find(p => p.sub || p.rehab); if (bad) return `${bad.ko}은(는) 부상 대체 계약 중인 외국인이라 양도할 수 없습니다.`;
+    const chk = (t, add, rem) => { const cur = this.foreignOf(t).filter(p => !p.sub && !rem.has(p.id)).concat(add.filter(p => p.foreign)), gen = cur.filter(p => !p.aq), aq = cur.filter(p => p.aq); if (gen.length > 3 || aq.length > 1) return `${KO0[t] || t}의 외국인 한도(일반 3명·아시아쿼터 1명)를 넘습니다.`; if (gen.length === 3 && gen.every(p => p.type === gen[0].type)) return `${KO0[t] || t}의 일반 외국인 3명이 같은 포지션이 됩니다.`; return null; };
+    return chk(me, tp, new Set(gp.map(p => p.id))) || chk(aiTeam, gp, new Set(tp.map(p => p.id)));
+  };
   proto.evaluateTrade = function (aiTeam, give, get) {
     const S = this.S, me = S.userTeam; if (!this.canTrade()) return { ok: false, why: S.phase === 'post' || S.phase === 'post_done' ? '포스트시즌에는 트레이드할 수 없습니다.' : `트레이드 마감(${LIM_DEADLINE}일차) 이후에는 할 수 없습니다.` };
     if (!give.length || !get.length) return { ok: false, why: '양쪽에서 최소 1명씩 선택하세요.' };
     const gp = give.map(id => S.players[id]), tp = get.map(id => S.players[id]);
     if (gp.some(p => p.team !== me) || tp.some(p => p.team !== aiTeam)) return { ok: false, why: '선수 소속이 올바르지 않습니다.' };
-    const vGet = tp.reduce((a, p) => a + this.tradeValue(p, aiTeam), 0), vGive = gp.reduce((a, p) => a + this.tradeValue(p, aiTeam), 0);
+    { const fb = this._tradeForeignBlock(me, aiTeam, gp, tp); if (fb) return { ok: false, why: fb }; }
+    const vGet = this.tradeLot(tp, aiTeam), vGive = this.tradeLot(gp, aiTeam);   // 묶음 가치(다대일은 합보다 낮게 평가)
     const aiN = S.teams[aiTeam].ids.length - tp.length + gp.length, myN = S.teams[me].ids.length + tp.length - gp.length;
     if (aiN > ROSTER_MAX || myN > ROSTER_MAX) return { ok: false, why: `보유 선수 ${ROSTER_MAX}명 제한을 넘습니다.` };
     if (aiN < ROSTER_MIN || myN < ROSTER_MIN) return { ok: false, why: `보유 선수 최소 ${ROSTER_MIN}명이 필요합니다.` };
@@ -3495,7 +3506,7 @@ table.dboard td.mine { background: color-mix(in srgb, var(--gold) 28%, transpare
     const aiPay = this.cbtPay(aiTeam) + (S.calib.cbtK || 1) * (gp.reduce((a, p) => a + (p.rookie === S.year || p.foreign ? 0 : p.contract.salary), 0) - tp.reduce((a, p) => a + (p.rookie === S.year || p.foreign ? 0 : p.contract.salary), 0));
     if (aiPay > this.cbtCap() && aiPay > this.cbtPay(aiTeam)) return { ok: false, why: `${aiTeam} 구단이 연봉 상한(${this.cbtCap()}억)을 넘게 되어 수락하지 않습니다.` };
     // AI가 핵심 선수를 내줄 때는 더 큰 대가를 요구
-    const star = tp.some(p => this.ovr(p) >= 65) ? 1.25 : 1.0, need = vGet * 1.12 * star + 0.1;
+    const star = tp.some(p => this.ovr(p) >= 65) ? 1.25 : 1.0, need = vGet * 1.12 * star + 0.1;   // 가치는 묶음 가치 기준
     return { ok: vGive >= need, vGive: Math.round(vGive * 10) / 10, vGet: Math.round(vGet * 10) / 10, need: Math.round(need * 10) / 10, why: vGive >= need ? null : `상대 구단이 받는 가치(${Math.round(vGive * 10) / 10})가 요구 수준(${Math.round(need * 10) / 10})에 못 미칩니다.` };
   };
   proto.executeTrade = function (aiTeam, give, get) {
