@@ -1732,7 +1732,7 @@ table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; 
       });
       this.mergeTracking();
       for (const o of others) this.commit(o.home, o.away, o.rh, o.ra, { spH: o.spH, spA: o.spA });
-      this._applyActiveMax(); this._decayFatigue(); this._tickService(); if (this._injuryDay) this._injuryDay(d); if (this._arcDay) this._arcDay(d); if (this._eventDay) this._eventDay(d); if (this._finSnapDay) this._finSnapDay(d); if (this._trainDay) this._trainDay(); if (this._scoutDay) this._scoutDay(); if (this._milestoneDay) this._milestoneDay(); this.playFutures(d); this.returnMilitary(this.milYM(d));
+      this._applyActiveMax(); this._decayFatigue(); this._tickService(); if (this._injuryDay) this._injuryDay(d); if (this._arcDay) this._arcDay(d); if (this._allStarDay) this._allStarDay(d); if (this._eventDay) this._eventDay(d); if (this._finSnapDay) this._finSnapDay(d); if (this._trainDay) this._trainDay(); if (this._scoutDay) this._scoutDay(); if (this._milestoneDay) this._milestoneDay(); this.playFutures(d); this.returnMilitary(this.milYM(d));
       if (!ug) { S.day++; return { status: 'ok', day: d }; }
       if (live) { S.pendingDay = d; return { status: 'userGame', day: d, game: ug.g, idx: ug.i }; }
       const L = this.startUserGame(ug.g, ug.i); this.playAuto(L); const res = this.finishUserGame(L);
@@ -3207,6 +3207,7 @@ table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; 
     else if (e.type === 'legend' && this._legendResolve) res = this._legendResolve(e, k);
     else if ((e.type === 'retcer' || e.type === 'awards') && this._cerResolve) res = this._cerResolve(e, k);
     else if (e.type === 'fanloss' && this._fanLossResolve) res = this._fanLossResolve(e, k);
+    else if ((e.type === 'allstar' || e.type === 'halfsum') && this._asResolve) res = this._asResolve(e, k);
     e.status = 'done'; e.choice = k; e.result = res; e.auto = !!auto; news(this, `${e.title}: ${res}`); this.invalidate();
     return { ok: true, msg: res };
   };
@@ -4504,6 +4505,104 @@ table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; 
     return `${d.name} 은퇴식: ${k === 'grand' ? '성대한 은퇴식을 치렀습니다(이사회 신뢰도 +2, 선수단 +2, 1.0억)' : k === 'normal' ? '보통 규모의 은퇴식을 열었습니다(이사회 신뢰도 +1, 선수단 +1, 0.3억)' : '간소하게 마무리했습니다'}.`;
   };
 });
+
+/* 올스타전·전반기 결산: 올스타 휴식기(전반기 89경기일 종료 직후, 90번째 경기일 전)에 올스타 명단 발표 → (내 구단 선수가 있으면) 참가/휴식 선택 → 올스타전 결과·MVP, 그리고 전반기 결산(후반기 운용 선택).
+ *  - 명단은 전반기 성적(타자 OPS×타석, 투수 RA9×이닝)과 구단 인기(관중 기반)로 정한다. 두 팀(드림·나눔)의 구단 편성은 게임 설정이며 실제와 다를 수 있다(⚠).
+ *  - 올스타전은 정규시즌 순위·기록에 포함되지 않는 별도 기록이다. 경기는 엔진 시뮬레이션이 아니라 명단의 능력치를 이용한 간이 계산(⚠).
+ *  - 효과(⚠ 가정): 참가 = 팬 관심(관중 수요 +1%/명, 최대 +5%, 14일) · 올스타 선수 컨디션 −1(6일) / 휴식 = 컨디션 +1(6일). 경기·재정 엔진의 다른 계산은 건드리지 않는다. */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) factory(require('./league.js'), require('../../web/src/engine.js'));
+  else factory(root.KBOLeague, root.KBOEngine);
+})(typeof self !== 'undefined' ? self : this, function (LG, Engine) {
+  'use strict';
+  const { proto, rngFor, clamp, TEAMS, KO0, news } = LG.OFFC;
+  const BREAK_DAY = 88;   // 전반기 마지막 경기일(0부터 88일째)의 틱에서 열어, 그날 경기를 마친 뒤 휴식기(89일째 경기 전)에 소식이 뜬다
+  const DREAM = ['Bears', 'Lions', 'Giants', 'Wiz', 'Heroes'];   // ⚠ 편성은 게임 설정
+  const SIDE_NAME = { dream: '드림', nanum: '나눔' };
+  const KO = t => (KO0 && KO0[t]) || t;
+  const r2 = x => Math.round(x * 100) / 100;
+  proto.allStar = function () { const A = this.S.allstar; return A && A.year === this.S.year ? A : null; };
+  proto._asSide = t => DREAM.includes(t) ? 'dream' : 'nanum';
+  /* 전반기 성적 가치(없으면 null) */
+  proto._asVal = function (p) {
+    const S = this.S;
+    if (p.type === 'B') { const b = S.stats.bat[p.id]; if (!b || b.PA < 100) return null; const ab = b.PA - b.BB - b.HBP - b.SF, h = b['1B'] + b['2B'] + b['3B'] + b.HR, tb = b['1B'] + 2 * b['2B'] + 3 * b['3B'] + 4 * b.HR, obp = (h + b.BB + b.HBP) / Math.max(1, b.PA), slg = ab ? tb / ab : 0, ops = obp + slg;
+      return { v: (ops - 0.70) * b.PA / 10, line: `타율 ${(ab ? h / ab : 0).toFixed(3).slice(1)} ${b.HR}홈런 ${b.RBI}타점 OPS ${ops.toFixed(3)}` }; }
+    const q = S.stats.pit[p.id], min = p.role === 'SP' ? 120 : 30; if (!q || q.outs < min) return null; const ra9 = q.R * 27 / q.outs;
+    return { v: (4.8 - ra9) * q.outs / 27 * 1.1 * (p.role === 'SP' ? 1 : 1.6), line: `RA9 ${ra9.toFixed(2)} ${Math.floor(q.outs / 3)}이닝 ${q.K}K` };   // 구원은 이닝이 적어 가치에 보정
+  };
+  /* 한 팀(드림/나눔)의 명단: 야수 12(포지션 선발 9 + 후보 3)·선발 3·구원 2, 구단별 최소 1명 */
+  proto._asPick = function (side) {
+    const S = this.S, teams = TEAMS.filter(t => this._asSide(t) === side), avgAtt = TEAMS.reduce((a, t) => a + (S.fin ? S.fin.teams[t].att0 : 0), 0) / TEAMS.length || 1, picks = [], used = new Set();
+    const pop = t => S.fin && S.fin.teams[t] ? clamp(1 + 0.12 * (S.fin.teams[t].att0 / avgAtt - 1), 0.9, 1.2) : 1;   // 팬 투표는 구단 인기(관중)를 약간 반영
+    const pool = []; for (const t of teams) for (const p of this.players(t)) { if (this.isInj(p) && (p.inj && this.injLeft(p) > 21)) continue; const ev = this._asVal(p); if (ev) pool.push({ p, t, v: ev.v, vv: ev.v * (p.type === 'B' ? pop(t) : 1), line: ev.line }); }
+    const add = (x, role) => { if (!x || used.has(x.p.id)) return false; used.add(x.p.id); picks.push({ id: x.p.id, ko: x.p.ko, team: x.t, pos: x.p.type === 'B' ? x.p.pos : x.p.role === 'SP' ? '선발' : '구원', kind: x.p.type, role, v: r2(x.v), line: x.line }); return true; };
+    const best = (pred, n) => pool.filter(x => !used.has(x.p.id) && pred(x)).sort((a, b) => b.vv - a.vv).slice(0, n || 1);
+    for (const pos of ['C', '1B', '2B', '3B', 'SS']) add(best(x => x.p.type === 'B' && x.p.pos === pos)[0], '선발');
+    for (const x of best(x => x.p.type === 'B' && ['LF', 'CF', 'RF'].includes(x.p.pos), 3)) add(x, '선발');
+    add(best(x => x.p.type === 'B')[0], '선발');   // 지명타자: 남은 타자 중 최고
+    for (const x of best(x => x.p.type === 'B', 3)) add(x, '후보');
+    for (const x of best(x => x.p.type === 'P' && x.p.role === 'SP', 3)) add(x, '선발투수');
+    for (const x of best(x => x.p.type === 'P' && x.p.role !== 'SP', 2)) add(x, '구원');
+    for (const t of teams) if (!picks.some(k => k.team === t)) { const x = pool.filter(z => z.t === t && !used.has(z.p.id)).sort((a, b) => b.vv - a.vv)[0]; if (x) add(x, '구단 대표'); }   // 구단당 최소 1명
+    return picks;
+  };
+  proto._allStarDay = function (d) {
+    const S = this.S; if (d !== BREAK_DAY || S.phase !== 'regular' || this.allStar()) return;
+    const dream = this._asPick('dream'), nanum = this._asPick('nanum'), user = S.userTeam, my = dream.concat(nanum).filter(k => k.team === user);
+    S.allstar = { year: S.year, dream, nanum, my: my.map(k => k.id), res: null };
+    for (const k of dream.concat(nanum)) { const p = S.players[k.id]; if (p) { p.asg = p.asg || []; if (!p.asg.includes(S.year)) p.asg.push(S.year); } }
+    news(this, `${S.year} 올스타 명단 발표 — 드림 ${dream.length}명·나눔 ${nanum.length}명${my.length ? `, 우리 구단 ${my.length}명(${my.slice(0, 4).map(k => k.ko).join(', ')}${my.length > 4 ? ' 외' : ''})` : ''}`);
+    if (my.length) {
+      const snub = this.players(user).map(p => ({ p, ev: this._asVal(p) })).filter(x => x.ev && !my.some(k => k.id === x.p.id)).sort((a, b) => b.ev.v - a.ev.v).slice(0, 2);
+      this._evAdd({ type: 'allstar', title: `⭐ ${S.year} 올스타 휴식기`, ttl: 3, def: 'play', rec: 'play', data: { n: my.length },
+        text: `올스타 명단이 발표되었습니다. 우리 구단 선정 ${my.length}명: ${my.map(k => `${k.ko}(${k.pos})`).join(', ')}.${snub.length ? ` 아쉽게 빠진 선수: ${snub.map(x => `${x.p.ko}(${x.ev.line})`).join(' · ')}.` : ''} 올스타전에 어떻게 임할까요?`, choices: [
+          { k: 'play', label: '정상 참가(팬 서비스)', hint: `관중 수요 +${Math.min(5, my.length)}%(14일) · 올스타 선수 컨디션 −1(6일) · 올스타전 MVP 후보` },
+          { k: 'rest', label: '핵심 선수 휴식 허용', hint: '올스타 선수 컨디션 +1(6일) · 올스타전에는 대체 선수가 출전(MVP 불가) · 팬 서비스 효과 없음' }] });
+    } else this._asFinish(new Set());
+    this._halfSummary();
+  };
+  /* 올스타전 결과(간이 계산): 명단의 능력치 합으로 득점 기대를 정하고 시드 난수로 결정 */
+  proto._asFinish = function (rest) {
+    const S = this.S, A = this.allStar(); if (!A || A.res) return A && A.res;
+    const r = rngFor(S.seed, S.year, 8800, 1), strength = side => A[side].filter(k => !rest.has(k.id)).reduce((a, k) => { const p = S.players[k.id]; if (!p) return a; return a + (k.kind === 'B' ? this._runsB(p, true) : -this._runsP(p) * 0.6); }, 0);
+    const z = strength('dream') - strength('nanum'), pois = m => { let L2 = Math.exp(-m), k = 0, p = 1; do { k++; p *= r.random(); } while (p > L2); return k - 1; };
+    let rd = pois(clamp(4.6 + z * 0.02, 3.2, 6.4)), rn = pois(clamp(4.6 - z * 0.02, 3.2, 6.4)), ext = false; if (rd === rn) { ext = true; if (r.random() < 0.5 + clamp(z * 0.004, -0.15, 0.15)) rd++; else rn++; }
+    const win = rd > rn ? 'dream' : 'nanum', cand = A[win].filter(k => k.kind === 'B' && !rest.has(k.id)), tot = cand.reduce((a, k) => a + Math.exp(Math.max(-2, Math.min(3, k.v / 2))), 0); let x = r.random() * tot, mvp = cand[0];
+    for (const k of cand) { x -= Math.exp(Math.max(-2, Math.min(3, k.v / 2))); if (x <= 0) { mvp = k; break; } }
+    A.res = { dream: rd, nanum: rn, win, ext, mvp: mvp ? { id: mvp.id, ko: mvp.ko, team: mvp.team, line: mvp.line } : null, rest: [...rest] };
+    (S.allstarHist = S.allstarHist || []).unshift({ year: S.year, dream: rd, nanum: rn, win, mvp: A.res.mvp }); if (S.allstarHist.length > 30) S.allstarHist.length = 30;
+    const txt = `${S.year} 올스타전: 드림 ${rd} : ${rn} 나눔${ext ? '(연장)' : ''} — ${SIDE_NAME[win]} 승리, MVP ${mvp ? `${mvp.ko}(${KO(mvp.team)})` : '-'}`; news(this, txt);
+    const mine = mvp && mvp.team === S.userTeam; this.story('allstar', txt + (mine ? ' · 우리 구단 선수 MVP' : ''), mine ? 3 : 2);
+    if (mine && S.players[mvp.id]) { const p = S.players[mvp.id]; p.loyAdj = clamp((p.loyAdj || 0) + 3, -15, 15); (p.asgMvp = p.asgMvp || []).push(S.year); }
+    return A.res;
+  };
+  proto._halfSummary = function () {
+    const S = this.S, t = S.userTeam, st = this.standings(), me = st.find(x => x.team === t), fifth = st[4], gb = ((fifth.w - me.w) + (me.l - fifth.l)) / 2, played = me.w + me.l + me.d;
+    const top = this.players(t).map(p => ({ p, ev: this._asVal(p) })).filter(x => x.ev), bat = top.filter(x => x.p.type === 'B').sort((a, b) => b.ev.v - a.ev.v)[0], pit = top.filter(x => x.p.type === 'P').sort((a, b) => b.ev.v - a.ev.v)[0], inj = this.players(t).filter(p => this.isInj(p)).length;
+    const gs = this.goalStatus ? this.goalStatus() : null, goalTxt = gs ? `시즌 목표: 순위 ${gs.rank.goal}위 이내(현재 ${gs.rank.cur}위${gs.rank.ok ? ' 달성권' : ''}) · 손익 ${gs.profit.goal.toFixed(1)}억(예상 ${gs.profit.cur >= 0 ? '+' : ''}${gs.profit.cur.toFixed(1)}억)` : '';
+    const gap = me.rank <= 5 ? `5위권(5위와 ${Math.abs(gb).toFixed(1)}경기 ${gb <= 0 ? '앞' : '뒤'})` : `5위와 ${gb.toFixed(1)}경기 차`;
+    const rec = me.rank <= 3 ? 'hold' : gb > 0 && gb <= 4 ? 'push' : gb > 9 ? 'care' : 'hold';
+    this._evAdd({ type: 'halfsum', title: `📋 ${S.year} 전반기 결산`, ttl: 5, def: 'hold', rec, data: { rank: me.rank },
+      text: `전반기 ${me.w}승 ${me.l}패${me.d ? ' ' + me.d + '무' : ''}(${played}경기) · ${me.rank}위 · ${gap}. ${bat ? `팀 타선 ${bat.p.ko}(${bat.ev.line})` : ''}${pit ? ` · 마운드 ${pit.p.ko}(${pit.ev.line})` : ''}${inj ? ` · 부상자 ${inj}명` : ''}. ${goalTxt ? goalTxt + '. ' : ''}후반기를 어떻게 운용할까요?`, choices: [
+        { k: 'push', label: '승부수 — 공격적 운용', hint: '투수 운용 「승부」·주루 「적극」으로 설정(기존 정책 카드와 같은 효과: 성적 ↑·부상 위험 ↑, 언제든 되돌릴 수 있음)' },
+        { k: 'hold', label: '현재 운용 유지', hint: '변화 없음' },
+        { k: 'care', label: '체력 관리 — 안정 운용', hint: '투수 운용 「절약」·주루 「보수」로 설정(부상 위험 ↓, 성적 약간 ↓, 언제든 되돌릴 수 있음)' }] });
+  };
+  proto._asResolve = function (e, k) {
+    const S = this.S, t = S.userTeam;
+    if (e.type === 'allstar') {
+      const A = this.allStar(), ids = A ? A.my : [], mood = (p, v, days) => { p.mood = { v, until: S.day + days }; }, f = S.fin && S.fin.teams[t];
+      for (const id of ids) { const p = S.players[id]; if (p && p.team === t) mood(p, k === 'rest' ? 1 : -1, 6); }
+      if (k === 'play' && f && ids.length) f.promo = { until: S.day + 14, mult: 1 + Math.min(5, ids.length) / 100 };
+      this.invalidate(); const res = this._asFinish(new Set(k === 'rest' ? ids : []));
+      return `${k === 'play' ? '올스타전에 정상 참가했습니다(관중 수요 +' + Math.min(5, ids.length) + '%, 선수 컨디션 −1)' : '핵심 선수를 쉬게 했습니다(컨디션 +1)'}. 결과: 드림 ${res.dream} : ${res.nanum} 나눔, MVP ${res.mvp ? res.mvp.ko : '-'}.`;
+    }
+    if (k === 'push') { this.setPolicy('pitch', 'push'); this.setPolicy('run', 'high'); return '후반기 승부수: 투수 운용 「승부」·주루 「적극」으로 설정했습니다.'; }
+    if (k === 'care') { this.setPolicy('pitch', 'save'); this.setPolicy('run', 'low'); return '후반기 체력 관리: 투수 운용 「절약」·주루 「보수」로 설정했습니다.'; }
+    return '후반기도 현재 운용을 유지합니다.';
+  };
+});
 </script>
 <script>/* KBO 감독 모드: 협상 테이블 · 선수 면담 · 시즌 스토리 · 언론·팬 반응
  * 계산(요구액·경쟁 입찰·예산·계약 규칙)은 기존 엔진 값을 그대로 쓰고, 이 모듈은 그 값을 대화·호감도·약속으로 풀어낸다.
@@ -5089,7 +5188,7 @@ table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; 
   };
   proto.careerOf = function (p) {
     const S = this.S, aw = []; for (const h of S.awardsHist || []) for (const a of h.awards) if (a.id === p.id) aw.push({ y: h.year, label: a.label, txt: a.txt });
-    return { origin: p.dh || null, war: { lg: Object.assign({}, p.lg || {}), lw: Object.assign({}, p.lw || {}), y: Object.assign({}, p.lwy || {}) }, seasons: (p.seasons || []).slice(), contracts: (p.cHist || []).slice(), awards: aw, notes: (p.notes || []).slice(), ovrHist: (p.ovrHist || []).slice(), promise: p.promise || null, kept: p.keptP || 0, broken: p.brokenP || 0, bonds: this.bonds(p) };
+    return { origin: p.dh || null, asg: (p.asg || []).slice(), asgMvp: (p.asgMvp || []).slice(), war: { lg: Object.assign({}, p.lg || {}), lw: Object.assign({}, p.lw || {}), y: Object.assign({}, p.lwy || {}) }, seasons: (p.seasons || []).slice(), contracts: (p.cHist || []).slice(), awards: aw, notes: (p.notes || []).slice(), ovrHist: (p.ovrHist || []).slice(), promise: p.promise || null, kept: p.keptP || 0, broken: p.brokenP || 0, bonds: this.bonds(p) };
   };
 
   /* ---------------- 구단 역사 · 명예의 전당 ---------------- */
@@ -7391,6 +7490,7 @@ table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; 
     return `${o ? `<div class="small">${o.y ? o.y + '년 ' : ''}${esc(o.school || '')} ${o.univ ? '(대졸)' : o.school ? '(고졸)' : ''} ${o.kind ? '· ' + esc(o.kind) : ''}${o.pick ? ' ' + o.pick + '순위' : ''}${o.deb ? ' · 1군 데뷔 ' + esc(o.deb) : ''}</div>` : ''}
       <div class="card" style="margin:8px 0"><b>시즌 기록 (1군)</b>${rows ? `<div class="tablewrap"><table class="car"><thead><tr><th class="l">시즌</th><th class="l">팀</th>${head}</tr></thead><tbody>${rows}${totRow}</tbody></table></div>${warHtml}${preHtml}` : '<div class="small muted">이 게임에서 완료된 시즌 기록이 아직 없습니다(시즌이 끝날 때마다 쌓입니다).</div>'}${c.ovrHist.length ? `<div class="small muted" style="margin-top:4px">종합 능력치 추이: ${c.ovrHist.map(x => `${x.y} ${x.o}`).join(' → ')}</div>` : ''}</div>
       ${farmHtml}
+      ${c.asg.length ? `<div class="card" style="margin:8px 0"><b>올스타</b> <span class="small">${c.asg.length}회 — ${c.asg.join('·')}${c.asgMvp.length ? ` · 올스타전 MVP ${c.asgMvp.join('·')}` : ''}</span></div>` : ''}
       ${c.awards.length ? `<div class="card" style="margin:8px 0"><b>수상</b>${c.awards.map(x => `<div class="small">${x.y} · <b>${esc(x.label)}</b> ${esc(x.txt || '')}</div>`).join('')}</div>` : ''}
       <div class="card" style="margin:8px 0"><b>계약 이력</b>${c.contracts.length ? c.contracts.slice().reverse().map(x => `<div class="small">${x.y} · ${esc(x.kind)} · ${x.years}년 연봉 ${x.salary}억${x.bonus ? ' + 계약금 ' + x.bonus + '억' : ''} (총 ${x.total}억)${KO[x.team] ? ' · ' + KO[x.team] : ''}</div>`).join('') : '<div class="small muted">기록된 계약이 없습니다(현재 계약은 계약·정보 탭).</div>'}</div>
       <div class="card" style="margin:8px 0"><b>약속과 면담</b>${c.promise ? `<div class="small">진행 중인 약속: <b>${esc(c.promise.label)}</b> (${c.promise.y}년)</div>` : ''}<div class="small muted">지킨 약속 ${c.kept}건 · 깨진 약속 ${c.broken}건</div>${c.notes.length ? c.notes.slice().reverse().map(x => `<div class="small">${x.y} ${L.dateStr(x.d)} · ${esc(x.t)}</div>`).join('') : '<div class="small muted">남은 기록이 없습니다.</div>'}</div>
@@ -7453,6 +7553,14 @@ table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; 
     const one = a => { const last = a.log[a.log.length - 1]; return `<div class="arc"><div class="row"><b>📖 ${esc(a.title)}</b> <span class="muted small">${esc(a.who)}</span><span class="sp"></span><span class="arcdots">${dots(a)}</span></div><div class="small" style="margin-top:3px">${last ? esc(last.t) : ''}</div><div class="muted small">${a.status === 'done' ? `결말: ${({ ok: '순조롭게 마무리', mixed: '엇갈린 결말', bad: '아쉬운 결말' })[a.end && a.end.tone] || ''}` : a.waiting === 'decide' ? '▶ 위 소식에서 결정을 기다리는 중' : `다음 이야기까지 약 ${a.days}일`}</div></div>`; };
     return `<div class="card"><h2 style="margin:0 0 6px">이야기 중</h2>${act.length ? act.map(one).join('') : '<div class="muted small">진행 중인 이야기가 없습니다.</div>'}${done.length ? `<details class="foldgroup"><summary class="muted small">지난 이야기 ${done.length}편</summary>${done.map(one).join('')}</details>` : ''}</div>`;
   };
+  function allStarCard() {   // 올스타전 결과·명단(올스타 휴식기 이후 그 시즌 동안)
+    const A = L.allStar && L.allStar(); if (!A) return ''; const U_ = U(), res = A.res, my = A.dream.concat(A.nanum).filter(k => k.team === U_);
+    const list = (side, name) => `<div style="flex:1;min-width:150px"><b>${name}</b> <span class="muted small">${A[side].length}명</span>${A[side].map(k => `<div class="small ${k.team === U_ ? 'pos' : ''}">${k.team === U_ ? '★ ' : ''}${esc(k.ko)} <span class="muted">${esc(KO[k.team] || k.team)} · ${esc(k.pos)}</span></div>`).join('')}</div>`;
+    return `<div class="card"><div class="row"><h2 style="margin:0">⭐ ${A.year} 올스타전</h2><span class="sp"></span><span class="small muted">${res ? '완료' : '결정 대기'}</span></div>
+      ${res ? `<div style="margin-top:6px"><b>드림 ${res.dream} : ${res.nanum} 나눔${res.ext ? '(연장)' : ''}</b> — ${res.win === 'dream' ? '드림' : '나눔'} 승리 · MVP <b>${esc(res.mvp ? res.mvp.ko : '-')}</b>${res.mvp ? ` <span class="muted small">(${esc(KO[res.mvp.team] || '')} · ${esc(res.mvp.line)})</span>` : ''}</div>` : '<div class="small muted" style="margin-top:6px">올스타 휴식기 소식에서 참가 여부를 정하면 결과가 나옵니다.</div>'}
+      <div class="small" style="margin-top:6px">우리 구단: ${my.length ? my.map(k => `<b>${esc(k.ko)}</b>(${esc(k.pos)})`).join(', ') : '선정된 선수가 없습니다'}</div>
+      <details class="foldgroup" style="margin-top:6px"><summary class="muted small">전체 명단(드림·나눔)</summary><div class="row" style="gap:12px;align-items:flex-start;margin-top:6px">${list('dream', '드림')}${list('nanum', '나눔')}</div><div class="small muted" style="margin-top:6px">명단은 전반기 성적과 구단 인기로 정합니다. 드림·나눔 구단 편성과 올스타전 결과 계산은 게임 설정이며 실제와 다를 수 있습니다(⚠).</div></details></div>`;
+  }
   const pressCard = () => { const pr = (L.S.press || []).slice(0, 3); if (!pr.length) return storyTopCard(); return `<div class="card"><div class="row"><h2 style="margin:0">언론·팬 반응</h2><span class="sp"></span><button class="sm" data-act="go" data-a="story">스토리</button></div>${pr.map(x => `<div class="press"><b>${esc(x.head)}</b>${x.fan ? `<div class="small muted">${esc(x.fan)}</div>` : ''}</div>`).join('')}</div>${storyTopCard()}`; };
   function screenStory() {
     const S = L.S, years = [...new Set((S.story || []).map(e => e.y).concat([S.year]))].sort((x, y) => y - x), y = ui.storyY || S.year, tab = ui.storyTab || 'top';
@@ -7467,7 +7575,7 @@ table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; 
     return `<div class="card"><div class="row"><h2 style="margin:0">시즌 스토리</h2><span class="sp"></span><select data-sel="storyy" aria-label="시즌">${years.map(v => `<option value="${v}" ${v === y ? 'selected' : ''}>${v}</option>`).join('')}</select></div><div class="tabs wrap" role="tablist" style="margin-top:8px">${tabs}</div></div>${body}`;
   }
   /* ---------------- 시즌 중 소식(이벤트) ---------------- */
-  const evIcon = { camp: '⛺', grievance: '🗣', sponsor: '🤝', promo: '🎉', board: '🏛', arc: '📖', legend: '🏅', retcer: '🎖', awards: '🏆', fanloss: '📉' };
+  const evIcon = { camp: '⛺', grievance: '🗣', sponsor: '🤝', promo: '🎉', board: '🏛', arc: '📖', legend: '🏅', retcer: '🎖', awards: '🏆', fanloss: '📉', allstar: '⭐', halfsum: '📋' };
   function eventCards() {
     const open = L.eventsOpen(), warns = L.validateEntry(); if (!open.length && !warns.length) return '';
     const rows = open.map(e => { const rec = e.rec || e.def; return `<div class="ev"><div><b>${evIcon[e.type] || '📢'} ${esc(e.title)}</b> <span class="muted small">${L.dateStr(e.day)} · ${e.type === 'comp' ? '직접 고를 때까지 보상이 정산되지 않습니다' : e.exp > 1e8 ? '개막 전까지 결정 · 미결정 시 변화 없음' : Math.max(0, e.exp - L.S.day) + '일 내 결정'}</span></div><div class="small" style="margin:4px 0 8px">${esc(e.text)}</div><div class="row evbtn">${e.choices.map(c => `<button class="sm ${c.k === rec ? 'primary' : ''}" data-act="evChoice" data-a="${e.id}|${c.k}" title="${esc(c.hint || '')}">${c.k === rec && open.length > 1 ? '★ ' : ''}${esc(c.label)}</button>`).join('')}</div><div class="small muted" style="margin-top:4px">${e.choices.map(c => esc(c.label.replace(/ \(.*\)$/, '')) + ': ' + esc(c.hint || '')).join(' / ')}</div></div>`; }).join('');
@@ -8374,7 +8482,7 @@ table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; 
     const scroll = window.scrollY;
     if (ui.pre && !ui.live) { document.body.classList.remove('modal-open'); root.innerHTML = screenPre() + confirmSheet() + toastHtml(); window.scrollTo(0, scroll); return; }   // 경기 전 브리핑(날짜 처리 끝, 경기 시작 전)
     if (ui.live) { document.body.classList.remove('modal-open'); root.innerHTML = screenLive() + toastHtml(); window.scrollTo(0, scroll); return; }   // 경기 화면에서는 이전 화면의 스크롤 잠금이 남지 않게 푼다
-    const S = ui.screen, f = { records: screenRecords, invest: screenInvest, desk: screenDesk, home: () => goalCard() + arcCard() + pressCard() + reportsCard() + screenHome() + foldGroup('home_ev', '최근 소식 처리', '', evHistory().replace(/^<div class="card">|<\/div>$/g, ''), false), roster: () => screenRoster(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, story: screenStory, mood: screenMood, train: screenTrain, scout: screenScout, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
+    const S = ui.screen, f = { records: screenRecords, invest: screenInvest, desk: screenDesk, home: () => goalCard() + allStarCard() + arcCard() + pressCard() + reportsCard() + screenHome() + foldGroup('home_ev', '최근 소식 처리', '', evHistory().replace(/^<div class="card">|<\/div>$/g, ''), false), roster: () => screenRoster(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, story: screenStory, mood: screenMood, train: screenTrain, scout: screenScout, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
     document.body.classList.toggle('modal-open', !!ui.modal);
     { const c = L.compOpen().find(x => !(ui.compSeen || (ui.compSeen = {}))[x.id]); if (c && !ui.live && !ui.negOpen) { ui.compSeen[c.id] = true; ui.comp = c.id; } }   // 새 FA 보상 선택은 처음 생길 때 바로 창을 띄운다
     const keep = snapInner(root);   // 체크박스·버튼으로 다시 그려도 안쪽 스크롤 상자와 펼침 상태를 유지한다

@@ -94,7 +94,7 @@
   };
   proto.careerOf = function (p) {
     const S = this.S, aw = []; for (const h of S.awardsHist || []) for (const a of h.awards) if (a.id === p.id) aw.push({ y: h.year, label: a.label, txt: a.txt });
-    return { origin: p.dh || null, war: { lg: Object.assign({}, p.lg || {}), lw: Object.assign({}, p.lw || {}), y: Object.assign({}, p.lwy || {}) }, seasons: (p.seasons || []).slice(), contracts: (p.cHist || []).slice(), awards: aw, notes: (p.notes || []).slice(), ovrHist: (p.ovrHist || []).slice(), promise: p.promise || null, kept: p.keptP || 0, broken: p.brokenP || 0, bonds: this.bonds(p) };
+    return { origin: p.dh || null, asg: (p.asg || []).slice(), asgMvp: (p.asgMvp || []).slice(), war: { lg: Object.assign({}, p.lg || {}), lw: Object.assign({}, p.lw || {}), y: Object.assign({}, p.lwy || {}) }, seasons: (p.seasons || []).slice(), contracts: (p.cHist || []).slice(), awards: aw, notes: (p.notes || []).slice(), ovrHist: (p.ovrHist || []).slice(), promise: p.promise || null, kept: p.keptP || 0, broken: p.brokenP || 0, bonds: this.bonds(p) };
   };
 
   /* ---------------- 구단 역사 · 명예의 전당 ---------------- */
