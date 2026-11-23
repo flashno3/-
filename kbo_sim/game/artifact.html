@@ -4207,6 +4207,149 @@ table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; 
         }
       }
     },
+    /* ---- 5) 베테랑의 마지막 시즌(은퇴 갈림길) ---- */
+    vet: {
+      title: '베테랑의 마지막 시즌', steps: 3,
+      can(L) {
+        const t = L.S.userTeam, c = L.players(t).filter(p => !p.foreign && p.age >= 37 && !(p.arcMem && p.arcMem.vet && L.S.year - p.arcMem.vet.y < 2) && (L._cerTenure(p, t) >= 6 || L.legendBound(p, t))).sort((a, b) => L._cerTenure(b, t) - L._cerTenure(a, t) || b.age - a.age)[0];
+        return c ? { pid: c.id } : null;
+      },
+      start(L, a) { L._arcGo(a, 'hint', 0); a.wait = L.S.day; },
+      stages: {
+        hint: {
+          enter(L, a) {
+            const p = P(L, a.pid), t = L.S.userTeam, yrs = L._cerTenure(p, t), lb = L.legendBound(p, t);
+            L._arcLog(a, `${p.ko}(${p.age}세, 구단 ${yrs}시즌)이 은퇴를 입에 올렸습니다.`);
+            const say = voice(L, p, { clutch: '"한 시즌만 더 던지고 싶은 마음과, 지금이 마지막이라는 마음이 싸웁니다."', shy: '"…제가 팀에 짐이 되는 건 아닌지 걱정입니다."', leader: '"후배들이 자리를 잡았다면 제가 물러날 때가 아닌가 싶습니다."', model: '"몸 상태를 보면 올해가 마지막일 수 있습니다."', free: '"뭐, 언제까지 할 수 있겠어요. 올해가 마지막일지도?"', def: '"올해가 마지막일지도 모르겠습니다."' });
+            L._arcEvent(a, { title: '은퇴 갈림길', ttl: 8, def: 'wait', rec: lb ? 'honor' : 'urge', text: `${p.ko}${lb ? `(영구결번 후보, 구단 WAR ${lb.war.toFixed(1)})` : ''}이(가) 올 시즌을 마지막으로 생각하고 있습니다. ${say}`, choices: [
+              { k: 'urge', label: '현역 연장을 설득', hint: '은퇴 가능성 크게 ↓(올 시즌 뒤 은퇴 확률 ×0.35) · 컨디션 +1(30일) · 충성도 +2' },
+              { k: 'honor', label: '마지막 시즌으로 예우', hint: '은퇴 가능성 ↑(×2.5) · 컨디션 +1(40일) · 충성도 +3 · 은퇴식 때 성대한 행사 추천' },
+              { k: 'wait', label: '본인 결정에 맡긴다', hint: '변화 없음' }] });
+          },
+          resolve(L, a, k) {
+            const p = P(L, a.pid); a.mem.choice = k;
+            if (k === 'urge') { p.arcRet = { v: 'stay', y: L.S.year }; mood(L, p, 1, 30); adj(p, 2); L._arcGo(a, 'mentor', 20); return `${p.ko}을(를) 설득했습니다. 올 시즌 뒤 은퇴 가능성이 크게 낮아졌습니다(컨디션 +1, 충성도 +2).`; }
+            if (k === 'honor') { p.arcRet = { v: 'go', y: L.S.year }; mood(L, p, 1, 40); adj(p, 3); addLoy(L, p, 'vet', 2, '마지막 시즌을 예우해 준 기억'); L._arcGo(a, 'mentor', 20); return `${p.ko}의 마지막 시즌을 예우하기로 했습니다(컨디션 +1, 충성도 +3). 은퇴 가능성이 높아졌습니다.`; }
+            L._arcGo(a, 'mentor', 20); return `${p.ko}의 결정에 맡기기로 했습니다.`;
+          }
+        },
+        mentor: {
+          enter(L, a) {
+            const p = P(L, a.pid), t = L.S.userTeam, y = L.players(t).filter(x => !x.foreign && x.id !== p.id && x.type === p.type && x.age <= 26).sort((a2, b) => L.ovr(b) - L.ovr(a2))[0]; a.mem.pupil = y ? y.id : null;
+            L._arcLog(a, `${p.ko}이(가) 후배들 앞에서 말수가 늘었습니다.`);
+            L._arcEvent(a, { title: '남기고 싶은 것', ttl: 8, def: 'none', rec: y ? 'mentor' : 'rest', text: `${p.ko}${y ? `이(가) ${y.ko}(${y.age}세)에게 자기 노하우를 전하고 싶어 합니다` : '의 몸 관리가 중요해졌습니다'}. 어떻게 할까요?`, choices: [
+              ...(y ? [{ k: 'mentor', label: `${y.ko}에게 멘토 역할(0.3억)`, hint: `${y.ko} 컨디션 +2(40일) · ${p.ko} 충성도 +1` }] : []),
+              { k: 'rest', label: '시즌 후반 관리 위주로', hint: `${p.ko} 컨디션 +1(30일) · 부담 줄임` },
+              { k: 'none', label: '지금처럼', hint: '변화 없음' }] });
+          },
+          resolve(L, a, k) {
+            const p = P(L, a.pid), y = a.mem.pupil ? P(L, a.mem.pupil) : null, f = L.S.fin && L.S.fin.teams[L.S.userTeam]; let txt = '';
+            if (k === 'mentor' && y) { if (f) f.evCost = Math.round(((f.evCost || 0) + 0.3) * 10) / 10; mood(L, y, 2, 40); adj(p, 1); a.mem.mentored = y.id; txt = `${p.ko}이(가) ${y.ko}에게 노하우를 전수합니다(${y.ko} 컨디션 +2, 40일).`; }
+            else if (k === 'rest') { mood(L, p, 1, 30); txt = `${p.ko}의 부담을 줄였습니다(컨디션 +1).`; } else txt = '지금처럼 이어 갑니다.';
+            L._arcGo(a, 'final', 30); return txt;
+          }
+        },
+        final: {
+          enter(L, a) {
+            const p = P(L, a.pid), f = L._arcForm(p), good = f !== null && f >= 0.8, t = L.S.userTeam, c = a.mem.choice;
+            p.arcMem = Object.assign(p.arcMem || {}, { vet: { choice: c, mentored: a.mem.mentored || null, y: L.S.year } }); L.note(p, `이야기 「${a.title}」: ${c === 'urge' ? '현역 연장 설득' : c === 'honor' ? '마지막 시즌 예우' : '본인 결정에 맡김'}`);
+            L._arcEnd(a, `${p.ko}의 시즌은 ${good ? '노장의 품격을 보여 주는 호조로' : f !== null && f <= -0.8 ? '세월을 실감하는 부침 속에서' : '차분하게'} 이어집니다. ${c === 'honor' ? '시즌이 끝나면 아름다운 마무리가 기다립니다.' : c === 'urge' ? '다음 시즌에도 그의 이름을 볼 수 있을 것 같습니다.' : '은퇴 여부는 시즌 뒤에 정해집니다.'}`, good ? 'ok' : 'mixed');
+          },
+          resolve() { return ''; }
+        }
+      }
+    },
+    /* ---- 6) FA 앞둔 에이스(계약 마지막 해) ---- */
+    contract: {
+      title: 'FA 앞둔 에이스', steps: 3,
+      can(L) {
+        const t = L.S.userTeam, c = L.players(t).filter(p => !p.foreign && p.active && p.contract.years === 1 && p.age >= 26 && p.age <= 36 && L.war(p) >= 1.5 && !(p.arcMem && p.arcMem.contract && p.arcMem.contract.y === L.S.year)).sort((a, b) => L.war(b) - L.war(a))[0];
+        return c ? { pid: c.id } : null;
+      },
+      start(L, a) { L._arcGo(a, 'rumor', 0); a.wait = L.S.day; },
+      stages: {
+        rumor: {
+          enter(L, a) {
+            const p = P(L, a.pid), t = L.S.userTeam, lb = L.legendBound(p, t), ask = L.resignAsk(p), cur = p.contract.salary;
+            L._arcLog(a, `${p.ko}의 계약이 올해로 끝납니다. 타 구단의 관심 소문이 돕니다.`);
+            L._arcEvent(a, { title: '계약 마지막 해', ttl: 9, def: 'wait', rec: 'early', text: `${p.ko}(WAR ${L.war(p).toFixed(1)}${lb ? ' · 영구결번 후보' : ''})의 계약이 올해 끝납니다(현재 ${cur.toFixed(1)}억, 예상 요구 ${ask.toFixed(1)}억). 타 구단이 관심을 보인다는 소문이 있습니다. ${voice(L, p, { clutch: '"여기서 끝까지 하고 싶지만, 저도 제 가치를 인정받고 싶습니다."', shy: '"…구단이 저를 어떻게 생각하시는지 궁금합니다."', leader: '"선수단과 팬이 좋아하는 이 팀에 남고 싶습니다."', model: '"제 기록이 저를 대변해 줄 겁니다."', free: '"시장이 어떤지 한번 보는 것도 나쁘지 않겠죠."', def: '' })}`, choices: [
+              { k: 'early', label: '조기 재계약 의사 전달', hint: '시즌 뒤 재계약 요구액 −8% · 충성도 +3 (요구액에 반영, ⚠ 가정)' },
+              { k: 'wait', label: '시즌 뒤 논의', hint: '변화 없음' },
+              { k: 'cold', label: '구단 방침 고수(인상 불가)', hint: '재계약 요구액 +5% · 충성도 −3' }] });
+          },
+          resolve(L, a, k) {
+            const p = P(L, a.pid), y = L.S.year; a.mem.choice = k;
+            if (k === 'early') { p.askMod = { v: 0.92, y }; adj(p, 3); addLoy(L, p, 'contract', 2, '일찍 재계약 의사를 밝혀 준 기억'); L._arcGo(a, 'deadline', 25); return `${p.ko}에게 일찍 재계약 의사를 전했습니다. 선수가 고마워합니다(충성도 +3, 시즌 뒤 요구액 −8%).`; }
+            if (k === 'cold') { p.askMod = { v: 1.05, y }; adj(p, -3); L._arcGo(a, 'deadline', 25); return `${p.ko}에게 인상 불가 방침을 전했습니다. 선수의 표정이 굳었습니다(충성도 −3, 시즌 뒤 요구액 +5%).`; }
+            L._arcGo(a, 'deadline', 25); return `재계약은 시즌 뒤에 논의하기로 했습니다.`;
+          }
+        },
+        deadline: {
+          enter(L, a) {
+            const p = P(L, a.pid), l = L.loyalty(p, p.team), v = l ? l.v : 50; a.mem.v = v;
+            L._arcLog(a, `트레이드 마감이 다가오자 ${p.ko}의 거취에 관심이 쏠립니다.`);
+            L._arcEvent(a, { title: '마감 앞의 거취', ttl: 8, def: 'silent', rec: v >= 60 ? 'assure' : 'silent', text: `트레이드 마감을 앞두고 ${p.ko}이(가) 거취를 묻습니다(충성도 ${Math.round(v)}). 선수는 ${v >= 65 ? '이 팀에 남고 싶은 마음이 큽니다' : v >= 50 ? '마음이 반반입니다' : '시장의 평가가 궁금한 눈치입니다'}.`, choices: [
+              { k: 'assure', label: '직접 만나 잔류 의사 확인', hint: `충성도에 따라 성공(현재 약 ${v >= 65 ? '높음' : v >= 50 ? '보통' : '낮음'}) · 성공하면 요구액 −5%·충성도 +2 / 실패하면 충성도 −1` },
+              { k: 'silent', label: '말을 아낀다', hint: '변화 없음' }] });
+          },
+          resolve(L, a, k) {
+            const p = P(L, a.pid), y = L.S.year, ok = k === 'assure' && rngFor(L.S.seed, y, L.S.day, 9260).random() < clamp(0.25 + (a.mem.v - 40) / 80, 0.15, 0.9); let txt;
+            if (k === 'assure') { if (ok) { p.askMod = { v: (p.askMod && p.askMod.y === y ? p.askMod.v : 1) * 0.95, y }; adj(p, 2); txt = `${p.ko}이(가) 잔류 의사를 밝혔습니다(충성도 +2, 요구액 −5%).`; } else { adj(p, -1); txt = `${p.ko}은(는) 확답을 피했습니다(충성도 −1).`; } } else txt = '말을 아끼며 시즌을 이어 갑니다.';
+            L._arcGo(a, 'close', 30); return txt;
+          }
+        },
+        close: {
+          enter(L, a) {
+            const p = P(L, a.pid), m = p.askMod && p.askMod.y === L.S.year ? p.askMod.v : 1; p.arcMem = Object.assign(p.arcMem || {}, { contract: { choice: a.mem.choice, askMod: m, y: L.S.year } }); L.note(p, `이야기 「${a.title}」: ${a.mem.choice === 'early' ? '조기 재계약 의사' : a.mem.choice === 'cold' ? '구단 방침 고수' : '시즌 뒤 논의'}(요구액 ×${m.toFixed(2)})`);
+            L._arcEnd(a, `${p.ko}의 재계약 협상은 시즌 뒤로 이어집니다. 요구액은 ${m < 1 ? Math.round((1 - m) * 100) + '% 낮아졌습니다' : m > 1 ? Math.round((m - 1) * 100) + '% 올랐습니다' : '변동이 없습니다'}.`, m < 1 ? 'ok' : m > 1 ? 'bad' : 'mixed');
+          },
+          resolve() { return ''; }
+        }
+      }
+    },
+    /* ---- 7) 외국인 선수의 적응 ---- */
+    foreign: {
+      title: '외국인 선수의 적응', steps: 3,
+      can(L) {
+        const t = L.S.userTeam, c = L.players(t).filter(p => p.foreign && !p.sub && !p.rehab && ((p.myFrom && p.myFrom.y === L.S.year) || L.S.year === 2027) && !(p.arcMem && p.arcMem.foreign && p.arcMem.foreign.y === L.S.year)).sort((a, b) => L.ovr(b) - L.ovr(a))[0];
+        return c ? { pid: c.id } : null;
+      },
+      start(L, a) { L._arcGo(a, 'adapt', 0); a.wait = L.S.day; },
+      stages: {
+        adapt: {
+          enter(L, a) {
+            const p = P(L, a.pid); L._arcLog(a, `${p.ko}(외국인)의 한국 생활이 시작되었습니다.`);
+            L._arcEvent(a, { title: '낯선 환경', ttl: 9, def: 'none', rec: 'support', text: `${p.ko}(${p.aq ? '아시아쿼터' : '외국인'}, OVR ${L.ovr(p)})이(가) 낯선 환경에 적응하는 중입니다. ${voice(L, p, { shy: '말수가 적고 팀 분위기에 아직 어색해합니다.', free: '여기저기 구경하며 즐거운 표정입니다.', leader: '동료들과 어울리려고 노력합니다.', clutch: '빨리 결과를 내고 싶은 눈치입니다.', model: '생활 패턴을 철저히 지키려 합니다.', def: '' })} 구단이 어떻게 도울까요?`, choices: [
+              { k: 'support', label: '통역·생활 지원 강화(0.3억)', hint: '컨디션 +2(30일) · 구단 신뢰 ↑' },
+              { k: 'dinner', label: '팀 식사로 어울리게(0.1억)', hint: '컨디션 +1(30일) · 유대 ↑' },
+              { k: 'none', label: '알아서 적응하게 둔다', hint: '변화 없음' }] });
+          },
+          resolve(L, a, k) {
+            const p = P(L, a.pid), f = L.S.fin && L.S.fin.teams[L.S.userTeam]; a.mem.choice = k;
+            if (k === 'support') { if (f) f.evCost = Math.round(((f.evCost || 0) + 0.3) * 10) / 10; mood(L, p, 2, 30); L._arcGo(a, 'review', 30); return `${p.ko}의 생활 지원을 강화했습니다(컨디션 +2, 30일).`; }
+            if (k === 'dinner') { if (f) f.evCost = Math.round(((f.evCost || 0) + 0.1) * 10) / 10; mood(L, p, 1, 30); L._bondShift && L._bondShift(p, 1, '팀 식사'); L._arcGo(a, 'review', 30); return `팀 식사로 ${p.ko}이(가) 동료들과 가까워졌습니다(컨디션 +1, 30일).`; }
+            L._arcGo(a, 'review', 30); return `${p.ko}이(가) 알아서 적응하도록 두었습니다.`;
+          }
+        },
+        review: {
+          enter(L, a) {
+            const p = P(L, a.pid), f = L._arcForm(p), good = f !== null && f >= 0.8, bad = f !== null && f <= -0.8; a.mem.tone = good ? 'good' : bad ? 'bad' : 'mid';
+            L._arcLog(a, `${p.ko}은(는) ${good ? '빠르게 팀에 녹아들었습니다' : bad ? '아직 적응에 어려움을 겪고 있습니다' : '무난하게 적응해 가고 있습니다'}.`);
+            L._arcEvent(a, { title: '한 달 뒤', ttl: 9, def: 'keep', rec: bad ? 'adjust' : 'keep', text: `${p.ko}${f === null ? '' : `(최근 흐름 ${f >= 0 ? '▲' : '▼'}${Math.abs(f).toFixed(1)})`}의 한 달을 돌아봅니다. ${good ? '기대 이상입니다.' : bad ? '성적이 기대에 못 미칩니다.' : '평범한 출발입니다.'} 어떻게 할까요?`, choices: [
+              { k: 'keep', label: '믿고 계속 기용', hint: bad ? '50%: 컨디션 +1(30일) / 아니면 −1' : '컨디션 +1(30일)' },
+              { k: 'adjust', label: '한국 야구 적응 면담(0.2억)', hint: '컨디션 +2(30일) · 코치진이 약점을 짚어 줌' }] });
+          },
+          resolve(L, a, k) {
+            const p = P(L, a.pid), f = L.S.fin && L.S.fin.teams[L.S.userTeam], r = rngFor(L.S.seed, L.S.year, L.S.day, 9261).random(); let txt, tone = 'ok';
+            if (k === 'adjust') { if (f) f.evCost = Math.round(((f.evCost || 0) + 0.2) * 10) / 10; mood(L, p, 2, 30); tone = 'mixed'; txt = `적응 면담을 통해 ${p.ko}의 고민을 풀어 줬습니다(컨디션 +2, 30일).`; }
+            else if (a.mem.tone === 'bad') { if (r < 0.5) { mood(L, p, 1, 30); txt = `믿어 준 보람이 있었습니다. ${p.ko}이(가) 감을 잡아 갑니다(컨디션 +1).`; } else { mood(L, p, -1, 30); tone = 'bad'; txt = `기용을 이어 갔지만 적응이 더딥니다(컨디션 −1, 30일).`; } }
+            else { mood(L, p, 1, 30); txt = `${p.ko}이(가) 팀의 핵심 전력으로 자리 잡아 갑니다(컨디션 +1, 30일).`; }
+            p.arcMem = Object.assign(p.arcMem || {}, { foreign: { choice: a.mem.choice, tone: a.mem.tone, res: tone, y: L.S.year } }); L.note(p, `이야기 「${a.title}」: ${({ support: '생활 지원', dinner: '팀 식사', none: '방임' })[a.mem.choice]} → ${({ good: '빠른 적응', bad: '적응 난항', mid: '무난' })[a.mem.tone]}`);
+            L._arcEnd(a, txt, tone); return txt;
+          }
+        }
+      }
+    },
     /* ---- 4) 그때의 일(후일담): 지난 이야기의 선택이 다음 시즌에 돌아온다 ---- */
     echo: {
       title: '그때의 일', steps: 2, followup: true,
@@ -4258,6 +4401,11 @@ table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; 
       }
     }
   };
+  /* 이야기 선택이 실제 값에 닿는 두 지점(⚠ 가정): 은퇴 확률(베테랑 아크)·재계약 요구액(계약 아크). 올해(S.year) 값만 유효하다 */
+  const _retireChance = proto.retireChance;
+  proto.retireChance = function (p) { const c = _retireChance.call(this, p), m = p.arcRet && p.arcRet.y === this.S.year ? p.arcRet.v : null; if (m === 'stay') return Math.max(0.02, c * 0.35); if (m === 'go') return Math.min(0.97, Math.max(c * 2.5, 0.35)); return c; };
+  const _resignAsk = proto.resignAsk;
+  proto.resignAsk = function (p) { const v = _resignAsk.call(this, p), m = p.askMod && p.askMod.y === this.S.year ? p.askMod.v : 1; return m === 1 ? v : Math.max(this.minSal(), Math.round(v * m * 10) / 10); };
   proto._arcDefs = function () { return DEFS; };
   /* ================= 진행 ================= */
   proto.arcStart = function (kind, force) {
