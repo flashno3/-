@@ -1732,7 +1732,7 @@ table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; 
       });
       this.mergeTracking();
       for (const o of others) this.commit(o.home, o.away, o.rh, o.ra, { spH: o.spH, spA: o.spA });
-      this._applyActiveMax(); this._decayFatigue(); this._tickService(); if (this._injuryDay) this._injuryDay(d); if (this._arcDay) this._arcDay(d); if (this._allStarDay) this._allStarDay(d); if (this._eventDay) this._eventDay(d); if (this._finSnapDay) this._finSnapDay(d); if (this._trainDay) this._trainDay(); if (this._scoutDay) this._scoutDay(); if (this._milestoneDay) this._milestoneDay(); this.playFutures(d); this.returnMilitary(this.milYM(d));
+      this._applyActiveMax(); this._decayFatigue(); this._tickService(); if (this._injuryDay) this._injuryDay(d); if (this._arcDay) this._arcDay(d); if (this._allStarDay) this._allStarDay(d); if (this._aiTradeDay) this._aiTradeDay(d); if (this._eventDay) this._eventDay(d); if (this._finSnapDay) this._finSnapDay(d); if (this._trainDay) this._trainDay(); if (this._scoutDay) this._scoutDay(); if (this._milestoneDay) this._milestoneDay(); this.playFutures(d); this.returnMilitary(this.milYM(d));
       if (!ug) { S.day++; return { status: 'ok', day: d }; }
       if (live) { S.pendingDay = d; return { status: 'userGame', day: d, game: ug.g, idx: ug.i }; }
       const L = this.startUserGame(ug.g, ug.i); this.playAuto(L); const res = this.finishUserGame(L);
@@ -4603,6 +4603,74 @@ table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; 
     return '후반기도 현재 운용을 유지합니다.';
   };
 });
+
+/* AI 구단의 운영 성향과 구단 간 트레이드: 세계가 살아 있도록 AI 구단끼리도 시즌 중에 선수를 맞바꾼다.
+ *  - 성향(우승 도전/균형/리빌딩)은 시즌 시작(전력 순위)과 시즌 중간(60일차 실제 순위)에 정한다. 우승 도전 구단은 현재 전력을, 리빌딩 구단은 젊은 선수를 선호한다.
+ *  - 트레이드는 1대1 맞교환만: 같은 유형(타자/투수·선발/구원·포수), 시장 가치 ±15% 이내, 양쪽 구단의 경쟁균형세 상한·보유 인원 유지, 외국인·부상자·영구결번 후보·팀 핵심(구단 WAR 상위 3명)은 제외.
+ *  - 빈도(⚠ 가정): 시즌 최대 8건, 구단당 최대 2건, 10~104일차(마감 110일 전). 규칙·확률은 실제 KBO 트레이드 빈도 자료 없이 설정한 값이다. */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) factory(require('./league.js'), require('../../web/src/engine.js'));
+  else factory(root.KBOLeague, root.KBOEngine);
+})(typeof self !== 'undefined' ? self : this, function (LG, Engine) {
+  'use strict';
+  const { proto, rngFor, clamp, TEAMS, KO0, news } = LG.OFFC;
+  const STYLE = { contend: '우승 도전', balance: '균형', rebuild: '리빌딩' };
+  const MAX_SEASON = 8, MAX_TEAM = 2;
+  proto.aiStyleName = k => STYLE[k] || STYLE.balance;
+  proto.aiStyle = function (t) { const m = this.S.aiStyle; return (m && m[t] && m[t].k) || 'balance'; };
+  /* 전력(1군 상위 26명 WAR 합)이나 실제 순위로 성향 갱신(내 구단 제외) */
+  proto._aiStyleUpdate = function (mode) {
+    const S = this.S, st = mode === 'rank' ? this.standings() : null; const strength = t => this.players(t).filter(p => !this.isInj(p)).map(p => this.war(p)).sort((a, b) => b - a).slice(0, 26).reduce((a, x) => a + x, 0);
+    const ranks = TEAMS.map(t => ({ t, v: st ? -st.find(x => x.team === t).rank : strength(t) })).sort((a, b) => b.v - a.v), m = S.aiStyle = S.aiStyle || {};
+    ranks.forEach((x, i) => { if (x.t === S.userTeam) return; const k = i < 3 ? 'contend' : i >= 7 ? 'rebuild' : 'balance'; m[x.t] = { k, y: S.year, how: mode === 'rank' ? '시즌 중 순위' : '시즌 전 전력', rank: i + 1 }; });
+  };
+  const young = p => p.age <= 25, vet = p => p.age >= 29;
+  proto._aiTradeOk = function (p) {   // 트레이드 대상 선수 조건
+    const S = this.S; if (p.foreign || p.retired || this.isInj(p) || p.sub || p.rehab || p.team === 'MIL') return false;
+    if ((p.moveY || 0) === S.year) return false;   // 올해 이미 이적한 선수
+    if (this.legendBound && this.legendBound(p, p.team)) return false;   // 영구결번 후보(구단 상징)는 보내지 않는다
+    return true;
+  };
+  proto._aiCore = function (t) { return new Set(this.players(t).sort((a, b) => this.war(b) - this.war(a)).slice(0, 3).map(p => p.id)); };
+  proto._aiSwap = function (A, B, pa, pb, why) {
+    const S = this.S, ia = pa.active, ib = pb.active;
+    this.removeFromTeam(A, pa.id); this.removeFromTeam(B, pb.id);
+    pa.team = B; pb.team = A; S.teams[B].ids.push(pa.id); S.teams[A].ids.push(pb.id); pa.active = ia; pb.active = ib; pa.lockUntil = 0; pb.lockUntil = 0; pa.moveY = pb.moveY = S.year; delete pa.aiGs; delete pb.aiGs;
+    this._engDirty = true; this._f2dirty = true; this.refreshTeam(A); this.refreshTeam(B);
+    const pos = p => p.type === 'P' ? (p.role === 'SP' ? '선발' : '구원') : p.pos, rec = { y: S.year, d: S.day, a: A, b: B, pa: { id: pa.id, ko: pa.ko, age: pa.age, pos: pos(pa) }, pb: { id: pb.id, ko: pb.ko, age: pb.age, pos: pos(pb) }, why };
+    (S.aiTrades = S.aiTrades || []).unshift(rec); if (S.aiTrades.length > 40) S.aiTrades.length = 40;
+    this._lnews(`구단 간 트레이드: ${KO0[A] || A} ${pa.ko}(${rec.pa.pos}·${pa.age}세) ↔ ${KO0[B] || B} ${pb.ko}(${rec.pb.pos}·${pb.age}세) — ${why}`);
+    return rec;
+  };
+  proto._aiTradeTry = function (A, B, r) {   // A: 우승 도전(현재 전력 선호), B: 리빌딩(젊은 선수 선호)
+    const S = this.S, coreA = this._aiCore(A), coreB = this._aiCore(B);
+    const cand = (t, core, pred) => this.players(t).filter(p => this._aiTradeOk(p) && !core.has(p.id) && pred(p));
+    const ya = cand(A, coreA, p => young(p) && this.marketValue(p) >= 1.0).sort((a, b) => this.marketValue(b) - this.marketValue(a)).slice(0, 8), vb = cand(B, coreB, p => vet(p) && this.marketValue(p) >= 1.0 && this.war(p) >= 0.5).sort((a, b) => this.war(b) - this.war(a)).slice(0, 10);
+    const pairs = []; for (const pa of ya) for (const pb of vb) {
+      if (pa.type !== pb.type) continue; if (pa.type === 'P' ? (pa.role === 'SP') !== (pb.role === 'SP') : (pa.pos === 'C') !== (pb.pos === 'C')) continue;
+      const va = this.marketValue(pa), vbv = this.marketValue(pb), ratio = va / vbv; if (ratio < 0.85 || ratio > 1.15) continue;
+      if (this.war(pb) < this.war(pa) + 0.3) continue;   // A는 당장의 전력이 나아져야 한다
+      const kk = (S.calib && S.calib.cbtK) || 1, sa = pa.rookie === S.year ? 0 : pa.contract.salary, sb = pb.rookie === S.year ? 0 : pb.contract.salary;
+      const payA = this.cbtPay(A) + kk * (sb - sa), payB = this.cbtPay(B) + kk * (sa - sb); if ((payA > this.cbtCap() && payA > this.cbtPay(A)) || (payB > this.cbtCap() && payB > this.cbtPay(B))) continue;   // 상한을 넘기는 방향의 교환은 하지 않는다
+      pairs.push({ pa, pb, s: Math.abs(1 - ratio) - 0.05 * (this.war(pb) - this.war(pa)) });
+    }
+    if (!pairs.length) return null; pairs.sort((x, y) => x.s - y.s); const pick = pairs[Math.min(pairs.length - 1, Math.floor(r.random() * Math.min(3, pairs.length)))];
+    return this._aiSwap(A, B, pick.pa, pick.pb, `${KO0[A] || A}(우승 도전)은 즉시 전력을, ${KO0[B] || B}(리빌딩)은 젊은 선수를 택했습니다`);
+  };
+  proto._aiTradeDay = function (d) {
+    const S = this.S; if (S.phase !== 'regular') return;
+    if (d === 0 || !S.aiStyle) this._aiStyleUpdate('power'); else if (d === 60) this._aiStyleUpdate('rank');
+    if (d < 10 || d > 104 || d % 5 !== 0) return;
+    const T = S.aiTradeSeason = S.aiTradeSeason && S.aiTradeSeason.y === S.year ? S.aiTradeSeason : { y: S.year, n: 0, by: {} };
+    if (T.n >= MAX_SEASON) return; const r = rngFor(S.seed, S.year, d, 7700); if (r.random() > 0.5) return;
+    const ai = TEAMS.filter(t => t !== S.userTeam), buyers = ai.filter(t => this.aiStyle(t) === 'contend' && (T.by[t] || 0) < MAX_TEAM), sellers = ai.filter(t => this.aiStyle(t) === 'rebuild' && (T.by[t] || 0) < MAX_TEAM);
+    if (!buyers.length || !sellers.length) return;
+    for (let k = 0; k < 6; k++) {
+      const A = buyers[Math.floor(r.random() * buyers.length)], B = sellers[Math.floor(r.random() * sellers.length)];
+      const rec = this._aiTradeTry(A, B, r); if (rec) { T.n++; T.by[A] = (T.by[A] || 0) + 1; T.by[B] = (T.by[B] || 0) + 1; return rec; }
+    }
+  };
+});
 </script>
 <script>/* KBO 감독 모드: 협상 테이블 · 선수 면담 · 시즌 스토리 · 언론·팬 반응
  * 계산(요구액·경쟁 입찰·예산·계약 규칙)은 기존 엔진 값을 그대로 쓰고, 이 모듈은 그 값을 대화·호감도·약속으로 풀어낸다.
@@ -7134,6 +7202,14 @@ table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; 
       ${hist.length ? `<div class="tablewrap"><table><thead><tr><th class="l">시즌</th><th>매출</th><th>PS 배당</th><th>모기업 보너스</th><th>선수단 보수</th><th>포상금</th><th>운영비</th><th>기금</th><th>영업이익</th><th>평균 관중</th><th>신뢰도</th></tr></thead><tbody>${hist.map(h => `<tr><td class="l">${h.year}</td><td class="n">${f1(h.r.rev)}</td><td class="n">${h.r.ps ? f1(h.r.ps) : '-'}</td><td class="n">${h.r.bonus ? f1(h.r.bonus) : '-'}</td><td class="n">${f1(h.r.pay)}</td><td class="n">${h.r.prize ? f1(h.r.prize) : '-'}</td><td class="n">${f1(h.r.opex)}</td><td class="n">${h.r.cbt ? f1(h.r.cbt) : '-'}</td><td class="n ${h.r.op >= 0 ? 'pos' : 'neg'}">${sg(h.r.op)}</td><td class="n">${h.r.att.toLocaleString()}</td><td class="n">${h.r.trust} (${h.r.dTrust >= 0 ? '+' : ''}${h.r.dTrust})</td></tr>`).join('')}</tbody></table></div>` : '<div class="small muted">아직 결산 기록이 없습니다.</div>'}</div>${econCard()}`;
   }
   /* 팀 정보: 내 팀뿐 아니라 모든 구단의 성적·로스터·연봉·최근 경기를 볼 수 있다 */
+  function aiWorldCard(t) {   // AI 구단 운영 성향 + 최근 구단 간 트레이드
+    if (!L.aiStyle) return ''; const S = L.S, st = S.aiStyle || {}, trades = (S.aiTrades || []).slice(0, 6);
+    const chip = k => `<span class="chip ${k === 'contend' ? 'ks' : k === 'rebuild' ? 'in' : ''}">${L.aiStyleName(k)}</span>`;
+    const mine = t !== U() ? `<div class="small" style="margin-top:4px"><b>${esc(KO[t])}</b> 운영 성향: ${chip(L.aiStyle(t))} <span class="muted">${st[t] ? esc(st[t].how) + ' ' + st[t].rank + '위 기준' : ''}</span></div>` : '';
+    return `<div class="card"><h2>리그 동향</h2>${mine}<div class="small muted" style="margin-top:4px">구단 성향: ${TEAMS.filter(x => x !== U()).map(x => `${esc(KO[x])} ${L.aiStyleName(L.aiStyle(x))}`).join(' · ')}</div>
+      <div style="margin-top:6px"><b class="small">최근 구단 간 트레이드</b>${trades.length ? trades.map(x => `<div class="small">${x.y} · ${esc(KO[x.a])} <b>${esc(x.pa.ko)}</b>(${esc(x.pa.pos)}·${x.pa.age}세) ↔ ${esc(KO[x.b])} <b>${esc(x.pb.ko)}</b>(${esc(x.pb.pos)}·${x.pb.age}세)</div>`).join('') : '<div class="small muted">아직 없습니다. 시즌 10~104일차에 우승 도전 구단과 리빌딩 구단이 선수를 맞바꿉니다.</div>'}</div>
+      <div class="small muted" style="margin-top:6px">우승 도전 구단은 즉시 전력을, 리빌딩 구단은 젊은 선수를 택합니다. 1대1 맞교환만 하며 외국인·부상자·영구결번 후보·팀 핵심 선수는 제외됩니다(⚠ 빈도·규칙은 게임 설정).</div></div>`;
+  }
   function screenTeams() {
     const S = L.S, st = L.standings(), t = (ui.viewTeam && ui.viewTeam in KO ? ui.viewTeam : U()), x = st.find(r => r.team === t), top = st[0];
     const chips = `<div class="chips">${st.map(r => `<button class="sm" aria-pressed="${r.team === t}" data-act="team" data-a="${r.team}">${r.rank}. ${KO[r.team]}</button>`).join('')}</div>`;
@@ -7150,7 +7226,7 @@ table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; 
     const inj = pl.filter(p => L.isInj(p)), fr = L.foreignOf(t), cv = L.cbtPreview(t), mgr = S.coach && S.coach.mgr[t];
     const gb = x.rank === 1 ? '-' : (((top.w - x.w) + (x.l - top.l)) / 2).toFixed(1);
     const rc = last.map(wl);
-    return `${chips}<div class="card"><div class="row"><h2 style="margin:0">${teamTag(t)}</h2><span class="muted small">${park(t)}${mgr ? ' · 감독 ' + esc(mgr.name) : ''}${t === U() ? ' · <b>내 팀</b>' : ''}</span></div>
+    return `${chips}${aiWorldCard(t)}<div class="card"><div class="row"><h2 style="margin:0">${teamTag(t)}</h2><span class="muted small">${park(t)}${mgr ? ' · 감독 ' + esc(mgr.name) : ''}${t === U() ? ' · <b>내 팀</b>' : ''}</span></div>
       <div class="kpis" style="margin-top:10px"><div class="kpi"><div class="l">순위</div><div class="v">${S.phase === 'offseason' || x.w + x.l + x.d === 0 ? '-' : x.rank + '위'}</div></div><div class="kpi"><div class="l">성적</div><div class="v">${x.w}-${x.l}${x.d ? '-' + x.d : ''}</div><div class="small muted">승률 ${pct3(x.pct)} · 게임차 ${gb}</div></div><div class="kpi"><div class="l">득점 / 실점</div><div class="v">${x.rs} / ${x.ra}</div><div class="small muted">득실 ${sgn(x.rs - x.ra)}</div></div><div class="kpi"><div class="l">최근 10경기</div><div class="v">${l10.length ? rec10 : '-'}</div><div class="small muted">연속 ${streak}</div></div><div class="kpi"><div class="l">연봉(상위 40)</div><div class="v">${cv.pay}</div><div class="small muted">상한 ${cv.cap.toFixed(1)}억${cv.kind === 'over' ? ' · 초과' : cv.kind === 'under' ? ' · 하한 미달' : ''}</div></div><div class="kpi"><div class="l">보유</div><div class="v">${pl.length}명</div><div class="small muted">1군 ${act.length} · 외국인 ${fr.filter(p => !p.aq).length}+AQ ${fr.filter(p => p.aq).length}</div></div></div></div>
       ${rc.length ? `<div class="card"><h2>최근 경기</h2><div class="tablewrap"><table><tbody>${last.map((g, i) => `<tr><td class="l">${L.dateStr(g.day)}</td><td class="l">${rc[i].home ? '홈' : '원정'} ${teamTag(rc[i].opp)}</td><td class="n"><b class="${rc[i].r === '승' ? 'pos' : rc[i].r === '패' ? 'neg' : ''}">${rc[i].r}</b> ${rc[i].my}:${rc[i].op}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
       <div class="grid">${tbl('주요 선수 (OVR 상위)', star)}${tbl('타순', lu, t === U() ? '현재 라인업 기준' : '현재 1군 타자로 구성한 예상 라인업')}${tbl('선발 로테이션', rot)}${tbl('불펜 (마무리·승리조·중간)', pen)}</div>
