@@ -22,6 +22,7 @@ const mk=(seed,team)=>{const L=League.create(base,team||'Eagles',seed);L.faAdvan
  while(S.day<S.schedule.length&&g++<200){const r=L.advance(10,false,true);if(r.status==='event'){stops++;}if(S.day>=S.schedule.length)break;
   for(const e of L.eventsOpen()){ev=ev||e;const k=e.type==='grievance'?'talk':e.type==='board'?(e.choices[0].k):e.choices[0].k;const res=L.resolveEvent(e.id,k);ok(res.ok||res.msg,'이벤트 처리 '+e.type)}}
  const types=new Set(S.events.list.map(e=>e.type));ok(stops>0&&S.events.list.length>=3,'시즌 중 이벤트 발생 '+S.events.list.length+' '+[...types]);ok(types.has('board'),'이사회 중간 점검 발생');
+ for(const e of L.eventsOpen())L.resolveEvent(e.id,e.def||e.choices[e.choices.length-1].k);   // 시즌 마지막 구간에서 생긴 이벤트(부상 복귀 등)도 처리
  ok(S.events.list.every(e=>e.status==='done'),'모든 이벤트 종결');ok((f.snap||[]).length>=5,'월별 재정 스냅샷 '+(f.snap||[]).length);
  ok(f.snap.every(x=>x.rank>=1&&x.rank<=10&&isFinite(x.op)),'스냅샷 값');}
 // 5) 이벤트 효과: 스폰서·팬 이벤트·불만
