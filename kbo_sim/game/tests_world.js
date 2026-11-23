@@ -23,7 +23,7 @@ const offseason=L=>{const S=L.S,off=L.startOffseason();for(const id of off.rep.e
  const ch0=L.challenges();ok(ch0.length===10&&ch0.every(c=>c.goal>0&&c.cur>=0),'도전 과제 구조');
  L.startOffseason();
  ok(S.history.length===1&&S.history[0].year===y,'시즌 이력');const ch=L.clubHistory();ok(ch.rows.length===1&&ch.rows[0].year===y,'구단 역사 행');
- let withSeason=0;for(const p of Object.values(S.players)){if(p.seasons&&p.seasons.length){withSeason++;const x=p.seasons[p.seasons.length-1];ok(x.y===y&&(x.k==='B'?x.PA>0:x.outs>0),'시즌 기록 유효');ok(Number.isFinite(x.k==='B'?x.ops:x.ra9),'기록 수치 유효')}}ok(withSeason>200,'다수 선수 커리어 기록 '+withSeason);
+ let withSeason=0;for(const p of Object.values(S.players)){if(p.seasons&&p.seasons.length){withSeason++;const x=p.seasons[p.seasons.length-1];if(x.farmOnly){ok(x.y===y&&Array.isArray(x.f),'2군 전용 시즌 행');continue}ok(x.y===y&&(x.k==='B'?x.PA>0:x.outs>0),'시즌 기록 유효');ok(Number.isFinite(x.k==='B'?x.ops:x.ra9),'기록 수치 유효')}}ok(withSeason>200,'다수 선수 커리어 기록 '+withSeason);
  const star=L.players(t).find(p=>p.seasons&&p.seasons.length);const c=L.careerOf(star);ok(c.seasons.length>=1&&Array.isArray(c.contracts)&&Array.isArray(c.awards),'커리어 구조');
  ok(S.rivH&&Object.keys(S.rivH).length>=1,'라이벌 시즌 전적 보관');ok(Array.isArray(S.chalDone),'도전 과제 확정 목록');
  const done=L.challenges().filter(c=>c.done);ok(done.every(c=>S.chalDone.some(x=>x.id===c.id&&x.y===y)||c.id==='winning'||true),'완료 항목 일관');
