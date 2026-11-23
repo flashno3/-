@@ -4267,22 +4267,25 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
  *  - 구단 WAR = 과거 누적(p.lg: 04~ 구단별 실제 WAR, game/refdata) + 게임 내 누적(p.lw: 시즌마다 war(p)×출전비중×배율)
  *  - 확실 ≥ 50 · 회색 40~50 (⚠ 제안값, 실제 영구결번 기준은 공식 규정이 없음), 구원투수는 확실 30 · 회색 24
  *  - 구단당 연 1건(이사회 심의 한도). 더 있으면 WAR 높은 순으로 다음 해로 넘긴다.
- * 게임 내 WAR 배율은 ⚠ 가정(타자 1.5·선발 2.0·구원 2.2): war()의 규모를 실제 STATIZ 규모에 맞추기 위한 값이며 시뮬레이션으로 보정했다. */
+ * 게임 내 WAR 배율은 ⚠ 가정(타자 1.0·선발 1.3·구원 2.2): war()의 규모를 실제 STATIZ 규모에 맞추기 위한 값이며 시뮬레이션으로 보정했다. */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) factory(require('./league.js'), require('../../web/src/engine.js'));
   else factory(root.KBOLeague, root.KBOEngine);
 })(typeof self !== 'undefined' ? self : this, function (LG, Engine) {
   'use strict';
   const { proto, rngFor, clamp, TEAMS, KO0, news } = LG.OFFC;
-  const K = { B: 1.5, SP: 2.0, RP: 2.2 };
+  const K = { B: 1.0, SP: 1.3, RP: 2.2 };
   const TH = { main: { sure: 50, gray: 40 }, rp: { sure: 30, gray: 24 } };
   const MIN_YEARS = 10, MAX_HOLD = 2;
-  const kind = p => p.type === 'B' ? 'B' : p.role === 'SP' ? 'SP' : 'RP';
+  const kind0 = p => p.type === 'B' ? 'B' : p.role === 'SP' ? 'SP' : 'RP';
+  /* 선발·구원 구분은 은퇴 때의 보직이 아니라 커리어 중 더 오래 맡은 보직(말년에 구원으로 옮겨 낮은 기준을 적용받는 것을 막는다) */
+  const kind = p => { if (p.type === 'B') return 'B'; const c = p.lkc || {}; const sp = c.SP || 0, rp = c.RP || 0; return sp + rp === 0 ? kind0(p) : sp >= rp ? 'SP' : 'RP'; };
   const r1 = x => Math.round(x * 10) / 10;
   proto.legends = function () { const S = this.S; return S.legends = S.legends || { list: [], q: [] }; };
   /* 시즌 종료 성장 직전에 한 번: 그 해 구단 WAR 대용치를 쌓는다 */
   proto._legendAccrue = function (p, share) {
     if (p.foreign || p.retired || !(p.team in this.S.teams)) return;
+    if (p.type === 'P') { p.lkc = p.lkc || { [kind0(p)]: 8 }; if (share > 0.2) p.lkc[kind0(p)] = (p.lkc[kind0(p)] || 0) + 1; }   // 보직 기록(커리어 구분용, 데이터 시작 시점 보직을 8시즌으로 간주)
     const w = this.war(p) * clamp(share, 0, 1) * K[kind(p)]; if (w <= 0) return;
     p.lw = p.lw || {}; p.lw[p.team] = r1((p.lw[p.team] || 0) + w);
   };
