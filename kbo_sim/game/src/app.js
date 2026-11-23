@@ -527,6 +527,15 @@
     }
     return { rows: out, g };
   }
+  function recRowsPast(t, year, o) {   // 지난 시즌 리그 기록(상위 타자·투수 70명씩 저장분)
+    const LRr = (L.S.leagueRows || {})[year]; if (!LRr) return { rows: [], g: 144 }; const out = [], names = L.careerCols()[t === 'B' ? 'B' : 'P'], g = 144;
+    for (const r of LRr[t === 'B' ? 'B' : 'P']) {
+      const [id, ko, team, pos, age] = r, c = Object.fromEntries(RZ[t].map(k => [k, 0])); names.forEach((k, i) => { c[k] = r[5 + i] || 0; });
+      if (o.team && team !== o.team) continue; if (o.q && (t === 'B' ? c.PA < Math.ceil(3.1 * g) : c.outs < 3 * g)) continue;
+      out.push(Object.assign({ p: { id, ko, team, pos: t === 'B' ? pos : undefined, role: t === 'P' ? pos : undefined, age }, has: true, past: true }, recDerive(c, t)));
+    }
+    return { rows: out, g };
+  }
   const REC_B = [['PA', '타석'], ['AB', '타수'], ['H', '안타'], ['2B', '2루타'], ['3B', '3루타'], ['HR', '홈런'], ['RBI', '타점'], ['BB', '볼넷'], ['HBP', '사구'], ['K', '삼진'], ['SB', '도루'], ['CS', '도실'], ['AVG', '타율'], ['OBP', '출루율'], ['SLG', '장타율'], ['OPS', 'OPS'], ['ISO', 'ISO'], ['K%', '삼진%'], ['BB%', '볼넷%']];
   const REC_P = [['IP', '이닝'], ['BF', '상대타자'], ['H', '피안타'], ['HR', '피홈런'], ['BB', '볼넷'], ['HBP', '사구'], ['K', '탈삼진'], ['R', '실점'], ['RA9', 'RA9'], ['WHIP', 'WHIP'], ['K/9', 'K/9'], ['BB/9', 'BB/9'], ['HR/9', 'HR/9'], ['K/BB', 'K/BB'], ['K%', '삼진%'], ['BB%', '볼넷%']];
   const REC_LOW = new Set(['RA9', 'WHIP', 'BB/9', 'HR/9', 'BB%', 'CS']);   // 낮을수록 좋은 지표(첫 정렬 방향)
@@ -537,7 +546,7 @@
     const shown = o.limit ? rows.slice(0, o.limit) : rows;
     const th = `<thead><tr><th class="l n">#</th><th class="l">선수</th><th class="l">${o.my ? '구분' : '팀'}</th>${cols.map(([key, lab]) => `<th class="n ${key === k ? 'sorted' : ''}" data-act="recSort" data-a="${t}|${key}" title="${lab} 순 정렬" style="cursor:pointer">${lab}${key === k ? (d < 0 ? ' ▼' : ' ▲') : ''}</th>`).join('')}</tr></thead>`;
     const lvl = p => p.active ? '1군' : L.isInj(p) ? '부상' : '2군';
-    const body = shown.map((x, i) => `<tr class="click ${x.p.team === me ? 'me' : ''} ${o.my && !x.has ? 'dim' : ''}" data-act="player" data-a="${x.p.id}"><td class="l n">${i + 1}</td><td class="l"><b>${esc(x.p.ko)}</b><span class="muted small"> ${t === 'B' ? posName[x.p.pos] || x.p.pos : x.p.role === 'SP' ? '선발' : '구원'}·${x.p.age}</span></td><td class="l">${o.my ? lvl(x.p) : x.p.team in KO ? esc(KO[x.p.team]) : '<span class="muted">' + esc(x.p.team) + '</span>'}</td>${cols.map(([key]) => `<td class="n ${key === k ? 'sorted' : ''}">${x.has || !o.my ? recFmt(key, x[key]) : '-'}</td>`).join('')}</tr>`).join('');
+    const body = shown.map((x, i) => `<tr class="${L.S.players[x.p.id] ? 'click ' : ''}${x.p.team === me ? 'me' : ''} ${o.my && !x.has ? 'dim' : ''}" ${L.S.players[x.p.id] ? `data-act="player" data-a="${x.p.id}"` : ''}><td class="l n">${i + 1}</td><td class="l"><b>${esc(x.p.ko)}</b><span class="muted small"> ${t === 'B' ? posName[x.p.pos] || x.p.pos : x.p.role === 'SP' ? '선발' : '구원'}·${x.p.age}</span></td><td class="l">${o.my ? lvl(x.p) : x.p.team in KO ? esc(KO[x.p.team]) : '<span class="muted">' + esc(x.p.team) + '</span>'}</td>${cols.map(([key]) => `<td class="n ${key === k ? 'sorted' : ''}">${x.has || !o.my ? recFmt(key, x[key]) : '-'}</td>`).join('')}</tr>`).join('');
     let tot = ''; if (o.total) { const sum = Object.fromEntries(RZ[t].map(c => [c, 0])); let any = false; for (const x of rows) { const c = recCounters(x.p.id, t, o.src); if (c) { any = true; for (const c2 of RZ[t]) sum[c2] += c[c2]; } } if (any) { const dv = recDerive(sum, t); tot = `<tr class="tot"><td></td><td class="l"><b>팀 합계</b></td><td></td>${cols.map(([key]) => `<td class="n"><b>${recFmt(key, dv[key])}</b></td>`).join('')}</tr>`; } }
     return `<div class="tablewrap" style="max-height:${o.my ? 62 : 70}vh;overflow:auto;margin-top:8px"><table class="rec">${th}<tbody>${body || `<tr><td class="muted" colspan="${cols.length + 3}">조건에 맞는 기록이 아직 없습니다.</td></tr>`}${tot}</tbody></table></div>`;
   }
@@ -551,9 +560,10 @@
       return `${seg}<div class="card"><div class="row"><h2 style="margin:0">${KO[U()]} 선수 기록</h2><span class="sp"></span><span class="small muted">${L.S.year} · 투수 ${P2.rows.length}명 · 타자 ${B.rows.length}명</span></div><div class="row" style="gap:6px;margin-top:6px">${srcBtns}</div>
         <h3 style="margin:12px 0 0">타자</h3>${recTable('B', B.rows, R, { my: true, total: true, src: R.src })}<h3 style="margin:14px 0 0">투수</h3>${recTable('P', P2.rows, R, { my: true, total: true, src: R.src })}${note}</div>`;
     }
-    const src = R.farm ? 'farm' : 'main', { rows, g } = recRows(R.t, { src, team: R.team, q: R.q && !R.farm });
-    const ctl = `<div class="row" style="gap:6px;flex-wrap:wrap">${btn('recSet', 't|B', R.t === 'B', '타자')}${btn('recSet', 't|P', R.t === 'P', '투수')}<span class="sp"></span>${btn('recSet', 'farm|0', !R.farm, '1군')}${btn('recSet', 'farm|1', R.farm, '2군')}<label class="small muted">구단 <select data-sel="recteam"><option value="">전체</option>${TEAMS.map(t => `<option value="${t}" ${R.team === t ? 'selected' : ''}>${KO[t]}</option>`).join('')}</select></label>${R.farm ? '' : btn('recSet', 'q|' + (R.q ? 0 : 1), R.q, R.t === 'B' ? `규정타석(${Math.ceil(3.1 * g)})` : `규정이닝(${g})`)}</div>`;
-    return `${seg}<div class="card"><div class="row"><h2 style="margin:0">선수 기록</h2><span class="sp"></span><span class="small muted">${L.S.year} ${R.farm ? '2군(퓨처스)' : '1군 정규시즌'} · ${rows.length}명${rows.length > R.n ? ' 중 상위 ' + R.n + '명' : ''}</span></div>${ctl}${recTable(R.t, rows, R, { limit: R.n })}${rows.length > R.n ? `<div class="row" style="margin-top:8px"><button class="sm" data-act="recMore">더 보기 (+50)</button></div>` : ''}${note}</div>`;
+    const years = Object.keys(L.S.leagueRows || {}).map(Number).sort((a, b) => b - a); if (R.year && !years.includes(R.year)) R.year = null;
+    const src = R.farm ? 'farm' : 'main', { rows, g } = R.year ? recRowsPast(R.t, R.year, { team: R.team, q: R.q }) : recRows(R.t, { src, team: R.team, q: R.q && !R.farm });
+    const ctl = `<div class="row" style="gap:6px;flex-wrap:wrap">${btn('recSet', 't|B', R.t === 'B', '타자')}${btn('recSet', 't|P', R.t === 'P', '투수')}<span class="sp"></span>${years.length ? `<label class="small muted">시즌 <select data-sel="recyear"><option value="">올해(${L.S.year})</option>${years.map(y => `<option value="${y}" ${R.year === y ? 'selected' : ''}>${y}</option>`).join('')}</select></label>` : ''}${R.year ? '' : btn('recSet', 'farm|0', !R.farm, '1군') + btn('recSet', 'farm|1', R.farm, '2군')}<label class="small muted">구단 <select data-sel="recteam"><option value="">전체</option>${TEAMS.map(t => `<option value="${t}" ${R.team === t ? 'selected' : ''}>${KO[t]}</option>`).join('')}</select></label>${R.farm && !R.year ? '' : btn('recSet', 'q|' + (R.q ? 0 : 1), R.q, R.t === 'B' ? `규정타석(${Math.ceil(3.1 * g)})` : `규정이닝(${g})`)}</div>`;
+    return `${seg}<div class="card"><div class="row"><h2 style="margin:0">선수 기록</h2><span class="sp"></span><span class="small muted">${R.year || L.S.year} ${R.year ? '1군 정규시즌(상위 70명 저장분)' : R.farm ? '2군(퓨처스)' : '1군 정규시즌'} · ${rows.length}명${rows.length > R.n ? ' 중 상위 ' + R.n + '명' : ''}</span></div>${ctl}${recTable(R.t, rows, R, { limit: R.n })}${rows.length > R.n ? `<div class="row" style="margin-top:8px"><button class="sm" data-act="recMore">더 보기 (+50)</button></div>` : ''}${note}</div>`;
   }
 
   /* ---------------- 이적시장 ---------------- */
@@ -792,10 +802,23 @@
   }
   function careerPanel(p) {
     const c = L.careerOf(p), o = c.origin, isB = p.type === 'B';
-    const rows = c.seasons.slice().reverse().map(x => `<tr><td class="l">${x.y}</td><td class="l">${KO[x.t] || x.t}</td>${x.k === 'B' ? `<td>${x.PA}</td><td>${x.avg.toFixed(3).slice(1)}</td><td>${x.HR}</td><td>${x.RBI}</td><td>${x.ops.toFixed(3)}</td>` : `<td>${Math.floor(x.outs / 3)}${x.outs % 3 ? '.' + x.outs % 3 : ''}</td><td>${x.ra9.toFixed(2)}</td><td>${x.K}</td><td>${x.BB}</td><td>${x.HR}</td>`}</tr>`).join('');
-    const head = isB ? '<th>타석</th><th>타율</th><th>HR</th><th>타점</th><th>OPS</th>' : '<th>이닝</th><th>RA9</th><th>K</th><th>BB</th><th>HR</th>';
+    const dB = a => { const [PA, K, BB, HBP, HR, b1, b2, b3, SF, RBI, SB, CS] = a, AB = PA - BB - HBP - SF, H = b1 + b2 + b3 + HR, TB = b1 + 2 * b2 + 3 * b3 + 4 * HR, od = AB + BB + HBP + SF, obp = od ? (H + BB + HBP) / od : 0, slg = AB ? TB / AB : 0; return { PA, AB, H, b2, b3, HR, RBI, BB, K, SB, CS, avg: AB ? H / AB : 0, obp, slg, ops: obp + slg }; };
+    const dP = a => { const [BF, K, BB, HBP, H, HR, outs, R] = a, ip = outs / 3; return { BF, K, BB, H, HR, R, outs, ip, ra9: ip ? R * 9 / ip : 0, whip: ip ? (H + BB) / ip : 0, k9: ip ? K * 9 / ip : 0 }; };
+    const ipS = outs => Math.floor(outs / 3) + (outs % 3 ? '.' + outs % 3 : ''), p3 = v => pct3(v), w1 = v => v === undefined || v === null ? '-' : v.toFixed(1);
+    const sum = arrs => arrs.reduce((a, r) => a.map((v, i) => v + (r[i] || 0)), arrs[0].map(() => 0));
+    const gameRows = c.seasons.filter(x => !x.farmOnly), full = gameRows.filter(x => x.c), farmRows = c.seasons.filter(x => x.f);
+    const bRow = (lab, team, d, war) => `<tr${lab === '통산' ? ' class="tot"' : ''}><td class="l">${lab}</td><td class="l">${team}</td><td>${d.PA}</td><td>${d.H}</td><td>${d.b2}</td><td>${d.b3}</td><td>${d.HR}</td><td>${d.RBI}</td><td>${d.BB}</td><td>${d.K}</td><td>${d.SB}</td><td>${p3(d.avg)}</td><td>${p3(d.obp)}</td><td>${p3(d.slg)}</td><td>${p3(d.ops)}</td><td>${w1(war)}</td></tr>`;
+    const pRow = (lab, team, d, war) => `<tr${lab === '통산' ? ' class="tot"' : ''}><td class="l">${lab}</td><td class="l">${team}</td><td>${ipS(d.outs)}</td><td>${d.H}</td><td>${d.HR}</td><td>${d.BB}</td><td>${d.K}</td><td>${d.R}</td><td>${d.ra9.toFixed(2)}</td><td>${d.whip.toFixed(2)}</td><td>${d.k9.toFixed(1)}</td><td>${w1(war)}</td></tr>`;
+    const oldRow = x => x.k === 'B' ? `<tr><td class="l">${x.y}</td><td class="l">${KO[x.t] || x.t}</td><td>${x.PA}</td><td>-</td><td>-</td><td>-</td><td>${x.HR}</td><td>${x.RBI}</td><td>-</td><td>-</td><td>${x.SB === undefined ? '-' : x.SB}</td><td>${p3(x.avg)}</td><td>-</td><td>-</td><td>${p3(x.ops)}</td><td>${w1(c.war.y[x.y])}</td></tr>` : `<tr><td class="l">${x.y}</td><td class="l">${KO[x.t] || x.t}</td><td>${ipS(x.outs)}</td><td>-</td><td>${x.HR}</td><td>${x.BB}</td><td>${x.K}</td><td>-</td><td>${x.ra9.toFixed(2)}</td><td>-</td><td>-</td><td>${w1(c.war.y[x.y])}</td></tr>`;
+    const rows = gameRows.slice().reverse().map(x => x.c ? (isB ? bRow(x.y, KO[x.t] || x.t, dB(x.c), c.war.y[x.y]) : pRow(x.y, KO[x.t] || x.t, dP(x.c), c.war.y[x.y])) : oldRow(x)).join('');
+    const totRow = full.length ? (isB ? bRow('통산', `${full.length}시즌`, dB(sum(full.map(x => x.c))), full.reduce((a, x) => a + (c.war.y[x.y] || 0), 0)) : pRow('통산', `${full.length}시즌`, dP(sum(full.map(x => x.c))), full.reduce((a, x) => a + (c.war.y[x.y] || 0), 0))) : '';
+    const head = isB ? '<th>타석</th><th>안타</th><th>2루타</th><th>3루타</th><th>홈런</th><th>타점</th><th>볼넷</th><th>삼진</th><th>도루</th><th>타율</th><th>출루</th><th>장타</th><th>OPS</th><th title="이 게임의 구단 WAR 대용치(⚠ 환산)">WAR</th>' : '<th>이닝</th><th>피안타</th><th>피홈런</th><th>볼넷</th><th>탈삼진</th><th>실점</th><th>RA9</th><th>WHIP</th><th>K/9</th><th title="이 게임의 구단 WAR 대용치(⚠ 환산)">WAR</th>';
+    const farmHtml = farmRows.length ? `<div class="card" style="margin:8px 0"><b>2군(퓨처스) 기록</b><div class="tablewrap"><table class="car"><thead><tr><th class="l">시즌</th><th class="l">팀</th>${isB ? '<th>타석</th><th>홈런</th><th>타율</th><th>OPS</th>' : '<th>이닝</th><th>탈삼진</th><th>RA9</th>'}</tr></thead><tbody>${farmRows.slice().reverse().map(x => { if (isB) { const d = dB(x.f); return `<tr><td class="l">${x.y}</td><td class="l">${KO[x.t] || x.t}</td><td>${d.PA}</td><td>${d.HR}</td><td>${p3(d.avg)}</td><td>${p3(d.ops)}</td></tr>`; } const d = dP(x.f); return `<tr><td class="l">${x.y}</td><td class="l">${KO[x.t] || x.t}</td><td>${ipS(d.outs)}</td><td>${d.K}</td><td>${d.ra9.toFixed(2)}</td></tr>`; }).join('')}</tbody></table></div></div>` : '';
+    const wt = [...new Set(Object.keys(c.war.lg).concat(Object.keys(c.war.lw)))], warHtml = wt.length ? `<div class="small" style="margin-top:6px">구단별 WAR: ${wt.map(t => `<b>${KO[t] || t}</b> ${((c.war.lg[t] || 0) + (c.war.lw[t] || 0)).toFixed(1)}${c.war.lg[t] ? ` <span class="muted">(2004~2026 실제 ${c.war.lg[t].toFixed(1)}${c.war.lw[t] ? ' + 게임 내 ' + c.war.lw[t].toFixed(1) : ''})</span>` : c.war.lw[t] ? ' <span class="muted">(게임 내)</span>' : ''}`).join(' · ')}</div>` : '';
+    const dh = o || {}, preHtml = (dh.g || dh.pa || dh.ip) ? `<div class="small muted" style="margin-top:4px">게임 시작 전(~2026) KBO 통산: ${dh.g ? dh.g + '경기' : ''}${isB ? (dh.pa ? ' · ' + dh.pa + '타석' : '') : (dh.ip ? ' · ' + dh.ip + '이닝' : '')} — 연도별 기록은 없고 합계만 있습니다.</div>` : '';
     return `${o ? `<div class="small">${o.y ? o.y + '년 ' : ''}${esc(o.school || '')} ${o.univ ? '(대졸)' : o.school ? '(고졸)' : ''} ${o.kind ? '· ' + esc(o.kind) : ''}${o.pick ? ' ' + o.pick + '순위' : ''}${o.deb ? ' · 1군 데뷔 ' + esc(o.deb) : ''}</div>` : ''}
-      <div class="card" style="margin:8px 0"><b>시즌 기록</b>${rows ? `<div class="tablewrap"><table><thead><tr><th class="l">시즌</th><th class="l">팀</th>${head}</tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="small muted">이 게임에서 완료된 시즌 기록이 아직 없습니다(시즌이 끝날 때마다 쌓입니다).</div>'}${c.ovrHist.length ? `<div class="small muted" style="margin-top:4px">종합 능력치 추이: ${c.ovrHist.map(x => `${x.y} ${x.o}`).join(' → ')}</div>` : ''}</div>
+      <div class="card" style="margin:8px 0"><b>시즌 기록 (1군)</b>${rows ? `<div class="tablewrap"><table class="car"><thead><tr><th class="l">시즌</th><th class="l">팀</th>${head}</tr></thead><tbody>${rows}${totRow}</tbody></table></div>${warHtml}${preHtml}` : '<div class="small muted">이 게임에서 완료된 시즌 기록이 아직 없습니다(시즌이 끝날 때마다 쌓입니다).</div>'}${c.ovrHist.length ? `<div class="small muted" style="margin-top:4px">종합 능력치 추이: ${c.ovrHist.map(x => `${x.y} ${x.o}`).join(' → ')}</div>` : ''}</div>
+      ${farmHtml}
       ${c.awards.length ? `<div class="card" style="margin:8px 0"><b>수상</b>${c.awards.map(x => `<div class="small">${x.y} · <b>${esc(x.label)}</b> ${esc(x.txt || '')}</div>`).join('')}</div>` : ''}
       <div class="card" style="margin:8px 0"><b>계약 이력</b>${c.contracts.length ? c.contracts.slice().reverse().map(x => `<div class="small">${x.y} · ${esc(x.kind)} · ${x.years}년 연봉 ${x.salary}억${x.bonus ? ' + 계약금 ' + x.bonus + '억' : ''} (총 ${x.total}억)${KO[x.team] ? ' · ' + KO[x.team] : ''}</div>`).join('') : '<div class="small muted">기록된 계약이 없습니다(현재 계약은 계약·정보 탭).</div>'}</div>
       <div class="card" style="margin:8px 0"><b>약속과 면담</b>${c.promise ? `<div class="small">진행 중인 약속: <b>${esc(c.promise.label)}</b> (${c.promise.y}년)</div>` : ''}<div class="small muted">지킨 약속 ${c.kept}건 · 깨진 약속 ${c.broken}건</div>${c.notes.length ? c.notes.slice().reverse().map(x => `<div class="small">${x.y} ${L.dateStr(x.d)} · ${esc(x.t)}</div>`).join('') : '<div class="small muted">남은 기록이 없습니다.</div>'}</div>
@@ -1759,7 +1782,7 @@
   function stackTables(root) {
     if (!window.matchMedia || !window.matchMedia('(max-width: 560px)').matches) return;
     root.querySelectorAll('.tablewrap').forEach(w => {
-      const t = w.querySelector('table'); if (!t || t.classList.contains('rost') || t.classList.contains('rec') || w.scrollWidth <= w.clientWidth + 2) return;   // 로스터 표는 카드형으로 바꾸지 않고(행 높이가 제각각이 됨) 항상 한 줄 행을 유지한다
+      const t = w.querySelector('table'); if (!t || t.classList.contains('rost') || t.classList.contains('rec') || t.classList.contains('car') || w.scrollWidth <= w.clientWidth + 2) return;   // 로스터 표는 카드형으로 바꾸지 않고(행 높이가 제각각이 됨) 항상 한 줄 행을 유지한다
       const heads = Array.from(t.querySelectorAll('thead th')).map(th => th.textContent.trim()); t.classList.add('rt');
       t.querySelectorAll('tbody tr').forEach(tr => Array.from(tr.children).forEach((td, i) => { if (heads[i] && td.tagName === 'TD' && !td.getAttribute('colspan')) td.dataset.l = heads[i]; }));
     });
@@ -2103,6 +2126,7 @@
     if (['lpl', 'lpos', 'pslot'].includes(sel)) L.pushUndo('편성 변경');
     const set = L.team(U()).set;
     if (sel === 'rsort') { ui.rf.s = el.value; render(); }
+    else if (sel === 'recyear') { ui.rec.year = el.value ? +el.value : null; ui.rec.n = 50; render(); }
     else if (sel === 'recteam') { ui.rec.team = el.value; ui.rec.n = 50; render(); }
     else if (sel === 'ttteam') { ui.trade.team = el.value; ui.trade.get.clear(); render(); }
     else if (sel === 'fasort') { ui.faSort = el.value; render(); }

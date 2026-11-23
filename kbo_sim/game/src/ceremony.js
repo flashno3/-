@@ -33,13 +33,13 @@
   /* ---- 은퇴식 ---- */
   proto._cerTenure = function (p, t) {
     if (this._legendOneClub && this._legendOneClub(p, t)) return this._legendYears(p);
-    return Math.max((p.seasons || []).filter(x => x.t === t).length, p.tnTeam === t ? (p.tn || 0) : 0);
+    return Math.max((p.seasons || []).filter(x => x.t === t && !x.farmOnly).length, p.tnTeam === t ? (p.tn || 0) : 0);
   };
   proto._retireCeremony = function (p) {
     const S = this.S, t = S.userTeam; if (p.foreign || p.team !== t) return null;
     const yrs = this._cerTenure(p, t), ev = this._legendEval ? this._legendEval(p, t) : { tier: null }, aw = []; for (const h of S.awardsHist || []) for (const a of h.awards) if (a.id === p.id) aw.push(a.label);
     if (yrs < MIN_TENURE && !ev.tier) return null;
-    const pos = p.type === 'P' ? (p.role === 'SP' ? '선발' : '구원') : p.pos, last = (p.seasons || []).filter(x => x.t === t).slice(-1)[0];
+    const pos = p.type === 'P' ? (p.role === 'SP' ? '선발' : '구원') : p.pos, last = (p.seasons || []).filter(x => x.t === t && !x.farmOnly).slice(-1)[0];
     const line = last ? (last.k === 'B' ? `마지막 시즌 ${last.PA}타석 타율 ${last.avg.toFixed(3).slice(1)} ${last.HR}홈런` : `마지막 시즌 ${Math.floor(last.outs / 3)}이닝 RA9 ${last.ra9.toFixed(2)}`) : '';
     const legend = ev.tier ? ` 구단 WAR ${ev.war.toFixed(1)}으로 영구결번 후보입니다(${ev.tier === 'sure' ? '확실' : '회색'}) — 은퇴식 뒤 영구결번 심의가 이어집니다.` : '';
     return this._evAdd({ type: 'retcer', title: `🎖 ${p.ko} 은퇴식`, ttl: 1e9, def: 'simple', rec: ev.tier === 'sure' || yrs >= 15 ? 'grand' : yrs >= 12 || ev.tier ? 'normal' : 'simple', data: { pid: p.id, name: p.ko, pos, yrs, tier: ev.tier || null },

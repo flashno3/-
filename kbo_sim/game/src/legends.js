@@ -23,7 +23,7 @@
     if (p.foreign || p.retired || !(p.team in this.S.teams)) return;
     if (p.type === 'P') { p.lkc = p.lkc || { [kind0(p)]: 8 }; if (share > 0.2) p.lkc[kind0(p)] = (p.lkc[kind0(p)] || 0) + 1; }   // 보직 기록(커리어 구분용, 데이터 시작 시점 보직을 8시즌으로 간주)
     const w = this.war(p) * clamp(share, 0, 1) * K[kind(p)]; if (w <= 0) return;
-    p.lw = p.lw || {}; p.lw[p.team] = r1((p.lw[p.team] || 0) + w);
+    p.lw = p.lw || {}; p.lw[p.team] = r1((p.lw[p.team] || 0) + w); p.lwy = p.lwy || {}; p.lwy[this.S.year] = r1(((p.lwy[this.S.year]) || 0) + w); const ys = Object.keys(p.lwy); if (ys.length > 25) delete p.lwy[ys[0]];   // 연도별 구단 WAR 대용치(경력 화면용)
   };
   proto.legendWar = function (p, club) { return r1(((p.lg && p.lg[club]) || 0) + ((p.lw && p.lw[club]) || 0)); };
   /* 한 구단 선수인지: 데이터상 원클럽(dh.one)·입단 구단(dh.dt)과 게임 안 소속 이력(p.seasons)이 모두 그 구단이어야 한다 */

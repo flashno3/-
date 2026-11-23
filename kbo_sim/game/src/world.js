@@ -76,16 +76,25 @@
   };
 
   /* ---------------- 선수 커리어 ---------------- */
+  const CB = ['PA', 'K', 'BB', 'HBP', 'HR', '1B', '2B', '3B', 'SF', 'RBI', 'SB', 'CS'], CP = ['BF', 'K', 'BB', 'HBP', 'H', 'HR', 'outs', 'R'];   // 시즌 행 카운터 순서(타자·투수)
+  proto.careerCols = function () { return { B: CB.slice(), P: CP.slice() }; };
   proto._careerSnapshot = function () {
     const S = this.S;
     for (const id of Object.keys(S.players)) { const p = S.players[id]; if (!p || p.retired) continue; const b = S.stats.bat[id], q = S.stats.pit[id]; let row = null;
       if (b && b.PA > 0) { const ab = b.PA - b.BB - b.HBP - b.SF, h = b['1B'] + b['2B'] + b['3B'] + b.HR, tb = b['1B'] + 2 * b['2B'] + 3 * b['3B'] + 4 * b.HR; row = { y: S.year, t: p.team, k: 'B', PA: b.PA, avg: ab ? Math.round(h / ab * 1000) / 1000 : 0, ops: Math.round(((h + b.BB + b.HBP) / Math.max(1, b.PA) + (ab ? tb / ab : 0)) * 1000) / 1000, HR: b.HR, RBI: b.RBI, SB: b.SB }; }
       else if (q && q.outs > 0) row = { y: S.year, t: p.team, k: 'P', outs: q.outs, ra9: Math.round(q.R * 27 / q.outs * 100) / 100, K: q.K, BB: q.BB, HR: q.HR };
-      if (row) { p.seasons = (p.seasons || []).filter(x => x.y !== S.year); p.seasons.push(row); if (p.seasons.length > 25) p.seasons.shift(); } }
+      if (row) { const f2 = row.k === 'B' ? S.stats2.bat[id] : S.stats2.pit[id]; row.c = row.k === 'B' ? CB.map(k => (b[k] || 0)) : CP.map(k => (q[k] || 0)); if (f2 && (row.k === 'B' ? f2.PA : f2.outs) > 0) row.f = (row.k === 'B' ? CB : CP).map(k => (f2[k] || 0));   // 전체 카운터(타자 CB·투수 CP 순서)와 2군 기록
+        p.seasons = (p.seasons || []).filter(x => x.y !== S.year); p.seasons.push(row); if (p.seasons.length > 25) p.seasons.shift(); }
+      else if (!p.retired) { const f2 = S.stats2.bat[id] || S.stats2.pit[id]; if (f2) { const isB = !!S.stats2.bat[id], c = (isB ? CB : CP).map(k => (f2[k] || 0)); if ((isB ? f2.PA : f2.outs) > 0) { p.seasons = (p.seasons || []).filter(x => x.y !== S.year); p.seasons.push({ y: S.year, t: p.team, k: isB ? 'B' : 'P', farmOnly: true, f: c }); if (p.seasons.length > 25) p.seasons.shift(); } } } }
+    // 리그 시즌 기록(상위 타자 70·투수 70): 은퇴해 사라지는 선수의 과거 시즌 리더보드를 보존한다
+    const hb = [], hp = []; for (const id of Object.keys(S.players)) { const p = S.players[id]; if (!p || p.team === 'DRAFT') continue; const b = S.stats.bat[id], q = S.stats.pit[id];
+      if (b && b.PA > 0) hb.push([id, p.ko, p.team, p.pos, p.age].concat(CB.map(k => b[k] || 0))); else if (q && q.outs > 0) hp.push([id, p.ko, p.team, p.role === 'SP' ? 'SP' : 'RP', p.age].concat(CP.map(k => q[k] || 0))); }
+    hb.sort((a, b) => b[5] - a[5]); hp.sort((a, b) => b[5 + CP.indexOf('outs')] - a[5 + CP.indexOf('outs')]);
+    const LR = S.leagueRows = S.leagueRows || {}; LR[S.year] = { B: hb.slice(0, 70), P: hp.slice(0, 70) }; const ys = Object.keys(LR).map(Number).sort((a, b) => a - b); while (ys.length > 15) delete LR[ys.shift()];
   };
   proto.careerOf = function (p) {
     const S = this.S, aw = []; for (const h of S.awardsHist || []) for (const a of h.awards) if (a.id === p.id) aw.push({ y: h.year, label: a.label, txt: a.txt });
-    return { origin: p.dh || null, seasons: (p.seasons || []).slice(), contracts: (p.cHist || []).slice(), awards: aw, notes: (p.notes || []).slice(), ovrHist: (p.ovrHist || []).slice(), promise: p.promise || null, kept: p.keptP || 0, broken: p.brokenP || 0, bonds: this.bonds(p) };
+    return { origin: p.dh || null, war: { lg: Object.assign({}, p.lg || {}), lw: Object.assign({}, p.lw || {}), y: Object.assign({}, p.lwy || {}) }, seasons: (p.seasons || []).slice(), contracts: (p.cHist || []).slice(), awards: aw, notes: (p.notes || []).slice(), ovrHist: (p.ovrHist || []).slice(), promise: p.promise || null, kept: p.keptP || 0, broken: p.brokenP || 0, bonds: this.bonds(p) };
   };
 
   /* ---------------- 구단 역사 · 명예의 전당 ---------------- */
