@@ -7,7 +7,7 @@ const finite=(v,m)=>ok(Number.isFinite(v),m+' 유한값 아님: '+v);
 function invariants(L,tag){
   const S=L.S;
   for(const t of Object.keys(S.teams)){const ids=S.teams[t].ids;ok(ids.length<=ROSTER_MAX+6,`${tag} ${t} 로스터 ${ids.length}`);ok(new Set(ids).size===ids.length,`${tag} 중복 선수`);for(const id of ids){const p=S.players[id];ok(p&&p.team===t,`${tag} 소속 불일치 ${id}`)}}
-  const t=S.userTeam,mine=L.players(t);const act=mine.filter(p=>p.active);ok(act.length<=ACTIVE_MAX,`${tag} 1군 초과 ${act.length}`);
+  const t=S.userTeam,mine=L.players(t);const act=mine.filter(p=>p.active);ok(act.length<=Math.max(L.activeMax(),S.amx||ACTIVE_MAX),`${tag} 1군 초과 ${act.length}/${L.activeMax()}/${S.amx}`);
   {const rp=L.reports();ok(rp.length<=30&&rp.every(r=>r.lines.length&&r.title),`${tag} 보고서 상태`);const au=L.scoutAuto();ok(typeof au.on==='boolean'&&['mid','high'].includes(au.target),`${tag} 자동 스카우팅 설정`)}
   {const sp=L.skillProjects();ok(sp.length<=L.skillLimit()+0&&sp.every(x=>x.prog>=0&&x.prog<=80),`${tag} 기술 프로젝트 상태`)}
   {const bad=L.players(t).filter(p=>p.active&&L.isInj(p));ok(bad.length===0,`${tag} 부상자가 1군 엔트리에 있음: ${bad.map(p=>p.ko+'/'+(p.inj&&p.inj.dx)).join(',')}`)}
@@ -72,7 +72,7 @@ function randTrain(L,R,tag){
 }
 function randSub(L,R,tag){   // 부상 대체 외국인: 가끔 일반 외국인에게 장기 부상을 만들고 계약·연장·해지·전환을 무작위로 시도
   const S=L.S,t=S.userTeam;if(S.phase!=='regular')return;
-  if(R()<0.04){const g=L.foreignOf(t).filter(p=>!p.aq&&!p.sub&&!L.isInj(p));if(g.length){const p=g[Math.floor(R()*g.length)],now=L.todayN(),d=30+Math.floor(R()*100);p.inj={dx:'soak 부상',since:new Date((now-1)*864e5).toISOString().slice(0,10)+' 발생',ret:new Date((now+d)*864e5).toISOString().slice(0,10),retN:now+d,apply:true,generated:true};p.active=false;L.invalidate()}}
+  if(R()<0.04){const g=L.foreignOf(t).filter(p=>!p.aq&&!p.sub&&!L.isInj(p));if(g.length){const p=g[Math.floor(R()*g.length)],now=L.todayN(),d=30+Math.floor(R()*100);p.inj={dx:'soak 부상',since:new Date((now-1)*864e5).toISOString().slice(0,10)+' 발생',ret:new Date((now+d)*864e5).toISOString().slice(0,10),retN:now+d,apply:true,generated:true};p.active=false;L.repairSettings(t);L.invalidate()}}   // 실제 부상 경로(_injuryDay)와 같이 라인업을 바로 보정한다
   const x=R();if(x<0.4){const el=L.subEligible(),c=L.subCands();if(el.length&&c.length)L.subSign(el[0].p.id,c[Math.floor(R()*Math.min(c.length,40))].id,1+Math.floor(R()*4))}
   else if(x<0.55){const sl=L.subList();if(sl.length)L.subExtend(sl[0].p.id,1+Math.floor(R()*2))}
   else if(x<0.75){const sl=L.subList();if(sl.length)L.subDecide(sl[0].p.id,R()<0.5?'convert':'release')}
