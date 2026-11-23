@@ -96,6 +96,37 @@
     if (c.holds >= MAX_HOLD) { LGd.q = LGd.q.filter(x => x !== c); return `${c.name}: 보류 한도를 넘어 지정하지 않음으로 처리했습니다.`; }
     c.holds++; c.since = S.year; return `${c.name}의 심의를 내년으로 보류했습니다(${c.holds}/${MAX_HOLD}).`;
   };
+
+  /* ---- 영구결번 후보와 FA·이적: 후보 판정, 놓쳤을 때의 팬 충성도 하락(→ 관중·MD 수입 감소) ---- */
+  proto.legendBound = function (p, t) {   // 한 구단 선수이면서 구단 WAR이 회색선 이상인 영구결번 후보(현역·FA 모두)
+    if (!p || p.foreign || !t || !(t in this.S.teams) || !this._legendOneClub(p, t)) return null;
+    const war = this.legendWar(p, t), th = kind(p) === 'RP' ? TH.rp : TH.main; return war >= th.gray ? { tier: war >= th.sure ? 'sure' : 'gray', war } : null;
+  };
+  const trustD = (L, d) => { const f = L.S.fin && L.S.fin.teams[L.S.userTeam]; if (f) f.trust = clamp(Math.round(((f.trust === undefined ? 70 : f.trust) + d) * 10) / 10, 0, 100); };
+  proto._legendLoss = function (p, club, to, how, lb) {
+    const S = this.S, user = S.userTeam, f = S.fin && S.fin.teams[club]; if (!f || !lb) return;
+    const hit = lb.tier === 'sure' ? 16 + clamp((lb.war - 50) * 0.15, 0, 6) : 9, before = f.fl === undefined ? 100 : f.fl;
+    f.fl = Math.max(55, Math.round((before - hit) * 10) / 10); (f.flLog = f.flLog || []).push({ y: S.year, name: p.ko, hit: Math.round((before - f.fl) * 10) / 10 }); if (f.flLog.length > 10) f.flLog.shift();
+    const dest = how === 'FA 이적' || how === '트레이드' ? `${KO0[to] || to}으로 떠났습니다` : '팀을 떠났습니다', tierTxt = lb.tier === 'sure' ? '영구결번이 확실시되던' : '영구결번 후보였던';
+    if (club === user || lb.tier === 'sure') this._lnews(`${KO0[club] || club} 팬들 충격: ${tierTxt} ${p.ko}(구단 WAR ${lb.war.toFixed(1)})이(가) ${dest}.`);
+    if (club !== user) return;
+    trustD(this, lb.tier === 'sure' ? -3 : -1.5);
+    for (const q of this.players(user)) if (q.id !== p.id) q.loyAdj = clamp((q.loyAdj || 0) - (lb.tier === 'sure' ? 2 : 1), -15, 15);   // 선수단도 구단이 레전드를 지키지 못했다고 본다
+    this.story('legend', `${p.ko} ${how} — ${tierTxt} 선수를 놓쳤습니다(팬 충성도 ${before.toFixed(0)} → ${f.fl.toFixed(0)})`, 3);
+    if (this.eventsOpen().some(e => e.type === 'fanloss')) return;
+    const im = this.fanImpact(user);
+    this._evAdd({ type: 'fanloss', title: `📉 팬 반응 — ${p.ko}`, ttl: 1e9, def: 'ignore', rec: lb.tier === 'sure' ? 'apology' : 'event', data: { name: p.ko },
+      text: `${tierTxt} ${p.ko}(구단 WAR ${lb.war.toFixed(1)})을(를) ${how === '방출' ? '방출했습니다' : '놓쳤습니다'}. 팬 충성도 지수가 ${before.toFixed(0)}에서 ${f.fl.toFixed(0)}로 떨어졌고(평년 100) 평균 관중 약 ${Math.round(im.attPct * 100)}% 감소, 예상 입장·MD 수입이 연 ${im.total.toFixed(1)}억 줄어듭니다. 이사회 신뢰도(${lb.tier === 'sure' ? '−3' : '−1.5'})와 선수단 충성도(${lb.tier === 'sure' ? '−2' : '−1'})도 내려갔습니다. 지수는 해마다 격차의 25%씩 회복됩니다. 어떻게 대응할까요?`, choices: [
+        { k: 'apology', label: '팬 소통 행사(1.0억)', hint: '팬 충성도 지수 +5 · 비용 1.0억' },
+        { k: 'event', label: '팬 감사 이벤트(0.4억)', hint: '팬 충성도 지수 +2.5 · 비용 0.4억' },
+        { k: 'ignore', label: '대응하지 않음', hint: '자연 회복만(해마다 격차의 25%)' }] });
+  };
+  proto._fanLossResolve = function (e, k) {
+    const S = this.S, f = S.fin && S.fin.teams[S.userTeam]; if (!f) return '';
+    const up = k === 'apology' ? 5 : k === 'event' ? 2.5 : 0, c = k === 'apology' ? 1.0 : k === 'event' ? 0.4 : 0;
+    if (up && f.fl !== undefined) f.fl = Math.min(100, Math.round((f.fl + up) * 10) / 10); if (c) f.evCost = Math.round(((f.evCost || 0) + c) * 10) / 10;
+    return k === 'ignore' ? `${e.data.name} 건에 대응하지 않았습니다(팬 충성도 지수 ${this.fanLoy(S.userTeam).toFixed(0)}, 자연 회복).` : `${k === 'apology' ? '팬 소통 행사' : '팬 감사 이벤트'}를 열었습니다(팬 충성도 지수 +${up}, ${c.toFixed(1)}억 → ${this.fanLoy(S.userTeam).toFixed(0)}).`;
+  };
   /* 시즌 전환: 보류된 내 구단 후보는 다음 해 오프시즌에 다시 이벤트로 올린다(이벤트는 한 건씩) */
   proto._legendRollover = function () { if (this._legendProcess) this._legendProcess(); };
 });

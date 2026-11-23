@@ -31,7 +31,7 @@
   };
   proto.startNewSeason = function () {
     if (this._campEvClose) this._campEvClose();   // 결정하지 않은 캠프 소식은 기본(변화 없음)으로 처리
-    const S = this.S; if (this._arcRollover) this._arcRollover(); if (this._legendRollover) this._legendRollover(); S.year += 1; S.off = null; S.faMkt = null; S.teamMood = null; S.restUntil = 0; S.trainAcc = { total: 0, B: {}, P: {} }; S.trainTrack = []; for (const id in S.players) if (S.players[id].tr) delete S.players[id].tr; for (const id in S.players) if (S.players[id].mood) delete S.players[id].mood; if (S.events) for (const e of (S.events.list || [])) if (e.status === 'open' && e.type !== 'legend') { if ((e.type === 'retcer' || e.type === 'awards') && this._cerResolve) this.resolveEvent(e.id, e.def, true); else { e.status = 'done'; e.result = '시즌 종료로 자동 종결'; } } S.fa = (S.fa || []);
+    const S = this.S; if (this._arcRollover) this._arcRollover(); if (this._legendRollover) this._legendRollover(); S.year += 1; S.off = null; S.faMkt = null; S.teamMood = null; S.restUntil = 0; S.trainAcc = { total: 0, B: {}, P: {} }; S.trainTrack = []; for (const id in S.players) if (S.players[id].tr) delete S.players[id].tr; for (const id in S.players) if (S.players[id].mood) delete S.players[id].mood; if (S.events) for (const e of (S.events.list || [])) if (e.status === 'open' && e.type !== 'legend') { if ((e.type === 'retcer' || e.type === 'awards' || e.type === 'fanloss') && this._cerResolve) this.resolveEvent(e.id, e.def, true); else { e.status = 'done'; e.result = '시즌 종료로 자동 종결'; } } S.fa = (S.fa || []);
     for (const id in S.players) if (S.players[id].retired || S.players[id].team === 'RET') delete S.players[id];   // 은퇴·이탈 선수 정리(저장 용량)
     this.finishFA === undefined; const adj = this.normalizeTalent(); S.lastAdj = adj;
     for (const t of TEAMS) if (t === S.userTeam) this.ensureActive(t);
@@ -85,10 +85,12 @@
   proto.executeTrade = function (aiTeam, give, get) {
     const S = this.S, ev = this.evaluateTrade(aiTeam, give, get); if (!ev.ok) return ev; const me = S.userTeam;
     const gb = give.map(id => ({ id, bl: this.bonds ? this.bonds(S.players[id]) : [] }));
+    const lbGive = give.map(id => ({ p: S.players[id], lb: this.legendBound ? this.legendBound(S.players[id], me) : null })).filter(x => x.lb);
     for (const id of give) { this.removeFromTeam(me, id); S.players[id].team = aiTeam; S.players[id].active = false; S.teams[aiTeam].ids.push(id); }
     for (const id of get) delete S.players[id].aiGs;
     for (const id of get) { this.removeFromTeam(aiTeam, id); S.players[id].team = me; S.players[id].active = false; S.teams[me].ids.push(id); }
     for (const id of get) S.players[id].myFrom = { y: S.year, how: `트레이드(${KO0[aiTeam]})` };
+    for (const x of lbGive) this._legendLoss(x.p, me, aiTeam, '트레이드', x.lb);   // 영구결번 후보를 내보내면 팬 충성도 하락
     news(this, `트레이드: ${give.map(i => S.players[i].ko).join(', ')} ↔ ${get.map(i => S.players[i].ko).join(', ')} (${aiTeam})`);
     if (this._bondShift) for (const x of gb) this._bondShift(S.players[x.id], -1, '트레이드', x.bl);
     this.refreshTeam(aiTeam); this.repairSettings(me); this.invalidate(); return ev;

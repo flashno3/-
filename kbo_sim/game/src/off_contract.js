@@ -38,12 +38,13 @@
     return { team: t, v: clamp(Math.round(v), 0, 100), items };
   };
   proto._hometown = function (p, t) { const h = (this.S.schoolHome || {})[p.dh && p.dh.school]; return !!(h && h.includes(t)); };   // 고교 소재 지역이 해당 구단 연고
-  proto.loyDiscount = function (p, t) { const l = this.loyalty(p, t); return !l || l.team !== (t || p.team) ? 0 : Math.max(0, Math.min(0.12, (l.v - 55) * 0.0027)); };
+  proto.loyDiscount = function (p, t) { const l = this.loyalty(p, t); if (!l || l.team !== (t || p.team)) return 0; const lb = this.legendBound && this.legendBound(p, l.team); return Math.max(0, Math.min(lb ? 0.2 : 0.12, (l.v - 55) * 0.0027 + (lb ? 0.06 : 0))); };   // 영구결번 후보는 원구단 잔류 할인이 더 크다(⚠ 최대 20%)
   /* 프랜차이즈 스타: 이 구단(t)의 충성도가 70 이상이고 가치(WAR 1.0 이상)가 높은 국내 선수가 이 구단에서 FA로 나왔을 때.
      구단은 이사회를 강하게 설득해 예산을 넘겨서라도 붙잡으려 한다 — 내 팀은 이사회 설득 성공 확률↑·신뢰도 하락↓, AI 구단은 여유자금이 모자라도(부족분이 비용의 45% 이내) 특별 승인으로 우선 입찰한다. */
   proto.faStar = function (p, t) {
-    if (!p || p.foreign || p.team !== 'FA' || !p.faInfo || !t || p.faInfo.from !== t || this.war(p) < 1.0) return null;
-    const l = this.loyalty(p, t); if (!l || l.team !== t || l.v < 70) return null; return { v: l.v, s: clamp((l.v - 70) / 30, 0, 1) };
+    if (!p || p.foreign || p.team !== 'FA' || !p.faInfo || !t || p.faInfo.from !== t) return null;
+    const lb = this.legendBound ? this.legendBound(p, t) : null; if (!lb && this.war(p) < 1.0) return null;   // 영구결번 후보(한 구단 선수, 구단 WAR 회색선 이상)는 충성도와 관계없이 프랜차이즈 스타
+    const l = this.loyalty(p, t); if ((!l || l.team !== t || l.v < 70) && !lb) return null; const v = Math.max(l && l.team === t ? l.v : 0, lb ? 70 : 0); return { v, s: clamp((v - 70) / 30, lb ? 0.6 : 0, 1), legend: lb || null };
   };
   /* 재계약(비FA) 요구액: 현재 연봉에서 올해 가치 기준 요구액 쪽으로 올릴 땐 0.6·내릴 땐 0.4만큼 이동하되, 한 해 인상은 +100%(×2)까지로 제한한다.
      이전에는 한 시즌 WAR가 튀면 ×3 이상을 요구하고 그 인상이 다음 해 기준이 돼 리그 상위 40명 평균 연봉이 3년 만에 +33%(상한의 97%)까지 쌓였다. 상한 ×2에서 5년 +19%(연 3.5%)로 완만해진다. ⚠ 한도 값은 실제 인상률 자료가 없는 보정값. */

@@ -146,13 +146,14 @@
   };
   /* 공통 영입 처리: 팀 이동·계약·FA 행사(재취득 연수 리셋)·보상 */
   proto._doSign = function (t, p, years, ask, bonus) {
-    const S = this.S, info = p.faInfo, graded = info && info.grade, comp = graded && info.from !== t ? graded : null;
+    const S = this.S, info = p.faInfo, lbLoss = info && info.from && info.from !== t && p.team === 'FA' && this.legendBound ? this.legendBound(p, info.from) : null, fromT = info && info.from, graded = info && info.grade, comp = graded && info.from !== t ? graded : null;
     S.fa = (S.fa || []).filter(x => x !== p.id); p.team = t; p.active = false; S.teams[t].ids.push(p.id); if (t === S.userTeam) p.myFrom = { y: S.year, how: p.foreign ? (p.aq ? '아시아쿼터 영입' : '외국인 영입') : 'FA 영입' };
     ask = Math.round(ask * 10) / 10; bonus = Math.round((bonus || 0) * 10) / 10; p.contract = this._newContract(p, ask, p.foreign || !graded ? 1 : years, p.foreign || !graded ? 0 : bonus); if (graded && !p.foreign) p.contract.fa = true;   // FA 계약 표시(다음 FA 등급 산정 모집단에서 제외) p.salHist = (p.salHist || []).slice(-2).concat([Math.round(((p.contract.bonus || 0) / p.contract.years + ask) * 10) / 10]);
     if (t === S.userTeam && this._contractNote) this._contractNote(p, p.foreign ? '외국인' : graded ? 'FA' : '재계약');
     if (graded && p.fa) { p.fa.used += 1; p.fa.last = graded; p.fa.svc = 0; p.fa.rem = 0; }
     if (comp) { this._faCount(t, 1); this._compensate(t, p, info); }
     p.faInfo = undefined; this.invalidate();
+    if (lbLoss && this._legendLoss) this._legendLoss(p, fromT, t, 'FA 이적', lbLoss);   // 영구결번 후보를 놓친 구단의 팬 충성도 하락
   };
   proto._foreignJoin = function (p) {   // 외국인은 영입 즉시 1군 엔트리에 등록한다(자리가 없으면 2군 대기)
     const S = this.S, t = S.userTeam; p.reg1 = true; p.lockUntil = 0; if (this.players(t).filter(x => x.active).length < ACTIVE_MAX && !this.isInj(p)) p.active = true; if (this.repairSettings) this.repairSettings(t); this.invalidate();   // 부상 중인 외국인은 영입해도 부상자 명단(2군) 대기
@@ -423,6 +424,7 @@
         if (p.team !== 'FA' || (m.bids[p.id] || []).some(b => b.team === t)) continue;
         const g = p.faInfo && p.faInfo.grade; if (g && p.faInfo.from !== t && this._faCount(t) >= this.faExtLimit()) continue;
         if (!(r.random() < (this.war(p) >= 2 ? 0.7 : 0.45))) continue;
+        if (p.faInfo && p.faInfo.from && p.faInfo.from !== t && this.legendBound && this.legendBound(p, p.faInfo.from) && r.random() < 0.8) continue;   // 레전드 스틸 억제: 타 구단의 영구결번 후보는 입찰 확률을 1/5로
         const deal = this._aiDeal(t, p); if (!deal) continue;
         (m.bids[p.id] = m.bids[p.id] || []).push({ team: t, per: Math.round(deal.per * 100) / 100, ceil: Math.round(deal.per * (1.02 + 0.1 * r.random()) * 100) / 100, y: deal.years, day: d }); if (this._faFeedAdd) this._faFeedAdd('bid', `${KO0[t]}이(가) ${p.ko}에게 ${deal.years}년 연 ${deal.per.toFixed(1)}억을 제시했습니다.`, p.id); break;
       }

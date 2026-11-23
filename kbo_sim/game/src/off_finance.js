@@ -55,10 +55,20 @@
     return att * f.price * f.pm * pm;
   };
   proto.finCap = function (t, year) { const f = this.S.fin.teams[t]; let c = f.cap; for (const [y, v] of f.capchg) if ((year || this.S.year) >= y) c = v; return c; };
+  /* 팬 충성도 지수(f.fl, 평년=100): 영구결번 후보를 놓치는 등 팬심이 크게 상하면 내려가 관중 수요·MD 수입이 줄고, 해마다 천천히 회복한다(⚠ 가정) */
+  proto.fanLoy = function (t) { const f = this.S.fin && this.S.fin.teams[t]; return f && f.fl !== undefined ? f.fl : 100; };
+  proto.fanMult = function (t) { return clamp(this.fanLoy(t) / 100, 0.5, 1.05); };
+  proto.fanMD = function (t) { return clamp(1 - 0.6 * (1 - this.fanMult(t)), 0.7, 1.05); };
+  proto.fanImpact = function (t) {   // 팬 충성도 하락으로 줄어드는 연간 수입(예상): 평균 관중·입장 수입·MD
+    const f = this.S.fin && this.S.fin.teams[t]; if (!f || this.fanLoy(t) >= 99.95) return { fl: this.fanLoy(t), att: 0, attPct: 0, gate: 0, md: 0, total: 0 };
+    const a1 = this.finAtt(t, false), old = f.fl; f.fl = 100; const a0 = this.finAtt(t, false); f.fl = old;
+    const gate = (a0 - a1) * f.price * f.pm * this.finPriceMult(t) * FIN_GAMES, md = f.other * (1 - this.fanMD(t));
+    return { fl: this.fanLoy(t), att: a0 - a1, attPct: a0 ? (a0 - a1) / a0 : 0, gate: Math.round(gate * 10) / 10, md: Math.round(md * 10) / 10, total: Math.round((gate + md) * 10) / 10 };
+  };
   proto._dem = function (f) { if (!(f.dem > 0)) f.dem = invDem(f.att0, f.cap); return f.dem; };   // 구버전 저장 파일은 처음 쓸 때 계산
   proto.finAtt = function (t, big) {   // 홈 관중 = E[min(수요, 좌석)], 수요 = 잠재 수요 × 성적 보정 × 티켓 가격 탄력성 × 이벤트 보정(big: 이원화 구장의 빅매치는 더 많은 좌석 개방)
     const S = this.S, f = S.fin.teams[t], r = S.rec[t], wp = (r[0] + r[1] + r[2]) >= 10 ? r[0] / Math.max(1, r[0] + r[1]) : 0.5, tier = big ? this.finTier(t) : null;
-    const mu = this._dem(f) * clamp(1 + 0.8 * (wp - 0.5), 0.8, 1.25) * clamp(1 - ELAST * (f.pm - 1), 0.6, 1.2) * (f.attMult || 1) * (f.promo && S.day < f.promo.until ? f.promo.mult : 1);
+    const mu = this._dem(f) * clamp(1 + 0.8 * (wp - 0.5), 0.8, 1.25) * clamp(1 - ELAST * (f.pm - 1), 0.6, 1.2) * this.fanMult(t) * (f.attMult || 1) * (f.promo && S.day < f.promo.until ? f.promo.mult : 1);
     return Math.round(expMin(mu, tier ? Math.max(this.finCap(t), tier.bigCap) : this.finCap(t)));
   };
   proto._finGame = function (home, away) { if (!this.finReady()) return; const f = this.S.fin.teams[home]; if (!f) return; f.gate += this.finAtt(home, this.isBigMatch(home, away)) * f.price * f.pm * this.finPriceMult(home) * (this.isRival(home, away) ? 1.04 : 1); f.games++; };   // 라이벌전은 홈 관중 +4%
@@ -69,8 +79,9 @@
   proto.faRoom = function (t) { return this.finReady() ? Math.round((this.finBudget(t) - this.finPay(t)) * 10) / 10 : 1e9; };
   proto.finPreview = function (t) {   // 시즌 예상 손익(진행분 + 남은 홈 경기를 현재 관중으로 환산), 포스트시즌 수입 제외
     const S = this.S, f = S.fin.teams[t], rem = Math.max(0, FIN_GAMES - f.games), gate = f.gate + rem * this.finGateAvg(t);
-    const pay = this.finPay(t), v = this.cbtPreview(t), cbt = v.fee || 0, bc = this.finBC(), ev = f.evRev || 0, evc = f.evCost || 0, rev = gate + f.parAds + f.other + bc + ev;
-    return { gate, par: f.parAds, other: f.other, bc, ev, evc, dead: this.deadNow(t), parts: f.parts, rev, pay, opex: f.opex, cbt, op: rev - pay - f.opex - evc - cbt, att: this.finAtt(t), cap: this.finCap(t), room: this.faRoom(t), budget: this.finBudget(t), trust: f.trust, allowed: this.finAllowed(t) };
+    const pay = this.finPay(t), v = this.cbtPreview(t), cbt = v.fee || 0, bc = this.finBC(), ev = f.evRev || 0, evc = f.evCost || 0, oth = f.other * this.fanMD(t), rev = gate + f.parAds + oth + bc + ev;   // 팬 충성도 지수는 관중 수요(finAtt)와 MD·기타 수입에 반영
+    
+    return { gate, par: f.parAds, other: oth, bc, ev, evc, dead: this.deadNow(t), parts: f.parts, rev, pay, opex: f.opex, cbt, op: rev - pay - f.opex - evc - cbt, att: this.finAtt(t), cap: this.finCap(t), room: this.faRoom(t), budget: this.finBudget(t), trust: f.trust, allowed: this.finAllowed(t) };
   };
   proto._psSettle = function () {   // 포스트시즌 입장수입 → 배당 재원 → 팀별 배당
     const P = this.S.post; if (!P || !P.rounds || !P.rounds.length) return null;
@@ -105,8 +116,9 @@
       let d = champ ? 12 : (ps && ps.runnerUp === t) ? 6 : inPS ? 3 : rank > 7 ? -6 : -3;
       d += op >= 0 ? 2 : (-op > f.lastRev * LOSS * (0.5 + f.trust / 100) ? -6 : -1);
       const trust = clamp(Math.round(f.trust + d), 0, 100);
-      row.teams[t] = { gate: Math.round(v.gate * 10) / 10, par: f.parAds, other: f.other, bc: v.bc, rev: Math.round((v.rev + div + bonus) * 10) / 10, ps: Math.round(div * 10) / 10, bonus: Math.round(bonus * 10) / 10, prize: Math.round(prize * 10) / 10, pay: Math.round(v.pay * 10) / 10, opex: f.opex, cbt: Math.round(v.cbt * 100) / 100, op: Math.round(op * 10) / 10, att: v.att, trust, dTrust: trust - f.trust, rank };
-      f.lastRev = v.rev - (f.evRev || 0); f.trust = trust; f.evRev = 0; f.evCost = 0; f.attMult = 1; f.promo = null; f.boardExtra = 0; f.pers = null; f.snap = []; f.dead = (f.dead || []).filter(x => x.year > S.year);   // 시즌 한정 이벤트 효과 정리·지난 위약금 소멸
+      row.teams[t] = { gate: Math.round(v.gate * 10) / 10, par: f.parAds, other: v.other, bc: v.bc, rev: Math.round((v.rev + div + bonus) * 10) / 10, ps: Math.round(div * 10) / 10, bonus: Math.round(bonus * 10) / 10, prize: Math.round(prize * 10) / 10, pay: Math.round(v.pay * 10) / 10, opex: f.opex, cbt: Math.round(v.cbt * 100) / 100, op: Math.round(op * 10) / 10, att: v.att, trust, dTrust: trust - f.trust, rank };
+      f.lastRev = v.rev - (f.evRev || 0); f.trust = trust; f.evRev = 0; f.evCost = 0; f.attMult = 1; if (f.fl !== undefined && f.fl < 100) f.fl = Math.min(100, Math.round((f.fl + (100 - f.fl) * 0.25 + (champ ? 3 : 0)) * 10) / 10); f.promo = null;   // 팬 충성도 지수는 해마다 격차의 25%씩(우승 시 +3) 회복
+       f.boardExtra = 0; f.pers = null; f.snap = []; f.dead = (f.dead || []).filter(x => x.year > S.year);   // 시즌 한정 이벤트 효과 정리·지난 위약금 소멸
       f.dem = Math.min(this._dem(f) * clamp(1 + 0.35 * (wp - 0.5) + (champ ? 0.03 : 0), 0.92, 1.1), 2.2 * Math.max(f.cap, this.finCap(t, S.year + 1)));   // 잠재 수요도 성적에 따라 오르내린다(좌석으로 잘리지 않음, 좌석의 2.2배까지)
       const att0Old = f.att0; f.att0 = Math.min(Math.max(this.finCap(t, S.year + 1), f.cap), Math.round(f.att0 * clamp(1 + 0.35 * (wp - 0.5) + (champ ? 0.03 : 0), 0.92, 1.1)));   // 성적이 좋으면 다음 해 기준 관중 상승(수요는 임시 구장의 좌석 축소로 사라지지 않게 처음 수용량 이내로만 제한)
       if (this.econ().on) this._econStep(t, f, v, att0Old);   // 연도별 가격·수익·비용 성장

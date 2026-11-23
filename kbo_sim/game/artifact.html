@@ -2270,12 +2270,13 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
     return { team: t, v: clamp(Math.round(v), 0, 100), items };
   };
   proto._hometown = function (p, t) { const h = (this.S.schoolHome || {})[p.dh && p.dh.school]; return !!(h && h.includes(t)); };   // 고교 소재 지역이 해당 구단 연고
-  proto.loyDiscount = function (p, t) { const l = this.loyalty(p, t); return !l || l.team !== (t || p.team) ? 0 : Math.max(0, Math.min(0.12, (l.v - 55) * 0.0027)); };
+  proto.loyDiscount = function (p, t) { const l = this.loyalty(p, t); if (!l || l.team !== (t || p.team)) return 0; const lb = this.legendBound && this.legendBound(p, l.team); return Math.max(0, Math.min(lb ? 0.2 : 0.12, (l.v - 55) * 0.0027 + (lb ? 0.06 : 0))); };   // 영구결번 후보는 원구단 잔류 할인이 더 크다(⚠ 최대 20%)
   /* 프랜차이즈 스타: 이 구단(t)의 충성도가 70 이상이고 가치(WAR 1.0 이상)가 높은 국내 선수가 이 구단에서 FA로 나왔을 때.
      구단은 이사회를 강하게 설득해 예산을 넘겨서라도 붙잡으려 한다 — 내 팀은 이사회 설득 성공 확률↑·신뢰도 하락↓, AI 구단은 여유자금이 모자라도(부족분이 비용의 45% 이내) 특별 승인으로 우선 입찰한다. */
   proto.faStar = function (p, t) {
-    if (!p || p.foreign || p.team !== 'FA' || !p.faInfo || !t || p.faInfo.from !== t || this.war(p) < 1.0) return null;
-    const l = this.loyalty(p, t); if (!l || l.team !== t || l.v < 70) return null; return { v: l.v, s: clamp((l.v - 70) / 30, 0, 1) };
+    if (!p || p.foreign || p.team !== 'FA' || !p.faInfo || !t || p.faInfo.from !== t) return null;
+    const lb = this.legendBound ? this.legendBound(p, t) : null; if (!lb && this.war(p) < 1.0) return null;   // 영구결번 후보(한 구단 선수, 구단 WAR 회색선 이상)는 충성도와 관계없이 프랜차이즈 스타
+    const l = this.loyalty(p, t); if ((!l || l.team !== t || l.v < 70) && !lb) return null; const v = Math.max(l && l.team === t ? l.v : 0, lb ? 70 : 0); return { v, s: clamp((v - 70) / 30, lb ? 0.6 : 0, 1), legend: lb || null };
   };
   /* 재계약(비FA) 요구액: 현재 연봉에서 올해 가치 기준 요구액 쪽으로 올릴 땐 0.6·내릴 땐 0.4만큼 이동하되, 한 해 인상은 +100%(×2)까지로 제한한다.
      이전에는 한 시즌 WAR가 튀면 ×3 이상을 요구하고 그 인상이 다음 해 기준이 돼 리그 상위 40명 평균 연봉이 3년 만에 +33%(상한의 97%)까지 쌓였다. 상한 ×2에서 5년 +19%(연 3.5%)로 완만해진다. ⚠ 한도 값은 실제 인상률 자료가 없는 보정값. */
@@ -2617,13 +2618,14 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
   };
   /* 공통 영입 처리: 팀 이동·계약·FA 행사(재취득 연수 리셋)·보상 */
   proto._doSign = function (t, p, years, ask, bonus) {
-    const S = this.S, info = p.faInfo, graded = info && info.grade, comp = graded && info.from !== t ? graded : null;
+    const S = this.S, info = p.faInfo, lbLoss = info && info.from && info.from !== t && p.team === 'FA' && this.legendBound ? this.legendBound(p, info.from) : null, fromT = info && info.from, graded = info && info.grade, comp = graded && info.from !== t ? graded : null;
     S.fa = (S.fa || []).filter(x => x !== p.id); p.team = t; p.active = false; S.teams[t].ids.push(p.id); if (t === S.userTeam) p.myFrom = { y: S.year, how: p.foreign ? (p.aq ? '아시아쿼터 영입' : '외국인 영입') : 'FA 영입' };
     ask = Math.round(ask * 10) / 10; bonus = Math.round((bonus || 0) * 10) / 10; p.contract = this._newContract(p, ask, p.foreign || !graded ? 1 : years, p.foreign || !graded ? 0 : bonus); if (graded && !p.foreign) p.contract.fa = true;   // FA 계약 표시(다음 FA 등급 산정 모집단에서 제외) p.salHist = (p.salHist || []).slice(-2).concat([Math.round(((p.contract.bonus || 0) / p.contract.years + ask) * 10) / 10]);
     if (t === S.userTeam && this._contractNote) this._contractNote(p, p.foreign ? '외국인' : graded ? 'FA' : '재계약');
     if (graded && p.fa) { p.fa.used += 1; p.fa.last = graded; p.fa.svc = 0; p.fa.rem = 0; }
     if (comp) { this._faCount(t, 1); this._compensate(t, p, info); }
     p.faInfo = undefined; this.invalidate();
+    if (lbLoss && this._legendLoss) this._legendLoss(p, fromT, t, 'FA 이적', lbLoss);   // 영구결번 후보를 놓친 구단의 팬 충성도 하락
   };
   proto._foreignJoin = function (p) {   // 외국인은 영입 즉시 1군 엔트리에 등록한다(자리가 없으면 2군 대기)
     const S = this.S, t = S.userTeam; p.reg1 = true; p.lockUntil = 0; if (this.players(t).filter(x => x.active).length < ACTIVE_MAX && !this.isInj(p)) p.active = true; if (this.repairSettings) this.repairSettings(t); this.invalidate();   // 부상 중인 외국인은 영입해도 부상자 명단(2군) 대기
@@ -2894,6 +2896,7 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
         if (p.team !== 'FA' || (m.bids[p.id] || []).some(b => b.team === t)) continue;
         const g = p.faInfo && p.faInfo.grade; if (g && p.faInfo.from !== t && this._faCount(t) >= this.faExtLimit()) continue;
         if (!(r.random() < (this.war(p) >= 2 ? 0.7 : 0.45))) continue;
+        if (p.faInfo && p.faInfo.from && p.faInfo.from !== t && this.legendBound && this.legendBound(p, p.faInfo.from) && r.random() < 0.8) continue;   // 레전드 스틸 억제: 타 구단의 영구결번 후보는 입찰 확률을 1/5로
         const deal = this._aiDeal(t, p); if (!deal) continue;
         (m.bids[p.id] = m.bids[p.id] || []).push({ team: t, per: Math.round(deal.per * 100) / 100, ceil: Math.round(deal.per * (1.02 + 0.1 * r.random()) * 100) / 100, y: deal.years, day: d }); if (this._faFeedAdd) this._faFeedAdd('bid', `${KO0[t]}이(가) ${p.ko}에게 ${deal.years}년 연 ${deal.per.toFixed(1)}억을 제시했습니다.`, p.id); break;
       }
@@ -2985,7 +2988,8 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
     if (S.teams[t].ids.length <= 44) return { ok: false, msg: '보유 선수가 최소 44명 필요합니다.' };
     const cost = this.releaseCost(id), f = S.fin && S.fin.teams[t]; const bl0 = this.bonds ? this.bonds(p) : [];
     if (f) { f.dead = (f.dead || []).concat(cost.rec.map(x => ({ year: x.year, amt: x.amt, who: p.ko }))); f.trust = clamp(Math.round((f.trust + cost.trust) * 10) / 10, 0, 100); }
-    this.release(t, id); if (this._bondShift && (p.tn >= 3 || this.ovr(p) >= 50)) this._bondShift(p, -1, '방출', bl0);
+    const lbRel = this.legendBound ? this.legendBound(p, t) : null;
+    this.release(t, id); if (lbRel) this._legendLoss(p, t, null, '방출', lbRel); if (this._bondShift && (p.tn >= 3 || this.ovr(p) >= 50)) this._bondShift(p, -1, '방출', bl0);
     news(this, `방출: ${p.ko} — 위약금 ${cost.total}억(이번 시즌 ${cost.thisYear}억)${cost.trust < 0 ? `, 이사회 신뢰도 ${cost.trust}` : ''}${cost.core ? ' · 오랜 핵심 선수 방출로 팬·선수단 반응이 좋지 않습니다' : ''}`);
     return { ok: true, cost };
   };
@@ -3193,6 +3197,7 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
     if (e.type === 'arc' && this._arcResolve) res = this._arcResolve(e, k, auto);
     else if (e.type === 'legend' && this._legendResolve) res = this._legendResolve(e, k);
     else if ((e.type === 'retcer' || e.type === 'awards') && this._cerResolve) res = this._cerResolve(e, k);
+    else if (e.type === 'fanloss' && this._fanLossResolve) res = this._fanLossResolve(e, k);
     e.status = 'done'; e.choice = k; e.result = res; e.auto = !!auto; news(this, `${e.title}: ${res}`); this.invalidate();
     return { ok: true, msg: res };
   };
@@ -3475,7 +3480,7 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
   };
   proto.startNewSeason = function () {
     if (this._campEvClose) this._campEvClose();   // 결정하지 않은 캠프 소식은 기본(변화 없음)으로 처리
-    const S = this.S; if (this._arcRollover) this._arcRollover(); if (this._legendRollover) this._legendRollover(); S.year += 1; S.off = null; S.faMkt = null; S.teamMood = null; S.restUntil = 0; S.trainAcc = { total: 0, B: {}, P: {} }; S.trainTrack = []; for (const id in S.players) if (S.players[id].tr) delete S.players[id].tr; for (const id in S.players) if (S.players[id].mood) delete S.players[id].mood; if (S.events) for (const e of (S.events.list || [])) if (e.status === 'open' && e.type !== 'legend') { if ((e.type === 'retcer' || e.type === 'awards') && this._cerResolve) this.resolveEvent(e.id, e.def, true); else { e.status = 'done'; e.result = '시즌 종료로 자동 종결'; } } S.fa = (S.fa || []);
+    const S = this.S; if (this._arcRollover) this._arcRollover(); if (this._legendRollover) this._legendRollover(); S.year += 1; S.off = null; S.faMkt = null; S.teamMood = null; S.restUntil = 0; S.trainAcc = { total: 0, B: {}, P: {} }; S.trainTrack = []; for (const id in S.players) if (S.players[id].tr) delete S.players[id].tr; for (const id in S.players) if (S.players[id].mood) delete S.players[id].mood; if (S.events) for (const e of (S.events.list || [])) if (e.status === 'open' && e.type !== 'legend') { if ((e.type === 'retcer' || e.type === 'awards' || e.type === 'fanloss') && this._cerResolve) this.resolveEvent(e.id, e.def, true); else { e.status = 'done'; e.result = '시즌 종료로 자동 종결'; } } S.fa = (S.fa || []);
     for (const id in S.players) if (S.players[id].retired || S.players[id].team === 'RET') delete S.players[id];   // 은퇴·이탈 선수 정리(저장 용량)
     this.finishFA === undefined; const adj = this.normalizeTalent(); S.lastAdj = adj;
     for (const t of TEAMS) if (t === S.userTeam) this.ensureActive(t);
@@ -3529,10 +3534,12 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
   proto.executeTrade = function (aiTeam, give, get) {
     const S = this.S, ev = this.evaluateTrade(aiTeam, give, get); if (!ev.ok) return ev; const me = S.userTeam;
     const gb = give.map(id => ({ id, bl: this.bonds ? this.bonds(S.players[id]) : [] }));
+    const lbGive = give.map(id => ({ p: S.players[id], lb: this.legendBound ? this.legendBound(S.players[id], me) : null })).filter(x => x.lb);
     for (const id of give) { this.removeFromTeam(me, id); S.players[id].team = aiTeam; S.players[id].active = false; S.teams[aiTeam].ids.push(id); }
     for (const id of get) delete S.players[id].aiGs;
     for (const id of get) { this.removeFromTeam(aiTeam, id); S.players[id].team = me; S.players[id].active = false; S.teams[me].ids.push(id); }
     for (const id of get) S.players[id].myFrom = { y: S.year, how: `트레이드(${KO0[aiTeam]})` };
+    for (const x of lbGive) this._legendLoss(x.p, me, aiTeam, '트레이드', x.lb);   // 영구결번 후보를 내보내면 팬 충성도 하락
     news(this, `트레이드: ${give.map(i => S.players[i].ko).join(', ')} ↔ ${get.map(i => S.players[i].ko).join(', ')} (${aiTeam})`);
     if (this._bondShift) for (const x of gb) this._bondShift(S.players[x.id], -1, '트레이드', x.bl);
     this.refreshTeam(aiTeam); this.repairSettings(me); this.invalidate(); return ev;
@@ -3597,10 +3604,20 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
     return att * f.price * f.pm * pm;
   };
   proto.finCap = function (t, year) { const f = this.S.fin.teams[t]; let c = f.cap; for (const [y, v] of f.capchg) if ((year || this.S.year) >= y) c = v; return c; };
+  /* 팬 충성도 지수(f.fl, 평년=100): 영구결번 후보를 놓치는 등 팬심이 크게 상하면 내려가 관중 수요·MD 수입이 줄고, 해마다 천천히 회복한다(⚠ 가정) */
+  proto.fanLoy = function (t) { const f = this.S.fin && this.S.fin.teams[t]; return f && f.fl !== undefined ? f.fl : 100; };
+  proto.fanMult = function (t) { return clamp(this.fanLoy(t) / 100, 0.5, 1.05); };
+  proto.fanMD = function (t) { return clamp(1 - 0.6 * (1 - this.fanMult(t)), 0.7, 1.05); };
+  proto.fanImpact = function (t) {   // 팬 충성도 하락으로 줄어드는 연간 수입(예상): 평균 관중·입장 수입·MD
+    const f = this.S.fin && this.S.fin.teams[t]; if (!f || this.fanLoy(t) >= 99.95) return { fl: this.fanLoy(t), att: 0, attPct: 0, gate: 0, md: 0, total: 0 };
+    const a1 = this.finAtt(t, false), old = f.fl; f.fl = 100; const a0 = this.finAtt(t, false); f.fl = old;
+    const gate = (a0 - a1) * f.price * f.pm * this.finPriceMult(t) * FIN_GAMES, md = f.other * (1 - this.fanMD(t));
+    return { fl: this.fanLoy(t), att: a0 - a1, attPct: a0 ? (a0 - a1) / a0 : 0, gate: Math.round(gate * 10) / 10, md: Math.round(md * 10) / 10, total: Math.round((gate + md) * 10) / 10 };
+  };
   proto._dem = function (f) { if (!(f.dem > 0)) f.dem = invDem(f.att0, f.cap); return f.dem; };   // 구버전 저장 파일은 처음 쓸 때 계산
   proto.finAtt = function (t, big) {   // 홈 관중 = E[min(수요, 좌석)], 수요 = 잠재 수요 × 성적 보정 × 티켓 가격 탄력성 × 이벤트 보정(big: 이원화 구장의 빅매치는 더 많은 좌석 개방)
     const S = this.S, f = S.fin.teams[t], r = S.rec[t], wp = (r[0] + r[1] + r[2]) >= 10 ? r[0] / Math.max(1, r[0] + r[1]) : 0.5, tier = big ? this.finTier(t) : null;
-    const mu = this._dem(f) * clamp(1 + 0.8 * (wp - 0.5), 0.8, 1.25) * clamp(1 - ELAST * (f.pm - 1), 0.6, 1.2) * (f.attMult || 1) * (f.promo && S.day < f.promo.until ? f.promo.mult : 1);
+    const mu = this._dem(f) * clamp(1 + 0.8 * (wp - 0.5), 0.8, 1.25) * clamp(1 - ELAST * (f.pm - 1), 0.6, 1.2) * this.fanMult(t) * (f.attMult || 1) * (f.promo && S.day < f.promo.until ? f.promo.mult : 1);
     return Math.round(expMin(mu, tier ? Math.max(this.finCap(t), tier.bigCap) : this.finCap(t)));
   };
   proto._finGame = function (home, away) { if (!this.finReady()) return; const f = this.S.fin.teams[home]; if (!f) return; f.gate += this.finAtt(home, this.isBigMatch(home, away)) * f.price * f.pm * this.finPriceMult(home) * (this.isRival(home, away) ? 1.04 : 1); f.games++; };   // 라이벌전은 홈 관중 +4%
@@ -3611,8 +3628,9 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
   proto.faRoom = function (t) { return this.finReady() ? Math.round((this.finBudget(t) - this.finPay(t)) * 10) / 10 : 1e9; };
   proto.finPreview = function (t) {   // 시즌 예상 손익(진행분 + 남은 홈 경기를 현재 관중으로 환산), 포스트시즌 수입 제외
     const S = this.S, f = S.fin.teams[t], rem = Math.max(0, FIN_GAMES - f.games), gate = f.gate + rem * this.finGateAvg(t);
-    const pay = this.finPay(t), v = this.cbtPreview(t), cbt = v.fee || 0, bc = this.finBC(), ev = f.evRev || 0, evc = f.evCost || 0, rev = gate + f.parAds + f.other + bc + ev;
-    return { gate, par: f.parAds, other: f.other, bc, ev, evc, dead: this.deadNow(t), parts: f.parts, rev, pay, opex: f.opex, cbt, op: rev - pay - f.opex - evc - cbt, att: this.finAtt(t), cap: this.finCap(t), room: this.faRoom(t), budget: this.finBudget(t), trust: f.trust, allowed: this.finAllowed(t) };
+    const pay = this.finPay(t), v = this.cbtPreview(t), cbt = v.fee || 0, bc = this.finBC(), ev = f.evRev || 0, evc = f.evCost || 0, oth = f.other * this.fanMD(t), rev = gate + f.parAds + oth + bc + ev;   // 팬 충성도 지수는 관중 수요(finAtt)와 MD·기타 수입에 반영
+    
+    return { gate, par: f.parAds, other: oth, bc, ev, evc, dead: this.deadNow(t), parts: f.parts, rev, pay, opex: f.opex, cbt, op: rev - pay - f.opex - evc - cbt, att: this.finAtt(t), cap: this.finCap(t), room: this.faRoom(t), budget: this.finBudget(t), trust: f.trust, allowed: this.finAllowed(t) };
   };
   proto._psSettle = function () {   // 포스트시즌 입장수입 → 배당 재원 → 팀별 배당
     const P = this.S.post; if (!P || !P.rounds || !P.rounds.length) return null;
@@ -3647,8 +3665,9 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
       let d = champ ? 12 : (ps && ps.runnerUp === t) ? 6 : inPS ? 3 : rank > 7 ? -6 : -3;
       d += op >= 0 ? 2 : (-op > f.lastRev * LOSS * (0.5 + f.trust / 100) ? -6 : -1);
       const trust = clamp(Math.round(f.trust + d), 0, 100);
-      row.teams[t] = { gate: Math.round(v.gate * 10) / 10, par: f.parAds, other: f.other, bc: v.bc, rev: Math.round((v.rev + div + bonus) * 10) / 10, ps: Math.round(div * 10) / 10, bonus: Math.round(bonus * 10) / 10, prize: Math.round(prize * 10) / 10, pay: Math.round(v.pay * 10) / 10, opex: f.opex, cbt: Math.round(v.cbt * 100) / 100, op: Math.round(op * 10) / 10, att: v.att, trust, dTrust: trust - f.trust, rank };
-      f.lastRev = v.rev - (f.evRev || 0); f.trust = trust; f.evRev = 0; f.evCost = 0; f.attMult = 1; f.promo = null; f.boardExtra = 0; f.pers = null; f.snap = []; f.dead = (f.dead || []).filter(x => x.year > S.year);   // 시즌 한정 이벤트 효과 정리·지난 위약금 소멸
+      row.teams[t] = { gate: Math.round(v.gate * 10) / 10, par: f.parAds, other: v.other, bc: v.bc, rev: Math.round((v.rev + div + bonus) * 10) / 10, ps: Math.round(div * 10) / 10, bonus: Math.round(bonus * 10) / 10, prize: Math.round(prize * 10) / 10, pay: Math.round(v.pay * 10) / 10, opex: f.opex, cbt: Math.round(v.cbt * 100) / 100, op: Math.round(op * 10) / 10, att: v.att, trust, dTrust: trust - f.trust, rank };
+      f.lastRev = v.rev - (f.evRev || 0); f.trust = trust; f.evRev = 0; f.evCost = 0; f.attMult = 1; if (f.fl !== undefined && f.fl < 100) f.fl = Math.min(100, Math.round((f.fl + (100 - f.fl) * 0.25 + (champ ? 3 : 0)) * 10) / 10); f.promo = null;   // 팬 충성도 지수는 해마다 격차의 25%씩(우승 시 +3) 회복
+       f.boardExtra = 0; f.pers = null; f.snap = []; f.dead = (f.dead || []).filter(x => x.year > S.year);   // 시즌 한정 이벤트 효과 정리·지난 위약금 소멸
       f.dem = Math.min(this._dem(f) * clamp(1 + 0.35 * (wp - 0.5) + (champ ? 0.03 : 0), 0.92, 1.1), 2.2 * Math.max(f.cap, this.finCap(t, S.year + 1)));   // 잠재 수요도 성적에 따라 오르내린다(좌석으로 잘리지 않음, 좌석의 2.2배까지)
       const att0Old = f.att0; f.att0 = Math.min(Math.max(this.finCap(t, S.year + 1), f.cap), Math.round(f.att0 * clamp(1 + 0.35 * (wp - 0.5) + (champ ? 0.03 : 0), 0.92, 1.1)));   // 성적이 좋으면 다음 해 기준 관중 상승(수요는 임시 구장의 좌석 축소로 사라지지 않게 처음 수용량 이내로만 제한)
       if (this.econ().on) this._econStep(t, f, v, att0Old);   // 연도별 가격·수익·비용 성장
@@ -4354,6 +4373,37 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
     if (k === 'decline') { LGd.q = LGd.q.filter(x => x !== c); if (c.tier === 'sure') tr(-2); return `${c.name}의 영구결번을 지정하지 않기로 했습니다${c.tier === 'sure' ? '(팬들의 실망, 이사회 신뢰도 −2)' : ''}.`; }
     if (c.holds >= MAX_HOLD) { LGd.q = LGd.q.filter(x => x !== c); return `${c.name}: 보류 한도를 넘어 지정하지 않음으로 처리했습니다.`; }
     c.holds++; c.since = S.year; return `${c.name}의 심의를 내년으로 보류했습니다(${c.holds}/${MAX_HOLD}).`;
+  };
+
+  /* ---- 영구결번 후보와 FA·이적: 후보 판정, 놓쳤을 때의 팬 충성도 하락(→ 관중·MD 수입 감소) ---- */
+  proto.legendBound = function (p, t) {   // 한 구단 선수이면서 구단 WAR이 회색선 이상인 영구결번 후보(현역·FA 모두)
+    if (!p || p.foreign || !t || !(t in this.S.teams) || !this._legendOneClub(p, t)) return null;
+    const war = this.legendWar(p, t), th = kind(p) === 'RP' ? TH.rp : TH.main; return war >= th.gray ? { tier: war >= th.sure ? 'sure' : 'gray', war } : null;
+  };
+  const trustD = (L, d) => { const f = L.S.fin && L.S.fin.teams[L.S.userTeam]; if (f) f.trust = clamp(Math.round(((f.trust === undefined ? 70 : f.trust) + d) * 10) / 10, 0, 100); };
+  proto._legendLoss = function (p, club, to, how, lb) {
+    const S = this.S, user = S.userTeam, f = S.fin && S.fin.teams[club]; if (!f || !lb) return;
+    const hit = lb.tier === 'sure' ? 16 + clamp((lb.war - 50) * 0.15, 0, 6) : 9, before = f.fl === undefined ? 100 : f.fl;
+    f.fl = Math.max(55, Math.round((before - hit) * 10) / 10); (f.flLog = f.flLog || []).push({ y: S.year, name: p.ko, hit: Math.round((before - f.fl) * 10) / 10 }); if (f.flLog.length > 10) f.flLog.shift();
+    const dest = how === 'FA 이적' || how === '트레이드' ? `${KO0[to] || to}으로 떠났습니다` : '팀을 떠났습니다', tierTxt = lb.tier === 'sure' ? '영구결번이 확실시되던' : '영구결번 후보였던';
+    if (club === user || lb.tier === 'sure') this._lnews(`${KO0[club] || club} 팬들 충격: ${tierTxt} ${p.ko}(구단 WAR ${lb.war.toFixed(1)})이(가) ${dest}.`);
+    if (club !== user) return;
+    trustD(this, lb.tier === 'sure' ? -3 : -1.5);
+    for (const q of this.players(user)) if (q.id !== p.id) q.loyAdj = clamp((q.loyAdj || 0) - (lb.tier === 'sure' ? 2 : 1), -15, 15);   // 선수단도 구단이 레전드를 지키지 못했다고 본다
+    this.story('legend', `${p.ko} ${how} — ${tierTxt} 선수를 놓쳤습니다(팬 충성도 ${before.toFixed(0)} → ${f.fl.toFixed(0)})`, 3);
+    if (this.eventsOpen().some(e => e.type === 'fanloss')) return;
+    const im = this.fanImpact(user);
+    this._evAdd({ type: 'fanloss', title: `📉 팬 반응 — ${p.ko}`, ttl: 1e9, def: 'ignore', rec: lb.tier === 'sure' ? 'apology' : 'event', data: { name: p.ko },
+      text: `${tierTxt} ${p.ko}(구단 WAR ${lb.war.toFixed(1)})을(를) ${how === '방출' ? '방출했습니다' : '놓쳤습니다'}. 팬 충성도 지수가 ${before.toFixed(0)}에서 ${f.fl.toFixed(0)}로 떨어졌고(평년 100) 평균 관중 약 ${Math.round(im.attPct * 100)}% 감소, 예상 입장·MD 수입이 연 ${im.total.toFixed(1)}억 줄어듭니다. 이사회 신뢰도(${lb.tier === 'sure' ? '−3' : '−1.5'})와 선수단 충성도(${lb.tier === 'sure' ? '−2' : '−1'})도 내려갔습니다. 지수는 해마다 격차의 25%씩 회복됩니다. 어떻게 대응할까요?`, choices: [
+        { k: 'apology', label: '팬 소통 행사(1.0억)', hint: '팬 충성도 지수 +5 · 비용 1.0억' },
+        { k: 'event', label: '팬 감사 이벤트(0.4억)', hint: '팬 충성도 지수 +2.5 · 비용 0.4억' },
+        { k: 'ignore', label: '대응하지 않음', hint: '자연 회복만(해마다 격차의 25%)' }] });
+  };
+  proto._fanLossResolve = function (e, k) {
+    const S = this.S, f = S.fin && S.fin.teams[S.userTeam]; if (!f) return '';
+    const up = k === 'apology' ? 5 : k === 'event' ? 2.5 : 0, c = k === 'apology' ? 1.0 : k === 'event' ? 0.4 : 0;
+    if (up && f.fl !== undefined) f.fl = Math.min(100, Math.round((f.fl + up) * 10) / 10); if (c) f.evCost = Math.round(((f.evCost || 0) + c) * 10) / 10;
+    return k === 'ignore' ? `${e.data.name} 건에 대응하지 않았습니다(팬 충성도 지수 ${this.fanLoy(S.userTeam).toFixed(0)}, 자연 회복).` : `${k === 'apology' ? '팬 소통 행사' : '팬 감사 이벤트'}를 열었습니다(팬 충성도 지수 +${up}, ${c.toFixed(1)}억 → ${this.fanLoy(S.userTeam).toFixed(0)}).`;
   };
   /* 시즌 전환: 보류된 내 구단 후보는 다음 해 오프시즌에 다시 이벤트로 올린다(이벤트는 한 건씩) */
   proto._legendRollover = function () { if (this._legendProcess) this._legendProcess(); };
@@ -6889,6 +6939,17 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
       ${dead.length ? `<div class="small muted" style="margin-top:6px">방출 위약금: ${dead.map(x => `${esc(x.who)} ${x.year}년 ${f1(x.amt)}억`).join(' · ')}</div>` : ''}</div>`;
   }
   /* 재정이 게임에 주는 영향 한눈에: 예산 → FA·코치 여유 → 신뢰도 → 설득·허용 적자 */
+  const legendChip = p => {   // 영구결번 후보 배지(한 구단 선수·구단 WAR 회색선 이상)
+    if (!L.legendBound) return ''; const from = (p.faInfo && p.faInfo.from) || p.team, lb = L.legendBound(p, from); if (!lb) return '';
+    return ` <span class="chip ${lb.tier === 'sure' ? 'ks' : 'in'}" title="${esc(KO[from] || '')}에서만 뛴 선수 · 구단 WAR ${lb.war.toFixed(1)} · 이적하면 후보에서 빠지고 원소속 팬 충성도가 크게 떨어집니다">영구결번 후보${lb.tier === 'sure' ? '(확실)' : ''} ${lb.war.toFixed(0)}</span>`;
+  };
+  function fanCard() {   // 팬 충성도 지수: 영구결번 후보를 놓치면 하락 → 관중·MD 수입 감소
+    if (!L.finReady() || !L.fanImpact) return ''; const t = U(), f = L.S.fin.teams[t], im = L.fanImpact(t), log = (f.flLog || []).slice(-3).reverse();
+    if (im.fl >= 99.95 && !log.length) return '';
+    return `<div class="card"><h2>팬 충성도</h2><div class="kpis"><div class="kpi"><div class="l">팬 충성도 지수</div><div class="v ${im.fl < 90 ? 'neg' : ''}">${im.fl.toFixed(0)}</div></div><div class="kpi"><div class="l">관중 감소</div><div class="v">${im.att ? '−' + Math.round(im.attPct * 100) + '%' : '없음'}</div></div><div class="kpi"><div class="l">연 수입 감소(예상)</div><div class="v ${im.total > 0 ? 'neg' : ''}">${im.total > 0 ? '−' + im.total.toFixed(1) + '억' : '없음'}</div></div></div>
+      <div class="small muted" style="margin-top:6px">영구결번 후보를 FA·트레이드·방출로 놓치면 지수가 내려갑니다(평년 100). 지수가 낮으면 관중 수요가 줄고 MD·기타 수입이 줄어듭니다${im.total > 0 ? ` — 입장 −${im.gate.toFixed(1)}억, MD −${im.md.toFixed(1)}억(연)` : ''}. 해마다 격차의 25%씩 회복되고 우승하면 +3입니다(⚠ 가정).</div>
+      ${log.length ? log.map(x => `<div class="small" style="margin-top:3px">${x.y} · <b>${esc(x.name)}</b> 놓침 → 지수 −${x.hit}</div>`).join('') : ''}</div>`;
+  }
   function finImpactCard() {
     if (!L.finReady()) return '';
     const S = L.S, t = U(), f = S.fin.teams[t], v = L.finPreview(t), allowed = L.finAllowed(t), per10 = allowed / (0.5 + f.trust / 100) * 0.1, room = L.faRoom(t);
@@ -6922,6 +6983,7 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
     const nextCap = me.capchg.filter(c => c[0] >= S.year);
     return `<div class="kpis"><div class="kpi"><div class="l">예상 영업이익(정규시즌)</div><div class="v ${mv.op >= 0 ? 'pos' : 'neg'}">${sg(mv.op)}억</div></div><div class="kpi"><div class="l">선수단 보수</div><div class="v">${f1(mv.pay)}억</div></div><div class="kpi"><div class="l">FA 여유자금</div><div class="v ${mv.room >= 0 ? '' : 'neg'}">${f1(mv.room)}억</div></div><div class="kpi"><div class="l">이사회 신뢰도</div><div class="v ${mv.trust < 30 ? 'neg' : ''}">${mv.trust}</div></div></div>
     ${finImpactCard()}
+    ${fanCard()}
     ${monthCard(me, mv)}
     <div class="card"><h2>티켓 가격 정책</h2><div class="small muted">가격을 올리면 객단가가 오르지만 관중이 줄어듭니다(탄력성 0.6, 가정). 시즌 중에도 바꿀 수 있고, 이후 경기부터 적용됩니다. 현재 홈 평균 관중 ${mv.att.toLocaleString()}명 / 좌석 ${mv.cap.toLocaleString()}</div>
       <div class="row" style="gap:6px;margin-top:6px">${[0.9, 1, 1.1, 1.2].map(m => `<button data-act="ticket" data-a="${m}" ${me.pm === m ? 'class="primary"' : ''}>${m === 1 ? '유지' : (m < 1 ? '' : '+') + Math.round((m - 1) * 100) + '%'}</button>`).join('')}</div></div>
@@ -7307,7 +7369,7 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
       const sign = n.state === 'signed' || n.state === 'done';
       panel = `<div class="neg-result ${n.state === 'broke' ? 'bad' : 'good'}"><b>${n.state === 'signed' ? '계약 체결' : n.state === 'done' ? '면담 종료' : '협상 종료'}</b><div class="small">${meet ? esc(n.msg || '') : n.state === 'signed' ? `${n.final.years}년 · 연봉 ${n.final.salary}억${n.final.bonus ? ' + 계약금 ' + n.final.bonus + '억' : ''}` : '선수는 시장에 남아 있습니다. 며칠 뒤 다시 협상할 수 있습니다.'}${n.evMsg ? '<br>' + esc(n.evMsg) : ''}</div></div><div class="row"><button class="primary" data-act="negDone">닫기</button></div>`;
     }
-    return `<div class="neg-bg"><div class="negwin" role="dialog" aria-label="협상 테이블" data-stop="1"><div class="neg-head"><div class="row" style="flex-wrap:nowrap"><button class="sm" data-act="negExit" aria-label="목록으로 돌아가기">← 돌아가기</button><b style="flex:1;text-align:center;min-width:0">${esc(p.ko)}</b><span class="chip in">${n.kind === 'foreign' && p.aq ? '아시아쿼터 영입' : NEG_KIND[n.kind]}</span></div>
+    return `<div class="neg-bg"><div class="negwin" role="dialog" aria-label="협상 테이블" data-stop="1"><div class="neg-head"><div class="row" style="flex-wrap:nowrap"><button class="sm" data-act="negExit" aria-label="목록으로 돌아가기">← 돌아가기</button><b style="flex:1;text-align:center;min-width:0">${esc(p.ko)}</b><span class="chip in">${n.kind === 'foreign' && p.aq ? '아시아쿼터 영입' : NEG_KIND[n.kind]}</span>${legendChip(p)}</div>
       <div class="row" style="justify-content:center;gap:6px"><span class="chip">${pos(p)}</span><span class="chip">${p.age}세</span>${foreignOvr(p)}${L.hiddenForeign(p) ? '' : moodChip(p) + traitChip(p)}</div>
       <div class="row" style="justify-content:space-between">${negMoodBar(n.mood, n.mood0)}<span class="small muted">${meet ? TOPIC_KO[n.topic] || '면담' : `${open ? `라운드 ${Math.min(n.round + 1, n.max)}/${n.max}` : '종료'}`} ${dots}</span></div>${pr}${fac}</div>
       <div class="neg-chat" aria-live="polite">${chat}</div>${negTabs}<div class="neg-panel">${panel}</div></div></div>`;
@@ -7342,7 +7404,7 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
     return `<div class="card"><div class="row"><h2 style="margin:0">시즌 스토리</h2><span class="sp"></span><select data-sel="storyy" aria-label="시즌">${years.map(v => `<option value="${v}" ${v === y ? 'selected' : ''}>${v}</option>`).join('')}</select></div><div class="tabs wrap" role="tablist" style="margin-top:8px">${tabs}</div></div>${body}`;
   }
   /* ---------------- 시즌 중 소식(이벤트) ---------------- */
-  const evIcon = { camp: '⛺', grievance: '🗣', sponsor: '🤝', promo: '🎉', board: '🏛', arc: '📖', legend: '🏅', retcer: '🎖', awards: '🏆' };
+  const evIcon = { camp: '⛺', grievance: '🗣', sponsor: '🤝', promo: '🎉', board: '🏛', arc: '📖', legend: '🏅', retcer: '🎖', awards: '🏆', fanloss: '📉' };
   function eventCards() {
     const open = L.eventsOpen(), warns = L.validateEntry(); if (!open.length && !warns.length) return '';
     const rows = open.map(e => { const rec = e.rec || e.def; return `<div class="ev"><div><b>${evIcon[e.type] || '📢'} ${esc(e.title)}</b> <span class="muted small">${L.dateStr(e.day)} · ${e.type === 'comp' ? '직접 고를 때까지 보상이 정산되지 않습니다' : e.exp > 1e8 ? '개막 전까지 결정 · 미결정 시 변화 없음' : Math.max(0, e.exp - L.S.day) + '일 내 결정'}</span></div><div class="small" style="margin:4px 0 8px">${esc(e.text)}</div><div class="row evbtn">${e.choices.map(c => `<button class="sm ${c.k === rec ? 'primary' : ''}" data-act="evChoice" data-a="${e.id}|${c.k}" title="${esc(c.hint || '')}">${c.k === rec && open.length > 1 ? '★ ' : ''}${esc(c.label)}</button>`).join('')}</div><div class="small muted" style="margin-top:4px">${e.choices.map(c => esc(c.label.replace(/ \(.*\)$/, '')) + ': ' + esc(c.hint || '')).join(' / ')}</div></div>`; }).join('');
@@ -7658,7 +7720,7 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
       const tm = L.faTerms(p, U()), fr = p.foreign, o = fr ? null : Object.assign(L.faDefaultOffer(p, U()), (ui.faIn || {})[p.id] || {}), per = o ? (o.bonus + o.salary * o.years) / o.years : 0, bi = fr || !tm.graded ? null : L.faBidInfo(p.id);
       const req = fr ? `<td class="n">${money(Math.min(L.askSalary(p), L.foreignCap(p, U())))}</td><td class="small muted">외국인 1년</td>` : tm.graded ? `<td class="n">${f1(tm.req(tm.pref))}<div class="small muted">시장가 ${f1(tm.mv)}${tm.ext ? ' · 이적 +4%' : ''}${tm.disc > 0 ? ' · <b class="pos">충성 할인 −' + Math.round(tm.disc * 1000) / 10 + '%</b>' : ''}${tm.comp > 1 ? ' · 경쟁 +' + Math.round((tm.comp - 1) * 1000) / 10 + '%' : ''}</div></td><td class="small muted">${tm.pref}년 선호 · 총 ${f1(tm.req(tm.pref) * tm.pref)}억</td>` : `<td class="n">${f1(tm.req(1))}</td><td class="small muted">1년 계약만 가능(FA 자격 없음)</td>`;
       const offer = fr ? `<button class="sm primary" data-act="negOpen" data-a="${p.id}|foreign">협상</button>` : `<select data-sel="fayears" data-a="${p.id}" ${tm.graded ? '' : 'disabled'}>${Array.from({ length: tm.maxYears }, (_, i) => i + 1).map(y => `<option value="${y}" ${y === o.years ? 'selected' : ''}>${y}년</option>`).join('')}</select> 연봉 <input class="num" type="number" step="0.1" min="0.3" style="width:64px" data-sel="fasal" data-a="${p.id}" value="${o.salary}"> ${tm.graded ? `계약금 <input class="num" type="number" step="0.1" min="0" style="width:64px" data-sel="fabonus" data-a="${p.id}" value="${o.bonus}">` : ''} <button class="sm primary" data-act="signFA" data-a="${p.id}">제시</button> <button class="sm" data-act="negOpen" data-a="${p.id}|fa" title="선수와 마주 앉아 협상합니다">협상</button>`;
-      return `<tr><td class="l"><b>${esc(p.ko)}</b></td><td class="l">${pos(p)}</td><td class="n">${p.age}</td><td>${ovrChip(L.ovr(p))}</td><td class="l">${faChip(p)}${p.faInfo && p.faInfo.from ? ` <span class="muted small">${KO[p.faInfo.from] || ''}</span>` : ''}</td><td class="l">${subHtml(p)}</td>${req}${mk ? `<td class="l small">${bidCell(bi)}</td>` : ''}<td>${offer}${bi && bi.best ? ` <button class="sm" data-act="faBeat" data-a="${p.id}" title="경쟁 입찰을 넘는 최소 제시를 입력칸에 채웁니다">경쟁 이기는 제시</button>` : ''}</td></tr>`;
+      return `<tr><td class="l"><b>${esc(p.ko)}</b>${legendChip(p)}</td><td class="l">${pos(p)}</td><td class="n">${p.age}</td><td>${ovrChip(L.ovr(p))}</td><td class="l">${faChip(p)}${p.faInfo && p.faInfo.from ? ` <span class="muted small">${KO[p.faInfo.from] || ''}</span>` : ''}</td><td class="l">${subHtml(p)}</td>${req}${mk ? `<td class="l small">${bidCell(bi)}</td>` : ''}<td>${offer}${bi && bi.best ? ` <button class="sm" data-act="faBeat" data-a="${p.id}" title="경쟁 입찰을 넘는 최소 제시를 입력칸에 채웁니다">경쟁 이기는 제시</button>` : ''}</td></tr>`;
     }).join('');
     return `${faCalendar()}${faFeedCard()}${persuadeCard()}${protectCard()}${tabBar}<div class="card"><div class="row"><h2>국내 FA 시장</h2><span class="muted small">${cbtText(U())} · FA 여유자금 ${L.faRoom(U()).toFixed(1)}억 · 보유 ${S.teams[U()].ids.length}명 · 외부 FA ${L._faCount(U())}/3 · 외국인 일반 ${L.foreignOf(U()).filter(x => !x.aq).length}/3 + AQ ${L.foreignOf(U()).filter(x => x.aq).length}/1</span><span class="sp"></span><select data-sel="fasort"><option value="war" ${ui.faSort === 'war' ? 'selected' : ''}>가치순</option><option value="ovr" ${ui.faSort === 'ovr' ? 'selected' : ''}>능력치순</option><option value="age" ${ui.faSort === 'age' ? 'selected' : ''}>나이순</option></select></div>
       ${list.length ? `<div class="tablewrap"><table><thead><tr><th class="l">선수</th><th class="l">포지션</th><th>나이</th><th>OVR</th><th class="l">FA 등급·원소속</th><th class="l">세부 능력</th><th>요구 연 보수(억)</th><th class="l">요구 조건</th>${mk ? '<th class="l">경쟁 현황</th>' : ''}<th class="l">제시 (연 보수 = 연봉 + 계약금 ÷ 기간)</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="muted">시장에 나온 FA가 없습니다. 오프시즌에 계약이 끝난 선수가 시장에 나옵니다.</p>'}</div>`;

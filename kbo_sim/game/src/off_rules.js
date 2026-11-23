@@ -42,7 +42,8 @@
     if (S.teams[t].ids.length <= 44) return { ok: false, msg: '보유 선수가 최소 44명 필요합니다.' };
     const cost = this.releaseCost(id), f = S.fin && S.fin.teams[t]; const bl0 = this.bonds ? this.bonds(p) : [];
     if (f) { f.dead = (f.dead || []).concat(cost.rec.map(x => ({ year: x.year, amt: x.amt, who: p.ko }))); f.trust = clamp(Math.round((f.trust + cost.trust) * 10) / 10, 0, 100); }
-    this.release(t, id); if (this._bondShift && (p.tn >= 3 || this.ovr(p) >= 50)) this._bondShift(p, -1, '방출', bl0);
+    const lbRel = this.legendBound ? this.legendBound(p, t) : null;
+    this.release(t, id); if (lbRel) this._legendLoss(p, t, null, '방출', lbRel); if (this._bondShift && (p.tn >= 3 || this.ovr(p) >= 50)) this._bondShift(p, -1, '방출', bl0);
     news(this, `방출: ${p.ko} — 위약금 ${cost.total}억(이번 시즌 ${cost.thisYear}억)${cost.trust < 0 ? `, 이사회 신뢰도 ${cost.trust}` : ''}${cost.core ? ' · 오랜 핵심 선수 방출로 팬·선수단 반응이 좋지 않습니다' : ''}`);
     return { ok: true, cost };
   };
