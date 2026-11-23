@@ -4274,7 +4274,7 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
 })(typeof self !== 'undefined' ? self : this, function (LG, Engine) {
   'use strict';
   const { proto, rngFor, clamp, TEAMS, KO0, news } = LG.OFFC;
-  const K = { B: 1.0, SP: 1.3, RP: 2.2 };
+  const K = { B: 1.0, SP: 1.3, RP: 1.8 };
   const TH = { main: { sure: 50, gray: 40 }, rp: { sure: 30, gray: 24 } };
   const MIN_YEARS = 10, MAX_HOLD = 2;
   const kind0 = p => p.type === 'B' ? 'B' : p.role === 'SP' ? 'SP' : 'RP';
@@ -4310,7 +4310,7 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
     team = team || this.S.userTeam; const out = [];
     for (const p of this.players(team)) {
       if (!this._legendOneClub(p, team)) continue; const war = this.legendWar(p, team), th = kind(p) === 'RP' ? TH.rp : TH.main;
-      if (war < th.gray * 0.8) continue; out.push({ id: p.id, name: p.ko, pos: p.type === 'P' ? (p.role === 'SP' ? '선발' : '구원') : p.pos, age: p.age, war, tier: war >= th.sure ? 'sure' : war >= th.gray ? 'gray' : 'near', yrs: this._legendYears(p) });
+      if (war < th.gray * 0.8) continue; out.push({ id: p.id, name: p.ko, pos: p.type === 'P' ? (kind(p) === 'SP' ? '선발' : '구원') : p.pos, age: p.age, war, tier: war >= th.sure ? 'sure' : war >= th.gray ? 'gray' : 'near', yrs: this._legendYears(p) });
     }
     return out.sort((a, b) => b.war - a.war);
   };
@@ -4322,7 +4322,7 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
     for (const p of Object.values(S.players)) {
       if (!p.retired || p.legJ) continue; p.legJ = 1; const club = this._legendClub(p); if (!club) continue;
       const ev = this._legendEval(p, club); if (!ev.tier) continue;
-      LGd.q.push({ pid: p.id, team: club, name: p.ko, pos: p.type === 'P' ? (p.role === 'SP' ? '선발' : '구원') : p.pos, age: p.age, yrs: ev.yrs, war: ev.war, tier: ev.tier, since: S.year, holds: 0 });
+      LGd.q.push({ pid: p.id, team: club, name: p.ko, pos: p.type === 'P' ? (kind(p) === 'SP' ? '선발' : '구원') : p.pos, age: p.age, yrs: ev.yrs, war: ev.war, tier: ev.tier, since: S.year, holds: 0 });
     }
     LGd.q.sort((a, b) => b.war - a.war);
     const done = {};
