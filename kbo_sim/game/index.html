@@ -1117,7 +1117,8 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
       const tar = C.fielding.team_avg_range; if (!tar.Whales) { const w = {}; for (const pos in tar[TEAMS[0]]) w[pos] = TEAMS.reduce((a, t) => a + tar[t][pos], 0) / TEAMS.length; tar.Whales = w; }
     }
     toJSON() { return this.S; }
-    static fromJSON(S) { S.mil = S.mil || []; S.fteams = S.fteams || { Whales: { ids: [] } }; S.stats2 = S.stats2 || { bat: {}, pit: {} }; S.recent = S.recent || {}; const L = new League(S); L._f2dirty = true; L._ensureWhales(); if (!S.rec2 || !S.rec2[TEAMS[0]] || L.farmTeams().some(t => !S.rec2[t])) { S.rec2 = {}; for (const t of L.farmTeams()) S.rec2[t] = [0, 0, 0, 0, 0]; }
+    static fromJSON(S) { if (S.post && S.post.cur && Array.isArray(S.post.rounds)) { const i = S.post.rounds.findIndex(r => r && r.name === S.post.cur.name); if (i >= 0) S.post.rounds[i] = S.post.cur; }   /* 저장 → 불러오기를 거치면 현재 시리즈(cur)와 rounds[i]가 서로 다른 복사본이 되어, 시리즈 종료 때 승자가 기록되지 않고 와일드카드가 되풀이되던 문제를 막는다 */
+      S.mil = S.mil || []; S.fteams = S.fteams || { Whales: { ids: [] } }; S.stats2 = S.stats2 || { bat: {}, pit: {} }; S.recent = S.recent || {}; const L = new League(S); L._f2dirty = true; L._ensureWhales(); if (!S.rec2 || !S.rec2[TEAMS[0]] || L.farmTeams().some(t => !S.rec2[t])) { S.rec2 = {}; for (const t of L.farmTeams()) S.rec2[t] = [0, 0, 0, 0, 0]; }
       if (!S.calib.salK) L._scaleSalaries();   // 예전 저장: 연봉을 실제 규모로 환산
       if (!S.cbt) S.cbt = { over: {}, under: {}, drop: {}, fees: {}, log: [] };
       if (!S.coach && L._ensureCoach) L._ensureCoach();   // 예전 저장: 가상 코칭스태프 생성
