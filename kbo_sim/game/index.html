@@ -1999,7 +1999,7 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
     _endSeries() {
       const P = this.S.post, s = P.cur;
       if (P.stage === 3) { P.done = true; P.champion = s.winner; P.runnerUp = s.winner === s.hi ? s.lo : s.hi; this.S.phase = 'post_done'; return true; }
-      P.day = (P.day || 0) + 1; this._mkSeries(P.stage + 1); return true;   // 시리즈 사이 하루 휴식(이동일)
+      P.day = (P.day || 0) + 1; const nm = s.name, w = s.winner; this._mkSeries(P.stage + 1); this._lnews(`${nm}: ${KO[w] || w} 승리 → ${P.cur.name} 진출 (${KO[P.cur.hi] || P.cur.hi} 대 ${KO[P.cur.lo] || P.cur.lo}, ${P.cur.need === 4 ? '7전 4선승' : '5전 3선승'})`); return true;   // 시리즈 사이 하루 휴식(이동일)
     }
     /* AI 대 AI 포스트시즌 경기 1회 */
     simPostGame() {
