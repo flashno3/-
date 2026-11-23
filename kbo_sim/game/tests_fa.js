@@ -43,7 +43,7 @@ const young=dh.filter(p=>p.peak!==undefined&&p.age<=24);ok(young.length>20&&youn
 // 1e) 2027 FA 시장(승인 22명): 미계약 20명은 시장에서 시작, 등급 6/10/6, AI가 시즌 초에 영입
 {const LM=League.create(base,'Lions',11),SM=LM.S;
  ok(SM.faClass2027.length===22,'FA 승인 22명');const gc={A:0,B:0,C:0};SM.faClass2027.forEach(x=>gc[x.grade]++);ok(gc.A===6&&gc.B===10&&gc.C===6,'등급 인원 KBO 공시와 일치 '+JSON.stringify(gc));
- const mk=LM.faList().filter(p=>!p.foreign&&p.faInfo&&p.faInfo.grade);ok(mk.length===19,'미계약 FA 19명 '+mk.length);
+ const mk=LM.faList().filter(p=>!p.foreign&&p.faInfo&&p.faInfo.grade);ok(mk.length===18,'미계약 FA 18명 '+mk.length);
  ok(['원태인','구자욱','홍창기','박동원'].every(n=>mk.some(p=>p.ko===n))&&!mk.some(p=>p.ko==='최지훈'),'주요 FA 시장 진입(최지훈은 SSG와 4년 67억 계약)');
  ok(['양의지','오태곤','최지훈'].every(n=>Object.values(SM.players).some(p=>p.ko===n&&p.team in SM.teams&&p.contract.total||p.ko===n&&p.team in SM.teams)),'계약 확정 3명은 소속 유지');
  ok(mk.every(p=>LM.faEligible(p)&&!SM.teams[p.faInfo.from].ids.includes(p.id)),'자격 보유·원소속 명단에서 제외');

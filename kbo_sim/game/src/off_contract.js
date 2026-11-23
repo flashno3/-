@@ -125,7 +125,8 @@
     // 1) 성장·노화
     for (const id in S.players) {
       const p = S.players[id]; if (p.retired || p.team === 'DRAFT') continue;
-      const share = this.playShare(p), pre = p.team === user ? { o0: this.ovr(p), s0: this.sub(p), a0: p.age, ps: Math.round(share * 100), trd: p.tr && p.tr.y === S.year ? p.tr.total : null } : null;   // 성장 공개 연출용 '성장 전' 기록(읽기 전용)
+      const share = this.playShare(p); if (this._legendAccrue) this._legendAccrue(p, share);   // 영구결번 판정용 구단 WAR 누적(읽기 전용 기록)
+      const pre = p.team === user ? { o0: this.ovr(p), s0: this.sub(p), a0: p.age, ps: Math.round(share * 100), trd: p.tr && p.tr.y === S.year ? p.tr.total : null } : null;   // 성장 공개 연출용 '성장 전' 기록(읽기 전용)
       const d = this.progress(p, rngFor(S.seed, S.year, 32, parseInt(id.slice(1))), p.team === user && this.investFarm && this.investFarm() > 0 ? clamp(share + this.investFarm(), 0, 1) : share);   // 육성 시설 투자: 내 선수의 출전 비중 보정(투자하지 않으면 그대로)
       if (p.team === user && this._trainRecord) this._trainRecord(p, d);   // 훈련 효과 분석용 기록(읽기 전용)
       if (p.team === user) { rep.prog.push(Object.assign({ id, d }, pre)); (p.ovrHist = p.ovrHist || []).push({ y: S.year + 1, o: this.ovr(p) }); if (p.ovrHist.length > 8) p.ovrHist.shift(); }
@@ -136,9 +137,10 @@
       const p = S.players[id]; if (p.retired || p.team === 'DRAFT') continue;
       if (rngFor(S.seed, S.year, 33, parseInt(id.slice(1))).random() < this.retireChance(p)) {
         p.retired = true; if (p.team !== 'FA') this.removeFromTeam(p.team, id); else S.fa = (S.fa || []).filter(x => x !== id);
-        if (p.team === user) { rep.retired.push(id); news(this, `${p.ko}(${p.age}세) 은퇴`); if (this._hofCheck) this._hofCheck(p); } p.team = 'RET'; p.active = false;
+        if (p.team === user) { rep.retired.push(id); news(this, `${p.ko}(${p.age}세) 은퇴`); if (this._hofCheck) this._hofCheck(p); } p.legClub = p.team; p.team = 'RET'; p.active = false;
       }
     }
+    if (this._legendProcess) this._legendProcess();   // 은퇴 선수 영구결번 심의(구단당 연 1건)
     this._closeSeason();   // 1군 등록일수 → FA 자격 연수, 연봉 이력
     // 3) 계약 만료
     for (const t of TEAMS) for (const id of S.teams[t].ids.slice()) {

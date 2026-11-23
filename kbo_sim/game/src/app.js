@@ -752,9 +752,21 @@
   }
   function histPanel() {
     const h = L.clubHistory(); const rows = h.rows.slice(0, 20).map(r => `<tr><td class="l">${r.year}</td><td>${r.rank}위</td><td>${r.w}승 ${r.l}패${r.d ? ' ' + r.d + '무' : ''}</td><td class="l">${r.champ ? '<span class="chip ks">우승</span>' : r.runner ? '<span class="chip in">준우승</span>' : r.rank <= 5 ? '<span class="chip">가을야구</span>' : ''}</td></tr>`).join('');
-    return clubIntroCard() + `<div class="card"><h2>${KO[U()]} 구단 역사 (이 게임의 시즌)</h2><div class="kpis"><div class="kpi"><div class="l">우승</div><div class="v">${h.titles}회</div></div><div class="kpi"><div class="l">준우승</div><div class="v">${h.runners}회</div></div><div class="kpi"><div class="l">가을야구</div><div class="v">${h.post}회</div></div></div>${rows ? `<div class="tablewrap"><table><thead><tr><th class="l">시즌</th><th>순위</th><th>성적</th><th class="l">비고</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="small muted" style="margin-top:6px">완료된 시즌이 아직 없습니다. 이 게임에서 치른 시즌이 쌓입니다.</div>'}</div>
+    return clubIntroCard() + legendCard() + `<div class="card"><h2>${KO[U()]} 구단 역사 (이 게임의 시즌)</h2><div class="kpis"><div class="kpi"><div class="l">우승</div><div class="v">${h.titles}회</div></div><div class="kpi"><div class="l">준우승</div><div class="v">${h.runners}회</div></div><div class="kpi"><div class="l">가을야구</div><div class="v">${h.post}회</div></div></div>${rows ? `<div class="tablewrap"><table><thead><tr><th class="l">시즌</th><th>순위</th><th>성적</th><th class="l">비고</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="small muted" style="margin-top:6px">완료된 시즌이 아직 없습니다. 이 게임에서 치른 시즌이 쌓입니다.</div>'}</div>
       <div class="card"><h2>명예의 전당</h2>${h.hof.length ? h.hof.map(x => `<div class="stl"><span class="d">${x.y}</span><span><b>${esc(x.name)}</b> <span class="muted small">${esc(x.pos)} · 근속 ${x.tn}년${x.summary ? ' · ' + esc(x.summary) : ''}${x.awards.length ? ' · ' + esc(x.awards.join(', ')) : ''}</span></span></div>`).join('') : '<div class="small muted">우리 구단에서 6년 이상 뛰었거나 시상 경력이 있는 선수가 은퇴하면 헌액됩니다.</div>'}</div>
       <div class="card"><h2>구단 수상 기록</h2>${h.awards.length ? h.awards.slice(0, 30).map(x => `<div class="stl"><span class="d">${x.y}</span><span><b>${esc(x.label)}</b> ${esc(x.name)} <span class="muted small">${esc(x.txt || '')}</span></span></div>`).join('') : '<div class="small muted">아직 없습니다.</div>'}</div>`;
+  }
+  function legendCard() {   // 영구결번: 1층(실제) + 2층(이 게임에서 지정) + 현역 후보
+    if (!L.legendList) return ''; const t = U(), P = L.clubProfile(t), real = P ? P.ret : [], mine = L.legendList(t), cands = L.legendCandidates(t), lg = L.legends().q.filter(x => x.team === t);
+    const tierChip = x => x === 'sure' ? '<span class="chip ks">확실</span>' : x === 'gray' ? '<span class="chip in">회색</span>' : '<span class="chip">근접</span>';
+    const realRows = real.map(r => `<div class="stl"><span class="d">${r[0]}번</span><span><b>${esc(r[1])}</b> <span class="muted small">${r[2] ? r[2] + '년 지정' : ''}</span></span></div>`).join('');
+    const gameRows = mine.slice().reverse().map(x => `<div class="stl"><span class="d">${x.y}</span><span><b>${esc(x.name)}</b> <span class="muted small">${esc(x.pos)} · ${x.yrs}시즌 · 구단 WAR ${x.war.toFixed(1)}${x.by === 'user' ? ' · 내가 지정' : ''}</span></span></div>`).join('');
+    const candRows = cands.map(c => `<tr class="click" data-act="player" data-a="${c.id}"><td class="l"><b>${esc(c.name)}</b> <span class="muted small">${esc(c.pos)} · ${c.age}세 · ${c.yrs}시즌</span></td><td class="n">${c.war.toFixed(1)}</td><td>${tierChip(c.tier)}</td></tr>`).join('');
+    return `<div class="card"><h2>영구결번</h2><div class="small muted" style="margin:-4px 0 6px">실제 영구결번과 이 게임에서 지정한 결번, 그리고 현역 후보입니다. 후보는 한 구단에서만 뛴 선수(이적 경력·외국인 제외)이며, 구단 WAR 50 이상(구원 30)은 확실, 40 이상(구원 24)은 회색으로 봅니다(⚠ 이 게임의 제안 기준).</div>
+      ${realRows ? `<h3 style="margin:8px 0 2px">실제 영구결번</h3>${realRows}` : '<div class="small muted">실제 영구결번이 없는 구단입니다.</div>'}
+      ${gameRows ? `<h3 style="margin:10px 0 2px">이 게임에서 지정</h3>${gameRows}` : ''}
+      ${lg.length ? `<div class="small" style="margin-top:8px">심의 대기: ${lg.map(x => `<b>${esc(x.name)}</b>(${x.war.toFixed(1)}${x.holds ? ', 보류 ' + x.holds : ''})`).join(' · ')}</div>` : ''}
+      <h3 style="margin:10px 0 2px">현역 후보 (구단 WAR 누적)</h3>${candRows ? `<div class="tablewrap"><table class="rec"><thead><tr><th class="l">선수</th><th class="n">WAR</th><th>구분</th></tr></thead><tbody>${candRows}</tbody></table></div>` : '<div class="small muted">현재 후보가 없습니다.</div>'}</div>`;
   }
   function chalPanel() {
     const S = L.S, cs = L.challenges(), done = (S.chalDone || []).slice().reverse();
@@ -843,7 +855,7 @@
     return `<div class="card"><div class="row"><h2 style="margin:0">시즌 스토리</h2><span class="sp"></span><select data-sel="storyy" aria-label="시즌">${years.map(v => `<option value="${v}" ${v === y ? 'selected' : ''}>${v}</option>`).join('')}</select></div><div class="tabs" role="tablist" style="margin-top:8px">${tabs}</div></div>${body}`;
   }
   /* ---------------- 시즌 중 소식(이벤트) ---------------- */
-  const evIcon = { camp: '⛺', grievance: '🗣', sponsor: '🤝', promo: '🎉', board: '🏛', arc: '📖' };
+  const evIcon = { camp: '⛺', grievance: '🗣', sponsor: '🤝', promo: '🎉', board: '🏛', arc: '📖', legend: '🏅' };
   function eventCards() {
     const open = L.eventsOpen(), warns = L.validateEntry(); if (!open.length && !warns.length) return '';
     const rows = open.map(e => { const rec = e.rec || e.def; return `<div class="ev"><div><b>${evIcon[e.type] || '📢'} ${esc(e.title)}</b> <span class="muted small">${L.dateStr(e.day)} · ${e.type === 'comp' ? '직접 고를 때까지 보상이 정산되지 않습니다' : e.exp > 1e8 ? '개막 전까지 결정 · 미결정 시 변화 없음' : Math.max(0, e.exp - L.S.day) + '일 내 결정'}</span></div><div class="small" style="margin:4px 0 8px">${esc(e.text)}</div><div class="row evbtn">${e.choices.map(c => `<button class="sm ${c.k === rec ? 'primary' : ''}" data-act="evChoice" data-a="${e.id}|${c.k}" title="${esc(c.hint || '')}">${c.k === rec && open.length > 1 ? '★ ' : ''}${esc(c.label)}</button>`).join('')}</div><div class="small muted" style="margin-top:4px">${e.choices.map(c => esc(c.label.replace(/ \(.*\)$/, '')) + ': ' + esc(c.hint || '')).join(' / ')}</div></div>`; }).join('');

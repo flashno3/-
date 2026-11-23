@@ -20,7 +20,7 @@ const best=(L,t)=>L.players(t).filter(p=>!p.foreign&&p.type==='B').sort((a,b)=>L
  const deal0=L._aiDeal(A,p);ok(deal0,'기본 상태에서 입찰 가능');const o0=L.faDefaultOffer(p,A,L.faTerms(p,A).pref),cost=o0.salary+o0.bonus/o0.years+L.faCompCost(p,A);setRoom(L,A,cost*0.8);   // 여유 = 비용의 80% → 부족분 20%
  const d1=L._aiDeal(A,p);ok(d1&&d1.special>0,'특별 승인 입찰 '+JSON.stringify(d1&&d1.special));
  p.tn=0;ok(!L._aiDeal(A,p),'스타가 아니면 예산 부족으로 입찰 불가');p.tn=8;
- let signed=false,flag=false;for(let d=0;d<40&&!signed;d++){L._postBids(d);const bs=S.faMkt.bids[p.id]||[];if(bs.some(b=>b.team===A))flag=true;if(S.faMkt.bids[p.id])S.faMkt.bids[p.id]=bs.filter(b=>b.team===A);L._resolveBids(d,false);if(p.team!=='FA')signed=true}
+ let signed=false,flag=false;for(let d=0;d<40&&!signed;d++){setRoom(L,A,cost*0.8);L._postBids(d);const bs=S.faMkt.bids[p.id]||[];if(bs.some(b=>b.team===A))flag=true;if(S.faMkt.bids[p.id])S.faMkt.bids[p.id]=bs.filter(b=>b.team===A);L._resolveBids(d,false);if(p.team!=='FA')signed=true}
  ok(flag,'우선 입찰 발생');if(!signed){L._resolveBids(45,true)}
  ok(p.team===A,'원소속팀이 계약('+p.team+')');if(p.team===A)ok((f.boardExtra||0)>0,'이사회 추가 예산 '+f.boardExtra);
  ok(/프랜차이즈 스타.*초과 승인/.test(JSON.stringify((S.news||[]).slice(0,30))+JSON.stringify(S.faFeed||[])),'초과 승인 소식')}

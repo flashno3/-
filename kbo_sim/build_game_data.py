@@ -494,6 +494,27 @@ def load_drafthist(players):
     return st
 DHS=load_drafthist(players)
 
+# 영구결번 기준 보정용: 2004~ 구단별 통산 WAR(사용자 제공 CSV, 팀·이름·구단 입단연도·WAR) → p['lg'] = {구단코드: WAR}. 구단 소속분 WAR이라 영구결번 판정(한 구단 기준)에 쓴다.
+def load_warref(players):
+    import csv
+    f=D+'game/refdata/war_2004_by_team.csv'
+    st={'ok':0,'players':0,'miss':[]}
+    if not os.path.exists(f): return st
+    TMC={'한화':'Eagles','LG':'Twins','SSG':'Landers','두산':'Bears','키움':'Heroes','KT':'Wiz','NC':'Dinos','롯데':'Giants','삼성':'Lions','KIA':'Tigers'}
+    ALIAS={'손광민':'손아섭'}   # 개명 전 이름
+    by={}
+    for r in csv.DictReader(open(f,encoding='utf-8-sig')):
+        n=ALIAS.get(r['이름'],r['이름']);y=2000+int(r['연도']);by.setdefault(n,[]).append((TMC[r['팀']],y,float(r['WAR']),r['포지션']))
+    for n,rows in by.items():
+        miny=min(y for _,y,_,_ in rows)
+        c=[p for p in players if p['ko']==n and not p.get('foreign') and p.get('dh') and p['dh'].get('y') and p['dh']['y']<=miny+1 and miny-p['dh']['y']<=4 and p.get('age',0)>=24]   # 신인 동명이인 배제(입단이 CSV 첫 연도보다 늦으면 다른 선수)
+        if len(c)!=1:
+            if len(c)>1: st['miss'].append((n,'모호 %d'%len(c)))
+            continue
+        c[0]['lg']={t:round(w,2) for t,_,w,_ in rows};st['ok']+=len(rows);st['players']+=1
+    return st
+WREF=load_warref(players)
+
 # FA 이력(사용자 제공 CSV): FA 행사 여부·등급·행사 횟수 → p['fah'](목록). 후보는 나이 27세 이상(FA 자격 연수 때문에), 동명이인은 FA 계약 CSV 매칭(p['ct'])·출전량으로 선택.
 def load_fahist(players):
     import csv,re
@@ -697,6 +718,7 @@ print('개명 병합(이전이름→현재이름·팀)',len(RENAMED),RENAMED)
 print('드래프트 이력 중복 방지 제외',DHS['dup'])
 print('드래프트 이력 매칭',DHS['ok'],'| 모호',DHS['amb'],'| 미매칭',DHS['miss'],'| 나이 재추정',sum(1 for p in players if p.get('ageEstDraft')))
 
+print('영구결번 WAR 참고(구단별)',WREF['players'],'명 매칭',WREF['ok'],'행 | 모호',WREF['miss'])
 print('FA 이력 반영',FAH['ok'],'행 | 미매칭(은퇴·자료 없음)',FAH['miss'])
 
 print('2027 외국인 확정 계약',len(FOREIGN27),'건')

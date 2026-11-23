@@ -165,6 +165,7 @@
       else res = '현 전력을 유지합니다.';
     }
     if (e.type === 'arc' && this._arcResolve) res = this._arcResolve(e, k, auto);
+    else if (e.type === 'legend' && this._legendResolve) res = this._legendResolve(e, k);
     e.status = 'done'; e.choice = k; e.result = res; e.auto = !!auto; news(this, `${e.title}: ${res}`); this.invalidate();
     return { ok: true, msg: res };
   };
