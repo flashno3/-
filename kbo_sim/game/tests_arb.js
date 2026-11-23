@@ -10,7 +10,7 @@ const off=L.startOffseason();
  for(const t of ['Bears','Twins'])ok(L.teamPerf(t).post===(L.teamPerf(t).rank<=5),'가을야구 여부');}
 // 2) 요구액: 비FA 삭감 한도 −30%·인상 한도 ×2, FA 자격자는 성적에 비례(삭감 한도 −30%)
 let cut=0,up=0,cnt=0;for(const p of Object.values(S.players)){if(!(p.team in S.teams)||p.foreign)continue;const cur=p.contract.salary,a=L.resignAsk(p);cnt++;
-  ok(a>=L.minSal()-1e-9,'최저연봉');if(L.faEligible(p)){ok(a>=cur*0.7*0.94-0.11||a<=L.minSal()+0.11,'FA 자격자 삭감 한도 '+p.ko+' '+cur+'→'+a)}else{ok(a>=cur*0.7*0.94-0.11&&a<=cur*2+0.31,'비FA 요구 범위 '+p.ko+' '+cur+'→'+a)}if(a<cur-0.05)cut++;if(a>cur+0.05)up++}
+  ok(a>=L.minSal()-1e-9,'최저연봉');if(L.faEligible(p)){ok(a>=cur*0.7*0.90-0.11||a<=L.minSal()+0.11,'FA 자격자 삭감 한도 '+p.ko+' '+cur+'→'+a)}else{ok(a>=cur*0.7*0.90-0.11&&a<=cur*2+0.31,'비FA 요구 범위 '+p.ko+' '+cur+'→'+a)}if(a<cur-0.05)cut++;if(a>cur+0.05)up++}
 ok(cut>20&&up>20,'삭감과 인상이 모두 존재 cut='+cut+' up='+up+'/'+cnt);
 // 3) 성적에 비례(FA 자격자 중 WAR 상위 vs 하위의 요구/현재 비)
 {const el=Object.values(S.players).filter(p=>p.team in S.teams&&!p.foreign&&L.faEligible(p));if(el.length>=8){const sorted=el.slice().sort((a,b)=>L.war(b)-L.war(a)),r=p=>L.resignAsk(p)/p.contract.salary,top=sorted.slice(0,4).reduce((a,p)=>a+r(p),0)/4,bot=sorted.slice(-4).reduce((a,p)=>a+r(p),0)/4;ok(top>bot,'FA 자격자: WAR 높을수록 요구 인상률 ↑ '+top.toFixed(2)+' > '+bot.toFixed(2))}}

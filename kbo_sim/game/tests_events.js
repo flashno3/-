@@ -26,7 +26,7 @@ const mk=(seed,team)=>{const L=League.create(base,team||'Eagles',seed);L.faAdvan
  ok(f.snap.every(x=>x.rank>=1&&x.rank<=10&&isFinite(x.op)),'스냅샷 값');}
 // 5) 이벤트 효과: 스폰서·팬 이벤트·불만
 {const L=mk(12,'Lions'),S=L.S,t=S.userTeam,f=S.fin.teams[t];S.day=40;
- const sp=L._evAdd({type:'sponsor',title:'t',data:{amt:5},text:'',choices:[{k:'accept'},{k:'decline'}],def:'decline'});const a0=L.finAtt(t),op0=L.finPreview(t).op;L.resolveEvent(sp.id,'accept');ok(f.evRev===5&&L.finAtt(t)<a0&&Math.abs(L.finPreview(t).rev-L.finPreview(t).gate-f.parAds-f.other-L.finBC()-5)<0.01,'스폰서 수락: 매출 +5, 관중 −1.5%');
+ const sp=L._evAdd({type:'sponsor',title:'t',data:{amt:5},text:'',choices:[{k:'accept'},{k:'decline'}],def:'decline'});const a0=L.finAtt(t),op0=L.finPreview(t).op;L.resolveEvent(sp.id,'accept');ok(f.evRev===5&&L.finAtt(t)<a0&&Math.abs(L.finPreview(t).rev-L.finPreview(t).gate-f.parAds-L.finPreview(t).other-L.finBC()-5)<0.01,'스폰서 수락: 매출 +5, 관중 −1.5%');
  const pr=L._evAdd({type:'promo',title:'t',data:{cost:2},text:'',choices:[{k:'go'},{k:'skip'}],def:'skip'});const a1=L.finAtt(t);L.resolveEvent(pr.id,'go');ok(L.finAtt(t)>a1&&f.evCost===2,'팬 이벤트: 비용·관중 증가');S.day=70;ok(L.finAtt(t)<=a1*1.001,'효과 20일 후 종료');
  const q=L.players(t).filter(p=>!p.active&&!L.isInj(p)&&!p.foreign)[0];const gv=L._evAdd({type:'grievance',title:'t',data:{pid:q.id},text:'',choices:[{k:'ignore'}],def:'ignore'});const l0=L.loyalty(q,t).v;L.resolveEvent(gv.id,'ignore');ok(L.loyalty(q,t).v<l0,'불만 방치: 충성도 하락');}
 console.log('events tests ok',n);

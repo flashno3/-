@@ -5,7 +5,7 @@ const L=League.create(base,'Lions',1),S=L.S,g=k=>Object.values(S.players).find(p
 // 산정: 근속·입단 구단·연고 1차 지명·원클럽·베테랑
 const cj=g('최정'),l=L.loyalty(cj);ok(l.team==='Landers'&&l.v===87&&l.items.length===4,'최정 충성도 87(유신고=수원 KT 연고, 연고 가산 없음) '+JSON.stringify(l));
 const oj=g('오지환'),lo2=L.loyalty(oj);ok(lo2.v===95&&lo2.items.some(x=>x[0].startsWith('연고 출신(경기고)')),'오지환: 경기고=서울 연고 가산 '+JSON.stringify(lo2));
-ok(Math.abs(L.loyDiscount(cj)-0.0864)<0.002,'할인율 = (충성도−55)×0.27%, 최대 12% '+L.loyDiscount(cj));
+{const lb=L.legendBound&&L.legendBound(cj,cj.team);const exp=lb?Math.min(0.2,0.0864+0.06):0.0864;ok(Math.abs(L.loyDiscount(cj)-exp)<0.002,'할인율 = (충성도−55)×0.27%(+영구결번 후보 6%p), 최대 12%(후보 20%) '+L.loyDiscount(cj)+' '+exp)}
 const vs=Object.values(S.players).filter(p=>!p.foreign&&p.team in S.teams).map(p=>L.loyalty(p)).filter(Boolean).map(x=>x.v);
 ok(vs.every(v=>v>=40&&v<=100)&&vs.length>900,'충성도 범위 40~100');
 // 외국인은 대상 아님, 다른 구단 기준 충성도는 근속 0
