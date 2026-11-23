@@ -13,11 +13,28 @@
   const INJ_P = [['팔꿈치 통증', 4], ['어깨 통증', 3], ['팔 피로 누적', 3], ['손가락 물집', 2], ['내전근 통증', 1], ['옆구리(복사근) 통증', 2], ['허리 통증', 1], ['햄스트링 염좌', 1]];
   const pickW = (r, list) => { let x = r.random() * list.reduce((a, b) => a + b[1], 0); for (const [n, w] of list) { if ((x -= w) < 0) return n; } return list[0][0]; };
   proto._injFix = function () { for (const p of Object.values(this.S.players)) if (p.inj && !this.isInj(p) && p.inj.generated) delete p.inj; };
+  /* 부상 자동 관리(내 팀): off=직접 / fill=부상으로 빈 1군 자리를 같은 유형(같은 포지션 우선)의 건강한 2군 선수로 자동 채움(기본) / full=fill + 복귀한 선수가 1군 최저보다 낫다면 자동 교체(AI와 같은 기준) */
+  proto.injAuto = function () { const v = this.S.injAuto; return v === 'off' || v === 'full' ? v : 'fill'; };
+  proto._injAutoFix = function (out, back) {
+    const S = this.S, user = S.userTeam, filled = [], swapped = [], val = q => q.type === 'B' ? this._runsB(q, true) : this._runsP(q);
+    for (const q of out) {
+      if (q.team !== user || q.active) continue; const g = this.callupGroup(q);
+      const pool = this.players(user).filter(x => !x.active && x.type === q.type && x.id !== q.id && !this.isInj(x) && !this.lockLeft(x)).sort((a, b) => ((this.callupGroup(b) === g) - (this.callupGroup(a) === g)) || this.ovr(b) - this.ovr(a));
+      for (const r of pool) { if (this.openSlots() <= 0) break; if (!this.moveActive(r.id, true)) { filled.push(`${q.ko} → ${r.ko}`); break; } }
+    }
+    if (this.injAuto() === 'full') for (const q of back) {
+      if (q.team !== user || q.active || this.isInj(q) || this.lockLeft(q)) continue;
+      const w = this.players(user).filter(x => x.active && x.type === q.type).sort((a, b) => val(a) - val(b))[0];
+      if (w && val(q) > val(w) + 0.5 && !this.swapActive(q.id, w.id)) swapped.push(`${q.ko} ↔ ${w.ko}`);
+    }
+    if (filled.length) news(this, `자동 대체: 부상 공백을 2군에서 채웠습니다 — ${filled.join(', ')}`);
+    if (swapped.length) news(this, `자동 복귀 등록: ${swapped.map(x => x.replace(' ↔ ', ' 복귀(1군) / 2군행 ')).join(', ')}`);
+  };
   proto._injuryDay = function (d) {
     const S = this.S, now = this.todayN(), r = rngFor(S.seed, S.year, d, 7000), changed = new Set(), user = S.userTeam, back = {}, out = {};
     for (const t of TEAMS) for (const p of this.players(t)) {
       if (p.inj && p.inj.apply !== false && !this.isInj(p)) {   // 복귀
-        if (t === user) { news(this, `부상 복귀: ${p.ko} (${p.inj.dx}) — 2군에서 대기 중`); this._bondShift(p, 1, '부상 복귀'); if (!p.foreign || true) this._returnEvent(p); }
+        if (t === user) { news(this, `부상 복귀: ${p.ko} (${p.inj.dx}) — 2군에서 대기 중`); this._bondShift(p, 1, '부상 복귀'); if (this.injAuto() !== 'full') this._returnEvent(p); }
         if (p.inj.generated) delete p.inj; else p.inj.apply = false; changed.add(t); (back[t] = back[t] || []).push(p);
       }
     }
@@ -38,7 +55,7 @@
       if (nb < 10 || np < 8) { this.ensureActive(user); this.repairSettings(user); this.invalidate(); news(this, '부상자 때문에 1군 엔트리가 최소 인원(타자 10·투수 8) 아래로 내려가 건강한 2군 선수를 자동 등록했습니다.'); }   // 내가 직접 정한 엔트리는 존중하고 경기 진행에 필요한 최소 인원일 때만 개입
     }
     for (const t of changed) {
-      if (t === user) { this.repairSettings(t); this.invalidate(); continue; }
+      if (t === user) { if (this.injAuto() !== 'off') this._injAutoFix(out[t] || [], back[t] || []); this.repairSettings(t); this.invalidate(); continue; }
       // AI: 전체 재편성 대신 최소 교체 — 부상자는 같은 유형의 가장 가치 높은 건강한 2군 선수로, 복귀자는 같은 유형 1군 최저 가치 선수와 맞바꿈(더 나을 때만)
       const val = q => q.type === 'B' ? this._runsB(q, true) : this._runsP(q);
       for (const q of out[t] || []) { const c = this.players(t).filter(x => !x.active && x.type === q.type && !this.isInj(x)).sort((a, b) => (q.type === 'B' && q.pos === 'C' ? (b.pos === 'C') - (a.pos === 'C') : 0) || val(b) - val(a))[0]; if (c) c.active = true; }

@@ -228,6 +228,7 @@
     return `<div class="card"><div class="row"><h2 style="margin:0">로스터</h2><span class="muted small">${all.length}명</span><span class="sp"></span><select data-sel="rsort" aria-label="정렬 기준"><option value="ovr" ${sk === 'ovr' ? 'selected' : ''}>능력치순</option><option value="pot" ${sk === 'pot' ? 'selected' : ''}>잠재력순</option><option value="age" ${sk === 'age' ? 'selected' : ''}>나이순</option><option value="sal" ${sk === 'sal' ? 'selected' : ''}>연봉순</option></select></div>
       <div class="small muted" style="margin-top:6px">1군 평균 OVR ${avg(n1, p => L.ovr(p)).toFixed(1)} · ${avg(n1, p => p.age).toFixed(1)}세 · 연봉(상위 40) ${L.cbtPay(t)} / 상한 ${L.cbtCap().toFixed(1)}억</div></div>
       ${rosterBar(n1)}
+      ${injAutoCard()}
       ${L.openSlots() > 0 && L.callupPlan().length ? `<div class="card" style="border-color:var(--accent,#2a7)"><div class="row" style="flex-wrap:nowrap"><span class="small" style="flex:1"><b>1군 빈 자리 ${L.openSlots()}명</b><br><span class="muted">필요 포지션 → OVR 순으로 2군에서만 올립니다(교체 없음).</span></span><button class="primary" data-act="autoCallup">자동 콜업 ${Math.min(L.openSlots(), L.callupPlan().length)}명</button></div></div>` : ''}
       ${scopeBar}
       <div class="tabs sub" role="tablist" aria-label="보기"><button role="tab" aria-selected="${v === 'pos'}" data-act="rview" data-a="pos">포지션별</button><button role="tab" aria-selected="${v === 'stat'}" data-act="rview" data-a="stat">성적·폼</button><button role="tab" aria-selected="${v === 'list'}" data-act="rview" data-a="list">한 줄 목록</button></div>
@@ -559,6 +560,10 @@
   function screenMarket() {
     const tabs = [['trade', '트레이드'], ['fa', 'FA 시장']];
     return `<div class="tabs" role="tablist">${tabs.map(t => `<button role="tab" aria-selected="${ui.market === t[0]}" data-act="mtab" data-a="${t[0]}">${t[1]}</button>`).join('')}</div>${ui.market === 'trade' ? screenTrade() : screenFA()}`;
+  }
+  function injAutoCard() {   // 부상 자동 관리(내 팀)
+    const m = L.injAuto(), opt = [['off', '직접'], ['fill', '자동 대체'], ['full', '대체+복귀']], desc = { off: '부상자가 생기면 직접 콜업·교체합니다.', fill: '부상으로 비는 1군 자리를 같은 유형(같은 포지션 우선)의 건강한 2군 선수로 자동 채웁니다.', full: '자동 대체에 더해, 복귀한 선수가 1군 최저 선수보다 낫다면 자동으로 1군에 올립니다(복귀 알림 없이).' }[m];
+    return `<div class="card"><div class="row" style="flex-wrap:wrap;gap:6px"><b>부상 자동 관리</b><span class="sp"></span>${opt.map(([k, t]) => `<button class="sm ${m === k ? 'primary' : ''}" data-act="injAuto" data-a="${k}">${t}</button>`).join('')}</div><div class="small muted" style="margin-top:4px">${desc} 결과는 구단 소식에 남고, 라인업·로테이션은 자동 보정됩니다.</div></div>`;
   }
   function playerRow(p, checked, act, extra) {
     return `<tr><td class="l"><label class="row" style="gap:6px"><input type="checkbox" data-act="${act}" data-a="${p.id}" ${checked ? 'checked' : ''}>${esc(p.ko)}</label></td><td class="l">${pos(p)}</td><td class="n">${p.age}</td><td>${ovrChip(L.ovr(p))}</td><td class="n">${money(p.contract.salary)}</td><td class="n">${money(L.marketValue(p))}</td></tr>`;
@@ -1868,6 +1873,7 @@
     arbFile(a) { const v = +($('[data-sel="arbclub"]') || {}).value, r = L.arbFile(a, v); if (typeof r === 'string') toast(r); else { autosave(); } render(); },
     arbAccept(a) { const e = L.arbAccept(a); if (e) toast(e); else { toast('연봉조정 결과로 1년 계약했습니다.'); ui.arb = null; autosave(); } render(); },
     arbRefuse(a) { const e = L.arbRefuse(a); if (e) toast(e); else { toast('합의를 거부해 자유계약선수로 공시했습니다.'); ui.arb = null; autosave(); } render(); },
+    injAuto(a) { L.S.injAuto = a; toast(a === 'off' ? '부상 자동 관리: 끔(직접 관리)' : a === 'fill' ? '부상 자동 관리: 부상 공백을 2군에서 자동으로 채웁니다' : '부상 자동 관리: 대체 콜업 + 복귀 자동 등록'); autosave(); render(); },
     autoCallup() { const r = L.autoCallup(), nm = { C: '포수', SP: '선발', IF: '내야', OF: '외야', RP: '구원' }; if (!r.done.length) toast(r.skipped.length ? r.skipped[0][1] : '콜업할 2군 선수가 없습니다.'); else { toast(`${r.done.length}명 콜업: ` + r.done.slice(0, 4).map(x => `${P(x.id).ko}(${nm[x.group]})`).join(', ') + (r.done.length > 4 ? ' 외' : '')); autosave(); } render(); },
     rmore(a) { ui.rmore = ui.rmore || {}; ui.rmore[a] = (ui.rmore[a] || 20) + 20; render(); },
     rview(a) { ui.rf.v = a; ui.rmore = {}; render(); },

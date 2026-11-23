@@ -3694,11 +3694,28 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
   const INJ_P = [['팔꿈치 통증', 4], ['어깨 통증', 3], ['팔 피로 누적', 3], ['손가락 물집', 2], ['내전근 통증', 1], ['옆구리(복사근) 통증', 2], ['허리 통증', 1], ['햄스트링 염좌', 1]];
   const pickW = (r, list) => { let x = r.random() * list.reduce((a, b) => a + b[1], 0); for (const [n, w] of list) { if ((x -= w) < 0) return n; } return list[0][0]; };
   proto._injFix = function () { for (const p of Object.values(this.S.players)) if (p.inj && !this.isInj(p) && p.inj.generated) delete p.inj; };
+  /* 부상 자동 관리(내 팀): off=직접 / fill=부상으로 빈 1군 자리를 같은 유형(같은 포지션 우선)의 건강한 2군 선수로 자동 채움(기본) / full=fill + 복귀한 선수가 1군 최저보다 낫다면 자동 교체(AI와 같은 기준) */
+  proto.injAuto = function () { const v = this.S.injAuto; return v === 'off' || v === 'full' ? v : 'fill'; };
+  proto._injAutoFix = function (out, back) {
+    const S = this.S, user = S.userTeam, filled = [], swapped = [], val = q => q.type === 'B' ? this._runsB(q, true) : this._runsP(q);
+    for (const q of out) {
+      if (q.team !== user || q.active) continue; const g = this.callupGroup(q);
+      const pool = this.players(user).filter(x => !x.active && x.type === q.type && x.id !== q.id && !this.isInj(x) && !this.lockLeft(x)).sort((a, b) => ((this.callupGroup(b) === g) - (this.callupGroup(a) === g)) || this.ovr(b) - this.ovr(a));
+      for (const r of pool) { if (this.openSlots() <= 0) break; if (!this.moveActive(r.id, true)) { filled.push(`${q.ko} → ${r.ko}`); break; } }
+    }
+    if (this.injAuto() === 'full') for (const q of back) {
+      if (q.team !== user || q.active || this.isInj(q) || this.lockLeft(q)) continue;
+      const w = this.players(user).filter(x => x.active && x.type === q.type).sort((a, b) => val(a) - val(b))[0];
+      if (w && val(q) > val(w) + 0.5 && !this.swapActive(q.id, w.id)) swapped.push(`${q.ko} ↔ ${w.ko}`);
+    }
+    if (filled.length) news(this, `자동 대체: 부상 공백을 2군에서 채웠습니다 — ${filled.join(', ')}`);
+    if (swapped.length) news(this, `자동 복귀 등록: ${swapped.map(x => x.replace(' ↔ ', ' 복귀(1군) / 2군행 ')).join(', ')}`);
+  };
   proto._injuryDay = function (d) {
     const S = this.S, now = this.todayN(), r = rngFor(S.seed, S.year, d, 7000), changed = new Set(), user = S.userTeam, back = {}, out = {};
     for (const t of TEAMS) for (const p of this.players(t)) {
       if (p.inj && p.inj.apply !== false && !this.isInj(p)) {   // 복귀
-        if (t === user) { news(this, `부상 복귀: ${p.ko} (${p.inj.dx}) — 2군에서 대기 중`); this._bondShift(p, 1, '부상 복귀'); if (!p.foreign || true) this._returnEvent(p); }
+        if (t === user) { news(this, `부상 복귀: ${p.ko} (${p.inj.dx}) — 2군에서 대기 중`); this._bondShift(p, 1, '부상 복귀'); if (this.injAuto() !== 'full') this._returnEvent(p); }
         if (p.inj.generated) delete p.inj; else p.inj.apply = false; changed.add(t); (back[t] = back[t] || []).push(p);
       }
     }
@@ -3719,7 +3736,7 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
       if (nb < 10 || np < 8) { this.ensureActive(user); this.repairSettings(user); this.invalidate(); news(this, '부상자 때문에 1군 엔트리가 최소 인원(타자 10·투수 8) 아래로 내려가 건강한 2군 선수를 자동 등록했습니다.'); }   // 내가 직접 정한 엔트리는 존중하고 경기 진행에 필요한 최소 인원일 때만 개입
     }
     for (const t of changed) {
-      if (t === user) { this.repairSettings(t); this.invalidate(); continue; }
+      if (t === user) { if (this.injAuto() !== 'off') this._injAutoFix(out[t] || [], back[t] || []); this.repairSettings(t); this.invalidate(); continue; }
       // AI: 전체 재편성 대신 최소 교체 — 부상자는 같은 유형의 가장 가치 높은 건강한 2군 선수로, 복귀자는 같은 유형 1군 최저 가치 선수와 맞바꿈(더 나을 때만)
       const val = q => q.type === 'B' ? this._runsB(q, true) : this._runsP(q);
       for (const q of out[t] || []) { const c = this.players(t).filter(x => !x.active && x.type === q.type && !this.isInj(x)).sort((a, b) => (q.type === 'B' && q.pos === 'C' ? (b.pos === 'C') - (a.pos === 'C') : 0) || val(b) - val(a))[0]; if (c) c.active = true; }
@@ -4011,7 +4028,7 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
   proto._arcInjure = function (p, days, dx, arcId) {
     const S = this.S, now = this.todayN(), retN = now + days, rd = new Date(retN * 864e5), sd = new Date(now * 864e5);
     p.inj = { dx, since: `${S.year}-${String(sd.getUTCMonth() + 1).padStart(2, '0')}-${String(sd.getUTCDate()).padStart(2, '0')} 발생`, ret: rd.toISOString().slice(0, 10), retN, basis: '이야기 진행(스토리 아크)', apply: true, generated: true, arc: arcId };
-    p.active = false; delete p.lockUntil; this.repairSettings(S.userTeam); this.invalidate();
+    p.active = false; delete p.lockUntil; if (this._injAutoFix && this.injAuto() !== 'off') this._injAutoFix([p], []); this.repairSettings(S.userTeam); this.invalidate();
   };
   proto._arcLog = function (a, text, imp) { const S = this.S; a.log.push({ y: S.year, d: S.day, t: text }); this.story('arc', `[${a.title}] ${text}`, imp || 2); news(this, `[이야기] ${a.title}: ${text}`); };
   proto._arcEvent = function (a, o) {
@@ -6765,6 +6782,7 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
     return `<div class="card"><div class="row"><h2 style="margin:0">로스터</h2><span class="muted small">${all.length}명</span><span class="sp"></span><select data-sel="rsort" aria-label="정렬 기준"><option value="ovr" ${sk === 'ovr' ? 'selected' : ''}>능력치순</option><option value="pot" ${sk === 'pot' ? 'selected' : ''}>잠재력순</option><option value="age" ${sk === 'age' ? 'selected' : ''}>나이순</option><option value="sal" ${sk === 'sal' ? 'selected' : ''}>연봉순</option></select></div>
       <div class="small muted" style="margin-top:6px">1군 평균 OVR ${avg(n1, p => L.ovr(p)).toFixed(1)} · ${avg(n1, p => p.age).toFixed(1)}세 · 연봉(상위 40) ${L.cbtPay(t)} / 상한 ${L.cbtCap().toFixed(1)}억</div></div>
       ${rosterBar(n1)}
+      ${injAutoCard()}
       ${L.openSlots() > 0 && L.callupPlan().length ? `<div class="card" style="border-color:var(--accent,#2a7)"><div class="row" style="flex-wrap:nowrap"><span class="small" style="flex:1"><b>1군 빈 자리 ${L.openSlots()}명</b><br><span class="muted">필요 포지션 → OVR 순으로 2군에서만 올립니다(교체 없음).</span></span><button class="primary" data-act="autoCallup">자동 콜업 ${Math.min(L.openSlots(), L.callupPlan().length)}명</button></div></div>` : ''}
       ${scopeBar}
       <div class="tabs sub" role="tablist" aria-label="보기"><button role="tab" aria-selected="${v === 'pos'}" data-act="rview" data-a="pos">포지션별</button><button role="tab" aria-selected="${v === 'stat'}" data-act="rview" data-a="stat">성적·폼</button><button role="tab" aria-selected="${v === 'list'}" data-act="rview" data-a="list">한 줄 목록</button></div>
@@ -7096,6 +7114,10 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
   function screenMarket() {
     const tabs = [['trade', '트레이드'], ['fa', 'FA 시장']];
     return `<div class="tabs" role="tablist">${tabs.map(t => `<button role="tab" aria-selected="${ui.market === t[0]}" data-act="mtab" data-a="${t[0]}">${t[1]}</button>`).join('')}</div>${ui.market === 'trade' ? screenTrade() : screenFA()}`;
+  }
+  function injAutoCard() {   // 부상 자동 관리(내 팀)
+    const m = L.injAuto(), opt = [['off', '직접'], ['fill', '자동 대체'], ['full', '대체+복귀']], desc = { off: '부상자가 생기면 직접 콜업·교체합니다.', fill: '부상으로 비는 1군 자리를 같은 유형(같은 포지션 우선)의 건강한 2군 선수로 자동 채웁니다.', full: '자동 대체에 더해, 복귀한 선수가 1군 최저 선수보다 낫다면 자동으로 1군에 올립니다(복귀 알림 없이).' }[m];
+    return `<div class="card"><div class="row" style="flex-wrap:wrap;gap:6px"><b>부상 자동 관리</b><span class="sp"></span>${opt.map(([k, t]) => `<button class="sm ${m === k ? 'primary' : ''}" data-act="injAuto" data-a="${k}">${t}</button>`).join('')}</div><div class="small muted" style="margin-top:4px">${desc} 결과는 구단 소식에 남고, 라인업·로테이션은 자동 보정됩니다.</div></div>`;
   }
   function playerRow(p, checked, act, extra) {
     return `<tr><td class="l"><label class="row" style="gap:6px"><input type="checkbox" data-act="${act}" data-a="${p.id}" ${checked ? 'checked' : ''}>${esc(p.ko)}</label></td><td class="l">${pos(p)}</td><td class="n">${p.age}</td><td>${ovrChip(L.ovr(p))}</td><td class="n">${money(p.contract.salary)}</td><td class="n">${money(L.marketValue(p))}</td></tr>`;
@@ -8405,6 +8427,7 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
     arbFile(a) { const v = +($('[data-sel="arbclub"]') || {}).value, r = L.arbFile(a, v); if (typeof r === 'string') toast(r); else { autosave(); } render(); },
     arbAccept(a) { const e = L.arbAccept(a); if (e) toast(e); else { toast('연봉조정 결과로 1년 계약했습니다.'); ui.arb = null; autosave(); } render(); },
     arbRefuse(a) { const e = L.arbRefuse(a); if (e) toast(e); else { toast('합의를 거부해 자유계약선수로 공시했습니다.'); ui.arb = null; autosave(); } render(); },
+    injAuto(a) { L.S.injAuto = a; toast(a === 'off' ? '부상 자동 관리: 끔(직접 관리)' : a === 'fill' ? '부상 자동 관리: 부상 공백을 2군에서 자동으로 채웁니다' : '부상 자동 관리: 대체 콜업 + 복귀 자동 등록'); autosave(); render(); },
     autoCallup() { const r = L.autoCallup(), nm = { C: '포수', SP: '선발', IF: '내야', OF: '외야', RP: '구원' }; if (!r.done.length) toast(r.skipped.length ? r.skipped[0][1] : '콜업할 2군 선수가 없습니다.'); else { toast(`${r.done.length}명 콜업: ` + r.done.slice(0, 4).map(x => `${P(x.id).ko}(${nm[x.group]})`).join(', ') + (r.done.length > 4 ? ' 외' : '')); autosave(); } render(); },
     rmore(a) { ui.rmore = ui.rmore || {}; ui.rmore[a] = (ui.rmore[a] || 20) + 20; render(); },
     rview(a) { ui.rf.v = a; ui.rmore = {}; render(); },
