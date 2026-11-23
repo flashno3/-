@@ -137,7 +137,7 @@
       const p = S.players[id]; if (p.retired || p.team === 'DRAFT') continue;
       if (rngFor(S.seed, S.year, 33, parseInt(id.slice(1))).random() < this.retireChance(p)) {
         p.retired = true; if (p.team !== 'FA') this.removeFromTeam(p.team, id); else S.fa = (S.fa || []).filter(x => x !== id);
-        if (p.team === user) { rep.retired.push(id); news(this, `${p.ko}(${p.age}세) 은퇴`); if (this._hofCheck) this._hofCheck(p); } p.legClub = p.team; p.team = 'RET'; p.active = false;
+        if (p.team === user) { rep.retired.push(id); news(this, `${p.ko}(${p.age}세) 은퇴`); if (this._hofCheck) this._hofCheck(p); if (this._retireCeremony) this._retireCeremony(p); } p.legClub = p.team; p.team = 'RET'; p.active = false;
       }
     }
     if (this._legendProcess) this._legendProcess();   // 은퇴 선수 영구결번 심의(구단당 연 1건)

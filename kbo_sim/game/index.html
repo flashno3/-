@@ -2377,7 +2377,7 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
       const p = S.players[id]; if (p.retired || p.team === 'DRAFT') continue;
       if (rngFor(S.seed, S.year, 33, parseInt(id.slice(1))).random() < this.retireChance(p)) {
         p.retired = true; if (p.team !== 'FA') this.removeFromTeam(p.team, id); else S.fa = (S.fa || []).filter(x => x !== id);
-        if (p.team === user) { rep.retired.push(id); news(this, `${p.ko}(${p.age}세) 은퇴`); if (this._hofCheck) this._hofCheck(p); } p.legClub = p.team; p.team = 'RET'; p.active = false;
+        if (p.team === user) { rep.retired.push(id); news(this, `${p.ko}(${p.age}세) 은퇴`); if (this._hofCheck) this._hofCheck(p); if (this._retireCeremony) this._retireCeremony(p); } p.legClub = p.team; p.team = 'RET'; p.active = false;
       }
     }
     if (this._legendProcess) this._legendProcess();   // 은퇴 선수 영구결번 심의(구단당 연 1건)
@@ -3200,6 +3200,7 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
     }
     if (e.type === 'arc' && this._arcResolve) res = this._arcResolve(e, k, auto);
     else if (e.type === 'legend' && this._legendResolve) res = this._legendResolve(e, k);
+    else if ((e.type === 'retcer' || e.type === 'awards') && this._cerResolve) res = this._cerResolve(e, k);
     e.status = 'done'; e.choice = k; e.result = res; e.auto = !!auto; news(this, `${e.title}: ${res}`); this.invalidate();
     return { ok: true, msg: res };
   };
@@ -3273,6 +3274,7 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
       f.trust = clamp(Math.round((f.trust + d) * 10) / 10, 0, 100);
     }
     (S.awardsHist = S.awardsHist || []).push({ year: S.year, awards: aw }); for (const m of mine.slice(0, 3)) if (S.players[m.id]) this._bondShift(S.players[m.id], 1, '시즌 활약');
+    if (this._awardCeremony) this._awardCeremony(aw);   // 내 구단 수상자가 있으면 시상식 이벤트
     S.report = { year: S.year, rank: me.rank, w: me.w, l: me.l, d: me.d, champion: S.post ? S.post.champion : null, awards: aw, mine, goals: res, goalTrust: d, trust: f.trust };
     if (res.length) news(this, `시즌 목표 평가: ${res.map(x => `${x.label} ${x.ok ? '달성' : '미달'}`).join(' · ')} → 이사회 신뢰도 ${d >= 0 ? '+' : ''}${d} (현재 ${f.trust})`);
     if (f.trust <= 12) { S.fired = { year: S.year, trust: f.trust, done: false }; news(this, `이사회가 감독 해임을 결정했습니다 (신뢰도 ${f.trust}).`); }
@@ -3481,7 +3483,7 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
   };
   proto.startNewSeason = function () {
     if (this._campEvClose) this._campEvClose();   // 결정하지 않은 캠프 소식은 기본(변화 없음)으로 처리
-    const S = this.S; if (this._arcRollover) this._arcRollover(); if (this._legendRollover) this._legendRollover(); S.year += 1; S.off = null; S.faMkt = null; S.teamMood = null; S.restUntil = 0; S.trainAcc = { total: 0, B: {}, P: {} }; S.trainTrack = []; for (const id in S.players) if (S.players[id].tr) delete S.players[id].tr; for (const id in S.players) if (S.players[id].mood) delete S.players[id].mood; if (S.events) for (const e of (S.events.list || [])) if (e.status === 'open' && e.type !== 'legend') { e.status = 'done'; e.result = '시즌 종료로 자동 종결'; } S.fa = (S.fa || []);
+    const S = this.S; if (this._arcRollover) this._arcRollover(); if (this._legendRollover) this._legendRollover(); S.year += 1; S.off = null; S.faMkt = null; S.teamMood = null; S.restUntil = 0; S.trainAcc = { total: 0, B: {}, P: {} }; S.trainTrack = []; for (const id in S.players) if (S.players[id].tr) delete S.players[id].tr; for (const id in S.players) if (S.players[id].mood) delete S.players[id].mood; if (S.events) for (const e of (S.events.list || [])) if (e.status === 'open' && e.type !== 'legend') { if ((e.type === 'retcer' || e.type === 'awards') && this._cerResolve) this.resolveEvent(e.id, e.def, true); else { e.status = 'done'; e.result = '시즌 종료로 자동 종결'; } } S.fa = (S.fa || []);
     for (const id in S.players) if (S.players[id].retired || S.players[id].team === 'RET') delete S.players[id];   // 은퇴·이탈 선수 정리(저장 용량)
     this.finishFA === undefined; const adj = this.normalizeTalent(); S.lastAdj = adj;
     for (const t of TEAMS) if (t === S.userTeam) this.ensureActive(t);
@@ -4329,7 +4331,7 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
     const done = {};
     for (const c of LGd.q.slice()) {
       if (done[c.team] || (c.holds > 0 && c.since >= S.year)) continue;
-      if (c.team === user) { if (this.eventsOpen().some(e => e.type === 'legend')) { done[c.team] = 1; continue; } this._legendEvent(c); done[c.team] = 1; continue; }
+      if (c.team === user) { if (this.eventsOpen().some(e => e.type === 'legend' || (e.type === 'retcer' && e.data.pid === c.pid))) { done[c.team] = 1; continue; } this._legendEvent(c); done[c.team] = 1; continue; }
       done[c.team] = 1; this._legendAI(c);
     }
   };
@@ -4363,6 +4365,76 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
   };
   /* 시즌 전환: 보류된 내 구단 후보는 다음 해 오프시즌에 다시 이벤트로 올린다(이벤트는 한 건씩) */
   proto._legendRollover = function () { if (this._legendProcess) this._legendProcess(); };
+});
+
+/* 시상식·은퇴식: 시즌 시상과 은퇴를 '내가 고르는 행사'로 만든다(내 구단 선수 기준).
+ *  - 시상식: 시즌 종료 직후, 내 구단 선수가 MVP·신인왕·골든글러브·타이틀을 받았을 때 보너스/만찬/축하 중 선택. 효과는 충성도(p.loyAdj)와 행사 비용(evCost)뿐.
+ *    수상이 재계약 요구액에 미치는 영향은 이미 성적(WAR) 기반 시장가에 들어 있어 따로 가산하지 않는다(이중 반영 방지).
+ *  - 은퇴식: 내 구단에서 오래 뛴(8시즌+) 선수나 영구결번 후보가 은퇴할 때 규모(간소/보통/성대) 선택. 영구결번 후보면 은퇴식 뒤에 영구결번 심의가 이어진다.
+ * 효과 크기(이사회 신뢰도 +1~2, 충성도 +1~4, 비용 0~1억)는 ⚠ 가정이며 경기·재정 계산(손익에 행사 비용만 반영)은 건드리지 않는다. 결정하지 않으면 시즌 전환 때 기본 선택으로 처리된다. */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) factory(require('./league.js'), require('../../web/src/engine.js'));
+  else factory(root.KBOLeague, root.KBOEngine);
+})(typeof self !== 'undefined' ? self : this, function (LG, Engine) {
+  'use strict';
+  const { proto, clamp, news } = LG.OFFC;
+  const MIN_TENURE = 8;
+  const cost = (L, c) => { const f = L.S.fin && L.S.fin.teams[L.S.userTeam]; if (f && c > 0) f.evCost = Math.round(((f.evCost || 0) + c) * 10) / 10; };
+  const adj = (p, v) => { if (p) p.loyAdj = clamp((p.loyAdj || 0) + v, -15, 15); };
+  const trust = (L, d) => { const f = L.S.fin && L.S.fin.teams[L.S.userTeam]; if (f) f.trust = clamp(Math.round(((f.trust === undefined ? 70 : f.trust) + d) * 10) / 10, 0, 100); };
+  proto._cerLog = function (o) { const S = this.S; (S.ceremonies = S.ceremonies || []).unshift(Object.assign({ y: S.year }, o)); if (S.ceremonies.length > 60) S.ceremonies.length = 60; };
+
+  /* ---- 시상식 ---- */
+  proto._awardCeremony = function (aw) {
+    const S = this.S, t = S.userTeam, mine = (aw || []).filter(x => x.team === t && S.players[x.id]);
+    if (!mine.length) return null; if (this.eventsOpen().some(e => e.type === 'awards' && e.data.year === S.year)) return null;
+    const mvp = aw.find(x => x.label === 'MVP'), rk = aw.find(x => x.label === '신인왕'), big = mine.some(x => x.label === 'MVP' || x.label === '신인왕');
+    const head = [mvp ? `MVP ${mvp.name}(${KO(mvp.team)}) ${mvp.txt}` : '', rk ? `신인왕 ${rk.name}(${KO(rk.team)})` : ''].filter(Boolean).join(' · ');
+    const mineTxt = mine.map(x => `${x.name}(${x.label})`).join(', '), n = mine.length, bonus = Math.min(1.5, Math.round(n * 3) / 10);
+    return this._evAdd({ type: 'awards', title: `🏆 ${S.year} 시즌 시상식`, ttl: 1e9, def: 'cheer', rec: big ? 'bonus' : 'party', data: { year: S.year, ids: mine.map(x => x.id), labels: mine.map(x => x.label) },
+      text: `${head ? head + '. ' : ''}우리 구단 수상: ${mineTxt}. 시상식을 어떻게 챙길까요?`, choices: [
+        { k: 'bonus', label: `수상 보너스 지급(${bonus.toFixed(1)}억)`, hint: `수상자 충성도 +${big ? 4 : 3} · 선수단 전체 +1(재계약·FA 협상에 반영, 시간이 지나며 사라짐) · 비용 ${bonus.toFixed(1)}억` },
+        { k: 'party', label: '축하 만찬(0.1억)', hint: '수상자 충성도 +2 · 선수단 전체 +1 · 비용 0.1억' },
+        { k: 'cheer', label: '축하 메시지만', hint: '수상자 충성도 +1 · 비용 없음' }] });
+  };
+  const KO = t => (LG.OFFC.KO0 && LG.OFFC.KO0[t]) || t;
+
+  /* ---- 은퇴식 ---- */
+  proto._cerTenure = function (p, t) {
+    if (this._legendOneClub && this._legendOneClub(p, t)) return this._legendYears(p);
+    return Math.max((p.seasons || []).filter(x => x.t === t).length, p.tnTeam === t ? (p.tn || 0) : 0);
+  };
+  proto._retireCeremony = function (p) {
+    const S = this.S, t = S.userTeam; if (p.foreign || p.team !== t) return null;
+    const yrs = this._cerTenure(p, t), ev = this._legendEval ? this._legendEval(p, t) : { tier: null }, aw = []; for (const h of S.awardsHist || []) for (const a of h.awards) if (a.id === p.id) aw.push(a.label);
+    if (yrs < MIN_TENURE && !ev.tier) return null;
+    const pos = p.type === 'P' ? (p.role === 'SP' ? '선발' : '구원') : p.pos, last = (p.seasons || []).filter(x => x.t === t).slice(-1)[0];
+    const line = last ? (last.k === 'B' ? `마지막 시즌 ${last.PA}타석 타율 ${last.avg.toFixed(3).slice(1)} ${last.HR}홈런` : `마지막 시즌 ${Math.floor(last.outs / 3)}이닝 RA9 ${last.ra9.toFixed(2)}`) : '';
+    const legend = ev.tier ? ` 구단 WAR ${ev.war.toFixed(1)}으로 영구결번 후보입니다(${ev.tier === 'sure' ? '확실' : '회색'}) — 은퇴식 뒤 영구결번 심의가 이어집니다.` : '';
+    return this._evAdd({ type: 'retcer', title: `🎖 ${p.ko} 은퇴식`, ttl: 1e9, def: 'simple', rec: ev.tier === 'sure' || yrs >= 15 ? 'grand' : yrs >= 12 || ev.tier ? 'normal' : 'simple', data: { pid: p.id, name: p.ko, pos, yrs, tier: ev.tier || null },
+      text: `${p.ko}(${pos}, ${p.age}세)이(가) 우리 구단에서 ${yrs}시즌을 뛰고 은퇴합니다.${aw.length ? ` 수상 ${aw.length}회(${[...new Set(aw)].slice(0, 3).join('·')}).` : ''}${line ? ' ' + line + '.' : ''}${legend} 은퇴식을 어떻게 치를까요?`, choices: [
+        { k: 'grand', label: '성대한 은퇴식(1.0억)', hint: '이사회 신뢰도 +2 · 선수단 전체 충성도 +2 · 비용 1.0억' },
+        { k: 'normal', label: '보통 은퇴식(0.3억)', hint: '이사회 신뢰도 +1 · 선수단 전체 충성도 +1 · 비용 0.3억' },
+        { k: 'simple', label: '간소하게(소식만)', hint: '비용 없음 · 변화 없음' }] });
+  };
+
+  proto._cerResolve = function (e, k) {
+    const S = this.S, t = S.userTeam, team = this.players(t);
+    if (e.type === 'awards') {
+      const ids = new Set(e.data.ids), big = e.data.labels.some(l => l === 'MVP' || l === '신인왕'), n = e.data.ids.length, bonus = Math.min(1.5, Math.round(n * 3) / 10);
+      let a = 1, all = 0, c = 0; if (k === 'bonus') { a = big ? 4 : 3; all = 1; c = bonus; } else if (k === 'party') { a = 2; all = 1; c = 0.1; }
+      for (const p of team) { if (ids.has(p.id)) adj(p, a); else if (all) adj(p, all); }
+      cost(this, c); this._cerLog({ kind: 'awards', size: k, n, labels: e.data.labels.slice(0, 4) });
+      return `${S.year} 시즌 시상식: ${k === 'bonus' ? `수상 보너스 ${c.toFixed(1)}억을 지급했습니다` : k === 'party' ? '축하 만찬을 열었습니다(0.1억)' : '축하 메시지를 전했습니다'}. 수상자 충성도 +${a}${all ? ', 선수단 +1' : ''}.`;
+    }
+    const d = e.data; let tr = 0, all = 0, c = 0; if (k === 'grand') { tr = 2; all = 2; c = 1.0; } else if (k === 'normal') { tr = 1; all = 1; c = 0.3; }
+    if (all) for (const p of team) if (p.id !== d.pid) adj(p, all); if (tr) trust(this, tr); cost(this, c);
+    this._cerLog({ kind: 'retire', name: d.name, pos: d.pos, yrs: d.yrs, size: k });
+    if (k !== 'simple') { this.story('ceremony', `${d.name} 은퇴식(${d.pos}, ${d.yrs}시즌) — ${k === 'grand' ? '성대하게' : '보통 규모로'} 치렀습니다`, k === 'grand' ? 3 : 2); news(this, `${d.name} 은퇴식을 ${k === 'grand' ? '성대하게' : '열어'} 마쳤습니다.`); }
+    e.status = 'done';   // 심의 대기 판정이 이 행사를 '진행 중'으로 보지 않게 먼저 닫는다
+    if (this._legendProcess) this._legendProcess();   // 영구결번 후보라면 은퇴식 뒤에 심의 이벤트가 이어진다
+    return `${d.name} 은퇴식: ${k === 'grand' ? '성대한 은퇴식을 치렀습니다(이사회 신뢰도 +2, 선수단 +2, 1.0억)' : k === 'normal' ? '보통 규모의 은퇴식을 열었습니다(이사회 신뢰도 +1, 선수단 +1, 0.3억)' : '간소하게 마무리했습니다'}.`;
+  };
 });
 </script>
 <script>/* KBO 감독 모드: 협상 테이블 · 선수 면담 · 시즌 스토리 · 언론·팬 반응
@@ -7278,7 +7350,7 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
     return `<div class="card"><div class="row"><h2 style="margin:0">시즌 스토리</h2><span class="sp"></span><select data-sel="storyy" aria-label="시즌">${years.map(v => `<option value="${v}" ${v === y ? 'selected' : ''}>${v}</option>`).join('')}</select></div><div class="tabs wrap" role="tablist" style="margin-top:8px">${tabs}</div></div>${body}`;
   }
   /* ---------------- 시즌 중 소식(이벤트) ---------------- */
-  const evIcon = { camp: '⛺', grievance: '🗣', sponsor: '🤝', promo: '🎉', board: '🏛', arc: '📖', legend: '🏅' };
+  const evIcon = { camp: '⛺', grievance: '🗣', sponsor: '🤝', promo: '🎉', board: '🏛', arc: '📖', legend: '🏅', retcer: '🎖', awards: '🏆' };
   function eventCards() {
     const open = L.eventsOpen(), warns = L.validateEntry(); if (!open.length && !warns.length) return '';
     const rows = open.map(e => { const rec = e.rec || e.def; return `<div class="ev"><div><b>${evIcon[e.type] || '📢'} ${esc(e.title)}</b> <span class="muted small">${L.dateStr(e.day)} · ${e.type === 'comp' ? '직접 고를 때까지 보상이 정산되지 않습니다' : e.exp > 1e8 ? '개막 전까지 결정 · 미결정 시 변화 없음' : Math.max(0, e.exp - L.S.day) + '일 내 결정'}</span></div><div class="small" style="margin:4px 0 8px">${esc(e.text)}</div><div class="row evbtn">${e.choices.map(c => `<button class="sm ${c.k === rec ? 'primary' : ''}" data-act="evChoice" data-a="${e.id}|${c.k}" title="${esc(c.hint || '')}">${c.k === rec && open.length > 1 ? '★ ' : ''}${esc(c.label)}</button>`).join('')}</div><div class="small muted" style="margin-top:4px">${e.choices.map(c => esc(c.label.replace(/ \(.*\)$/, '')) + ': ' + esc(c.hint || '')).join(' / ')}</div></div>`; }).join('');

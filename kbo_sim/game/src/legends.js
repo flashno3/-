@@ -64,7 +64,7 @@
     const done = {};
     for (const c of LGd.q.slice()) {
       if (done[c.team] || (c.holds > 0 && c.since >= S.year)) continue;
-      if (c.team === user) { if (this.eventsOpen().some(e => e.type === 'legend')) { done[c.team] = 1; continue; } this._legendEvent(c); done[c.team] = 1; continue; }
+      if (c.team === user) { if (this.eventsOpen().some(e => e.type === 'legend' || (e.type === 'retcer' && e.data.pid === c.pid))) { done[c.team] = 1; continue; } this._legendEvent(c); done[c.team] = 1; continue; }
       done[c.team] = 1; this._legendAI(c);
     }
   };

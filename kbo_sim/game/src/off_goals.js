@@ -66,6 +66,7 @@
       f.trust = clamp(Math.round((f.trust + d) * 10) / 10, 0, 100);
     }
     (S.awardsHist = S.awardsHist || []).push({ year: S.year, awards: aw }); for (const m of mine.slice(0, 3)) if (S.players[m.id]) this._bondShift(S.players[m.id], 1, '시즌 활약');
+    if (this._awardCeremony) this._awardCeremony(aw);   // 내 구단 수상자가 있으면 시상식 이벤트
     S.report = { year: S.year, rank: me.rank, w: me.w, l: me.l, d: me.d, champion: S.post ? S.post.champion : null, awards: aw, mine, goals: res, goalTrust: d, trust: f.trust };
     if (res.length) news(this, `시즌 목표 평가: ${res.map(x => `${x.label} ${x.ok ? '달성' : '미달'}`).join(' · ')} → 이사회 신뢰도 ${d >= 0 ? '+' : ''}${d} (현재 ${f.trust})`);
     if (f.trust <= 12) { S.fired = { year: S.year, trust: f.trust, done: false }; news(this, `이사회가 감독 해임을 결정했습니다 (신뢰도 ${f.trust}).`); }
