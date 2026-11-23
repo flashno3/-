@@ -766,7 +766,7 @@
       ${realRows ? `<h3 style="margin:8px 0 2px">실제 영구결번</h3>${realRows}` : '<div class="small muted">실제 영구결번이 없는 구단입니다.</div>'}
       ${gameRows ? `<h3 style="margin:10px 0 2px">이 게임에서 지정</h3>${gameRows}` : ''}
       ${lg.length ? `<div class="small" style="margin-top:8px">심의 대기: ${lg.map(x => `<b>${esc(x.name)}</b>(${x.war.toFixed(1)}${x.holds ? ', 보류 ' + x.holds : ''})`).join(' · ')}</div>` : ''}
-      <h3 style="margin:10px 0 2px">현역 후보 (구단 WAR 누적)</h3>${candRows ? `<div class="tablewrap"><table class="rec"><thead><tr><th class="l">선수</th><th class="n">WAR</th><th>구분</th></tr></thead><tbody>${candRows}</tbody></table></div>` : '<div class="small muted">현재 후보가 없습니다.</div>'}</div>`;
+      <h3 style="margin:10px 0 2px">현역 후보 (구단 WAR 누적)</h3>${candRows ? `<div class="tablewrap"><table><thead><tr><th class="l">선수</th><th class="n">WAR</th><th>구분</th></tr></thead><tbody>${candRows}</tbody></table></div>` : '<div class="small muted">현재 후보가 없습니다.</div>'}</div>`;
   }
   function chalPanel() {
     const S = L.S, cs = L.challenges(), done = (S.chalDone || []).slice().reverse();
@@ -852,7 +852,7 @@
     else if (tab === 'chal') body = chalPanel();
     else if (tab === 'hist') body = histPanel();
     else { const l = (S.press || []).filter(e => e.y === y); body = l.length ? `<div class="card">${l.map(e => `<div class="press"><b>${esc(e.head)}</b>${e.fan ? `<div class="small muted">${esc(e.fan)}</div>` : ''}<div class="small muted">${e.ph === 'offseason' ? '오프시즌' : L.dateStr(e.d)}</div></div>`).join('')}</div>` : '<div class="card muted">아직 기사가 없습니다.</div>'; }
-    return `<div class="card"><div class="row"><h2 style="margin:0">시즌 스토리</h2><span class="sp"></span><select data-sel="storyy" aria-label="시즌">${years.map(v => `<option value="${v}" ${v === y ? 'selected' : ''}>${v}</option>`).join('')}</select></div><div class="tabs" role="tablist" style="margin-top:8px">${tabs}</div></div>${body}`;
+    return `<div class="card"><div class="row"><h2 style="margin:0">시즌 스토리</h2><span class="sp"></span><select data-sel="storyy" aria-label="시즌">${years.map(v => `<option value="${v}" ${v === y ? 'selected' : ''}>${v}</option>`).join('')}</select></div><div class="tabs wrap" role="tablist" style="margin-top:8px">${tabs}</div></div>${body}`;
   }
   /* ---------------- 시즌 중 소식(이벤트) ---------------- */
   const evIcon = { camp: '⛺', grievance: '🗣', sponsor: '🤝', promo: '🎉', board: '🏛', arc: '📖', legend: '🏅' };

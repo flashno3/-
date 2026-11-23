@@ -353,3 +353,4 @@ table.rec tr.me td:nth-child(2) { background: var(--accent-soft); } table.rec th
 @media (max-width: 340px) { .rost td, .rost th { font-size: 12.5px; } }
 table.rec tr.tot td { border-top: 2px solid var(--line); background: var(--surface2); } table.rec tr.tot td:nth-child(2) { background: var(--surface2); }
 table.rec thead th { position: sticky; top: 0; background: var(--surface); z-index: 2; box-shadow: 0 1px 0 var(--line); } table.rec thead th:nth-child(2) { z-index: 3; }   /* 정렬 머리줄은 위에 고정, 선수 이름 칸은 왼쪽에 고정 */
+.tabs.wrap { flex-wrap: wrap; overflow-x: visible; }   /* 탭이 많은 줄(스토리)은 휴대폰에서 넘기지 않고 줄바꿈 — 마지막 탭(구단 역사)이 화면 밖에 숨는 문제 방지 */
