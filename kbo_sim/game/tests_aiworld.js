@@ -10,7 +10,7 @@ const season = L => { const S = L.S; while (S.day < 110) L.advance(5, false, tru
 let total = 0, withTrade = 0;
 for (const seed of [1, 2, 3, 4, 5, 6]) {
   const L = mk(seed), S = L.S, sizes0 = Object.fromEntries(Object.keys(S.teams).map(t => [t, S.teams[t].ids.length])), pay0 = Object.fromEntries(Object.keys(S.teams).map(t => [t, L.cbtPay(t)])), user0 = S.teams[S.userTeam].ids.slice();
-  season(L); const tr = (S.aiTrades || []).filter(x => x.y === S.year); total += tr.length; if (tr.length) withTrade++;
+  season(L); const tr = (S.aiTrades || []).filter(x => x.y === S.year && !x.unrest); total += tr.length; if (tr.length) withTrade++;
   ok(tr.length <= 8, `시즌 한도 ${tr.length}`); const by = {}; for (const x of tr) { by[x.a] = (by[x.a] || 0) + 1; by[x.b] = (by[x.b] || 0) + 1; ok(x.a !== S.userTeam && x.b !== S.userTeam, '내 구단 불포함'); ok(x.d >= 10 && x.d <= 104, '트레이드 기간 ' + x.d); }
   ok(Object.values(by).every(v => v <= 2), '구단당 2건 이하 ' + JSON.stringify(by));
   for (const x of tr) { const pa = S.players[x.pa.id], pb = S.players[x.pb.id]; if (!pa || !pb) continue; ok(pa.team === x.b && pb.team === x.a, '이적 반영 ' + pa.ko + '/' + pb.ko); ok(!pa.foreign && !pb.foreign, '외국인 제외'); ok(pa.type === pb.type, '같은 유형'); ok(x.pa.age <= 25 && x.pb.age >= 28, '젊은 선수 ↔ 베테랑'); ok(pa.moveY === S.year && pb.moveY === S.year, '이적 연도 기록');

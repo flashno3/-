@@ -131,7 +131,7 @@
     policy() { const P = this.S.policy || {}; return { pitch: P.pitch || 'normal', run: P.run || 'normal' }; }
     setPolicy(k, v) { const ok = { pitch: ['save', 'normal', 'push'], run: ['low', 'normal', 'high'] }; if (!ok[k] || !ok[k].includes(v)) return false; this.S.policy = Object.assign({ pitch: 'normal', run: 'normal' }, this.S.policy, { [k]: v }); this.invalidate(); return true; }
     _modRates(p) {
-      const S = this.S; if (p.team !== S.userTeam) return p.p; const m = this.moodOf(p), pol = this.policy(); let q = m ? this._shifted(p, 0.04 * m) : p.p;
+      const S = this.S; if (p.team !== S.userTeam) return p.unrest && p.unrest.stage === 'slack' ? this._shifted(p, -0.12) : p.p; const m = this.moodOf(p), pol = this.policy(); let q = m ? this._shifted(p, 0.04 * m) : p.p;
       if (p.type === 'B' && pol.run !== 'normal') q = Object.assign({}, q, { sba: q.sba * (pol.run === 'high' ? 1.5 : 0.6) });
       return q;
     }
@@ -476,7 +476,7 @@
       if (!!on === !!p.active) return null;
       const locking = S.day < S.schedule.length;
       if (on) {
-        if (this.isInj(p)) return `${p.ko}은(는) 부상자 명단입니다(${p.inj.dx}, 복귀 예정 ${this.injDateStr(p)}).`;
+        if (this.isInj(p)) return p.inj && p.inj.unrest ? `${p.ko}은(는) 이탈·정지 중이라 1군에 올릴 수 없습니다.` : `${p.ko}은(는) 부상자 명단입니다(${p.inj.dx}, 복귀 예정 ${this.injDateStr(p)}).`;
         if (A.length >= this.activeMax()) return `1군 엔트리는 ${this.activeMax()}명까지입니다. 먼저 한 명을 2군으로 내리세요.`;
         if (locking && S.day < (p.lockUntil || 0)) return `${p.ko}은(는) 2군 말소 후 10경기일이 지나야 1군에 등록할 수 있습니다. (${p.lockUntil - S.day}일 남음)`;
         p.active = true; if (t === S.userTeam && !p.debut1 && S.phase === 'regular') p.debut1 = { y: S.year, d: S.day }; if (this._bondShift && (S.phase === 'regular' || S.phase === 'preseason')) this._bondShift(p, 1, '1군 승격');
@@ -715,7 +715,7 @@
       });
       this.mergeTracking();
       for (const o of others) this.commit(o.home, o.away, o.rh, o.ra, { spH: o.spH, spA: o.spA });
-      this._applyActiveMax(); this._decayFatigue(); this._tickService(); if (this._injuryDay) this._injuryDay(d); if (this._arcDay) this._arcDay(d); if (this._allStarDay) this._allStarDay(d); if (this._aiTradeDay) this._aiTradeDay(d); if (this._eventDay) this._eventDay(d); if (this._finSnapDay) this._finSnapDay(d); if (this._trainDay) this._trainDay(); if (this._scoutDay) this._scoutDay(); if (this._milestoneDay) this._milestoneDay(); this.playFutures(d); this.returnMilitary(this.milYM(d));
+      this._applyActiveMax(); this._decayFatigue(); this._tickService(); if (this._injuryDay) this._injuryDay(d); if (this._arcDay) this._arcDay(d); if (this._allStarDay) this._allStarDay(d); if (this._aiTradeDay) this._aiTradeDay(d); if (this._unrestDay) this._unrestDay(d); if (this._eventDay) this._eventDay(d); if (this._finSnapDay) this._finSnapDay(d); if (this._trainDay) this._trainDay(); if (this._scoutDay) this._scoutDay(); if (this._milestoneDay) this._milestoneDay(); this.playFutures(d); this.returnMilitary(this.milYM(d));
       if (!ug) { S.day++; return { status: 'ok', day: d }; }
       if (live) { S.pendingDay = d; return { status: 'userGame', day: d, game: ug.g, idx: ug.i }; }
       const L = this.startUserGame(ug.g, ug.i); this.playAuto(L); const res = this.finishUserGame(L);

@@ -1141,7 +1141,7 @@ table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; 
     policy() { const P = this.S.policy || {}; return { pitch: P.pitch || 'normal', run: P.run || 'normal' }; }
     setPolicy(k, v) { const ok = { pitch: ['save', 'normal', 'push'], run: ['low', 'normal', 'high'] }; if (!ok[k] || !ok[k].includes(v)) return false; this.S.policy = Object.assign({ pitch: 'normal', run: 'normal' }, this.S.policy, { [k]: v }); this.invalidate(); return true; }
     _modRates(p) {
-      const S = this.S; if (p.team !== S.userTeam) return p.p; const m = this.moodOf(p), pol = this.policy(); let q = m ? this._shifted(p, 0.04 * m) : p.p;
+      const S = this.S; if (p.team !== S.userTeam) return p.unrest && p.unrest.stage === 'slack' ? this._shifted(p, -0.12) : p.p; const m = this.moodOf(p), pol = this.policy(); let q = m ? this._shifted(p, 0.04 * m) : p.p;
       if (p.type === 'B' && pol.run !== 'normal') q = Object.assign({}, q, { sba: q.sba * (pol.run === 'high' ? 1.5 : 0.6) });
       return q;
     }
@@ -1486,7 +1486,7 @@ table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; 
       if (!!on === !!p.active) return null;
       const locking = S.day < S.schedule.length;
       if (on) {
-        if (this.isInj(p)) return `${p.ko}은(는) 부상자 명단입니다(${p.inj.dx}, 복귀 예정 ${this.injDateStr(p)}).`;
+        if (this.isInj(p)) return p.inj && p.inj.unrest ? `${p.ko}은(는) 이탈·정지 중이라 1군에 올릴 수 없습니다.` : `${p.ko}은(는) 부상자 명단입니다(${p.inj.dx}, 복귀 예정 ${this.injDateStr(p)}).`;
         if (A.length >= this.activeMax()) return `1군 엔트리는 ${this.activeMax()}명까지입니다. 먼저 한 명을 2군으로 내리세요.`;
         if (locking && S.day < (p.lockUntil || 0)) return `${p.ko}은(는) 2군 말소 후 10경기일이 지나야 1군에 등록할 수 있습니다. (${p.lockUntil - S.day}일 남음)`;
         p.active = true; if (t === S.userTeam && !p.debut1 && S.phase === 'regular') p.debut1 = { y: S.year, d: S.day }; if (this._bondShift && (S.phase === 'regular' || S.phase === 'preseason')) this._bondShift(p, 1, '1군 승격');
@@ -1725,7 +1725,7 @@ table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; 
       });
       this.mergeTracking();
       for (const o of others) this.commit(o.home, o.away, o.rh, o.ra, { spH: o.spH, spA: o.spA });
-      this._applyActiveMax(); this._decayFatigue(); this._tickService(); if (this._injuryDay) this._injuryDay(d); if (this._arcDay) this._arcDay(d); if (this._allStarDay) this._allStarDay(d); if (this._aiTradeDay) this._aiTradeDay(d); if (this._eventDay) this._eventDay(d); if (this._finSnapDay) this._finSnapDay(d); if (this._trainDay) this._trainDay(); if (this._scoutDay) this._scoutDay(); if (this._milestoneDay) this._milestoneDay(); this.playFutures(d); this.returnMilitary(this.milYM(d));
+      this._applyActiveMax(); this._decayFatigue(); this._tickService(); if (this._injuryDay) this._injuryDay(d); if (this._arcDay) this._arcDay(d); if (this._allStarDay) this._allStarDay(d); if (this._aiTradeDay) this._aiTradeDay(d); if (this._unrestDay) this._unrestDay(d); if (this._eventDay) this._eventDay(d); if (this._finSnapDay) this._finSnapDay(d); if (this._trainDay) this._trainDay(); if (this._scoutDay) this._scoutDay(); if (this._milestoneDay) this._milestoneDay(); this.playFutures(d); this.returnMilitary(this.milYM(d));
       if (!ug) { S.day++; return { status: 'ok', day: d }; }
       if (live) { S.pendingDay = d; return { status: 'userGame', day: d, game: ug.g, idx: ug.i }; }
       const L = this.startUserGame(ug.g, ug.i); this.playAuto(L); const res = this.finishUserGame(L);
@@ -3201,6 +3201,7 @@ table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; 
     else if ((e.type === 'retcer' || e.type === 'awards') && this._cerResolve) res = this._cerResolve(e, k);
     else if (e.type === 'fanloss' && this._fanLossResolve) res = this._fanLossResolve(e, k);
     else if ((e.type === 'allstar' || e.type === 'halfsum') && this._asResolve) res = this._asResolve(e, k);
+    else if (e.type === 'unrest' && this._unrestResolve) res = this._unrestResolve(e, k);
     e.status = 'done'; e.choice = k; e.result = res; e.auto = !!auto; news(this, `${e.title}: ${res}`); this.invalidate();
     return { ok: true, msg: res };
   };
@@ -3483,7 +3484,7 @@ table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; 
   };
   proto.startNewSeason = function () {
     if (this._campEvClose) this._campEvClose();   // 결정하지 않은 캠프 소식은 기본(변화 없음)으로 처리
-    const S = this.S; if (this._arcRollover) this._arcRollover(); if (this._legendRollover) this._legendRollover(); S.year += 1; S.off = null; S.faMkt = null; S.teamMood = null; S.restUntil = 0; S.trainAcc = { total: 0, B: {}, P: {} }; S.trainTrack = []; for (const id in S.players) if (S.players[id].tr) delete S.players[id].tr; for (const id in S.players) if (S.players[id].mood) delete S.players[id].mood; if (S.events) for (const e of (S.events.list || [])) if (e.status === 'open' && e.type !== 'legend') { if ((e.type === 'retcer' || e.type === 'awards' || e.type === 'fanloss') && this._cerResolve) this.resolveEvent(e.id, e.def, true); else { e.status = 'done'; e.result = '시즌 종료로 자동 종결'; } } S.fa = (S.fa || []);
+    const S = this.S; if (this._arcRollover) this._arcRollover(); if (this._legendRollover) this._legendRollover(); if (this._unrestRollover) this._unrestRollover(); S.year += 1; S.off = null; S.faMkt = null; S.teamMood = null; S.restUntil = 0; S.trainAcc = { total: 0, B: {}, P: {} }; S.trainTrack = []; for (const id in S.players) if (S.players[id].tr) delete S.players[id].tr; for (const id in S.players) if (S.players[id].mood) delete S.players[id].mood; if (S.events) for (const e of (S.events.list || [])) if (e.status === 'open' && e.type !== 'legend') { if ((e.type === 'retcer' || e.type === 'awards' || e.type === 'fanloss' || e.type === 'unrest') && this._cerResolve) this.resolveEvent(e.id, e.def, true); else { e.status = 'done'; e.result = '시즌 종료로 자동 종결'; } } S.fa = (S.fa || []);
     for (const id in S.players) if (S.players[id].retired || S.players[id].team === 'RET') delete S.players[id];   // 은퇴·이탈 선수 정리(저장 용량)
     this.finishFA === undefined; const adj = this.normalizeTalent(); S.lastAdj = adj;
     for (const t of TEAMS) if (t === S.userTeam) this.ensureActive(t);
@@ -5044,6 +5045,210 @@ table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; 
       const rec = this._aiTradeTry(A, B, r); if (rec) { T.n++; T.by[A] = (T.by[A] || 0) + 1; T.by[B] = (T.by[B] || 0) + 1; return rec; }
     }
   };
+});
+
+/* 선수 불만 에스컬레이션(내 구단 + AI 구단): 불만 게이지가 쌓이면 면담 요구 → 이적 요청 → (거부 시) 태업 → 무단이탈 → 구단 대응(제한선수·자격정지·시정 촉구 후 계약 해지·임의해지).
+ * 규정 근거(원문 확인): KBO 규약 제31조 임의해지선수(연봉 지급 중단·복귀 1년 제한)·제32조 출장정지선수·제33조 제한선수(개인 사유 참가활동 중지)·제34조 자격정지선수(계약·규약 위반)·
+ *   제36조 규제선수 특례(규제 기간 일수 × 연봉 1/300 감액)·제47조·통일계약서 제24조 계약 해지(14일 이상 시정 촉구, 총재 승인, 선수 귀책 해지는 잔여 연봉 미지급)·통일계약서 제21조 트레이드 거부.
+ * 규정에 없는 것(⚠ 게임 설정): 불만 게이지·단계 임계값·태업(컨디션 −3)·무단이탈 판정(연속 불참)·제한/자격정지 최소 기간(20·30일)·복귀 허가 기준·AI 구단의 판단 확률.
+ * 단계: grumble(40+, 표시만) · meeting(60+) · request(75+) · refused(거부 후) · slack(태업) · awol(무단이탈) · notice(시정 촉구 14일) · restr(제한/자격정지). 외국인·올해 신인·상무·FA 선수는 제외. */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) factory(require('./league.js'), require('../../web/src/engine.js'));
+  else factory(root.KBOLeague, root.KBOEngine);
+})(typeof self !== 'undefined' ? self : this, function (LG, Engine) {
+  'use strict';
+  const { proto, rngFor, clamp, TEAMS, KO0, TRAITS, news } = LG.OFFC;
+  const TH = { grumble: 40, meeting: 50, request: 62 }, TRAIT_K = { free: 1.3, clutch: 1.1, shy: 0.7, leader: 0.8, model: 0.8 };
+  const r1 = x => Math.round(x * 10) / 10;
+  const STAGE_TXT = { grumble: '불만', meeting: '면담 요구', request: '이적 요청', refused: '요청 거부', slack: '태업', awol: '무단이탈', notice: '시정 촉구', restr: '활동 정지' };
+  proto.unrestStageName = s => STAGE_TXT[s] || '';
+  proto._grv = function (p) { return p.grv || 0; };
+  proto._unrestPlayers = function (t) { return this.players(t).filter(p => !p.foreign && p.team === t && p.team !== 'MIL' && p.rookie !== this.S.year); };
+  /* 불만이 쌓이는 속도(하루): 벤치·2군의 스타, 나쁜 대우(충성도 보정), 부진한 컨디션 / 줄어드는 속도: 기본 회복, 팀 호성적 */
+  proto._grvRate = function (p, t, ctx) {
+    const S = this.S, set = S.teams[t].set, tr = TRAIT_K[this.traitOf(p)] || 1; let up = 0;
+    const star = ctx.star.has(p.id), core = ctx.core.has(p.id);
+    if (star && !p.active && !this.isInj(p)) up += 0.55; else if (star && p.active && !core && p.type === 'B') up += 0.35; else if (star && p.active && !core && p.role === 'SP') up += 0.35;
+    else if (!p.active && !this.isInj(p) && this.ovr(p) >= ctx.minAct + 4) up += 0.3;
+    if ((p.loyAdj || 0) <= -2) up += (-(p.loyAdj || 0) - 1) * 0.06;
+    if (t === S.userTeam && this.moodOf(p) <= -2) up += 0.15;
+    return up * tr - 0.12 - (ctx.win ? 0.1 : 0);
+  };
+  proto._unrestCtx = function (t) {
+    const S = this.S, set = S.teams[t].set, ps = this._unrestPlayers(t), byOvr = ps.slice().sort((a, b) => this.ovr(b) - this.ovr(a)), r = S.rec[t] || [0, 0, 0];
+    const act = ps.filter(p => p.active && !this.isInj(p)), minAct = act.length ? Math.min(...act.map(p => this.ovr(p))) : 0;
+    const core = new Set([...(set.lineup || []).map(x => x.id || x), ...(set.rotation || []), set.bullpen && set.bullpen.closer, ...((set.bullpen && set.bullpen.setup) || [])].filter(Boolean));
+    return { star: new Set(byOvr.slice(0, 14).map(p => p.id)), core, minAct, win: (r[0] + r[1] + r[2]) >= 20 && r[0] / Math.max(1, r[0] + r[1]) >= 0.55 };
+  };
+  const cause = (L, p, t) => { const ctx = L._unrestCtx(t); if (ctx.star.has(p.id) && !p.active) return '주전급 기량인데 1군에서 뛰지 못하는 것'; if (ctx.star.has(p.id) && !ctx.core.has(p.id)) return '주전급 기량에 걸맞은 출전 기회를 받지 못하는 것'; if ((p.loyAdj || 0) <= -3) return '최근 구단의 대우에 대한 서운함'; return '개인적인 사정과 팀 분위기'; };
+  const rrp = (L, p, salt, d) => rngFor(L.S.seed, L.S.year, d === undefined ? L.S.day : d, 8900 + salt + (parseInt(String(p.id).slice(1)) || 0) % 997).random();
+  /* ---- 일일 처리 ---- */
+  proto._unrestDay = function (d) {
+    const S = this.S; if (S.phase !== 'regular') return;
+    for (const t of TEAMS) {
+      const ctx = this._unrestCtx(t);
+      for (const p of this._unrestPlayers(t)) {
+        if (p.unrest) { this._unrestStage(p, t, d); continue; }
+        let v = p.grv || 0; v += this._grvRate(p, t, ctx);
+        if (rrp(this, p, 1, d) < 0.0004) v += 15 + 10 * rrp(this, p, 2, d);   // 개인 사정·언론 보도 같은 돌발 불만
+        v = clamp(v, 0, 100); if (v <= 0) delete p.grv; else p.grv = r1(v);
+        if (!(p.unrestCool && d < p.unrestCool)) { const n = p.unrestYear === S.year ? (p.unrestN || 0) : 0; if (v >= TH.request && n >= 1) this._unrestEnter(p, t, d, 'request'); else if (v >= TH.meeting && n < 3) this._unrestEnter(p, t, d, 'meeting'); }
+      }
+    }
+  };
+  proto._unrestEnter = function (p, t, d, stage) {
+    const S = this.S; p.unrest = { stage, since: d, y: S.year, t }; if (p.unrestYear !== S.year) { p.unrestYear = S.year; p.unrestN = 0; } if (stage === 'meeting') p.unrestN = (p.unrestN || 0) + 1;
+    if (t === S.userTeam) return this._unrestEvent(p, t, stage); this._unrestAI(p, t, d, stage);
+  };
+  proto._unrestCool = function (p, d, days) { p.unrestCool = d + (days || 45); delete p.unrest; };
+  proto._unrestLog = function (p, t, text, imp) { const S = this.S; (S.unrestLog = S.unrestLog || []).unshift({ y: S.year, d: S.day, t, id: p.id, ko: p.ko, text }); if (S.unrestLog.length > 40) S.unrestLog.length = 40; if (t === S.userTeam) this.story('unrest', text, imp || 2); else this._lnews(`${KO0[t] || t} ${text}`); };
+  /* ---- 단계 진행(진행 중인 선수) ---- */
+  proto._unrestStage = function (p, t, d) {
+    const S = this.S, u = p.unrest, user = t === S.userTeam, age = d - u.since;
+    if (p.team !== t || (u.t !== undefined && u.t !== t)) { delete p.unrest; return; } if (u.t === undefined) u.t = t;   // 다른 구단으로 옮기면 진행 중이던 단계는 사라진다
+    if (u.stage === 'refused') {   // 요청 거부 뒤: 불만이 가라앉지 않으면 8일 뒤 태업
+      p.grv = r1(clamp((p.grv || 0) + 0.4, 0, 100)); if (user) p.mood = { v: -2, until: d + 3 };
+      if (p.grv < 50) { this._unrestCool(p, d, 40); return; }
+      if (age >= 8 && p.grv >= 70) { u.stage = 'slack'; u.since = d; this._unrestLog(p, t, `${p.ko}이(가) 이적 요청이 거부되자 훈련·경기에서 소극적인 태업에 들어갔습니다`, 3); if (user) this._unrestEvent(p, t, 'slack'); else this._unrestAI(p, t, d, 'slack'); }
+    } else if (u.stage === 'slack') {
+      p.grv = r1(clamp((p.grv || 0) + 0.2, 0, 100)); if (user) p.mood = { v: -3, until: d + 3 };
+      if (p.grv < 55) { this._unrestLog(p, t, `${p.ko}이(가) 마음을 가다듬고 태업을 그쳤습니다`, 2); this._unrestCool(p, d, 60); return; }
+      if (age >= 20 && p.grv >= 76 && rrp(this, p, 5, d) < 0.03) this._unrestAwol(p, t, d);
+    } else if (u.stage === 'notice') {
+      if (user) this._unrestPay(p, t); if (age >= 14) this._unrestNoticeEnd(p, t, d);
+    } else if (u.stage === 'awol') { if (user) this._unrestPay(p, t); if (!user && age >= 5) this._unrestAI(p, t, d, 'awol2'); }
+    else if (u.stage === 'restr') { if (user) this._unrestPay(p, t); if (age >= u.min) { if (user) { if (!u.asked) { u.asked = true; this._unrestEvent(p, t, 'return'); } } else this._unrestAI(p, t, d, 'return'); } }
+    else if (u.stage === 'meeting' || u.stage === 'request') {   // 내 구단: 이벤트를 방치하면 기본 선택으로 처리(이벤트 만료 시 resolveEvent가 호출). AI: 즉시 처리됨
+      if (user && age > 12 && !this.eventsOpen().some(e => e.type === 'unrest' && e.data.pid === p.id)) { this._unrestEnter2(p, t, d, u.stage === 'meeting' ? 'ignore' : 'refuse'); }
+    }
+  };
+  proto._unrestEnter2 = function (p, t, d, k) { const msg = this._unrestApply(p, t, k, p.unrest ? p.unrest.stage : 'meeting'); return msg; };
+  proto._unrestPay = function (p, t) { const f = this.S.fin && this.S.fin.teams[t]; if (f && p.contract) f.evRev = r1((f.evRev || 0) + p.contract.salary / 300); };   // 규제·이탈 기간 일수 × 연봉 1/300 감액(제36조·통일계약서 제27조)
+  proto._unrestAwol = function (p, t, d) {
+    const S = this.S, user = t === S.userTeam; p.unrest = { stage: 'awol', since: d, y: S.year };
+    p.active = false; p.inj = { dx: '무단이탈', since: `${S.year} 발생`, ret: '2099-12-31', retN: 1e9, basis: '선수 불만 에스컬레이션', apply: true, generated: false, unrest: true };
+    this._unrestLog(p, t, `${p.ko}이(가) 팀을 무단이탈했습니다(연락 두절)`, 3);
+    if (user) { if (this._injAutoFix && this.injAuto() !== 'off') this._injAutoFix([p], []); this.repairSettings(t); this._unrestEvent(p, t, 'awol'); } else { this.refreshTeam(t); }
+    this.invalidate();
+  };
+  proto._unrestReturn = function (p, t, d, how) {
+    delete p.inj; delete p.unrest; p.grv = r1(Math.max(15, (p.grv || 0) - 30)); p.unrestCool = d + 60; p.lockUntil = 0; p.active = false; this.invalidate(); if (t === this.S.userTeam) this.repairSettings(t); else this.refreshTeam(t);
+    this._unrestLog(p, t, `${p.ko}이(가) ${how}로 팀에 복귀했습니다`, 2);
+  };
+  proto._unrestRelease = function (p, t, text, voluntary) {
+    const S = this.S, d = S.day; this._unrestLog(p, t, text, 3); delete p.inj; delete p.unrest; delete p.grv; p.active = false; if (voluntary) p.volRet = { team: t, y: S.year + 1 };
+    this.release(t, p.id); if (t === S.userTeam) this.repairSettings(t); else this.refreshTeam(t); this.invalidate();
+  };
+  proto._unrestNoticeEnd = function (p, t, d) {   // 14일 시정 촉구 종료: 복귀하지 않으면 계약 해지가 가능해진다
+    const user = t === this.S.userTeam, back = (p.grv || 0) <= 72 && rrp(this, p, 7, d) < 0.6;
+    if (back) { this._unrestReturn(p, t, d, '시정 촉구에 응해'); return; }
+    p.unrest.stage = 'awol'; p.unrest.since = d; p.unrest.noticed = true;
+    this._unrestLog(p, t, `${p.ko}이(가) 시정 촉구 14일이 지나도 복귀하지 않았습니다`, 3);
+    if (user) this._unrestEvent(p, t, 'awol'); else this._unrestAI(p, t, d, 'awol2');
+  };
+  /* ---- AI 구단의 자동 판단 ---- */
+  proto._unrestAI = function (p, t, d, stage) {
+    const S = this.S, r = rrp(this, p, 11, d), loy = this.loyalty(p, t), lv = loy ? loy.v : 45;
+    if (stage === 'meeting') {
+      if (r < clamp(0.3 + lv / 300, 0.25, 0.6)) { p.grv = r1(Math.max(0, (p.grv || 0) - 28)); this._unrestCool(p, d, 45); this._unrestLog(p, t, `${p.ko}과(와) 면담으로 불만을 풀었습니다`, 1); }
+      else { p.grv = r1(Math.min(100, (p.grv || 0) + 8)); delete p.unrest; p.unrestCool = d + 8; }   // 풀지 못하면 8일 뒤 다시(불만이 66을 넘으면 이적 요청)
+      return;
+    }
+    if (stage === 'request') {
+      this._unrestLog(p, t, `${p.ko}이(가) 구단에 이적을 요청했습니다`, 2);
+      if (this.canTrade() && r < 0.45 && this._unrestAITrade(p, t, d)) return;
+      p.unrest = { stage: 'refused', since: d, y: S.year }; p.loyAdj = clamp((p.loyAdj || 0) - 3, -15, 15); return;
+    }
+    if (stage === 'slack') { if (r < 0.5 && this.canTrade() && this._unrestAITrade(p, t, d)) return; if (r < 0.75) { p.grv = r1(Math.max(0, (p.grv || 0) - 22)); } return; }
+    if (stage === 'awol2') {   // 무단이탈 5일째: 복귀 45% / 제한선수 지정 25% / 계약 해지 20% / 임의해지 10%
+      if (r < 0.45) { this._unrestReturn(p, t, d, '복귀 설득에 응해'); return; }
+      if (r < 0.7) { p.unrest = { stage: 'restr', since: d, min: 20, kind: '제한선수', y: S.year }; this._unrestLog(p, t, `${p.ko}을(를) 제한선수로 지정했습니다`, 2); return; }
+      if (r < 0.9) { this._unrestRelease(p, t, `${p.ko}과(와) 14일 시정 촉구 뒤 계약을 해지했습니다(선수 귀책)`, false); return; }
+      this._unrestRelease(p, t, `${p.ko}과(와) 임의해지로 합의했습니다(1년 복귀 제한)`, true); return;
+    }
+    if (stage === 'return') { if ((p.grv || 0) <= 55 && r < 0.7) this._unrestReturn(p, t, d, `${p.unrest.kind} 해제`); else this._unrestRelease(p, t, `${p.ko}의 ${p.unrest.kind}이(가) 끝났지만 복귀를 허가하지 않고 계약을 해지했습니다`, false); }
+  };
+  proto._unrestAITrade = function (p, A, d) {   // 같은 유형·가치 ±20%(불만 선수는 10% 할인)의 맞교환
+    const S = this.S, mv = this.marketValue(p) * 0.9, r = rngFor(S.seed, S.year, d, 8999 + (parseInt(String(p.id).slice(1)) || 0) % 977);
+    const teams = TEAMS.filter(x => x !== A && x !== S.userTeam).sort(() => r.random() - 0.5);
+    for (const B of teams) { const cand = this.players(B).filter(q => this._aiTradeOk(q) && q.type === p.type && (p.type === 'P' ? (p.role === 'SP') === (q.role === 'SP') : (p.pos === 'C') === (q.pos === 'C')) && !this._aiCore(B).has(q.id) && this.marketValue(q) / mv >= 0.8 && this.marketValue(q) / mv <= 1.2).sort((a, b) => Math.abs(this.marketValue(a) / mv - 1) - Math.abs(this.marketValue(b) / mv - 1))[0];
+      if (cand && this._aiTradeOk(p)) { delete p.unrest; p.grv = 20; const rec = this._aiSwap(A, B, p, cand, `${p.ko}의 이적 요청을 받아들였습니다`); if (rec) rec.unrest = true; p.unrestCool = d + 90; return true; } }
+    return false;
+  };
+  /* ---- 내 구단: 이벤트 ---- */
+  proto._unrestEvent = function (p, t, stage) {
+    const S = this.S, v = Math.round(p.grv || 0), loy = this.loyalty(p, t), lv = loy ? loy.v : 45, c = cause(this, p, t), cap = this.captain && this.captain();
+    const prTalk = base => clamp(base + lv / 250 + (cap ? 0.1 : 0) - v / 400 + (this.traitOf(p) === 'leader' ? 0.08 : this.traitOf(p) === 'free' ? -0.08 : 0), 0.15, 0.85), pct = x => Math.round(x * 100) + '%';
+    const T = TRAITS[this.traitOf(p)] || '-', ctx = this._unrestCtx(t), benched = !p.active && !this.isInj(p), core = ctx.core.has(p.id);
+    const E = { type: 'unrest', ttl: 8, data: { pid: p.id, stage } };
+    if (stage === 'meeting') return this._evAdd(Object.assign(E, { title: `${p.ko} 면담 요구`, def: 'ignore', rec: benched ? 'play' : 'talk', text: `${p.ko}(${T}, OVR ${this.ovr(p)})이(가) 면담을 요청했습니다. 불만 ${v}/100 — ${c}. 방치하면 이적 요청으로 번질 수 있습니다.`, choices: [
+      { k: 'talk', label: '면담으로 달랜다', hint: `성공 ${pct(prTalk(0.35))}: 불만 −30·충성도 +2 / 실패: 불만 +6·충성도 −1` },
+      ...(core ? [] : [{ k: 'play', label: p.active ? '출전 기회를 늘려 준다' : '1군에 올려 기회를 준다', hint: '불만 −25 · 충성도 +1(1군에 올릴 수 있을 때)' }]),
+      { k: 'raise', label: '대우 개선 약속(0.3억)', hint: '불만 −15 · 충성도 +3' }, { k: 'ignore', label: '그대로 둔다', hint: '불만 +5' }] }));
+    if (stage === 'request') return this._evAdd(Object.assign(E, { title: `${p.ko} 이적 요청`, def: 'refuse', rec: 'talk', text: `${p.ko}이(가) 구단에 공식적으로 이적을 요청했습니다(불만 ${v}/100 — ${c}). 규약상 선수에게 이적을 요구할 권리는 없지만, 거부하면 태업이나 무단이탈로 번질 위험이 있습니다.`, choices: [
+      { k: 'trade', label: '요청 수락 — 맞교환 트레이드 추진', hint: '조건에 맞는 팀이 있으면 즉시 트레이드(없으면 불만 −10)' },
+      { k: 'talk', label: '설득해 마음을 돌린다', hint: `성공 ${pct(prTalk(0.25))}: 불만 −35 / 실패: 불만 +8` },
+      { k: 'refuse', label: '요청 거부(보류권 유지)', hint: '충성도 −3 · 불만이 안 풀리면 8일 뒤 태업' }] }));
+    if (stage === 'slack') return this._evAdd(Object.assign(E, { title: `${p.ko} 태업`, def: 'ignore', rec: 'meet', text: `${p.ko}이(가) 이적 요청이 거부된 뒤 훈련과 경기에서 소극적입니다(컨디션 −3). 불만 ${v}/100. 14일 안에 풀지 못하면 무단이탈로 이어질 수 있습니다.`, choices: [
+      { k: 'meet', label: '감독이 직접 면담', hint: `성공 ${pct(prTalk(0.2))}: 불만 −30(태업 해소) / 실패: 불만 +5` },
+      { k: 'bench', label: '2군으로 내려 징계', hint: '1군에서 제외 · 불만 +8 · 충성도 −2(태업 영향 차단)' },
+      { k: 'trade', label: '맞교환 트레이드 추진', hint: '조건에 맞는 팀이 있으면 즉시 트레이드' }, { k: 'ignore', label: '그대로 둔다', hint: '컨디션 −3 지속' }] }));
+    if (stage === 'awol') { const u = p.unrest, noticed = !!u.noticed; return this._evAdd(Object.assign(E, { title: `${p.ko} 무단이탈`, ttl: 6, def: noticed ? 'restrict' : 'notice', rec: noticed ? 'release' : 'notice', text: `${p.ko}이(가) 연락 두절 상태로 팀을 이탈했습니다(불만 ${v}/100). 이탈 기간에는 일수 × 연봉 1/300이 감액됩니다. ${noticed ? '14일 시정 촉구에도 복귀하지 않았습니다.' : ''} 규약에 따라 대응하세요.`, choices: [
+      ...(noticed ? [] : [{ k: 'notice', label: '14일 시정 촉구', hint: '14일 뒤 복귀하지 않으면 계약 해지 가능(복귀 가능성 약 60%, 불만이 낮을수록 높음)' }]),
+      { k: 'restrict', label: '제한선수 지정 요청(제33조)', hint: '개인 사유로 참가활동 중지 · 최소 20일 정지 후 복귀 판단 · 정지 기간 연봉 1/300 감액' },
+      { k: 'suspend', label: '자격정지선수 지정 요청(제34조)', hint: '계약 위반 · 최소 30일 정지 후 복귀 판단 · 정지 기간 연봉 1/300 감액' },
+      { k: 'release', label: '계약 해지(제47조·통일계약서 제24조)', req: noticed ? null : '먼저 14일 시정 촉구가 필요', hint: '총재 승인 · 선수 귀책이라 잔여 연봉 지급 없음 · 선수는 자유계약선수가 됨' },
+      { k: 'voluntary', label: '임의해지 협의(제31조)', hint: '연봉 지급 중단 · 1년 복귀 제한 · 원소속 구단과만 복귀 가능' }] })); }
+    if (stage === 'return') return this._evAdd(Object.assign(E, { title: `${p.ko} 복귀 신청`, ttl: 8, def: 'extend', rec: (p.grv || 0) <= 50 ? 'allow' : 'extend', text: `${p.ko}의 ${p.unrest.kind} 최소 기간이 지났습니다. 복귀를 신청했습니다(불만 ${v}/100).`, choices: [
+      { k: 'allow', label: '복귀 허가', hint: '불만 −30 · 1군 복귀는 2군 조정 뒤' }, { k: 'extend', label: '정지 14일 연장', hint: '연봉 감액 계속 · 불만 +3' },
+      { k: 'release', label: '계약 해지', hint: '선수 귀책 해지(총재 승인)' }] }));
+  };
+  proto._unrestApply = function (p, t, k, stage) {
+    const S = this.S, d = S.day, u = p.unrest || {}, f = S.fin && S.fin.teams[t], cost = c => { if (f && c > 0) f.evCost = r1((f.evCost || 0) + c); };
+    const adj = v => { p.loyAdj = clamp((p.loyAdj || 0) + v, -15, 15); }, down = v => { p.grv = r1(Math.max(0, (p.grv || 0) - v)); }, up = v => { p.grv = r1(Math.min(100, (p.grv || 0) + v)); };
+    const loy = this.loyalty(p, t), lv = loy ? loy.v : 45, cap = this.captain && this.captain(), v0 = p.grv || 0;
+    const talk = base => rrp(this, p, 21, d) < clamp(base + lv / 250 + (cap ? 0.1 : 0) - v0 / 400 + (this.traitOf(p) === 'leader' ? 0.08 : this.traitOf(p) === 'free' ? -0.08 : 0), 0.15, 0.85);
+    const tradeNow = () => { const off = this._offerFor ? this._offerFor(p, rngFor(S.seed, S.year, d, 9300 + (parseInt(String(p.id).slice(1)) || 0))) : null; if (!off) return false; const ev = this.executeTrade(off.t, [p.id], [off.y.id]); if (!ev.ok) return false; delete p.unrest; delete p.grv; p.unrestCool = d + 90; this._unrestLog(p, t, `${p.ko}의 요청을 받아들여 ${KO0[off.t]}와 트레이드했습니다(${off.y.ko} 영입)`, 3); return true; };
+    if (stage === 'meeting') {
+      if (k === 'talk') { if (talk(0.35)) { down(30); adj(2); this._unrestCool(p, d, 45); return `${p.ko}과(와) 면담으로 불만을 풀었습니다(불만 −30, 충성도 +2).`; } up(6); adj(-1); delete p.unrest; p.unrestCool = d + 12; return `면담이 겉돌았습니다(불만 +6, 충성도 −1).`; }
+      if (k === 'play') { let ok = true; if (!p.active && !this.isInj(p)) ok = !this.moveActive(p.id, true); if (ok) { down(25); adj(1); this._unrestCool(p, d, 45); return `${p.ko}에게 출전 기회를 주기로 했습니다(불만 −25, 충성도 +1).`; } up(3); delete p.unrest; p.unrestCool = d + 12; return `지금은 1군에 올릴 수 없어 기회를 약속하지 못했습니다(불만 +3).`; }
+      if (k === 'raise') { cost(0.3); down(15); adj(3); this._unrestCool(p, d, 45); return `대우 개선을 약속했습니다(불만 −15, 충성도 +3, 0.3억).`; }
+      up(5); delete p.unrest; p.unrestCool = d + 12; return `그대로 두었습니다(불만 +5).`;
+    }
+    if (stage === 'request') {
+      if (k === 'trade') { if (tradeNow()) return `요청을 받아들여 트레이드를 성사시켰습니다.`; down(10); p.unrest = { stage: 'refused', since: d, y: S.year }; return `조건에 맞는 맞교환 상대를 찾지 못했습니다(불만 −10). 이적 요청은 보류 상태입니다.`; }
+      if (k === 'talk') { if (talk(0.25)) { down(35); adj(2); this._unrestCool(p, d, 60); return `${p.ko}을(를) 설득했습니다(불만 −35, 충성도 +2).`; } up(8); p.unrest = { stage: 'refused', since: d, y: S.year }; adj(-2); return `설득이 통하지 않았습니다(불만 +8, 충성도 −2).`; }
+      adj(-3); p.mood = { v: -1, until: d + 10 }; p.unrest = { stage: 'refused', since: d, y: S.year }; this.invalidate(); return `이적 요청을 거부했습니다(충성도 −3). 불만이 풀리지 않으면 태업으로 번질 수 있습니다.`;
+    }
+    if (stage === 'slack') {
+      if (k === 'meet') { if (talk(0.2)) { down(30); this._unrestCool(p, d, 60); this._unrestLog(p, t, `${p.ko}이(가) 감독 면담 뒤 태업을 풀었습니다`, 2); return `감독 면담으로 ${p.ko}의 태업을 풀었습니다(불만 −30).`; } up(5); return `면담이 통하지 않았습니다(불만 +5).`; }
+      if (k === 'bench') { p.active = false; p.lockUntil = d + 10; up(8); adj(-2); if (this._injAutoFix && this.injAuto() !== 'off') this._injAutoFix([p], []); this.repairSettings(t); this.invalidate(); return `${p.ko}을(를) 2군으로 내려 징계했습니다(불만 +8, 충성도 −2).`; }
+      if (k === 'trade') { if (tradeNow()) return `맞교환 트레이드로 ${p.ko}을(를) 내보냈습니다.`; return `조건에 맞는 맞교환 상대를 찾지 못했습니다.`; }
+      return `그대로 두었습니다(컨디션 −3 지속).`;
+    }
+    if (stage === 'awol') {
+      if (k === 'notice') { u.stage = 'notice'; u.since = d; return `${p.ko}에게 14일 시정 촉구서를 보냈습니다(규약상 계약 해지의 전 단계).`; }
+      if (k === 'restrict') { p.unrest = { stage: 'restr', since: d, min: 20, kind: '제한선수', y: S.year }; return `${p.ko}을(를) 제한선수로 지정 요청했습니다(최소 20일, 정지 기간 연봉 1/300 감액).`; }
+      if (k === 'suspend') { p.unrest = { stage: 'restr', since: d, min: 30, kind: '자격정지선수', y: S.year }; return `${p.ko}을(를) 자격정지선수로 지정 요청했습니다(최소 30일, 정지 기간 연봉 1/300 감액).`; }
+      if (k === 'release') { this._unrestRelease(p, t, `${p.ko}과(와) 14일 시정 촉구 뒤 계약을 해지했습니다(선수 귀책, 총재 승인)`, false); return `${p.ko}의 계약을 해지했습니다(잔여 연봉 미지급).`; }
+      this._unrestRelease(p, t, `${p.ko}과(와) 임의해지로 합의했습니다(1년 복귀 제한)`, true); return `${p.ko}과(와) 임의해지로 합의했습니다(연봉 지급 중단, 1년 복귀 제한).`;
+    }
+    if (stage === 'return') {
+      if (k === 'allow') { this._unrestReturn(p, t, d, `${u.kind} 해제`); return `${p.ko}의 복귀를 허가했습니다.`; }
+      if (k === 'release') { this._unrestRelease(p, t, `${p.ko}의 ${u.kind} 뒤 계약을 해지했습니다(선수 귀책)`, false); return `${p.ko}의 계약을 해지했습니다.`; }
+      u.min = (u.min || 20) + 14; u.asked = false; up(3); return `${p.ko}의 정지를 14일 연장했습니다.`;
+    }
+    return '';
+  };
+  proto._unrestResolve = function (e, k) {
+    const S = this.S, p = S.players[e.data.pid], t = S.userTeam; if (!p || p.team !== t || !p.unrest) return '이미 정리된 일입니다.';
+    return this._unrestApply(p, t, k, e.data.stage);
+  };
+  /* ---- 화면용 ---- */
+  proto.unrestInfo = function (t) {
+    t = t || this.S.userTeam; return this._unrestPlayers(t).filter(p => (p.grv || 0) >= 30 || p.unrest).map(p => ({ id: p.id, ko: p.ko, v: Math.round(p.grv || 0), stage: p.unrest ? p.unrest.stage : (p.grv >= TH.grumble ? 'grumble' : ''), kind: p.unrest && p.unrest.kind || '', cause: cause(this, p, t) })).sort((a, b) => b.v - a.v);
+  };
+  proto._unrestRollover = function () { for (const p of Object.values(this.S.players)) { if (p.unrest) { if (p.unrest.stage === 'meeting') delete p.unrest; else p.unrest.since = 0; } delete p.unrestCool; if (p.grv) p.grv = r1(p.grv * 0.5); if (!p.grv) delete p.grv; } };   // 시즌이 바뀌면 불만의 절반이 가라앉는다
 });
 </script>
 <script>/* KBO 감독 모드: 협상 테이블 · 선수 면담 · 시즌 스토리 · 언론·팬 반응
@@ -7321,7 +7526,7 @@ table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; 
     const valHead = sk === 'age' ? '나이' : '연봉';   // 잠재는 정렬과 상관없이 항상 별도 열로 보여준다
     const potCell = p => `<td>${hasPot(p) && p.age <= 25 ? `<span class="pot" data-l="${L.potLetter(p)}" title="잠재력 ${L.potLetter(p)} · ${L.tierLabel(potv(p))}">${L.potLetter(p)}</span>` : `<span class="muted" title="${p.foreign ? '외국인은 잠재력을 표시하지 않습니다' : '26세 이상은 성장 여력을 표시하지 않습니다(완성 단계)'}">-</span>`}</td>`;
     const valCell = p => { if (sk === 'age') return `<td class="n">${p.age}세</td>`; const c = p.contract; return `<td class="n">${money(c.salary)}${c.amort ? '<span class="muted small">+</span>' : ''}${c.years > 1 ? `<span class="small muted yr"> ${c.years}년</span>` : ''}</td>`; };   // 1년 계약은 표시를 생략(다년만 연수 표기)
-    const status = p => `${p.foreign ? ` <span class="chip">${p.aq ? 'AQ' : '외'}</span>` : ''}${injChip(p).replace(/>부상 ~[^<]*</, '>부상<')}${moodChip(p).replace(/>(▲호조|▼부진)[\d.]+</, (m, a) => '>' + a[0] + '<')}${L.S.captain === p.id ? ' <span class="chip in" title="주장">C</span>' : ''}`;   // 목록에서는 상태를 짧은 아이콘으로(자세한 내용은 칩에 마우스를 올리거나 상세에서)
+    const status = p => `${p.foreign ? ` <span class="chip">${p.aq ? 'AQ' : '외'}</span>` : ''}${injChip(p).replace(/>부상 ~[^<]*</, '>부상<')}${moodChip(p).replace(/>(▲호조|▼부진)[\d.]+</, (m, a) => '>' + a[0] + '<')}${L.S.captain === p.id ? ' <span class="chip in" title="주장">C</span>' : ''}${L.isInj(p) ? '' : unrestChip(p)}`;   // 목록에서는 상태를 짧은 아이콘으로(자세한 내용은 칩에 마우스를 올리거나 상세에서)
     const mgBtn = p => p.active ? `<button class="sm" data-act="toggleActive" data-a="${p.id}" title="2군으로 내림">2군</button>` : L.isInj(p) ? '<span class="muted small" title="복귀 전 등록 불가">IL</span>' : `<button class="sm primary" data-act="toggleActive" data-a="${p.id}" title="1군 등록">1군</button>`;
     const rowOf = p => `<tr class="click${p.active ? '' : ' dim'}" data-act="player" data-a="${p.id}"><td class="l"><b>${esc(p.ko)}</b>${status(p)}<span class="small muted vm"> ${pos(p)}·${p.age}세</span></td><td class="l hm">${pos(p)} · ${p.age}세</td><td>${ovrChip(L.ovr(p))}</td>${potCell(p)}${valCell(p)}<td class="l hm">${subHtml(p)}</td><td class="l small hm">${statLine(p)}</td><td data-stop="1">${mgBtn(p)}</td></tr>`;
     const head = `<thead><tr><th class="l">선수</th><th class="l hm">포지션</th><th>OVR</th><th title="스카우트 추정 성장 상한(25세 이하만 표시)">잠재</th><th>${valHead}</th><th class="l hm">세부 능력</th><th class="l hm">올 시즌</th><th title="1군↔2군 이동">이동</th></tr></thead>`;
@@ -7582,6 +7787,7 @@ table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; 
     const mine = t !== U() ? `<div class="small" style="margin-top:4px"><b>${esc(KO[t])}</b> 운영 성향: ${chip(L.aiStyle(t))} <span class="muted">${st[t] ? esc(st[t].how) + ' ' + st[t].rank + '위 기준' : ''}</span></div>` : '';
     return `<div class="card"><h2>리그 동향</h2>${mine}<div class="small muted" style="margin-top:4px">구단 성향: ${TEAMS.filter(x => x !== U()).map(x => `${esc(KO[x])} ${L.aiStyleName(L.aiStyle(x))}`).join(' · ')}</div>
       <div style="margin-top:6px"><b class="small">최근 구단 간 트레이드</b>${trades.length ? trades.map(x => `<div class="small">${x.y} · ${esc(KO[x.a])} <b>${esc(x.pa.ko)}</b>(${esc(x.pa.pos)}·${x.pa.age}세) ↔ ${esc(KO[x.b])} <b>${esc(x.pb.ko)}</b>(${esc(x.pb.pos)}·${x.pb.age}세)</div>`).join('') : '<div class="small muted">아직 없습니다. 시즌 10~104일차에 우승 도전 구단과 리빌딩 구단이 선수를 맞바꿉니다.</div>'}</div>
+      ${(S.unrestLog || []).filter(x => x.t !== U()).slice(0, 5).length ? `<div style="margin-top:6px"><b class="small">타 구단 선수 불만 소식</b>${(S.unrestLog || []).filter(x => x.t !== U()).slice(0, 5).map(x => `<div class="small">${x.y} · ${esc(KO[x.t] || x.t)} — ${esc(x.text)}</div>`).join('')}</div>` : ''}
       <div class="small muted" style="margin-top:6px">우승 도전 구단은 즉시 전력을, 리빌딩 구단은 젊은 선수를 택합니다. 1대1 맞교환만 하며 외국인·부상자·영구결번 후보·팀 핵심 선수는 제외됩니다(⚠ 빈도·규칙은 게임 설정).</div></div>`;
   }
   function screenTeams() {
@@ -7758,7 +7964,8 @@ table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; 
     const until = p.mood && L.S.day < p.mood.until ? p.mood.until : (L.S.teamMood && L.S.day < L.S.teamMood.until ? L.S.teamMood.until : null);
     return ` <span class="chip ${m > 0 ? 'in' : 'warn'}" title="컨디션 ${m > 0 ? '+' : ''}${m}: 경기 능력치가 OVR 약 ${m > 0 ? '+' : ''}${(m * 0.55).toFixed(1)} 보정됩니다${until ? ' (~' + L.dateStr(until) + ')' : ''}">${m > 0 ? '▲호조' : '▼부진'}${Math.abs(m)}</span>`;
   }
-  function injChip(p) { if (!L.isInj(p)) return ''; const n = L.injLeft(p); return ` <span class="chip warn" title="${esc(p.inj.dx)} · ${esc(p.inj.basis || '')} · 복귀 예정 ${L.injDateStr(p)}">부상 ~${L.injDateStr(p).slice(2)} (${n}일)</span>`; }
+  function unrestChip(p) { const u = p.unrest; if (u) return ` <span class="chip ${['slack', 'awol', 'notice', 'restr'].includes(u.stage) ? 'warn' : 'in'}" title="불만 ${Math.round(p.grv || 0)}/100">${esc(L.unrestStageName(u.stage) + (u.kind ? '·' + u.kind : ''))}</span>`; return (p.grv || 0) >= 40 ? ` <span class="chip" title="불만 ${Math.round(p.grv)}/100">불만 ${Math.round(p.grv)}</span>` : ''; }
+  function injChip(p) { if (!L.isInj(p)) return ''; if (p.inj.unrest) return unrestChip(p) || ' <span class="chip warn">이탈</span>'; const n = L.injLeft(p); return ` <span class="chip warn" title="${esc(p.inj.dx)} · ${esc(p.inj.basis || '')} · 복귀 예정 ${L.injDateStr(p)}">부상 ~${L.injDateStr(p).slice(2)} (${n}일)</span>`; }
   function bidCell(bi) {
     if (!bi) return '<span class="muted">-</span>';
     const pe = bi.pend ? `<div class="pos"><b>내 제시 보류 중</b> (연 ${f1((bi.pend.bonus + bi.pend.salary * bi.pend.years) / bi.pend.years)}억 × ${bi.pend.years}년 · ${bi.pendLeft}일 남음)</div>` : '';
@@ -7873,6 +8080,7 @@ table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; 
       <div class="small muted" style="margin-top:6px">평판은 협상·면담 호감도의 시작값에 최대 ±5 영향을 줍니다(경제 수치에는 영향 없음).</div></div>
       <div class="card"><h2>선수단 분위기</h2><div class="kpis"><div class="kpi"><div class="l">평균 컨디션 보정</div><div class="v">${bd.club.mood >= 0 ? '+' : ''}${bd.club.mood}</div></div><div class="kpi"><div class="l">불만 선수</div><div class="v">${bd.unhappy.length}명</div></div><div class="kpi"><div class="l">주장</div><div class="v" style="font-size:15px">${cap ? esc(cap.ko) : '없음'}</div></div></div>
       ${bd.unhappy.length ? `<div style="margin-top:8px"><b class="small">마음이 불편한 선수</b><div class="chips">${bd.unhappy.map(chip).join('')}</div></div>` : ''}${bd.happy.length ? `<div style="margin-top:8px"><b class="small">구단에 만족하는 선수</b><div class="chips">${bd.happy.map(chip).join('')}</div></div>` : ''}</div>
+      ${(() => { const ui2 = L.unrestInfo ? L.unrestInfo() : [], lg = (L.S.unrestLog || []).filter(x => x.t === L.S.userTeam).slice(0, 6); if (!ui2.length && !lg.length) return ''; const nm = L.unrestStageName || (x => x); return `<div class="card"><h2>선수 불만 현황</h2><div class="small muted">불만이 쌓이면 면담 요구 → 이적 요청 → (거부 시) 태업 → 무단이탈로 번질 수 있습니다. 게이지는 출전 기회·연봉·성적·팀 성적에서 쌓입니다.</div>${ui2.map(x => `<div class="row small" style="margin-top:4px"><button class="linkbtn" data-act="player" data-a="${x.id}">${esc(x.ko)}</button><span class="sp"></span><span class="muted">${esc(x.cause || '')}</span> <span class="chip ${x.stage === 'awol' || x.stage === 'slack' ? 'bad' : x.stage ? 'in' : ''}">${esc(x.stage ? nm(x.stage) : '불만')}${x.kind ? ' · ' + esc(x.kind) : ''}</span> <b>${x.v}</b></div>`).join('')}${lg.length ? `<div style="margin-top:8px"><b class="small">최근 경과</b>${lg.map(x => `<div class="small muted">${L.dateStr(x.d)} · ${esc(x.text)}</div>`).join('')}</div>` : ''}</div>`; })()}
       <div class="card"><h2>동료 관계</h2><div class="small muted">친한 동료(선수당 최대 3명)는 한 선수의 일에 함께 영향을 받습니다. 같은 선수는 10일에 한 번만 받습니다.</div>
       <details class="small" style="margin-top:6px"><summary>관계 종류 · 발동 조건 · 효과 보기</summary><div style="margin-top:6px"><b>관계</b>: 같은 학교 동기, 같은 학교 선후배, 같은 해 같은 구단 지명 동기, 우리 구단이 같은 해 지명한 동기, 멘토-제자(경력 8년·31세 이상 베테랑 ↔ 24세 이하, 같은 포지션)<br><b>긍정 사건</b>: 면담 성공, 재계약·비FA 다년계약, 약속 이행, 1군 승격, 기록 달성, 시즌 활약, 부상 복귀<br><b>부정 사건</b>: 면담 실패, 약속 불이행, 방출(근속 3년 이상 또는 OVR 50 이상), 트레이드로 내보냄, 장기 부상(30일 이상)<br><b>효과</b>: 충성도 보정 ±1(주인공이 리더형이면 ×1.5, 받는 선수가 소심형이면 ×1.3, 자유분방형이 부정 영향을 받으면 ×1.3)과 컨디션 ±1(긍정 8일·부정 10일)<br><b>회복</b>: 충성도 보정은 30일마다 1, 새 시즌에 2씩 0 쪽으로 돌아옵니다.</div></details>
       ${L.bondPreview().length ? `<div style="margin-top:8px"><b class="small">이 선수에게 일이 생기면 영향받는 동료</b>${L.bondPreview().map(x => `<div class="small" style="margin-top:4px"><button class="linkbtn" data-act="player" data-a="${x.p.id}"><b>${esc(x.p.ko)}</b></button> → ${x.b.map(b => `${esc(P(b.id).ko)} <span class="muted">(${esc(b.why)})</span>`).join(' · ')}</div>`).join('')}</div>` : ''}
@@ -8041,7 +8249,7 @@ table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; 
     return `<div class="card"><div class="row"><h2 style="margin:0">시즌 스토리</h2><span class="sp"></span><select data-sel="storyy" aria-label="시즌">${years.map(v => `<option value="${v}" ${v === y ? 'selected' : ''}>${v}</option>`).join('')}</select></div><div class="tabs wrap" role="tablist" style="margin-top:8px">${tabs}</div></div>${body}`;
   }
   /* ---------------- 시즌 중 소식(이벤트) ---------------- */
-  const evIcon = { camp: '⛺', grievance: '🗣', sponsor: '🤝', promo: '🎉', board: '🏛', arc: '📖', legend: '🏅', retcer: '🎖', awards: '🏆', fanloss: '📉', allstar: '⭐', halfsum: '📋' };
+  const evIcon = { camp: '⛺', grievance: '🗣', sponsor: '🤝', promo: '🎉', board: '🏛', arc: '📖', legend: '🏅', retcer: '🎖', awards: '🏆', unrest: '⚠', fanloss: '📉', allstar: '⭐', halfsum: '📋' };
   function eventCards() {
     const open = L.eventsOpen(), warns = L.validateEntry(); if (!open.length && !warns.length) return '';
     const rows = open.map(e => { const rec = e.rec || e.def; return `<div class="ev"><div><b>${evIcon[e.type] || '📢'} ${esc(e.title)}</b> <span class="muted small">${L.dateStr(e.day)} · ${e.type === 'comp' ? '직접 고를 때까지 보상이 정산되지 않습니다' : e.exp > 1e8 ? '개막 전까지 결정 · 미결정 시 변화 없음' : Math.max(0, e.exp - L.S.day) + '일 내 결정'}</span></div><div class="small" style="margin:4px 0 8px">${esc(e.text)}</div><div class="row evbtn">${e.choices.map(c => `<button class="sm ${c.k === rec ? 'primary' : ''}" data-act="evChoice" data-a="${e.id}|${c.k}" title="${esc(c.hint || '')}">${c.k === rec && open.length > 1 ? '★ ' : ''}${esc(c.label)}</button>`).join('')}</div><div class="small muted" style="margin-top:4px">${e.choices.map(c => esc(c.label.replace(/ \(.*\)$/, '')) + ': ' + esc(c.hint || '')).join(' / ')}</div></div>`; }).join('');
