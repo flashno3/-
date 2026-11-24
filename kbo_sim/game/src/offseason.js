@@ -6,7 +6,7 @@
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) {
     factory(require('./league.js'), require('../../web/src/engine.js'));
-    for (const f of ['off_common', 'off_growth', 'off_rookies', 'off_contract', 'off_draft', 'off_fa', 'off_rules', 'off_events', 'off_goals', 'off_advance', 'off_rival', 'off_season', 'off_finance', 'off_injury', 'off_salary', 'club_history','arcs','legends','ceremony','allstar','aiworld']) require('./' + f + '.js');
+    for (const f of ['off_common', 'off_growth', 'off_rookies', 'off_contract', 'off_draft', 'off_fa', 'off_rules', 'off_events', 'off_goals', 'off_advance', 'off_rival', 'off_season', 'off_finance', 'off_injury', 'off_salary', 'club_history','arcs','arcs2','legends','ceremony','allstar','aiworld']) require('./' + f + '.js');
     require('./negotiate.js'); require('./world.js'); require('./training.js'); require('./scout.js'); require('./invest.js');
   } else factory(root.KBOLeague, root.KBOEngine);
 })(typeof self !== 'undefined' ? self : this, function (LG, Engine) { 'use strict'; });

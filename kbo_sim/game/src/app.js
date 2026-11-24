@@ -884,10 +884,25 @@
   function negBackTo() { const bk = ui.negBack; ui.negBack = null; if (bk) { ui.screen = bk.screen; ui.market = bk.market; ui.faTab = bk.faTab; if (bk.modal && P(bk.modal)) ui.modal = bk.modal; } render(); if (bk) window.scrollTo(0, bk.scroll); }
   const TOPIC_KO = { grievance: '출전 기회 불만', request: '이적 요청', slump: '부진 상담', checkin: '일반 면담' };
   const storyTopCard = () => { const S = L.S; if (S.phase !== 'offseason') return ''; const y = S.off ? S.off.year || S.year : S.year, top = L.storyTop(y, 5); if (!top.length) return ''; return `<div class="card"><div class="row"><h2 style="margin:0">${y} 올해의 이야기</h2><span class="sp"></span><button class="sm" data-act="go" data-a="story">전체 보기</button></div>${top.map(e => `<div class="stl"><span class="d">${e.ph === 'offseason' ? '오프시즌' : L.dateStr(e.d)}</span><span>${esc(e.text)}</span></div>`).join('')}</div>`; };
+  const arcGauge = g => { const hi = g.good === 'high', cls = hi ? (g.v >= 60 ? '' : g.v <= 35 ? 'bad' : 'mid') : (g.v <= 35 ? '' : g.v >= 60 ? 'bad' : 'mid'); return `<div class="arcg ${cls}"><span class="gl">${esc(g.label)}</span><span class="ab"><i style="width:${Math.max(3, Math.min(100, g.v))}%"></i></span><span class="gv">${g.v}</span></div>`; };
+  function arcPanel() {   // 이야기 전용 화면: 진행 중인 이야기(막·게이지·선택 기록)와 끝난 이야기(에필로그)
+    if (!L.arcSummary) return ''; const all = L.arcSummary(), act = all.filter(a => a.status === 'active'), done = all.filter(a => a.status === 'done');
+    const tone = { ok: '순조롭게 마무리', mixed: '엇갈린 결말', bad: '아쉬운 결말' };
+    const hist = a => a.hist.length ? `<div class="small" style="margin-top:6px"><b>지금까지의 선택</b>${a.hist.map(h => `<div class="muted">${esc(h.n)} → <span style="color:var(--fg)">${esc(h.c)}</span></div>`).join('')}</div>` : '';
+    const dots = a => Array.from({ length: a.steps }, (_, i) => `<span class="arcdot ${i < a.progress ? 'on' : i === a.progress && a.status === 'active' ? 'cur' : ''}"></span>`).join('');
+    const one = a => { const last = a.log.slice(-3).reverse(); return `<div class="arc"><div class="row"><b>📖 ${esc(a.title)}</b> <span class="muted small">${esc(a.who)}</span><span class="sp"></span><span class="arcdots">${dots(a)}</span></div>
+      ${a.chapter ? `<div class="small" style="margin-top:3px"><b>${a.act ? a.act + '막 · ' : ''}${esc(a.chapter)}</b> <span class="muted">${a.waiting === 'decide' ? '— 결정을 기다리는 중(대시보드의 소식)' : a.days !== null ? `— 다음 막까지 약 ${a.days}일` : ''}</span></div>` : ''}
+      ${a.gauges.length ? `<div style="margin-top:6px">${a.gauges.map(arcGauge).join('')}</div>` : ''}${hist(a)}
+      ${last.length ? `<div class="small muted" style="margin-top:6px">${last.map(x => `${x.y} · ${esc(x.t)}`).join('<br>')}</div>` : ''}</div>`; };
+    const epi = a => `<div class="arc"><div class="row"><b>📖 ${esc(a.title)}</b> <span class="muted small">${esc(a.who)} · ${a.y}</span><span class="sp"></span><span class="chip ${a.end && a.end.tone === 'ok' ? 'ks' : a.end && a.end.tone === 'bad' ? 'warn' : 'in'}">${esc((a.end && tone[a.end.tone]) || '')}</span></div>
+      <div class="small" style="margin-top:4px">${a.end ? esc(a.end.text) : ''}</div>${a.gauges.length ? `<div style="margin-top:6px">${a.gauges.map(arcGauge).join('')}</div>` : ''}${hist(a)}</div>`;
+    return `<div class="card"><h2>진행 중인 이야기</h2>${act.length ? act.map(one).join('') : '<div class="small muted">지금 진행 중인 이야기가 없습니다. 시즌 중 상황(연패·부상·성적 등)에 따라 새 이야기가 시작됩니다.</div>'}</div>
+      <div class="card"><h2>지난 이야기 (에필로그)</h2>${done.length ? done.map(epi).join('') : '<div class="small muted">아직 끝난 이야기가 없습니다.</div>'}</div>`;
+  }
   const arcCard = () => {
     if (!L.arcSummary) return ''; const all = L.arcSummary(), act = all.filter(a => a.status === 'active'), done = all.filter(a => a.status === 'done').slice(0, 4); if (!act.length && !done.length) return '';
     const dots = a => Array.from({ length: a.steps }, (_, i) => `<span class="arcdot ${i < a.progress ? 'on' : i === a.progress && a.status === 'active' ? 'cur' : ''}"></span>`).join('');
-    const one = a => { const last = a.log[a.log.length - 1]; return `<div class="arc"><div class="row"><b>📖 ${esc(a.title)}</b> <span class="muted small">${esc(a.who)}</span><span class="sp"></span><span class="arcdots">${dots(a)}</span></div><div class="small" style="margin-top:3px">${last ? esc(last.t) : ''}</div><div class="muted small">${a.status === 'done' ? `결말: ${({ ok: '순조롭게 마무리', mixed: '엇갈린 결말', bad: '아쉬운 결말' })[a.end && a.end.tone] || ''}` : a.waiting === 'decide' ? '▶ 위 소식에서 결정을 기다리는 중' : `다음 이야기까지 약 ${a.days}일`}</div></div>`; };
+    const one = a => { const last = a.log[a.log.length - 1]; return `<div class="arc"><div class="row"><b>📖 ${esc(a.title)}</b> <span class="muted small">${esc(a.who)}</span><span class="sp"></span><span class="arcdots">${dots(a)}</span></div><div class="small" style="margin-top:3px">${a.chapter ? `<b>${a.act ? a.act + '막 · ' : ''}${esc(a.chapter)}</b> — ` : ''}${last ? esc(last.t) : ''}</div>${a.gauges && a.gauges.length ? `<div style="margin-top:4px">${a.gauges.map(arcGauge).join('')}</div>` : ''}<div class="muted small">${a.status === 'done' ? `결말: ${({ ok: '순조롭게 마무리', mixed: '엇갈린 결말', bad: '아쉬운 결말' })[a.end && a.end.tone] || ''}` : a.waiting === 'decide' ? '▶ 위 소식에서 결정을 기다리는 중' : `다음 이야기까지 약 ${a.days}일`}</div></div>`; };
     return `<div class="card"><h2 style="margin:0 0 6px">이야기 중</h2>${act.length ? act.map(one).join('') : '<div class="muted small">진행 중인 이야기가 없습니다.</div>'}${done.length ? `<details class="foldgroup"><summary class="muted small">지난 이야기 ${done.length}편</summary>${done.map(one).join('')}</details>` : ''}</div>`;
   };
   function allStarCard() {   // 올스타전 결과·명단(올스타 휴식기 이후 그 시즌 동안)
@@ -902,12 +917,13 @@
   function screenStory() {
     const S = L.S, years = [...new Set((S.story || []).map(e => e.y).concat([S.year]))].sort((x, y) => y - x), y = ui.storyY || S.year, tab = ui.storyTab || 'top';
     const lab = e => e.ph === 'offseason' ? '오프시즌' : L.dateStr(e.d), star = i => '★'.repeat(Math.min(3, i));
-    const tabs = [['top', '올해의 이야기'], ['line', '타임라인'], ['press', '언론·팬 반응'], ['chal', '도전 과제'], ['hist', '구단 역사']].map(([k, t]) => `<button role="tab" aria-selected="${tab === k}" data-act="storyTab" data-a="${k}">${t}</button>`).join('');
+    const tabs = [['top', '올해의 이야기'], ['arc', '이야기'], ['line', '타임라인'], ['press', '언론·팬 반응'], ['chal', '도전 과제'], ['hist', '구단 역사']].map(([k, t]) => `<button role="tab" aria-selected="${tab === k}" data-act="storyTab" data-a="${k}">${t}</button>`).join('');
     let body;
     if (tab === 'top') { const top = L.storyTop(y, 8); body = top.length ? `<div class="card"><h2>${y} 시즌 하이라이트</h2>${top.map(e => `<div class="stl"><span class="d">${lab(e)}</span><span>${esc(e.text)}</span><span class="muted small">${star(e.imp)}</span></div>`).join('')}</div>` : '<div class="card muted">아직 기록된 이야기가 없습니다. 계약·트레이드·부상·연승 같은 사건이 쌓입니다.</div>'; }
     else if (tab === 'line') { const mi = ui.storyMin || 1, l = L.storyYear(y).filter(e => e.imp >= mi).reverse(); body = `<div class="chips">${[[1, '전체'], [2, '★2 이상'], [3, '★3']].map(([k, t]) => `<button class="sm" aria-pressed="${mi === k}" data-act="storyMin" data-a="${k}">${t}</button>`).join('')}</div>` + (l.length ? `<div class="card">${l.map(e => `<div class="stl"><span class="d">${lab(e)}</span><span>${esc(e.text)}</span><span class="muted small">${star(e.imp)}</span></div>`).join('')}</div>` : '<div class="card muted">기록이 없습니다.</div>'); }
     else if (tab === 'chal') body = chalPanel();
     else if (tab === 'hist') body = histPanel();
+    else if (tab === 'arc') body = arcPanel();
     else { const l = (S.press || []).filter(e => e.y === y); body = l.length ? `<div class="card">${l.map(e => `<div class="press"><b>${esc(e.head)}</b>${e.fan ? `<div class="small muted">${esc(e.fan)}</div>` : ''}<div class="small muted">${e.ph === 'offseason' ? '오프시즌' : L.dateStr(e.d)}</div></div>`).join('')}</div>` : '<div class="card muted">아직 기사가 없습니다.</div>'; }
     return `<div class="card"><div class="row"><h2 style="margin:0">시즌 스토리</h2><span class="sp"></span><select data-sel="storyy" aria-label="시즌">${years.map(v => `<option value="${v}" ${v === y ? 'selected' : ''}>${v}</option>`).join('')}</select></div><div class="tabs wrap" role="tablist" style="margin-top:8px">${tabs}</div></div>${body}`;
   }

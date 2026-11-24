@@ -400,9 +400,10 @@
   const _resignAsk = proto.resignAsk;
   proto.resignAsk = function (p) { const v = _resignAsk.call(this, p), m = p.askMod && p.askMod.y === this.S.year ? p.askMod.v : 1; return m === 1 ? v : Math.max(this.minSal(), Math.round(v * m * 10) / 10); };
   proto._arcDefs = function () { return DEFS; };
+  proto._arcRegister = function (kind, def) { DEFS[kind] = def; };   // 분기 그래프 아크(arcs2.js)가 기존 정의를 대체하거나 새로 등록한다
   /* ================= 진행 ================= */
-  proto.arcStart = function (kind, force) {
-    const S = this.S, def = DEFS[kind], A = this.arcs(); if (!def) return null; const ctx = def.can(this); if (!ctx) return null;
+  proto.arcStart = function (kind, force, given) {
+    const S = this.S, def = DEFS[kind], A = this.arcs(); if (!def) return null; const ctx = given || def.can(this); if (!ctx) return null;
     const a = { id: 'A' + (++A.seq), kind, title: def.title, status: 'active', y: S.year, d0: S.day, stage: null, wait: null, ev: null, pid: ctx.pid, pid2: ctx.pid2, mem: {}, log: [] }; A.list.unshift(a); A.last = S.day;
     if (A.list.length > 40) A.list.length = 40; def.start(this, a, ctx); return a;
   };
@@ -412,10 +413,13 @@
       const pa = P(this, a.pid), pb = a.pid2 ? P(this, a.pid2) : null;
       if (!pa || pa.team !== S.userTeam || (a.pid2 && (!pb || pb.team !== S.userTeam))) { this._arcEnd(a, `${!pa || pa.team !== S.userTeam ? (pa ? pa.ko : '선수') : pb.ko}이(가) 팀을 떠나면서 이야기는 거기서 막을 내렸습니다.`, 'mixed'); continue; }
       if (a.ev) { const ev = this.eventsOpen().find(e => e.id === a.ev); if (!ev) { a.ev = null; a.wait = d + 3; } }   // 이벤트가 외부 요인으로 종결되면 단계를 다시 연다
-      if (a.wait !== null && a.wait !== undefined && d >= a.wait && !a.ev) { const st = DEFS[a.kind].stages[a.stage]; if (st) st.enter(this, a); }
+      if (a.wait !== null && a.wait !== undefined && d >= a.wait && !a.ev) { const st = DEFS[a.kind].stages[a.stage]; if (st) st.enter(this, a); else this._arcEnd(a, '이야기가 개편되어 여기서 마무리되었습니다.', 'mixed'); }
     }
     const act = A.list.filter(x => x.status === 'active');
     if (act.length < MAX_ACTIVE && d >= 8 && d <= 80 && !act.some(x => x.kind === 'echo') && rngFor(S.seed, S.year, d, 9101).random() < 0.2 && this.arcStart('echo')) return;   // 지난 시즌 이야기의 후일담이 먼저 돌아온다
+    if (act.length < MAX_ACTIVE && d >= 14 && d <= 118) {   // 반응형 시작: 게임 상황이 맞으면(연패·부상·성적 등) 그 이야기가 시작된다
+      for (const k of Object.keys(DEFS)) { const df = DEFS[k]; if (!df.trig || A.list.some(x => x.kind === k && x.y === S.year) || act.length >= MAX_ACTIVE) continue; if (rngFor(S.seed, S.year, d, 9150 + k.length).random() > 0.35) continue; const ctx = df.trig(this); if (ctx && this.arcStart(k, false, ctx)) return; }
+    }
     if (act.length >= MAX_ACTIVE || d < 14 || d > 118 || d - A.last < MIN_GAP) return;
     const r = rngFor(S.seed, S.year, d, 9100); if (r.random() > 0.07) return;
     const kinds = Object.keys(DEFS).filter(k => !DEFS[k].followup && !A.list.some(x => x.kind === k && x.y === S.year)).sort(() => r.random() - 0.5);   // 한 시즌에 같은 이야기는 한 번
@@ -431,7 +435,13 @@
     for (const a of this.arcsActive()) { if (!a.ev) a.wait = 10; a.log.push({ y: this.S.year, d: 0, t: '시즌이 끝나고, 이야기는 다음 시즌으로 이어집니다.' }); }
   };
   proto.arcSummary = function () {
-    const out = []; for (const a of this.arcs().list) { const p = P(this, a.pid), p2 = a.pid2 ? P(this, a.pid2) : null; out.push({ id: a.id, kind: a.kind, title: a.title, status: a.status, y: a.y, steps: DEFS[a.kind].steps, stage: a.stage, who: [p && p.ko, p2 && p2.ko].filter(Boolean).join(' · '), pid: a.pid, log: a.log.slice(), end: a.end || null, waiting: a.ev ? 'decide' : a.wait !== null && a.wait !== undefined ? 'wait' : '', days: a.wait !== null && a.wait !== undefined ? Math.max(0, a.wait - this.S.day) : null, progress: a.status === 'done' ? DEFS[a.kind].steps : Math.min(DEFS[a.kind].steps - 1, Object.keys(DEFS[a.kind].stages).indexOf(a.stage)) }); }
+    const out = []; for (const a of this.arcs().list) {
+      const df = DEFS[a.kind] || {}, p = P(this, a.pid), p2 = a.pid2 ? P(this, a.pid2) : null, nd = df.nodes && df.nodes[a.stage], keys = df.stages ? Object.keys(df.stages) : [];
+      out.push({ id: a.id, kind: a.kind, title: a.title, status: a.status, y: a.y, steps: df.acts || df.steps || 3, stage: a.stage, who: [p && p.ko, p2 && p2.ko].filter(Boolean).join(' · '), pid: a.pid, log: a.log.slice(), end: a.end || null,
+        waiting: a.ev ? 'decide' : a.wait !== null && a.wait !== undefined ? 'wait' : '', days: a.wait !== null && a.wait !== undefined ? Math.max(0, a.wait - this.S.day) : null,
+        progress: a.status === 'done' ? (df.acts || df.steps || 3) : Math.min((df.acts || df.steps || 3) - 1, nd && nd.act ? nd.act - 1 : Math.max(0, keys.indexOf(a.stage))), chapter: nd && nd.title ? nd.title : null, act: nd && nd.act ? nd.act : null,
+        gauges: a.g && df.gauges ? df.gauges.map(g => ({ k: g.k, label: g.label, v: Math.round(a.g[g.k]), good: g.good })) : [], hist: (a.hist || []).slice(), graph: !!df.nodes });
+    }
     return out;
   };
 });
