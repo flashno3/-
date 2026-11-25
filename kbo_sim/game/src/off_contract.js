@@ -111,7 +111,7 @@
     const S = this.S, r = rngFor(S.seed, S.year, 31), user = S.userTeam, rep = { prog: [], retired: [], expiring: [] };
     if (this._subEnd) this._subEnd();   // 시즌이 끝나면 부상 대체 계약은 종료(FA 공시)
     const st = this.standings(); S.prevRank = {}; { const ch = S.post && S.post.champion, ru = S.post && S.post.runnerUp; let k = 3; for (const x of st) S.prevRank[x.team] = x.team === ch ? 1 : x.team === ru ? 2 : k++; }   // 전년도 성적(동률 해소용): 연도 구단순위는 우승 1위·준우승 2위, 나머지는 정규시즌 순서
-    S.history.push({ year: S.year, champion: S.post ? S.post.champion : null, runnerUp: S.post ? S.post.runnerUp : null, userRank: st.find(x => x.team === user).rank, userRec: st.find(x => x.team === user), top: st.slice(0, 5).map(x => x.team) });
+    S.history.push({ year: S.year, champion: S.post ? S.post.champion : null, runnerUp: S.post ? S.post.runnerUp : null, userTeam: user, userRank: st.find(x => x.team === user).rank, userRec: st.find(x => x.team === user), top: st.slice(0, 5).map(x => x.team) });
     this.mergeTracking(); if (this._careerSnapshot) this._careerSnapshot();
     // 0) 경쟁균형세 정산(시즌 종료 시점 연봉 기준)
     { const log = this.settleCBT(), my = log.find(x => x.team === user);

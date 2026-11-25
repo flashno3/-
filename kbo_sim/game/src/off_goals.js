@@ -70,6 +70,7 @@
     S.report = { year: S.year, rank: me.rank, w: me.w, l: me.l, d: me.d, champion: S.post ? S.post.champion : null, awards: aw, mine, goals: res, goalTrust: d, trust: f.trust };
     if (res.length) news(this, `시즌 목표 평가: ${res.map(x => `${x.label} ${x.ok ? '달성' : '미달'}`).join(' · ')} → 이사회 신뢰도 ${d >= 0 ? '+' : ''}${d} (현재 ${f.trust})`);
     if (f.trust <= 12) { S.fired = { year: S.year, trust: f.trust, done: false }; news(this, `이사회가 감독 해임을 결정했습니다 (신뢰도 ${f.trust}).`); }
+    else if (this._mgrOffers) this._mgrOffers();   // 다른 구단의 감독 제의(drama.js)
   };
   proto.takeOverTeam = function (t) {   // 해임 후 다른 구단 지휘: 라인업·로테이션 자동 편성, 신뢰도 55로 시작
     const S = this.S; if (!(t in S.teams) || t === S.userTeam) return false; const old = S.userTeam;

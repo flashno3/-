@@ -127,7 +127,7 @@
     }
     /* 컨디션(분위기)·운영 방침: 내 팀 선수의 경기 능력치에 반영(엔진 입력만 바꾸므로 시뮬레이션 규칙은 그대로).
        mood: 선수 개별(-3~+3, 기한 있음) + 팀 분위기. 1단계 ≈ OVR 0.55 */
-    moodOf(p) { const S = this.S, m = p.mood && S.day < p.mood.until ? p.mood.v : 0, tm = S.teamMood && S.day < S.teamMood.until && p.team === S.userTeam ? S.teamMood.v : 0, cb = p.team === S.userTeam && this.capBonus ? this.capBonus() : 0, cl = p.team === S.userTeam && /^post/.test(S.phase) && this.traitOf && this.traitOf(p) === 'clutch' ? 1 : 0; return clamp(m + tm + cb + cl, -4, 4); }
+    moodOf(p) { const S = this.S, m = p.mood && S.day < p.mood.until ? p.mood.v : 0, tm = S.teamMood && S.day < S.teamMood.until && p.team === S.userTeam ? S.teamMood.v : 0, cb = p.team === S.userTeam && this.capBonus ? this.capBonus() : 0, cl = p.team === S.userTeam && /^post/.test(S.phase) && this.traitOf && this.traitOf(p) === 'clutch' ? 1 : 0, ch = p.team === S.userTeam && this.chemMood ? this.chemMood() : 0; return clamp(m + tm + cb + cl + ch, -4, 4); }   // ch: 라커룸 분위기(70 이상 +1 · 30 이하 −1)
     policy() { const P = this.S.policy || {}; return { pitch: P.pitch || 'normal', run: P.run || 'normal' }; }
     setPolicy(k, v) { const ok = { pitch: ['save', 'normal', 'push'], run: ['low', 'normal', 'high'] }; if (!ok[k] || !ok[k].includes(v)) return false; this.S.policy = Object.assign({ pitch: 'normal', run: 'normal' }, this.S.policy, { [k]: v }); this.invalidate(); return true; }
     _modRates(p) {
@@ -715,7 +715,7 @@
       });
       this.mergeTracking();
       for (const o of others) this.commit(o.home, o.away, o.rh, o.ra, { spH: o.spH, spA: o.spA });
-      this._applyActiveMax(); this._decayFatigue(); this._tickService(); if (this._injuryDay) this._injuryDay(d); if (this._arcDay) this._arcDay(d); if (this._allStarDay) this._allStarDay(d); if (this._aiTradeDay) this._aiTradeDay(d); if (this._unrestDay) this._unrestDay(d); if (this._growDay) this._growDay(d); if (this._clinchDay) this._clinchDay(d); if (this._eventDay) this._eventDay(d); if (this._finSnapDay) this._finSnapDay(d); if (this._trainDay) this._trainDay(); if (this._scoutDay) this._scoutDay(); if (this._milestoneDay) this._milestoneDay(); this.playFutures(d); this.returnMilitary(this.milYM(d));
+      this._applyActiveMax(); this._decayFatigue(); this._tickService(); if (this._injuryDay) this._injuryDay(d); if (this._arcDay) this._arcDay(d); if (this._allStarDay) this._allStarDay(d); if (this._aiTradeDay) this._aiTradeDay(d); if (this._unrestDay) this._unrestDay(d); if (this._growDay) this._growDay(d); if (this._clinchDay) this._clinchDay(d); if (this._pressConDay) this._pressConDay(d); if (this._eventDay) this._eventDay(d); if (this._finSnapDay) this._finSnapDay(d); if (this._trainDay) this._trainDay(); if (this._scoutDay) this._scoutDay(); if (this._milestoneDay) this._milestoneDay(); this.playFutures(d); this.returnMilitary(this.milYM(d));
       if (!ug) { S.day++; return { status: 'ok', day: d }; }
       if (live) { S.pendingDay = d; return { status: 'userGame', day: d, game: ug.g, idx: ug.i }; }
       const L = this.startUserGame(ug.g, ug.i); this.playAuto(L); const res = this.finishUserGame(L);
@@ -766,6 +766,7 @@
       const ctx = { auto: true, userSide, league: this, prep, g, idx };
       const live = new E.LiveGame({ home, away, lineups, staff, rng: r, maxInn: 11, penal, fatigue: true, hook: { [userSide]: (game, ss) => { ss.o += 3; } } });
       live.pre = { [userSide]: (game, ss) => this._autoBullpen(game, ss, userSide, ctx) };
+      if (this._applyMgrStyle) this._applyMgrStyle(live, oppSide, opp);   // 상대 감독 성향 → 상대 팀 기본 작전(drama.js)
       ctx.live = live; ctx.E = E; return ctx;
     }
     /* 내 팀 자동 불펜 운용: 하프 이닝 시작 전에 호출(ctx.auto 가 꺼져 있으면 건너뜀) */

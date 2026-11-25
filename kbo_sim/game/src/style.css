@@ -454,3 +454,6 @@ td .sub { min-width: 230px; gap: 1px 8px; } td .sub span { white-space: nowrap; 
 /* ---- 순위 싸움: 확정 배너·맞대결 프리뷰 ---- */
 .hero .hclinch { margin: -4px 0 10px; padding: 8px 12px; border-radius: 10px; font-weight: 700; background: rgba(255,255,255,.18); } .hero .hclinch.in { background: rgba(255,214,107,.3); }
 .racecard { border-left: 4px solid var(--neg); }
+
+.hero .hchip.chem::before { content: '🏠 '; }
+.evcard .ev[data-type="presscon"] { --evc: #3B82C4; }
