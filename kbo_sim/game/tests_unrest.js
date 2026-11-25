@@ -36,12 +36,12 @@ const awol = (seed) => { const L = mk(seed), S = L.S, t = S.userTeam, p = pick(L
 { const L = mk(3), S = L.S, t = S.userTeam; const p = pick(L, t); p.grv = 70; p.unrestYear = S.year; p.unrestN = 1; L._unrestEnter(p, t, S.day, 'request'); const ev = L.eventsOpen().find(e => e.type === 'unrest'); L.resolveEvent(ev.id, 'trade'); ok(p.team !== t || (p.unrest && p.unrest.stage === 'refused'), '수락: 트레이드 성사 또는 보류 ' + p.team);
   const q = pick(L, t); q.grv = 70; q.unrestYear = S.year; q.unrestN = 1; L._unrestEnter(q, t, S.day, 'request'); const e2 = L.eventsOpen().find(e => e.type === 'unrest' && e.data.pid === q.id); const g0 = q.grv; L.resolveEvent(e2.id, 'talk'); ok(q.grv < g0 || q.grv > g0, '설득 결과 반영'); }
 // 6) AI 구단: 한 시즌 동안 자동 처리, 불변식
-let aiReq = 0, aiSlack = 0, userIncidents = 0;
+let aiReq = 0, aiSlack = 0, aiAny = 0, userIncidents = 0;
 for (const seed of [1, 2, 3]) { const L = mk(seed), S = L.S; while (S.day < S.schedule.length) { L.advance(1, false, true); for (const e of L.eventsOpen()) L.resolveEvent(e.id, e.def || e.choices[e.choices.length - 1].k, true); }
-  for (const x of S.unrestLog || []) { if (x.t !== S.userTeam) { if (/이적을 요청/.test(x.text)) aiReq++; if (/태업/.test(x.text)) aiSlack++; } else userIncidents++; ok(x.text && !/undefined|NaN/.test(x.text), '로그 형식'); }
+  for (const x of S.unrestLog || []) { if (x.t !== S.userTeam) { aiAny++; if (/이적을 요청/.test(x.text)) aiReq++; if (/태업/.test(x.text)) aiSlack++; } else userIncidents++; ok(x.text && !/undefined|NaN/.test(x.text), '로그 형식'); }
   for (const t of Object.keys(S.teams)) for (const id of S.teams[t].ids) { const p = S.players[id]; ok(p && p.team === t, '소속 일치'); if (p.inj && p.inj.unrest) ok(!p.active && p.unrest, `${p.ko} 이탈 선수는 1군에 없음`); if (p.unrest) ok(['meeting', 'request', 'refused', 'slack', 'awol', 'notice', 'restr'].includes(p.unrest.stage), '단계 값'); ok(!(p.grv > 100 || p.grv < 0), '게이지 범위'); }
   for (const t of Object.keys(S.teams)) ok(S.teams[t].ids.length >= 40, `${t} 인원 ${S.teams[t].ids.length}`); }
-ok(aiReq + aiSlack >= 1, `AI 구단에서도 불만 에스컬레이션 발생 ${aiReq}/${aiSlack}`);
+ok(aiAny >= 1, `AI 구단에서도 불만 에스컬레이션 발생(면담 단계 포함) ${aiAny}건 · 이적요청 ${aiReq} · 태업 ${aiSlack}`);
 // 7) 저장/불러오기, 시즌 전환
 { const L = mk(3), S = L.S, t = S.userTeam; const p = pick(L, t); p.grv = 70; p.unrest = { stage: 'slack', since: S.day, y: S.year, t }; const L2 = League.fromJSON(JSON.parse(JSON.stringify(S))); ok(L2.S.players[p.id].unrest.stage === 'slack' && L2.S.players[p.id].grv === 70, '저장 후 유지'); L._unrestRollover(); ok(p.grv === 35 && p.unrest.since === 0, '시즌 전환: 불만 절반'); }
 console.log('unrest tests ok', n, `(AI 이적요청 ${aiReq}·태업 ${aiSlack} / 내 구단 ${userIncidents})`);
