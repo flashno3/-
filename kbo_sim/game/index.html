@@ -4516,7 +4516,7 @@ tr.me td, table.rec tr.me td:nth-child(2) { background: var(--brand-soft); }
     const S = this.S; if (S.phase !== 'regular') return; const A = this.arcs();
     for (const a of A.list.filter(x => x.status === 'active')) {   // 대기 중인 단계 진입
       const pa = P(this, a.pid), pb = a.pid2 ? P(this, a.pid2) : null;
-      if (!pa || pa.team !== S.userTeam || (a.pid2 && (!pb || pb.team !== S.userTeam))) { this._arcEnd(a, `${!pa || pa.team !== S.userTeam ? (pa ? pa.ko : '선수') : pb.ko}이(가) 팀을 떠나면서 이야기는 거기서 막을 내렸습니다.`, 'mixed'); continue; }
+      if (!pa || pa.team !== S.userTeam || (a.pid2 && (!pb || pb.team !== S.userTeam))) { this._arcEnd(a, `${!pa || pa.team !== S.userTeam ? (pa ? pa.ko : '선수') : (pb ? pb.ko : '선수')}이(가) 팀을 떠나면서 이야기는 거기서 막을 내렸습니다.`, 'mixed'); continue; }
       if (a.ev) { const ev = this.eventsOpen().find(e => e.id === a.ev); if (!ev) { a.ev = null; a.wait = d + 3; } }   // 이벤트가 외부 요인으로 종결되면 단계를 다시 연다
       if (a.wait !== null && a.wait !== undefined && d >= a.wait && !a.ev) { const st = DEFS[a.kind].stages[a.stage]; if (st) st.enter(this, a); else this._arcEnd(a, '이야기가 개편되어 여기서 마무리되었습니다.', 'mixed'); }
     }
