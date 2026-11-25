@@ -9,7 +9,7 @@
   // 팀 색(테마용). 로고는 사용자가 제공한 이미지(KBO_LOGOS)를 사용한다.
   const BADGE = { Bears: { p: '#131230' }, Twins: { p: '#C30452' }, Heroes: { p: '#820024' }, Landers: { p: '#CE0E2D' }, Wiz: { p: '#1C1C1C' }, Eagles: { p: '#F26A1B' }, Tigers: { p: '#E4002B' }, Giants: { p: '#0A2547' }, Dinos: { p: '#1E3F78' }, Lions: { p: '#0A5BC4' } };
   const logo = (t, size) => (KBO_LOGOS[t] ? `<img class="logo" src="${KBO_LOGOS[t]}" alt="${KO[t]}" style="height:${size || 22}px;width:${Math.round((size || 22) * 1.45)}px">` : '');   // 로고 원본 비율이 제각각이라 같은 크기의 상자 안에 맞춰 넣는다
-  const applyTheme = () => { const r = document.documentElement.style; if (L) { r.setProperty('--tp', BADGE[L.S.userTeam].p); } else r.setProperty('--tp', '#1D7A4E'); };
+  const applyTheme = () => { const r = document.documentElement.style; if (L) { r.setProperty('--tp', BADGE[L.S.userTeam].p); } else r.setProperty('--tp', ui && BADGE[ui.team] ? BADGE[ui.team].p : '#1D7A4E'); };   // 시작 화면: 고른 구단 색 미리보기
   const SAVE_KEY = 'kbo.mgr.save.v1';
   const $ = (s, r) => (r || document).querySelector(s);
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -56,16 +56,18 @@
   function renderStart() {
     if (!preview) preview = League.create(KBO_BASE, 'Bears', 1);
     const has = !!store.get(SAVE_KEY);
+    const rt = Object.fromEntries(TEAMS.map(t => { const r = teamRating(preview, t); return [t, (r.bat + r.sp + r.rp) / 3]; })), rk = TEAMS.slice().sort((a, b) => rt[b] - rt[a]);   // 전력 순위(이 게임의 2027 개막 전 능력치 기준)
+    const tier = t => { const i = rk.indexOf(t); return i < 3 ? ['우승 후보', '쉬움', 'easy'] : i < 7 ? ['중위권', '보통', 'mid'] : ['리빌딩', '어려움', 'hard']; };
     const cards = TEAMS.map(t => {
-      const r = teamRating(preview, t), stars = preview.players(t).sort((a, b) => preview.ovr(b) - preview.ovr(a)).slice(0, 3);
-      return `<button class="teamcard" data-act="pickteam" data-a="${t}" aria-pressed="${ui.team === t}"><div class="nm">${logo(t, 44)}${KO[t]}</div>
-        <div class="small muted">${park(t)} · 연봉 ${money(preview.cbtPay(t))}</div>
+      const r = teamRating(preview, t), stars = preview.players(t).sort((a, b) => preview.ovr(b) - preview.ovr(a)).slice(0, 3), tr = tier(t);
+      return `<button class="teamcard" style="--tc:${BADGE[t] ? BADGE[t].p : 'var(--accent)'}" data-act="pickteam" data-a="${t}" aria-pressed="${ui.team === t}"><div class="tierrow"><span class="tier ${tr[2]}" title="이 게임의 개막 전 전력(타선·선발·불펜 OVR 평균) 순위 ${rk.indexOf(t) + 1}위 기준">${tr[0]} · ${tr[1]}</span><span class="small muted">전력 ${rk.indexOf(t) + 1}위</span></div><div class="nm">${logo(t, 44)}${KO[t]}</div>
+        <div class="small muted tc-park">${park(t)} · 연봉 ${money(preview.cbtPay(t))}</div>
         <div class="row small"><span>타선 <b class="num">${r.bat.toFixed(0)}</b></span><span>선발 <b class="num">${r.sp.toFixed(0)}</b></span><span>불펜 <b class="num">${r.rp.toFixed(0)}</b></span></div>
         <div class="small">${stars.map(p => `${esc(p.ko)} ${ovrChip(preview.ovr(p))}`).join(' ')}</div></button>`;
     }).join('');
     return `<div class="start"><header><h1>KBO 감독 모드</h1><p class="muted" style="margin:6px 0 0">구단을 골라 라인업·로테이션·불펜을 짜고, 경기를 직접 지휘하고, 트레이드·FA·드래프트로 팀을 키우세요. 정규시즌 144경기 뒤 포스트시즌이 이어지고, 시즌이 끝나면 다음 시즌으로 계속됩니다.</p></header>
       <div class="teamcards">${cards}</div>
-      <div class="card row"><div><h2>${KO[ui.team]}으로 시작</h2><div class="small muted">2027 시즌 · 선수 능력치는 2024~2026 기록을 합산해 평균으로 보정한 값입니다.</div></div><span class="sp"></span>
+      <div class="card row startbar"><div><h2>${KO[ui.team]}으로 시작</h2><div class="small muted">2027 시즌 · 선수 능력치는 2024~2026 기록을 합산해 평균으로 보정한 값입니다.</div></div><span class="sp"></span>
         <button class="primary big" data-act="newgame">감독 시작</button>${has ? '<button class="big" data-act="continue">이어하기</button>' : ''}</div>
       <details class="card adv" ${ui.seed ? 'open' : ''}><summary class="small">고급 설정</summary><div class="small muted" style="margin:6px 0">시드: 성장·부상·드래프트·경기 결과 등 모든 우연의 출발값입니다. 비워 두면 게임마다 무작위로 정해지고, 같은 숫자와 같은 선택이면 같은 결과가 재현됩니다.</div>
         <label class="small muted">시드(선택) <input type="text" id="seedIn" inputmode="numeric" value="${esc(ui.seed)}" style="width:110px" placeholder="무작위"></label></details></div>`;
@@ -109,6 +111,21 @@
     return `<div class="card"><h2>부상자 명단 (${list.length}명)</h2><div class="tablewrap"><table><thead><tr><th class="l">선수</th><th class="l">부상</th><th>복귀 예정</th><th>남은 일수</th></tr></thead><tbody>${list.map(p => `<tr class="click" data-act="player" data-a="${p.id}"><td class="l"><b>${esc(p.ko)}</b> <span class="muted small">${pos(p)} · OVR ${L.ovr(p)}</span></td><td class="l small">${esc(p.inj.dx)}</td><td class="n">${L.injDateStr(p)}</td><td class="n">${L.injLeft(p)}일</td></tr>`).join('')}</tbody></table></div><div class="small muted">부상자는 1군에 등록할 수 없습니다. 복귀 예정일이 지나면 2군에서 대기하며, 직접 1군에 등록하세요. 초기 장기 부상자는 뉴스 기반이며(복귀 시점은 추정 포함), 시즌 중 부상은 확률로 발생합니다.</div></div>`;
   }
   /* 대시보드 상단: 구단 색 띠 위에 '우리 팀 지금 어떤가' — 순위·성적·연속·최근 10경기·가을야구 확률·다음 경기·주목할 선수. 모두 기존 값의 읽기 전용 요약 */
+  /* 첫 게임 안내(3단계, 닫을 수 있음): 진행 상황은 실제 상태로 판정(FA 마감·라인업 화면 방문·첫 경기) */
+  function guideCard() {
+    if (pref('guide_off', '') === '1') return ''; const S = L.S, my = L.standings().find(x => x.team === U()), played = my.w + my.l + my.d;
+    if (S.year > 2027 || played >= 3) return '';
+    const st = [[!(S.faMkt && !S.faMkt.closed), 'FA 협상 마무리', '이적시장 > FA 시장에서 영입을 검토하고, 주 버튼으로 날짜를 넘기거나 「FA 마감 · 개막」을 누르세요.', 'market'],
+      [pref('seen_lineup', '') === '1', '라인업·로테이션 확인', '선수단 > 라인업·투수진에서 자동 편성을 확인하거나 바꾸세요.', 'lineup'],
+      [played > 0, '첫 경기', '주 버튼으로 경기를 진행하세요. 「직접 지휘」를 켜면 타석마다 작전을 낼 수 있습니다.', 'home']];
+    const n = st.filter(x => x[0]).length;
+    return `<div class="card guide"><div class="row"><h2 style="margin:0">처음 시작하기</h2><span class="chip">${n}/3</span><span class="sp"></span><button class="sm" data-act="guideOff">안내 닫기</button></div>${st.map((x, i) => `<div class="gstep ${x[0] ? 'done' : ''}"><span class="gnum">${x[0] ? '✓' : i + 1}</span><div><b>${x[1]}</b><div class="small muted">${x[2]}</div></div>${x[0] || x[3] === 'home' ? '' : `<button class="sm" data-act="go" data-a="${x[3]}">열기</button>`}</div>`).join('')}</div>`;
+  }
+  function seasonLine() {   // 시즌 진행 막대: 지금 위치와 올스타·트레이드 마감·확대 엔트리·종료 표시
+    const S = L.S; if (S.phase !== 'regular' || !L.seasonMarks) return ''; const sm = L.seasonMarks(), day = Math.min(S.day, sm.len), pc = d => Math.min(100, Math.max(0, d / Math.max(1, sm.len - 1) * 100));
+    const nx = sm.marks.find(m => m.d >= day && m.k !== 'end') || sm.marks[sm.marks.length - 1], left = Math.max(0, nx.d - day);
+    return `<div class="sline" title="${esc(sm.marks.map(m => `${L.dateStr(m.d)} ${m.t}`).join(' · '))}"><div class="sbar"><i style="width:${pc(day)}%"></i>${sm.marks.filter(m => m.k !== 'end').map(m => `<u class="${m.k} ${m.d <= day ? 'past' : ''}" style="left:${pc(m.d)}%" title="${esc(L.dateStr(m.d) + ' ' + m.t)}"></u>`).join('')}</div><div class="snext"><span>${day}/${sm.len}일차</span><span>다음 · ${esc(nx.t)} ${left ? `${left}일 뒤 (${L.dateStr(nx.d)})` : '오늘'}</span></div></div>`;
+  }
   function heroCard() {
     const S = L.S, st = L.standings(), my = st.find(x => x.team === U()), g = my.w + my.l + my.d, t = U();
     const games = S.results.filter(x => x.home === t || x.away === t), wl = x => { const h = x.home === t, a = h ? x.rh : x.ra, b = h ? x.ra : x.rh; return a === b ? 'D' : a > b ? 'W' : 'L'; };
@@ -122,7 +139,7 @@
     const watch = [...hot.map(x => pc(x.p, 'hot', '최근 흐름 좋음')), ...cold.map(x => pc(x.p, 'cold', '최근 흐름 부진')), ...rise.map(p => pc(p, 'rise', '올해 성장 상한이 크게 오른 유망주')), ...unrest.slice(0, 2).map(x => pc(P(x.id), 'warn', `불만: ${L.unrestStageName ? L.unrestStageName(x.stage) : x.stage}`))].join('');
     const dots = l10.length ? `<span class="l10" aria-label="최근 ${l10.length}경기">${l10.map(r => `<i class="${r}"></i>`).join('')}</span>` : '';
     const status = S.phase === 'offseason' ? '오프시즌' : faOpen() ? 'FA 협상 기간' : g === 0 ? '개막 전' : `${my.rank}위`;
-    return `<section class="hero" aria-label="우리 팀 현황"><div class="hrow">${logo(t, 40)}<div class="hname"><b>${KO[t]}</b><span>${S.year} 시즌 · ${status}</span></div><span class="sp"></span>${top5 !== null ? `<div class="hodds" title="남은 경기를 200번 시뮬레이션한 5위 이내 확률(참고용)"><b>${top5}%</b><span>가을야구 확률</span></div>` : ''}</div>
+    return `<section class="hero" aria-label="우리 팀 현황"><div class="hrow">${logo(t, 40)}<div class="hname"><b>${KO[t]}</b><span>${S.year} 시즌 · ${status}</span></div><span class="sp"></span>${(() => { const cl = S.phase === 'regular' && g > 0 && L.postClinch ? L.postClinch(t) : null; return cl ? `<div class="hodds" title="남은 경기 결과와 관계없이 정해진 상태입니다(승률 기준)."><b>${cl === 'in' ? '진출 확정' : '탈락 확정'}</b><span>가을야구</span></div>` : top5 !== null ? `<div class="hodds" title="남은 경기를 200번 시뮬레이션한 5위 이내 확률(참고용)"><b>${top5 === 0 && od[t].top5 > 0 ? '1% 미만' : top5 === 100 && od[t].top5 < 100 ? '99% 이상' : top5 + '%'}</b><span>가을야구 확률</span></div>` : ''; })()}</div>${seasonLine()}
       <div class="hstats"><div><b>${g ? `${my.w}승 ${my.l}패${my.d ? ' ' + my.d + '무' : ''}` : '-'}</b><span>${g ? `승률 ${pct3(my.pct)}` : '성적'}</span></div><div><b>${g ? gtxt : '-'}</b><span>순위 경쟁</span></div><div><b>${strk || '-'}</b><span>연속</span></div><div><b>${dots || '-'}</b><span>최근 10경기</span></div></div>
       ${nx || watch || inj ? `<div class="hfoot">${nx ? `<span class="hnext">다음 · ${L.dateStr(nx.day)} ${nx.home === t ? '홈' : '원정'} ${logo(opp, 18)}${KO[opp]}${sp ? ` · 선발 ${esc(sp.ko)}` : ''}</span>` : ''}${watch ? `<span class="hwatch">주목 ${watch}</span>` : ''}${inj ? `<span class="hinj">부상 ${inj}명</span>` : ''}</div>` : ''}</section>`;
   }
@@ -436,19 +453,30 @@
       <div class="small muted" style="margin-top:6px">영구결번 후보를 FA·트레이드·방출로 놓치면 지수가 내려갑니다(평년 100). 지수가 낮으면 관중 수요가 줄고 MD·기타 수입이 줄어듭니다${im.total > 0 ? ` — 입장 −${im.gate.toFixed(1)}억, MD −${im.md.toFixed(1)}억(연)` : ''}. 해마다 격차의 25%씩 회복되고 우승하면 +3입니다(⚠ 가정).</div>
       ${log.length ? log.map(x => `<div class="small" style="margin-top:3px">${x.y} · <b>${esc(x.name)}</b> 놓침 → 지수 −${x.hit}</div>`).join('') : ''}</div>`;
   }
+  /* 재정 흐름 폭포 그래프: 작년 매출 → 운영비 → 허용 적자 → (이사회 추가) → 예산 → 선수단 보수 → FA 여유자금. 아래 표와 같은 값(읽기 전용) */
+  function finWaterfall(t) {
+    const f = L.S.fin.teams[t], st = [['작년 매출', f.lastRev, 'up'], ['운영비', -f.opex, 'dn'], ['허용 적자', L.finAllowed(t), 'up']].concat(f.boardExtra ? [['이사회 추가', f.boardExtra, 'up']] : []);
+    const budget = L.finBudget(t), pay = L.finPay(t), room = L.faRoom(t); let run = 0; const bars = [];
+    for (const [l, v, k] of st) { bars.push({ l, a: run, b: run + v, k, v }); run += v; }
+    bars.push({ l: '예산', a: 0, b: budget, k: 'tot', v: budget }); bars.push({ l: '선수단 보수', a: budget, b: budget - pay, k: 'dn', v: -pay }); bars.push({ l: 'FA 여유자금', a: 0, b: room, k: room >= 0 ? 'tot' : 'neg', v: room });
+    const W = 360, H = 170, pl = 6, pr = 6, pt = 16, pb = 30, lo = Math.min(0, ...bars.map(x => Math.min(x.a, x.b))), hi = Math.max(...bars.map(x => Math.max(x.a, x.b))), Y = v => pt + (hi - v) / Math.max(1, hi - lo) * (H - pt - pb), bw = (W - pl - pr) / bars.length;
+    const g = bars.map((x, i) => { const y1 = Y(Math.max(x.a, x.b)), y2 = Y(Math.min(x.a, x.b)), xx = pl + i * bw + bw * 0.15, w = bw * 0.7; return `<rect class="w-${x.k}" x="${xx.toFixed(1)}" y="${y1.toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(1, y2 - y1).toFixed(1)}" rx="2"><title>${x.l} ${x.v >= 0 ? '+' : ''}${f1(x.v)}억</title></rect><text class="wv" x="${(xx + w / 2).toFixed(1)}" y="${(y1 - 3).toFixed(1)}" text-anchor="middle">${x.v >= 0 && x.k !== 'tot' && x.k !== 'neg' ? '+' : ''}${Math.round(x.v)}</text>${(() => { const parts = x.l.split(' '), l1 = parts.length > 1 ? parts.slice(0, -1).join(' ') : x.l, l2 = parts.length > 1 ? parts[parts.length - 1] : ''; return `<text class="wl" x="${(xx + w / 2).toFixed(1)}" y="${H - 16}" text-anchor="middle">${l1}</text>${l2 ? `<text class="wl" x="${(xx + w / 2).toFixed(1)}" y="${H - 5}" text-anchor="middle">${l2}</text>` : ''}`; })()}`; }).join('');
+    return `<svg class="wfall" viewBox="0 0 ${W} ${H}" role="img" aria-label="재정 흐름: 작년 매출에서 FA 여유자금까지(억 원)"><line x1="0" x2="${W}" y1="${Y(0)}" y2="${Y(0)}" class="w0"/>${g}</svg>`;
+  }
   function finImpactCard() {
     if (!L.finReady()) return '';
     const S = L.S, t = U(), f = S.fin.teams[t], v = L.finPreview(t), allowed = L.finAllowed(t), per10 = allowed / (0.5 + f.trust / 100) * 0.1, room = L.faRoom(t);
     const tier = f.trust >= 70 ? ['높음', 'pos', '이사회가 적자를 넉넉히 허용합니다. 대형 영입·코치 투자 여력이 큽니다.'] : f.trust >= 40 ? ['보통', '', '허용 적자가 중간입니다. 무리한 영입은 설득이 필요합니다.'] : ['낮음', 'neg', '허용 적자가 크게 줄어 FA·코치 영입이 막히고 설득 성공률도 낮습니다. 흑자·성적으로 신뢰를 회복하세요.'];
     const row = (l, x, note) => `<tr><td class="l">${l}</td><td class="n"><b>${x}</b></td><td class="l small muted">${note || ''}</td></tr>`;
     return `<div class="card"><h2>재정이 게임에 미치는 영향</h2><div class="small muted">핵심은 <b>FA 여유자금</b>입니다. 여유자금이 FA·코치 영입과 방출 위약금·보상금을 결정하고, 시즌 손익과 성적은 <b>이사회 신뢰도</b>를 바꿔 다음 시즌 예산(허용 적자)을 키우거나 줄입니다.</div>
+      ${finWaterfall(t)}
       <div class="tablewrap"><table><tbody>
         ${row('① 작년 매출', f1(f.lastRev) + '억', '입장·광고·중계 등. 성적·티켓 가격·이벤트로 변동')}
         ${row('② 고정 운영비', '−' + f1(f.opex) + '억', '프런트·경기진행·구장 등(감사보고서 기준)')}
         ${row('③ 허용 적자(신뢰도 ' + f1(f.trust) + ' · ' + tier[0] + ')', '+' + f1(allowed) + '억', '신뢰도 +10 → 약 +' + f1(per10) + '억')}
         ${f.boardExtra ? row('④ 이사회 추가 예산', '+' + f1(f.boardExtra) + '억', '설득·중간 점검으로 승인') : ''}
         ${row('= 선수단 예산', f1(L.finBudget(t)) + '억', '여기서 선수단 보수를 뺀 금액이 FA 여유자금')}
-        ${row('− 선수단 보수(연봉+계약금 상각+위약금·보상금)', '−' + f1(v.pay) + '억', v.dead ? `방출 위약금 ${f1(v.dead)}억 포함` : '')}
+        ${row('− 선수단 보수(연봉+계약금 상각+위약금·보상금)', '−' + f1(L.finPay(t)) + '억', [v.dead ? `방출 위약금 ${f1(v.dead)}억 포함` : '', f.payCut ? `무단이탈·정지 감액 ${f1(f.payCut)}억은 시즌 손익에만 반영` : ''].filter(Boolean).join(' · '))}
         ${row('= FA 여유자금', `<span class="${room >= 0 ? 'pos' : 'neg'}">${room >= 0 ? '+' : ''}${f1(room)}억</span>`, '영입 가능액 · 부족하면 이사회 설득(확률은 신뢰도에 비례)')}
       </tbody></table></div>
       <div class="small" style="margin-top:6px"><b class="${tier[1]}">신뢰도 ${tier[0]}</b> — ${tier[2]}</div>
@@ -1667,13 +1695,39 @@
       <div class="card"><div class="row"><button class="primary big" style="flex:1" data-act="preStart">경기 시작</button></div>
         <label class="row small" style="gap:6px;margin-top:8px"><input type="checkbox" data-act="preSkip" ${pref('briefSkip', '0') === '1' ? 'checked' : ''}>다음부터 경기 전 브리핑 건너뛰기 <span class="muted">(설정은 이 기기에 저장)</span></label></div></div>`;
   }
+  /* 승리 확률(참고용, ⚠ 단순 모델): 현재 이닝·초말·아웃·주자·점수 차에서 남은 경기를 리그 평균 타석 결과(이 게임의 보정 리그 비율)로 2,000번 굴린다.
+   *  선수 능력·작전·투수 교체·홈 이점은 넣지 않았고 주루는 단순 규칙(⚠ 가정). 경기 엔진·기록에는 아무 영향이 없다(읽기 전용 계산). */
+  const WP_CACHE = new Map(), WPR = { s2: 0.75, t1: 0.3, d1: 0.5, sf: 0.55, adv: 0.4, roe: 0.015 };   // 주루·실책 가정(⚠): 단타 2루→홈 75%·1루→3루 30%, 2루타 1루→홈 50%, 아웃 때 3루→홈 55%·2루→3루 40%, 인플레이 아웃의 1.5%는 실책 출루 — 이 게임 엔진의 경기당 득점에 맞춘 값
+  function winProb(g, side) {
+    const lb = L.S.calib.lb, inn = g.inning, top = g.top, outs = g.outs, b = g.bases.map(x => !!x), diff = g.score.home - g.score.away, maxInn = g.maxInn || 11;
+    const key = [inn, top ? 1 : 0, outs, b.map(x => x ? 1 : 0).join(''), diff, maxInn].join('|'); let ph = WP_CACHE.get(key);
+    if (ph === undefined) {
+      let seed = 0; for (const ch of key) seed = (Math.imul(seed ^ ch.charCodeAt(0), 16777619) + 2166136261) >>> 0; const rnd = () => { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+      const pk = lb.k, pbb = lb.bb + lb.hbp, phr = lb.hr, bab = lb.babip, xbh = lb.xbh, tri = lb.tri || 0.08, N = 2000;
+      const half = (o0, b0) => { let o = o0, r = 0, B = b0.slice(); while (o < 3) { const u = rnd(); if (u < pk) { o++; continue; } if (u < pk + pbb) { if (B[0]) { if (B[1]) { if (B[2]) r++; B[2] = true; } B[1] = true; } B[0] = true; continue; } if (u < pk + pbb + phr) { r += 1 + B.filter(Boolean).length; B = [false, false, false]; continue; }
+          if (rnd() < bab) { const x = rnd(); if (x < xbh * tri) { r += B.filter(Boolean).length; B = [false, false, true]; } else if (x < xbh) { const s1 = B[0] && rnd() < WPR.d1; r += (B[2] ? 1 : 0) + (B[1] ? 1 : 0) + (s1 ? 1 : 0); B = [false, true, B[0] && !s1]; } else { r += B[2] ? 1 : 0; const s2 = B[1] && rnd() < WPR.s2, t1 = B[0] && !(B[1] && !s2) && rnd() < WPR.t1; if (s2) r++; B = [true, B[0] && !t1, (B[1] && !s2) || t1]; } }
+          else { if (rnd() < WPR.roe) { if (B[0]) { if (B[1]) { if (B[2]) r++; B[2] = true; } B[1] = true; } B[0] = true; continue; } if (B[0] && o < 2 && rnd() < 0.12) { o += 2; B[0] = false; continue; } o++; if (o < 3 && B[2] && rnd() < WPR.sf) { r++; B[2] = false; } if (o < 3 && B[1] && !B[2] && rnd() < WPR.adv) { B[2] = true; B[1] = false; } } } return r; };
+      let win = 0; for (let n = 0; n < N; n++) { let h = 0, a = 0, i = inn, t = top, first = true; const d0 = diff; h = Math.max(0, d0); a = Math.max(0, -d0); let done = false;
+        while (!done) { const r = first ? half(outs, b) : half(0, [false, false, false]); first = false; if (t) a += r; else h += r;
+          if (t) { if (i >= 9 && h > a) done = true; else t = false; } else { if (i >= 9 && h !== a) done = true; else if (i >= maxInn) done = true; else { i++; t = true; } } }
+        win += h > a ? 1 : h === a ? 0.5 : 0; }
+      ph = win / N; if (WP_CACHE.size > 3000) WP_CACHE.clear(); WP_CACHE.set(key, ph);
+    }
+    return side === 'home' ? ph : 1 - ph;
+  }
+  function wpHtml(g, us) {
+    const lv = ui.live, fin = g.finished, v = fin ? (g.score[us] > g.score[us === 'home' ? 'away' : 'home'] ? 1 : g.score.home === g.score.away ? 0.5 : 0) : winProb(g, us), pct = Math.round(v * 100);
+    const k = g.inning * 2 + (g.top ? 0 : 1) + ':' + g.outs + ':' + g.score.home + ':' + g.score.away, hist = lv.wp = lv.wp || []; if (!hist.length || hist[hist.length - 1].k !== k) hist.push({ k, v });
+    const W = 220, H = 30, pts = hist.map((x, i) => `${(hist.length < 2 ? W : i * W / (hist.length - 1)).toFixed(1)},${(H - 2 - x.v * (H - 4)).toFixed(1)}`).join(' ');
+    return `<div class="wpbox" title="참고용 승리 확률: 지금 상황(이닝·아웃·주자·점수 차)에서 리그 평균 타자·투수로 남은 경기를 2,000번 굴린 값입니다. 선수 능력·작전·투수 교체는 반영하지 않습니다(⚠ 단순 모델)."><span class="small muted">우리 승리 확률</span><b class="${pct >= 50 ? 'pos' : 'neg'}">${pct}%</b><span class="wpbar"><i style="width:${pct}%"></i></span>${hist.length > 1 ? `<svg class="wpline" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><line x1="0" x2="${W}" y1="${H / 2}" y2="${H / 2}" class="mid"/><polyline points="${pts}"/></svg>` : ''}</div>`;
+  }
   function screenLive() {
     const lv = ui.live, ctx = lv.ctx, g = ctx.live, us = ctx.userSide, myBat = g.batSide === us, myField = g.fldSide === us, fin = g.finished, E = ctx.E, T = g.tact[us];
     const b = g.batter, pt = g.pitcher, bp = P(b.id), pp = P(pt.id), tr = E.tracking().pit[pt.id] || { outs: 0, R: 0, K: 0 }, f = g.pitchFatigue(g.fldSide);
     const lp = lv.feed.find(x => !x.sys) || lv.feed[0], lpHtml = lp ? `<div class="lastplay ${lp.run ? 'run' : ''}" aria-live="polite"><span class="w">${lp.w || ''}</span><span class="t">${esc(lp.t)}</span></div>` : '<div class="lastplay"><span class="t">「다음 타석」을 눌러 경기를 시작하세요</span></div>';
     const chips = `<div class="tacts small"><span class="chip ${T.bat !== 'normal' ? 'in' : ''}">공격 ${BAT_LBL[T.bat]}</span><span class="chip ${T.pit !== 'normal' ? 'in' : ''}">투구 ${PIT_LBL[T.pit]}</span>${T.inf ? '<span class="chip in">전진 수비</span>' : ''}${T.hold ? '<span class="chip in">견제 지시</span>' : ''}${g.calm[us] > 0 ? `<span class="chip in">투수 안정 (${g.calm[us]}타자)</span>` : ''}${ctx.auto ? '<span class="chip">자동 불펜</span>' : '<span class="chip bad">수동 불펜</span>'}</div>`;
     const adv = fin ? [] : advice();
-    const stick = `<div class="lvstick"><div class="card score"><div class="tablewrap">${liveScore(g)}</div><div class="situ" style="margin-top:6px"><div class="outs" aria-label="${g.outs}아웃">${[0, 1, 2].map(i => `<i class="${i < g.outs && !fin ? 'on' : ''}"></i>`).join('')}</div><span class="small">${g.inning}회${g.top ? '초' : '말'} · ${fin ? '종료' : (g.top ? KO[g.away] : KO[g.home]) + ' 공격'} · ${g.outs}아웃</span><span class="sp"></span>${diamond(g)}</div></div>${lpHtml}</div>`;
+    const stick = `<div class="lvstick"><div class="card score"><div class="tablewrap">${liveScore(g)}</div><div class="situ" style="margin-top:6px"><div class="outs" aria-label="${g.outs}아웃">${[0, 1, 2].map(i => `<i class="${i < g.outs && !fin ? 'on' : ''}"></i>`).join('')}</div><span class="small">${g.inning}회${g.top ? '초' : '말'} · ${fin ? '종료' : (g.top ? KO[g.away] : KO[g.home]) + ' 공격'} · ${g.outs}아웃</span><span class="sp"></span>${diamond(g)}</div>${wpHtml(g, us)}</div>${lpHtml}</div>`;
     const fcls = f.over > 0 ? 'dead' : f.pct >= 0.85 ? 'warn' : '';
     const matchup = `<div class="cards2"><div class="pcard"><div class="small muted">${myBat ? '내 타자' : '상대 타자'} (${g.idx[g.batSide] % 9 + 1}번)</div><div class="nm">${esc(bp ? bp.ko : b.name)} ${bp ? ovrChip(L.ovr(bp)) : ''}</div><div class="small muted">${bp ? posName[bp.pos] : ''}${bp && L.handLabel(bp) ? ' · ' + L.handLabel(bp) : ''} · 올 시즌 ${bp ? batLine(bp.id) : ''}</div>${platChip(bp, pp)}${bp ? subHtml(bp) : ''}</div>
       <div class="pcard"><div class="small muted">${myField ? '내 투수' : '상대 투수'}</div><div class="nm">${esc(pp ? pp.ko : pt.name)} ${pp ? ovrChip(L.ovr(pp)) : ''}${pp && L.handLabel(pp) ? ` <span class="chip">${L.handLabel(pp)}</span>` : ''}</div><div class="small muted">이 경기 ${Math.floor(tr.outs / 3)}${tr.outs % 3 ? '.' + tr.outs % 3 : ''}이닝 ${tr.R}실점 ${tr.K}K · 상대 타자 ${f.bf}명</div><div class="fbar ${fcls}" title="남은 체력 ${Math.max(0, 100 - Math.round(f.pct * 100))}% (상대 타자 ${f.bf}명 / 한계 ${f.lim}명)" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.max(0, 100 - Math.round(f.pct * 100))}" aria-label="투수 남은 체력"><i style="width:${Math.max(0, 100 - Math.round(f.pct * 100))}%"></i></div><div class="small ${f.over > 0 ? 'neg' : 'muted'}">${f.over > 0 ? '체력 바닥 · 한계 초과(구위 저하 중)' : `남은 체력 ${Math.max(0, 100 - Math.round(f.pct * 100))}%${f.pct >= 0.85 ? ' · 한계에 가까움' : ''}`}</div>${pp ? subHtml(pp) : ''}</div></div>`;
@@ -1683,7 +1737,7 @@
     const dock = fin ? `<div class="r"><button class="primary" style="font-size:16px" data-act="liveFinish">경기 종료 · 결과 반영 (${KO[g.away]} ${g.score.away} : ${g.score.home} ${KO[g.home]})</button></div>`
       : `${adv.length ? `<div class="r chiprow" aria-label="추천 작전">${adv.slice(0, 2).map(x => `<button class="sm recchip" data-act="liveAdv" data-a="${x.a}">★ ${x.l}</button>`).join('')}</div>` : ''}<div class="r"><button class="primary" data-act="liveRun" data-a="pa">다음 타석</button><button data-act="liveRun" data-a="inning">이닝 끝까지</button><button data-act="liveRun" data-a="end">경기 끝까지</button></div><div class="r"><button data-act="liveSheet" data-a="tact">작전</button><button data-act="liveSheet" data-a="subs">교체</button><button data-act="liveAuto">${ctx.auto ? '자동 불펜 ON' : '자동 불펜 OFF'}</button></div>`;
     return `<div class="lvwrap"><div class="lvhead"><b style="font-family:var(--font-display);font-size:18px">${logo(g.away, 28)} ${KO[g.away]} @ ${logo(g.home, 28)} ${KO[g.home]}</b>${L.isRival(g.home, g.away) && (g.home === U() || g.away === U()) ? ` <span class="chip warn">${esc(L.rivalName(g.home, g.away))}</span>` : ''}<span class="muted small">${park(g.home)} · ${ctx.post ? '포스트시즌' : L.dateStr(L.S.day)}${ctx.prep.absent && ctx.prep.absent.length ? ` · 결장 ${ctx.prep.absent.map(a => esc(a.out.ko) + '→' + esc(a.in.ko)).join(', ')}` : ''}</span><span class="sp"></span>${fin ? '' : '<button class="warn sm" data-act="liveAbort">자동으로 끝내기</button>'}</div>
-      ${stick}<div class="livecols"><div style="display:flex;flex-direction:column;gap:12px;min-width:0">${fin ? '' : `<div class="card"><div class="row"><h3 style="margin:0">경기장</h3><span class="sp"></span><span class="small muted">주자·타자·투수를 눌러 지시</span></div>${fieldHtml(g, adv)}${chips}${ordersChips()}</div><div class="card">${matchup}</div>${momentCard(g, us, myBat, myField)}`}${advHtml}</div>
+      ${stick}<div class="livecols"><div style="display:flex;flex-direction:column;gap:12px;min-width:0">${fin ? '' : `<div class="card">${matchup}</div><div class="card"><div class="row"><h3 style="margin:0">경기장</h3><span class="sp"></span><span class="small muted">주자·타자·투수를 눌러 지시</span></div>${fieldHtml(g, adv)}${chips}${ordersChips()}</div>${momentCard(g, us, myBat, myField)}`}${advHtml}</div>
       <div style="display:flex;flex-direction:column;gap:12px;min-width:0"><details class="card" open><summary>경기 기록</summary><ul class="feed" style="margin-top:8px">${feed || '<li class="muted">경기를 시작하세요.</li>'}</ul></details><details class="card"><summary>내 라인업</summary><div class="tablewrap"><table><tbody>${lineup}</tbody></table></div></details></div></div></div>
       <div class="livedock">${dock}</div>${pickerHtml()}${fin ? '' : sheetsHtml()}`;
   }
@@ -1884,7 +1938,8 @@
     const scroll = window.scrollY;
     if (ui.pre && !ui.live) { document.body.classList.remove('modal-open'); root.innerHTML = screenPre() + confirmSheet() + toastHtml(); window.scrollTo(0, scroll); return; }   // 경기 전 브리핑(날짜 처리 끝, 경기 시작 전)
     if (ui.live) { document.body.classList.remove('modal-open'); root.innerHTML = screenLive() + toastHtml(); window.scrollTo(0, scroll); return; }   // 경기 화면에서는 이전 화면의 스크롤 잠금이 남지 않게 푼다
-    const S = ui.screen, f = { records: screenRecords, invest: screenInvest, desk: screenDesk, home: () => heroCard() + screenHome() + foldGroup('home_ev', '최근 소식 처리', '', evHistory().replace(/^<div class="card">|<\/div>$/g, ''), false), roster: () => screenRoster(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, story: screenStory, mood: screenMood, train: screenTrain, scout: screenScout, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
+    if ((ui.screen === 'lineup' || ui.screen === 'pitching') && pref('seen_lineup', '') !== '1') setPref('seen_lineup', '1');   // 첫 게임 안내: 라인업 확인 단계
+    const S = ui.screen, f = { records: screenRecords, invest: screenInvest, desk: screenDesk, home: () => guideCard() + heroCard() + screenHome() + foldGroup('home_ev', '최근 소식 처리', '', evHistory().replace(/^<div class="card">|<\/div>$/g, ''), false), roster: () => screenRoster(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, story: screenStory, mood: screenMood, train: screenTrain, scout: screenScout, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
     document.body.classList.toggle('modal-open', !!ui.modal);
     { const c = L.compOpen().find(x => !(ui.compSeen || (ui.compSeen = {}))[x.id]); if (c && !ui.live && !ui.negOpen) { ui.compSeen[c.id] = true; ui.comp = c.id; } }   // 새 FA 보상 선택은 처음 생길 때 바로 창을 띄운다
     const keep = snapInner(root);   // 체크박스·버튼으로 다시 그려도 안쪽 스크롤 상자와 펼침 상태를 유지한다
@@ -2109,6 +2164,7 @@
     faOverToggle() { ui.faOver = !ui.faOver; render(); },
     fatab(a) { ui.faTab = a; render(); },
     faDay(a) { const k = L.faAdvance(+a); toast(L.S.faMkt ? `${L.faDateStr(L.S.faMkt.day)}가 되었습니다.` : ''); if (k) autosave(); render(); },
+    guideOff() { setPref('guide_off', '1'); render(); },
     toastClose() { ui.toast = null; clearTimeout(toast.t); const t = $('.toast'); if (t) t.remove(); },
     faClose() { L.closeFA(); toast('FA 협상을 마감했습니다.'); autosave(); render(); },
     faBeat(a) { const p = P(a), q = k => $(`[data-sel="${k}"][data-a="${a}"]`), y = q('fayears'), b = L.faBeat(p, U(), y ? +y.value : undefined); (ui.faIn = ui.faIn || {})[a] = { years: b.years, salary: b.salary, bonus: b.bonus }; render(); },

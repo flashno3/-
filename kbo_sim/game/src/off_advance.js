@@ -67,4 +67,22 @@
       else { const c = S.stats.pit[p.id]; if (!c) continue; const v = { K: c.K, IP: Math.floor(c.outs / 3) }; for (const [k, n, lab] of [['K', 100, '탈삼진'], ['K', 150, '탈삼진'], ['K', 200, '탈삼진'], ['IP', 100, '이닝'], ['IP', 150, '이닝']]) { const key = k + n; if (v[k] >= n && !p.ms.d[key]) { p.ms.d[key] = S.day; news(this, `기록 달성: ${p.ko} 시즌 ${n}${lab}${this._fromText(p)}`); this._bondShift(p, 1, '기록 달성'); } } }
     }
   };
+  /* 시즌 타임라인(화면용, 읽기 전용): 올스타 휴식기·트레이드 마감·9월 확대 엔트리·정규시즌 종료(일차) */
+  proto.seasonMarks = function () {
+    const S = this.S, len = (S.schedule && S.schedule.length) || 144, out = [], sep = Date.UTC(S.year, 8, 1) / 864e5;
+    if (this.allStarBreakDay) out.push({ d: this.allStarBreakDay(), k: 'as', t: '올스타 휴식기' });
+    out.push({ d: LIM_DEADLINE, k: 'dl', t: '트레이드 마감' });
+    for (let d = 0; d < len; d++) if (this.dateOf(d).getTime() / 864e5 >= sep) { out.push({ d, k: 'sep', t: '9월 확대 엔트리(34명)' }); break; }
+    out.push({ d: len - 1, k: 'end', t: '정규시즌 종료' });
+    return { len, marks: out.sort((a, b) => a.d - b.d) };
+  };
+  /* 가을야구(5위 이내) 확정·탈락 판정 — 승률 기준의 보수적 판정(무승부는 승률에서 빠진다). 남은 경기를 모두 이겨도 5개 팀의 '최저 가능 승률'에 못 미치면 탈락 확정,
+   *  다른 팀 중 내 '최저 가능 승률' 이상에 도달할 수 있는 팀이 4개 이하면 진출 확정. 동률 결정전 가능성은 확정에서 제외(≥로 비교) */
+  proto.postClinch = function (t) {
+    const S = this.S, st = this.standings(), len = (S.schedule && S.schedule.length) || 144, rem = x => Math.max(0, len - (x.w + x.l + x.d)), pmax = x => (x.w + rem(x)) / Math.max(1, x.w + x.l + rem(x)), pmin = x => x.w / Math.max(1, x.w + x.l + rem(x));
+    const me = st.find(x => x.team === t), others = st.filter(x => x.team !== t); if (!me) return null;
+    if (others.filter(x => pmin(x) > pmax(me)).length >= 5) return 'out';
+    if (others.filter(x => pmax(x) >= pmin(me)).length <= 4) return 'in';
+    return null;
+  };
 });

@@ -418,3 +418,35 @@ td .sub { min-width: 230px; gap: 1px 8px; } td .sub span { white-space: nowrap; 
 .gchart .gl { fill: none; stroke: var(--brand); stroke-width: 2.5; stroke-linejoin: round; } .gchart .gp { fill: var(--surface); stroke: var(--brand); stroke-width: 2; }
 .gchart .gc { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 5 4; } .gchart .gm { font-size: 10px; } .gchart .gm.up { fill: var(--pos); } .gchart .gm.dn { fill: var(--neg); }
 .gchart .gp.now { fill: var(--brand); }
+
+/* ---- 라이브: 승리 확률 · 득점 강조 ---- */
+.wpbox { display: grid; grid-template-columns: auto auto minmax(60px, 1fr); align-items: center; gap: 4px 10px; margin-top: 8px; } .wpbox b { font-family: var(--font-display); font-size: 17px; }
+.wpbox .wpbar { height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--neg) 35%, var(--surface2)); overflow: hidden; } .wpbox .wpbar i { display: block; height: 100%; background: var(--pos); }
+.wpbox .wpline { grid-column: 1 / -1; width: 100%; height: 30px; } .wpbox .wpline polyline { fill: none; stroke: var(--brand); stroke-width: 2; vector-effect: non-scaling-stroke; } .wpbox .wpline .mid { stroke: var(--line); stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+@keyframes runpulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--gold) 70%, transparent); } 100% { box-shadow: 0 0 0 14px transparent; } }
+.lastplay.run { animation: runpulse .9s ease-out 1; border-color: var(--gold); }
+@media (prefers-reduced-motion: reduce) { .lastplay.run { animation: none; } }
+
+/* ---- 시작 화면: 구단 색 띠·전력 등급·모바일 2열·하단 고정 시작 바 ---- */
+.teamcard { border-top: 5px solid var(--tc, var(--line)); } .teamcard[aria-pressed=true] { border-color: var(--tc); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tc) 25%, transparent); }
+.teamcard .tierrow { display: flex; align-items: center; justify-content: space-between; gap: 6px; } .tier { font-size: 12px; font-weight: 700; border-radius: 999px; padding: 2px 8px; }
+.tier.easy { background: var(--accent-soft); color: var(--pos); } .tier.mid { background: var(--surface2); color: var(--muted); } .tier.hard { background: var(--warn-soft); color: var(--warn); }
+@media (max-width: 560px) {
+  .teamcards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .teamcard { padding: 10px; gap: 5px; } .teamcard .nm { font-size: 16px; } .teamcard .nm .logo { height: 30px !important; width: 44px !important; }
+  .teamcard .tc-park { display: none; } .teamcard .tierrow .muted { display: none; } .teamcard .row.small { gap: 2px 8px; font-size: 12px; } .teamcard > .small:last-child { font-size: 12px; }
+  .startbar { position: sticky; bottom: 0; z-index: 5; box-shadow: 0 -6px 18px rgba(0,0,0,.12); margin-bottom: 0; } .startbar h2 { font-size: 16px; }
+}
+/* ---- 첫 게임 안내 ---- */
+.guide .gstep { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); } .guide .gstep:first-of-type { border-top: 0; } .guide .gstep > div { flex: 1; min-width: 0; }
+.guide .gnum { width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex: none; background: var(--brand-soft); border: 1px solid var(--brand); font-weight: 700; font-size: 13px; }
+.guide .gstep.done { opacity: .6; } .guide .gstep.done .gnum { background: var(--pos); border-color: var(--pos); color: #fff; }
+
+/* ---- 시즌 타임라인(히어로 안) ---- */
+.hero .sline { margin-top: 10px; } .hero .sbar { position: relative; height: 6px; border-radius: 3px; background: rgba(255,255,255,.18); } .hero .sbar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: rgba(255,255,255,.85); }
+.hero .sbar u { position: absolute; top: -4px; width: 3px; height: 14px; margin-left: -1px; border-radius: 2px; background: #FFD66B; } .hero .sbar u.past { opacity: .45; } .hero .sbar u.dl { background: #FF9A9A; } .hero .sbar u.sep { background: #9AD7FF; }
+.hero .snext { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; opacity: .85; margin-top: 5px; flex-wrap: wrap; }
+
+/* ---- 재정 폭포 그래프 ---- */
+.wfall { display: block; width: 100%; max-width: 560px; height: auto; margin: 8px 0 4px; } .wfall .w0 { stroke: var(--line); }
+.wfall .w-up { fill: color-mix(in srgb, var(--pos) 70%, var(--surface)); } .wfall .w-dn { fill: color-mix(in srgb, var(--neg) 65%, var(--surface)); } .wfall .w-tot { fill: var(--brand); } .wfall .w-neg { fill: var(--neg); }
+.wfall .wv { font-size: 10px; font-family: var(--font-display); fill: var(--fg); } .wfall .wl { font-size: 9.5px; fill: var(--muted); }

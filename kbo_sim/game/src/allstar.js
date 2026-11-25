@@ -39,6 +39,7 @@
     for (const t of teams) if (!picks.some(k => k.team === t)) { const x = pool.filter(z => z.t === t && !used.has(z.p.id)).sort((a, b) => b.vv - a.vv)[0]; if (x) add(x, '구단 대표'); }   // 구단당 최소 1명
     return picks;
   };
+  proto.allStarBreakDay = () => BREAK_DAY;   // 화면(시즌 타임라인)용
   proto._allStarDay = function (d) {
     const S = this.S; if (d !== BREAK_DAY || S.phase !== 'regular' || this.allStar()) return;
     const dream = this._asPick('dream'), nanum = this._asPick('nanum'), user = S.userTeam, my = dream.concat(nanum).filter(k => k.team === user);
