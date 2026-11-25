@@ -53,11 +53,11 @@
       L._f27 = base.foreign2027 || [];
       L._faclass = base.faclass2027 || [];
       if (L._initFARules) L._initFARules();   // FA 자격 연수·등급 기준 연봉·외국인 슬롯 초기화
-      if (L._milInit) L._milInit();   // 병역 상태·2026년 11~12월 입대자 복무 명단으로(military.js)
       if (L._applyFAClass) L._applyFAClass(L._faclass);   // 2027 FA 승인 선수: 미계약 20명은 시장에서 시작
       if (L._addDraftClass) L._addDraftClass(base.draft2027);   // 2027 신인 드래프트 지명 결과(실제 지명·가상 능력치)
       for (const t of TEAMS) L.initTeam(t);
       if (L._initFinance) L._initFinance(base.finance);   // 재정: 초기 보수 합계로 운영비를 역산
+      if (L._milInit) L._milInit();   // 병역 상태·2026년 11~12월 입대자 복무 명단으로(military.js) — 운영비 역산(위) 뒤에: 입대자 연봉이 2026 보수에는 들어가고 2027에는 빠지도록
       L._liftMinSal();   // 2027년부터 최저연봉 3,300만원(규약 제71조): 운영비 역산 뒤에 올려 증가분이 손익에 그대로 반영되게 한다
       if (L._initCoaches) L._initCoaches(base.coaches || []);
       if (L.openFAMarket) L.openFAMarket();   // 2027 FA 협상 기간: 1월 1일 시작   // 코칭스태프(보도 기반 일부 + 가상)

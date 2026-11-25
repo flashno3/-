@@ -22,6 +22,7 @@
   proto._aiTradeOk = function (p) {   // 트레이드 대상 선수 조건
     const S = this.S; if (p.foreign || p.retired || this.isInj(p) || p.sub || p.rehab || p.team === 'MIL') return false;
     if ((p.moveY || 0) === S.year) return false;   // 올해 이미 이적한 선수
+    if (p.mil && p.mil.st === 'sangmu27') return false;   // 상무 합격자(입대 예정)는 트레이드하지 않는다
     if (this.legendBound && this.legendBound(p, p.team)) return false;   // 영구결번 후보(구단 상징)는 보내지 않는다
     return true;
   };

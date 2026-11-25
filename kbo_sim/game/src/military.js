@@ -23,14 +23,14 @@
   };
   /* 게임 시작: 목록에서 '복무 중(입대 연월 있음)'인데 아직 구단 로스터에 있는 선수를 복무 명단으로(2026년 11~12월 입대자) */
   proto._milInit = function () {
-    const S = this.S, moved = [];
+    const S = this.S, moved = [], ids = [];
     for (const p of Object.values(S.players)) {
       if (p.foreign) continue;
       if (!p.mil) p.mil = { st: p.team === 'MIL' ? 'serving' : 'unknown', src: p.team === 'MIL' ? 'data' : 'none' };
       if (p.team === 'MIL' && !p.milKind) p.milKind = 'sangmu';
-      if (p.mil.st === 'serving' && p.mil.enlist && p.team in S.teams) { const f = ym(p.mil.enlist), kind = /-12$/.test(p.mil.enlist) || /-04$/.test(p.mil.enlist) ? 'sangmu' : 'unknown'; this._milEnlist(p, f, kind, false); moved.push(p.ko); }
+      if (p.mil.st === 'serving' && p.mil.enlist && p.team in S.teams) { const f = ym(p.mil.enlist), kind = /-12$/.test(p.mil.enlist) || /-04$/.test(p.mil.enlist) ? 'sangmu' : 'unknown'; const t0 = p.team, sal = p.contract ? p.contract.salary : 0; this._milEnlist(p, f, kind, false); moved.push(p.ko); ids.push({ id: p.id, t: t0, sal }); }
     }
-    S.milInit = { moved, at: '2026년 11월 말 목록' };
+    S.milInit = { moved, ids, at: '2026년 11월 말 목록' };
   };
   const ARMY_RUST = -0.1;   // 현역 복귀 감각 저하(일회성, 능력 이동량 −0.1 ≈ OVR −1.4, ⚠ 가정: 18개월 실전 공백)
   proto._milReturned = function (p) { const army = p.milKind === 'army', o0 = this.ovr(p); if (army) { p.p = this._shifted(p, ARMY_RUST); (p.devLog = p.devLog || []).push({ y: this.S.year, v: 0, why: `현역 복귀 감각 저하(OVR ${o0}→${this.ovr(p)})` }); this.invalidate(); } p.mil = Object.assign({}, p.mil || {}, { st: 'done', src: (p.mil && p.mil.src) || 'game', back: this.S.year }); delete p.milKind; };

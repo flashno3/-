@@ -75,7 +75,8 @@ ok(S.nextId>Math.max(...Object.keys(S.players).map(id=>parseInt(id.slice(1)))),'
  LC.advance(300,false);const P0=LC.startPostseason();let g0=0;while(!P0.done&&g0++<100){if(LC.userInPost()){const c=LC.startUserPostGame();c.live.playToEnd();LC.finishUserPostGame(c)}else LC.simPostGame()}LC.startOffseason();
  ok(ns.contract.years<=0||ns.team==='FA'||ns.team==='RET'||ns.contract.years===undefined||true,'오프시즌 진입');}
 // 3) 군 복무(상무)
-{const L2=League.create(base,'Lions',4),S2=L2.S;const mil=S2.mil.map(id=>S2.players[id]);
+{const L2=League.create(base,'Lions',4),S2=L2.S;const all0=S2.mil.map(id=>S2.players[id]),mil=all0.filter(p=>p.milFrom==='2025.12'||p.milFrom==='2026.04'),late=all0.filter(p=>!mil.includes(p));   /* 게임 데이터의 상무 26명 + 사용자 제공 목록의 2026년 11~12월 입대자(전역 2028년 5~6월) */
+ ok(late.length>=10&&late.every(p=>(p.milFrom==='2026.12'||p.milFrom==='2026.11')&&p.milReturn>=2028*12+4&&!S2.teams[p.milTeam].ids.includes(p.id)),'2026년 11~12월 입대자 '+late.length+'명 복무 명단(2028년 전역)');
  ok(L2.farmTeams().includes('Whales')&&mil.length===26&&mil.every(p=>p.team==='MIL'&&p.milTeam in S2.teams&&!S2.teams[p.milTeam].ids.includes(p.id)),'상무 26명이 팀 명단 밖');
  const lionsMil=mil.filter(p=>p.milTeam==='Lions').length,before=L2.players('Lions').length;
  const one=mil.find(p=>p.milReturn%12+1===6);const cbtBefore=L2.cbtPay(one.milTeam);
