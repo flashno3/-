@@ -8,15 +8,15 @@ const byKo = (S, ko, t) => Object.values(S.players).filter(p => p.ko === ko && (
   ok(byKo(S, '노시환', 'Eagles')[0].mil.st === 'ag' && byKo(S, '김서현', 'Eagles')[0].mil.st === 'pending' && byKo(S, '권민규', 'Eagles')[0].mil.st === 'sangmu27', '목록 상태');
   ok(byKo(S, '황동재', 'Lions')[0].team === 'MIL', '게임 데이터 상무 복무자 유지(목록 상충)');
   ok((S.mil || []).every(id => S.players[id].team === 'MIL' && S.players[id].milTeam in S.teams && S.players[id].milReturn > 2026 * 12), '복무 명단 정합');
-  ok(Object.values(S.players).filter(p => !p.foreign).every(p => p.mil && ['done', 'ag', 'serving', 'pending', 'sangmu27', 'unknown'].includes(p.mil.st)), '모든 국내 선수 상태 값');
+  ok(Object.values(S.players).filter(p => !p.foreign).every(p => p.mil && ['done', 'ag', 'serving', 'pending', 'apply', 'sangmu27', 'unknown'].includes(p.mil.st)), '모든 국내 선수 상태 값');
   ok(Object.values(S.players).filter(p => p.foreign).every(p => !L.milStatus(p)), '외국인 제외');
   const ig = L.integrity(); ok(!ig.errors.length, '정합성 ' + JSON.stringify(ig.errors.slice(0, 2)));
   ok(S.milInit.moved.length >= 10, '12월·11월 입대자 이동 ' + S.milInit.moved.length);
   ok(Math.abs(L.milAllowance('Tigers') - (S.mil || []).map(id => S.players[id]).filter(p => p.milTeam === 'Tigers').reduce((a, p) => a + Math.min(0.12, 0.25 * p.contract.salary), 0)) < 0.011, '군보류수당 = 연봉 25%·최대 0.12억'); }
-// 2) 2027 상무 1차 합격자 6월 입대, 전역 처리
+// 2) 2027 상무 1차 합격자 3월 29일 입대(정규시즌 시작 때), 전역 처리
 { const L = League.create(base, 'Eagles', 4), S = L.S; L.faAdvance(75); L.closeFA(); const km = byKo(S, '권민규', 'Eagles')[0];
-  while (S.day < S.schedule.length && L.dateOf(S.day).getUTCMonth() < 5) L.advance(1, false); L.advance(2, false);
-  ok(km.team === 'MIL' && km.milReturn === 2027 * 12 + 5 + 18 && km.mil.st === 'serving', '권민규 2027년 6월 상무 입대 → 2028년 12월 전역');
+  L.advance(2, false);
+  ok(km.team === 'MIL' && km.milFrom === '2027.03' && km.milReturn === 2027 * 12 + 2 + 18 && km.mil.st === 'serving', '권민규 2027년 3월 상무 입대 → 2028년 9월 전역');
   const back = L.returnMilitary(2030 * 12); ok(back.length > 0 && back.every(p => p.mil.st === 'done' && p.team in S.teams && !p.milKind), '전역하면 병역 필'); }
 // 3) 내 구단 입대 결정: 상한 나이 넘은 미필은 상무 잠금·현역만
 { const L = League.create(base, 'Eagles', 5), S = L.S; L.faAdvance(75); L.closeFA(); L.advance(1, false); const U = S.userTeam;
@@ -36,6 +36,13 @@ const byKo = (S, ko, t) => Object.values(S.players).filter(p => p.ko === ko && (
   for (const [ko, t, fr] of [['박명근', 'Twins', '2026.04'], ['여동건', 'Bears', '2025.12'], ['황동재', 'Lions', '2025.12']]) { const q = byKo(S, ko, t)[0]; ok(q.team === 'MIL' && q.milFrom === fr && q.mil.st === 'serving', `${ko} 상무 복무(${fr})`); }
   ok(byKo(S, '김휘집', 'Dinos')[0].mil.st === 'pending', '김휘집 미필');
   const U = S.userTeam, p = L.players(U).find(q => !q.foreign && q.mil.st === 'pending'); p.age = 28; L._milEnlist(p, S.year * 12 + 11, 'army'); const o0 = L.ovr(p); L.returnMilitary(2040 * 12); ok(p.team === U && p.mil.st === 'done' && L.ovr(p) < o0, '현역 복귀: 능력 감소 ' + o0 + '→' + L.ovr(p));
-  const ai = Object.keys(S.teams).find(t => t !== U), cs = L.players(ai).filter(x => !x.foreign && !L.isInj(x)).slice(0, 3); for (const c of cs) { c.mil = { st: 'pending', src: 'test' }; c.age = 27; } L._milOffseason(); ok(cs.every(c => c.team === 'MIL'), 'AI: 27세 미필은 반드시 입대');
+  const ai = Object.keys(S.teams).find(t => t !== U), cs = L.players(ai).filter(x => !x.foreign && !L.isInj(x)).slice(0, 3); for (const c of cs) { c.mil = { st: 'pending', src: 'test' }; c.age = 27; } L._milOffseason(); ok(cs.every(c => c.mil.st === 'apply' && c.mil.last), 'AI: 27세 미필은 반드시 상무 지원(마지막 해)');
+  const young = L.players(ai).filter(x => !x.foreign && !L.isInj(x) && !cs.includes(x)).slice(0, 2); for (const y of young) { y.mil = { st: 'apply', y: S.year, src: 'test' }; y.age = 23; }
+  const apps0 = Object.values(S.players).filter(x => x.mil && x.mil.st === 'apply' && x.team in S.teams); S.year += 1; const sel = L._milSelect(); S.year -= 1;
+  ok(sel && sel.win <= sel.to && sel.to <= 40 && sel.apps === apps0.length, '연간 선발 인원 안에서 선발 ' + JSON.stringify(sel));
+  const winners = apps0.filter(x => x.team === 'MIL' && x.milKind === 'sangmu'), losers = apps0.filter(x => !winners.includes(x)); ok(winners.length === sel.win, '합격 인원');
+  if (winners.length && losers.length) ok(Math.min(...winners.map(x => L.war(x))) >= Math.max(...losers.map(x => L.war(x))) - 1e-9, '최근 WAR 순 선발');
+  ok(losers.every(x => (x.mil.last ? x.team === 'MIL' && x.milKind === 'army' : x.mil.st === 'pending')), '탈락: 마지막 해는 현역, 아니면 미필로');
+  ok(winners.every(x => x.milFrom === `${S.year}.12` || x.milFrom === `${S.year + 1}.03`), '합격자 12월·3월 말 회차');
 }
 console.log('military tests ok', n);

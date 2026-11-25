@@ -1,7 +1,8 @@
 /* 병역: 실존 선수의 병역 상태(사용자 제공 2026년 11월 말 기준 목록, 빌드 때 p.mil로 매칭) + 게임 안의 입대·전역 순환.
  *  규약 근거: 제24조 ②(군 입대 선수는 선수 정원에서 제외, 군보류 기간 = 입대일~전역일), 제62조 ④(군보류수당 = 연봉의 25%, 최대 1,200만원, 10개월 지급).
  *  상무 지원 만 19~27세(지원서 접수 연도 기준, 현역병 모집업무 규정)·입영 연기 상한 만 28세(병역법) — 사용자 제공 근거(law.go.kr·easylaw.go.kr·mma.go.kr 링크).
- *  ⚠ 게임 설정: 상무 합격 확률·AI 구단의 입대 시점 판단(27세는 100%)·현역 복무 중 성장 정체·현역 복귀 감각 저하.
+ *  상무 선발(사용자 제공 자료): 연 2회(12월·이듬해 3월 말 입대), 연간 선발 = 다음 12개월 전역 예정 인원 ± 2(상무 인원 약 42명 이내), 지원자 중 최근 WAR 순(동률은 OVR).
+ *  ⚠ 게임 설정: AI 구단의 지원 시점 판단(27세는 100%)·두 회차 배분(상위 절반 12월)·현역 복무 중 성장 정체·현역 복귀 감각 저하.
  *  상태: done(필)·ag(AG 금메달 예술체육요원, 필로 취급)·serving(복무 중)·pending(미필)·sangmu27(2027 상무 1차 합격, 2027년 6월 입대 ⚠)·unknown(목록에 없는 실존 선수 — 입대 대상에서 제외).
  *  게임 중 새로 들어오는 국내 신인은 미필(pending)로 시작. 외국인은 대상 아님. 복무 기간 18개월(기존 상무 처리와 같음). */
 (function (root, factory) {
@@ -10,7 +11,7 @@
 })(typeof self !== 'undefined' ? self : this, function (LG, Engine) {
   'use strict';
   const { proto, rngFor, clamp, TEAMS, KO0, news } = LG.OFFC;
-  const SVC = 18, SANGMU_MAX_AGE = 27, ST_KO = { done: '병역 필', ag: '병역 필(AG 금메달)', serving: '복무 중', pending: '미필', sangmu27: '미필(2027 상무 합격)', unknown: '병역 정보 없음' };
+  const SVC = 18, SANGMU_MAX_AGE = 27, ST_KO = { done: '병역 필', ag: '병역 필(AG 금메달)', serving: '복무 중', pending: '미필', sangmu27: '미필(2027 상무 합격)', apply: '미필(상무 지원 중)', unknown: '병역 정보 없음' };
   const ym = s => { const [y, m] = String(s).split(/[-.]/).map(Number); return y * 12 + (m - 1); };
   proto.milStatus = function (p) { if (!p || p.foreign) return null; const m = p.mil || { st: p.team === 'MIL' ? 'serving' : 'unknown' }; return Object.assign({ label: ST_KO[m.st] || m.st }, m); };
   proto._milEnlist = function (p, ymFrom, kind, why) {   // 입대: 로스터에서 빼서 상무/현역 복무 명단으로
@@ -34,13 +35,14 @@
   };
   const ARMY_RUST = -0.1;   // 현역 복귀 감각 저하(일회성, 능력 이동량 −0.1 ≈ OVR −1.4, ⚠ 가정: 18개월 실전 공백)
   proto._milReturned = function (p) { const army = p.milKind === 'army', o0 = this.ovr(p); if (army) { p.p = this._shifted(p, ARMY_RUST); (p.devLog = p.devLog || []).push({ y: this.S.year, v: 0, why: `현역 복귀 감각 저하(OVR ${o0}→${this.ovr(p)})` }); this.invalidate(); } p.mil = Object.assign({}, p.mil || {}, { st: 'done', src: (p.mil && p.mil.src) || 'game', back: this.S.year }); delete p.milKind; };
-  /* 매일: 2027 상무 1차 합격자 6월 입대(⚠ 시기 가정) */
+  /* 2027 상무 1차 합격자: 2027년 3월 29일 입대(사용자 제공) — 정규시즌 시작 시점에 복무 명단으로 */
   proto._milDay = function () {
-    const S = this.S; if (S.phase !== 'regular' || S.year !== 2027) return; const d = this.dateOf(S.day); if (d.getUTCMonth() < 5) return;
-    for (const p of Object.values(S.players)) if (p.mil && p.mil.st === 'sangmu27' && p.team in S.teams) this._milEnlist(p, S.year * 12 + 5, 'sangmu');
+    const S = this.S; if (S.phase !== 'regular' || S.year !== 2027) return;
+    for (const p of Object.values(S.players)) if (p.mil && p.mil.st === 'sangmu27' && p.team in S.teams) this._milEnlist(p, S.year * 12 + 2, 'sangmu');
+    for (const p of Object.values(S.players)) if (p.mil && p.mil.st === 'apply' && p.mil.win === 'spring' && p.team in S.teams) this._milEnlist(p, S.year * 12 + 2, 'sangmu');   // 3월 말 회차 합격자
   };
   /* 오프시즌(12월 입대): AI 구단은 자동, 내 구단은 선수별 결정 이벤트 */
-  const SEL = ov => clamp(0.3 + (ov - 35) * 0.02, 0.15, 0.85);   // 상무 합격 확률(⚠ 가정: 능력이 높을수록 유리)
+  const ROSTER_CAP = 42;
   const WANT = { 22: 0.05, 23: 0.12, 24: 0.22, 25: 0.35, 26: 0.5 };   // AI 구단 미필 선수의 연도별 입대 확률(⚠ 가정), 27세는 100%
   proto._milOffseason = function () {
     const S = this.S, y = S.year, when = y * 12 + 11;
@@ -50,22 +52,38 @@
         const m = p.mil; if (p.foreign || !m || m.st !== 'pending') continue; const age = p.age, ov = this.ovr(p), r = rngFor(S.seed, y, 4300, parseInt(String(p.id).slice(1)) || 0);
         if (t === S.userTeam) { if (age >= 24) this._milEvent(p, age > SANGMU_MAX_AGE); continue; }
         const deadline = age > SANGMU_MAX_AGE, pr = age >= SANGMU_MAX_AGE ? 1 : (WANT[clamp(age, 22, 26)] || 0) * (core.has(p.id) ? 0.5 : 1); if (age < 22 || r.random() >= pr) continue;   // 만 27세 오프시즌에는 반드시(상무 지원 마지막 해)
-        const kind = !deadline && r.random() < SEL(ov) ? 'sangmu' : 'army'; this._milEnlist(p, when, kind);
+        if (deadline) this._milEnlist(p, when, 'army'); else p.mil = Object.assign({}, m, { st: 'apply', y, last: age >= SANGMU_MAX_AGE });   // 지원서 제출 — 선발은 새 시즌 직전(_milSelect)
       }
     }
   };
   proto._milEvent = function (p, deadline) {
-    const sel = Math.round(SEL(this.ovr(p)) * 100), when = this.S.year * 12 + 11;
+    const when = this.S.year * 12 + 11, w = Math.round(this.war(p) * 10) / 10;
     return this._evAdd({ type: 'military', ttl: 9999, def: deadline ? 'army' : 'wait', rec: deadline ? 'army' : p.age >= 26 ? 'sangmu' : 'wait', data: { pid: p.id, when }, title: `${p.ko} 병역 계획`, text: `${p.ko}(${p.age}세, OVR ${this.ovr(p)})은 병역 미필입니다. ${deadline ? `상무 지원 나이(만 ${SANGMU_MAX_AGE}세 이하, 현역병 모집업무 규정)를 넘겨 더 미룰 수 없습니다.` : '입대 시기를 정해야 합니다. 상무는 퓨처스리그에서 계속 뛰지만, 현역은 18개월 동안 야구를 거의 하지 못합니다.'} 복무 중에는 선수 정원에서 빠지고 구단이 군보류수당(연봉의 25%, 최대 0.12억)을 냅니다.`, choices: [
-      { k: 'sangmu', label: '상무 지원(12월 입대)', req: deadline ? `만 ${SANGMU_MAX_AGE}세 초과` : null, hint: `합격 확률 약 ${sel}%(능력 기준 ⚠) · 18개월 퓨처스 출전(성장 유지) · 떨어지면 올해는 그대로` },
+      { k: 'sangmu', label: '상무 지원', req: deadline ? `만 ${SANGMU_MAX_AGE}세 초과` : null, hint: `연간 선발 인원(다음 1년 전역 예정 ±2) 안에서 지원자 중 최근 WAR 순 선발(올해 WAR ${w}) · 합격하면 12월 또는 3월 말 입대 · 18개월 퓨처스 출전(성장 유지) · ${p.age >= SANGMU_MAX_AGE ? '떨어지면 현역 입대(마지막 해)' : '떨어지면 내년에 다시'}` },
       { k: 'army', label: '현역 입대(12월)', hint: '18개월 · 실전 공백으로 성장 정체(⚠ 출전 비중 10%) · 복귀 때 감각 저하(OVR 약 −1.4)' },
       { k: 'wait', label: '내년으로 미룬다', req: deadline ? '더 미룰 수 없음' : null, hint: '올해는 팀에 남는다 · 나이가 찰수록 선택지가 줄어든다' }] });
   };
   proto._milResolve = function (e, k) {
-    const S = this.S, p = S.players[e.data.pid]; if (!p || p.team !== S.userTeam || !p.mil || p.mil.st !== 'pending') return '이미 정리된 일입니다.';
-    if (k === 'sangmu') { const ok = rngFor(S.seed, S.year, 4301, parseInt(String(p.id).slice(1)) || 0).random() < SEL(this.ovr(p)); if (!ok) return `${p.ko}이(가) 상무에 지원했지만 떨어졌습니다. 올해는 팀에 남습니다.`; this._milEnlist(p, e.data.when, 'sangmu'); return `${p.ko} 상무 합격 — 12월 입대합니다.`; }
+    const S = this.S, p = S.players[e.data.pid]; if (!p || p.team !== S.userTeam || !p.mil || p.mil.st !== 'pending') return '이미 정리된 일입니다.';   // (지원자는 st: 'apply')
+    if (k === 'sangmu') { p.mil = Object.assign({}, p.mil, { st: 'apply', y: S.year, last: p.age >= SANGMU_MAX_AGE }); return `${p.ko}이(가) 상무에 지원했습니다. 결과는 새 시즌 직전 발표됩니다(지원자 중 최근 WAR 순).`; }
     if (k === 'army') { this._milEnlist(p, e.data.when, 'army'); return `${p.ko}이(가) 12월 현역으로 입대합니다.`; }
     return `${p.ko}의 입대를 내년으로 미룹니다.`;
+  };
+  /* 상무 선발(새 시즌 직전): T/O = 다음 12개월 전역 예정 상무 인원 ± 2(인원 42명 이내), 지원자 최근 WAR 순. 상위 절반 = 12월 입대, 나머지 = 3월 말 입대(⚠ 배분 가정).
+   *  탈락자: 마지막 해(27세)면 현역, 아니면 미필로 돌아가 내년에 다시 */
+  proto._milSelect = function () {
+    const S = this.S, Y = S.year - 1, all = Object.values(S.players); for (const p of all) if (p.mil && p.mil.st === 'apply' && !(p.team in S.teams && p.mil.y === Y)) p.mil = Object.assign({}, p.mil, { st: 'pending' });   // 구단을 떠났거나 지난 지원서는 미필로
+    const apps = all.filter(p => p.mil && p.mil.st === 'apply' && p.mil.y === Y && p.team in S.teams);
+    if (!apps.length) return null; const sm = (S.mil || []).map(id => S.players[id]).filter(p => p && p.milKind !== 'army'), out12 = sm.filter(p => p.milReturn <= (Y + 1) * 12 + 11).length;
+    const r = rngFor(S.seed, Y, 4400), to = clamp(Math.min(out12 + Math.floor(r.random() * 5) - 2, ROSTER_CAP - (sm.length - out12)), 0, 40);
+    const rank = apps.slice().sort((a, b) => (this.war(b) - this.war(a)) || (this.ovr(b) - this.ovr(a))), win = rank.slice(0, to), lose = rank.slice(to), half = Math.ceil(win.length / 2);
+    win.forEach((p, i) => { if (i < half) this._milEnlist(p, Y * 12 + 11, 'sangmu'); else { p.mil = Object.assign({}, p.mil, { win: 'spring' }); this._milEnlist(p, S.year * 12 + 2, 'sangmu'); } });
+    for (const p of lose) { if (p.mil.last) this._milEnlist(p, Y * 12 + 11, 'army'); else p.mil = Object.assign({}, p.mil, { st: 'pending', tried: (p.mil.tried || 0) + 1 }); }
+    const mine = rank.filter(p => p.milTeam === S.userTeam || p.team === S.userTeam);
+    S.milSel = { y: Y, to, out: out12, apps: apps.length, win: win.length, cap: ROSTER_CAP };
+    this._lnews(`상무 야구단 선발: 지원 ${apps.length}명 중 ${win.length}명 합격(연간 선발 인원 ${to}명 · 전역 예정 ${out12}명)`);
+    for (const p of mine) news(this, win.includes(p) ? `${p.ko} 상무 합격 — ${p.milFrom.replace('.', '년 ')}월 입대` : p.team === 'MIL' ? `${p.ko} 상무 탈락 — 현역 입대` : `${p.ko} 상무 탈락 — 내년에 다시 지원할 수 있습니다`);
+    return S.milSel;
   };
   /* 군보류수당(제62조 ④): 복무 중인 내 구단 소속 선수 연봉의 25%, 최대 0.12억/년 */
   proto.milAllowance = function (t) { const S = this.S; return Math.round((S.mil || []).map(id => S.players[id]).filter(p => p && p.milTeam === t && p.contract).reduce((a, p) => a + Math.min(0.12, 0.25 * p.contract.salary), 0) * 100) / 100; };

@@ -37,6 +37,7 @@
     for (const t of TEAMS) if (t === S.userTeam) this.ensureActive(t);
     this.topUpWhales();
     this.returnMilitary(S.year * 12 + 2);   // 새 시즌 개막(3월) 전까지 전역한 선수 복귀
+    if (this._milSelect) this._milSelect();   // 상무 선발(지난 오프시즌 지원자, military.js)
     if (S.cbt && S.cbt.excPrompt) S.cbt.excPrompt = null;   // 확인하지 않아도 추천 선수로 적용된 상태로 새 시즌 시작
     this.newSeasonSetup(false);
     for (const t of TEAMS) {   // 1군 편성은 오프시즌 달력(11월 20일) 기준으로 이뤄졌으므로, 개막일 기준 부상자(복귀가 3~4월 이후인 선수)를 1군에서 내리고 건강한 선수로 채운다
