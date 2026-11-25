@@ -1,0 +1,38 @@
+병역 목록 매칭 보고(빌드 시 생성)
+
+[게임 데이터에 없음]
+Eagles:장지수(done) 없음
+Eagles:성지훈(serving) 없음
+Eagles:박상현(serving) 없음
+Eagles:엄상현(serving) 없음
+Eagles:최주원(serving) 없음
+Eagles:정안석(serving) 없음
+Lions:임창민(done) 없음
+Lions:김윤수(done) 없음
+Lions:박병호(done) 없음
+Twins:김범석(serving) 없음
+Bears:제환유(serving) 없음
+Wiz:황재균(done) 없음
+Wiz:육청명(pending) 없음
+Wiz:박태완(pending) 없음
+Giants:나균안(ag) 없음
+Giants:진해수(done) 없음
+Giants:정훈(done) 없음
+Dinos:임상현(pending) 없음
+Heroes:김혜성(ag) 없음
+Heroes:문성현(done) 없음
+Heroes:송성문(done) 없음
+Heroes:이용규(done) 없음
+Heroes:주승우(serving) 없음
+
+[모호해서 반영하지 않음]
+Wiz:김동현(pending) 다른 구단 동명이인 4명
+
+[상충]
+Lions:황동재 목록 done, 게임 데이터는 상무 복무 중(2025.12 입대) → 복무 유지
+Twins:박명근 목록 pending, 게임 데이터는 상무 복무 중(2026.04 입대) → 복무 유지
+Bears:여동건 목록 pending, 게임 데이터는 상무 복무 중(2025.12 입대) → 복무 유지
+Landers:송영진 목록 pending, 게임 데이터는 상무 복무 중(2026.04 입대) → 복무 유지
+Landers:박지환 목록 pending, 게임 데이터는 상무 복무 중(2026.04 입대) → 복무 유지
+Landers:이율예 목록 pending, 게임 데이터는 상무 복무 중(2026.04 입대) → 복무 유지
+Heroes:고영우 목록 pending, 게임 데이터는 상무 복무 중(2025.12 입대) → 복무 유지

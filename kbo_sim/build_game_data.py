@@ -515,6 +515,44 @@ def load_warref(players):
     return st
 WREF=load_warref(players)
 
+# 병역 상태(사용자 제공 2026년 11월 말 기준 목록) → p['mil'] = {'st': done|ag|serving|pending|sangmu27, 'enlist': 'YYYY-MM'|None, 'src': 'list'}.
+#  매칭: 이름 + 구단(상무 복무자는 원소속 milTeam) → 동명이인은 원문 단서(좌완/우완·투타) → 구단이 다르면 리그 전체에서 이름이 유일할 때만. 모호·없음·상충은 보고서로 남긴다.
+#  게임 데이터에 이미 상무 복무(입대 연월 포함)로 있는 선수는 그대로 둔다(목록과 다르면 상충으로 기록).
+def load_military(players):
+    f=D+'game/refdata/military_2026.json'; rep={'ok':0,'miss':[],'amb':[],'conflict':[]}
+    if not os.path.exists(f): return rep
+    M=json.load(open(f,encoding='utf8')); by={}
+    for p in players:
+        if not p.get('foreign'): by.setdefault(p['ko'],[]).append(p)
+    def find(n,t,typ=None,hint=''):
+        c=by.get(n,[]); ct=[p for p in c if p['team']==t or (p['team']=='MIL' and p.get('milTeam')==t)]
+        if typ: ct=[p for p in ct if p['type']==typ] or ct
+        if hint=='좌완': ct=[p for p in ct if p.get('throws')=='L']
+        if hint=='우완': ct=[p for p in ct if p.get('throws')!='L' and p['type']=='P']
+        if len(ct)==1: return ct[0],None
+        if len(ct)>1: return None,'모호 %d명'%len(ct)
+        if len(c)==1: return c[0],None
+        return None,('없음' if not c else '다른 구단 동명이인 %d명'%len(c))
+    for t,T in M.items():
+        if t.startswith('_'): continue
+        items=[(n,k,None,None,'') for k in ('ag','done','pending','sangmu27') for n in T.get(k,[])]
+        items+=[(x[0],'serving',x[1],None,x[2] if len(x)>2 else '') for x in T.get('serving',[])]
+        items+=[(x[0],'done',None,x[1],x[2]) for x in T.get('done_amb',[])]
+        for n,k,en,typ,hint in items:
+            HINT={('Eagles','이태양'):('P',30),('Tigers','최원준'):('B',28),('Twins','김현수'):('B',35),('Heroes','이주형'):('B',26)}   # 원문의 포지션·연차로 동명이인 구분(투수 이태양 37세, 외야수 최원준 30세·김현수 39세·이주형 26세)
+            if (t,n) in HINT:
+                ty,ma=HINT[(t,n)]; c=[q for q in by.get(n,[]) if q['type']==ty and q.get('age',0)>=ma]; p,why=(c[0],None) if len(c)==1 else (None,'모호 %d명'%len(c))
+            elif t=='Eagles' and n=='이승현' and k=='serving':   # 원문: 포수 이승현(2026년 4월 상무 입대) — 게임 데이터의 상무 복무 이승현(원소속 한화)
+                c=[q for q in by.get(n,[]) if q['team']=='MIL' and q.get('milTeam')=='Eagles']; p,why=(c[0],None) if len(c)==1 else (None,'모호')
+            else: p,why=find(n,t,typ,hint)
+            if not p: (rep['miss'] if why=='없음' else rep['amb']).append('%s:%s(%s) %s'%(t,n,k,why)); continue
+            if p.get('mil'): rep['conflict'].append('%s:%s 중복 지정(%s→%s)'%(t,n,p['mil']['st'],k)); continue
+            if p['team']=='MIL' and k!='serving':
+                rep['conflict'].append('%s:%s 목록 %s, 게임 데이터는 상무 복무 중(%s 입대) → 복무 유지'%(t,n,k,p.get('milFrom'))); p['mil']={'st':'serving','enlist':None,'src':'data','after':'done'}; continue
+            p['mil']={'st':k,'enlist':en,'src':'list'}; rep['ok']+=1
+    return rep
+MILREP=load_military(players)
+
 # FA 이력(사용자 제공 CSV): FA 행사 여부·등급·행사 횟수 → p['fah'](목록). 후보는 나이 27세 이상(FA 자격 연수 때문에), 동명이인은 FA 계약 CSV 매칭(p['ct'])·출전량으로 선택.
 def load_fahist(players):
     import csv,re
@@ -719,6 +757,8 @@ print('드래프트 이력 중복 방지 제외',DHS['dup'])
 print('드래프트 이력 매칭',DHS['ok'],'| 모호',DHS['amb'],'| 미매칭',DHS['miss'],'| 나이 재추정',sum(1 for p in players if p.get('ageEstDraft')))
 
 print('영구결번 WAR 참고(구단별)',WREF['players'],'명 매칭',WREF['ok'],'행 | 모호',WREF['miss'])
+print('병역 상태 매칭',MILREP['ok'],'명 | 게임 데이터에 없음',len(MILREP['miss']),'| 모호',len(MILREP['amb']),'| 상충',len(MILREP['conflict']))
+open(D+'game/refdata/military_match_report.txt','w',encoding='utf8').write('병역 목록 매칭 보고(빌드 시 생성)\n\n[게임 데이터에 없음]\n'+'\n'.join(MILREP['miss'])+'\n\n[모호해서 반영하지 않음]\n'+'\n'.join(MILREP['amb'])+'\n\n[상충]\n'+'\n'.join(MILREP['conflict'])+'\n')
 print('FA 이력 반영',FAH['ok'],'행 | 미매칭(은퇴·자료 없음)',FAH['miss'])
 
 print('2027 외국인 확정 계약',len(FOREIGN27),'건')

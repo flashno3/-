@@ -70,7 +70,7 @@
     const dupName = !!opts.name && this._nameTaken.has(name);   // 실제 지명자 이름이 기존 선수와 겹치면 동명이인으로 표시(무작위 이름은 겹치지 않게 뽑는다)
     this._nameTaken.add(name); this._nameTakenN = nPl + 1;
     const age = opts.age || 18 + Math.min(5, Math.floor(r.random() * r.random() * 6 + r.random() * 2));
-    const p = { id, type, name, ko: name, team: 'DRAFT', age, rookie: S.year + 1, foreign: false, active: false, fat: 0, lastStart: -99, retired: false, pot: Math.max(0, gauss(r, 0.75, 0.5)), p: {} };
+    const p = { id, type, name, ko: name, team: 'DRAFT', age, rookie: S.year + 1, foreign: false, active: false, fat: 0, lastStart: -99, retired: false, pot: Math.max(0, gauss(r, 0.75, 0.5)), p: {}, mil: { st: 'pending', src: 'gen' } };   // 국내 신인은 병역 미필로 시작
     if (dupName) { p.ns = true; for (const q of Object.values(S.players)) if (q.ko === name) q.ns = true; }
     if (type === 'B') {
       const cl = (v, a, b) => clamp(v, a, b);

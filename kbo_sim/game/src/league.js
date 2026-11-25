@@ -53,6 +53,7 @@
       L._f27 = base.foreign2027 || [];
       L._faclass = base.faclass2027 || [];
       if (L._initFARules) L._initFARules();   // FA 자격 연수·등급 기준 연봉·외국인 슬롯 초기화
+      if (L._milInit) L._milInit();   // 병역 상태·2026년 11~12월 입대자 복무 명단으로(military.js)
       if (L._applyFAClass) L._applyFAClass(L._faclass);   // 2027 FA 승인 선수: 미계약 20명은 시장에서 시작
       if (L._addDraftClass) L._addDraftClass(base.draft2027);   // 2027 신인 드래프트 지명 결과(실제 지명·가상 능력치)
       for (const t of TEAMS) L.initTeam(t);
@@ -673,7 +674,7 @@
         const p = S.players[id]; if (!p || p.retired) { S.mil = S.mil.filter(x => x !== id); continue; }
         if (p.milReturn > ym) continue;
         const t = p.milTeam; if (!(t in S.teams)) continue;
-        p.team = t; p.active = false; p.lockUntil = 0; S.teams[t].ids.push(id); delete p.milTeam; delete p.milReturn; delete p.milFrom; S.mil = S.mil.filter(x => x !== id); back.push(p);
+        p.team = t; p.active = false; p.lockUntil = 0; S.teams[t].ids.push(id); delete p.milTeam; delete p.milReturn; delete p.milFrom; S.mil = S.mil.filter(x => x !== id); back.push(p); if (this._milReturned) this._milReturned(p);
         if (t === S.userTeam) { S.news.unshift({ year: S.year, day: S.day, text: `${p.ko} 전역 — 2군으로 복귀` }); }
       }
       if (back.length) { for (const t of new Set(back.map(p => p.team))) { if (t !== S.userTeam) this.refreshTeam(t); } this.invalidate(); }
@@ -715,7 +716,7 @@
       });
       this.mergeTracking();
       for (const o of others) this.commit(o.home, o.away, o.rh, o.ra, { spH: o.spH, spA: o.spA });
-      this._applyActiveMax(); this._decayFatigue(); this._tickService(); if (this._injuryDay) this._injuryDay(d); if (this._arcDay) this._arcDay(d); if (this._allStarDay) this._allStarDay(d); if (this._aiTradeDay) this._aiTradeDay(d); if (this._unrestDay) this._unrestDay(d); if (this._growDay) this._growDay(d); if (this._clinchDay) this._clinchDay(d); if (this._pressConDay) this._pressConDay(d); if (this._eventDay) this._eventDay(d); if (this._finSnapDay) this._finSnapDay(d); if (this._trainDay) this._trainDay(); if (this._scoutDay) this._scoutDay(); if (this._milestoneDay) this._milestoneDay(); this.playFutures(d); this.returnMilitary(this.milYM(d));
+      this._applyActiveMax(); this._decayFatigue(); this._tickService(); if (this._injuryDay) this._injuryDay(d); if (this._arcDay) this._arcDay(d); if (this._allStarDay) this._allStarDay(d); if (this._aiTradeDay) this._aiTradeDay(d); if (this._unrestDay) this._unrestDay(d); if (this._growDay) this._growDay(d); if (this._clinchDay) this._clinchDay(d); if (this._pressConDay) this._pressConDay(d); if (this._milDay) this._milDay(d); if (this._eventDay) this._eventDay(d); if (this._finSnapDay) this._finSnapDay(d); if (this._trainDay) this._trainDay(); if (this._scoutDay) this._scoutDay(); if (this._milestoneDay) this._milestoneDay(); this.playFutures(d); this.returnMilitary(this.milYM(d));
       if (!ug) { S.day++; return { status: 'ok', day: d }; }
       if (live) { S.pendingDay = d; return { status: 'userGame', day: d, game: ug.g, idx: ug.i }; }
       const L = this.startUserGame(ug.g, ug.i); this.playAuto(L); const res = this.finishUserGame(L);

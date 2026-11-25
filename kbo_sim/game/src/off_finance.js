@@ -73,7 +73,7 @@
   };
   proto._finGame = function (home, away) { if (!this.finReady()) return; const f = this.S.fin.teams[home]; if (!f) return; f.gate += this.finAtt(home, this.isBigMatch(home, away)) * f.price * f.pm * this.finPriceMult(home) * (this.isRival(home, away) ? 1.04 : 1); f.games++; };   // 라이벌전은 홈 관중 +4%
   proto.setTicketPolicy = function (t, pm) { if (!this.finReady() || !PRICE_PM.includes(pm)) return false; this.S.fin.teams[t].pm = pm; return true; };
-  proto.finPay = function (t) { return Math.round((this.payroll(t) + this.coachPayDelta(t) + (this.scoutPay ? this.scoutPay(t) : 0) + this.deadNow(t) + this.S.teams[t].ids.reduce((a, id) => { const c = this.S.players[id].contract; return a + (c.amort && c.years > 0 ? c.amort : 0); }, 0)) * 10) / 10; };   // 선수단 보수 = 연봉 + 신규 FA 계약금 상각
+  proto.finPay = function (t) { return Math.round((this.payroll(t) + (this.milAllowance ? this.milAllowance(t) : 0) + this.coachPayDelta(t) + (this.scoutPay ? this.scoutPay(t) : 0) + this.deadNow(t) + this.S.teams[t].ids.reduce((a, id) => { const c = this.S.players[id].contract; return a + (c.amort && c.years > 0 ? c.amort : 0); }, 0)) * 10) / 10; };   // 선수단 보수 = 연봉 + 신규 FA 계약금 상각
   proto.finAllowed = function (t) { const f = this.S.fin.teams[t]; return f.lastRev * LOSS * (0.5 + f.trust / 100); };
   proto.finBudget = function (t) { const f = this.S.fin.teams[t]; return Math.round((f.lastRev - f.opex + this.finAllowed(t) + (f.boardExtra || 0)) * 10) / 10; };   // 이사회 승인 추가 예산 포함
   proto.faRoom = function (t) { return this.finReady() ? Math.round((this.finBudget(t) - this.finPay(t)) * 10) / 10 : 1e9; };
