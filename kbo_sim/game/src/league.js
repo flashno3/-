@@ -42,7 +42,7 @@
       L._ensureWhales(); L._calibrate(base);
       const r = rngFor(seed, 1);
       for (const id in S.players) {
-        const p = S.players[id]; p.pot = p.age <= 25 ? Math.max(0, (27 - p.age) * 0.10 + gauss(r, 0, 0.15)) : 0;
+        const p = S.players[id]; p.pot = p.age <= 25 ? Math.max(0, (27 - p.age) * 0.10 + gauss(r, 0, 0.15)) : 0;   // 25세 이하는 뒤의 _initFARules(off_fa.js)에서 숨은 정점(peak)으로 대체된다
         p.contract = { salary: Math.round(L.price(p) * clamp(1 + gauss(r, 0, 0.12), 0.7, 1.4) * 10) / 10, years: 1 };
         p.contract.salary = Math.max(0.3, p.contract.salary);
       }
@@ -715,7 +715,7 @@
       });
       this.mergeTracking();
       for (const o of others) this.commit(o.home, o.away, o.rh, o.ra, { spH: o.spH, spA: o.spA });
-      this._applyActiveMax(); this._decayFatigue(); this._tickService(); if (this._injuryDay) this._injuryDay(d); if (this._arcDay) this._arcDay(d); if (this._allStarDay) this._allStarDay(d); if (this._aiTradeDay) this._aiTradeDay(d); if (this._unrestDay) this._unrestDay(d); if (this._eventDay) this._eventDay(d); if (this._finSnapDay) this._finSnapDay(d); if (this._trainDay) this._trainDay(); if (this._scoutDay) this._scoutDay(); if (this._milestoneDay) this._milestoneDay(); this.playFutures(d); this.returnMilitary(this.milYM(d));
+      this._applyActiveMax(); this._decayFatigue(); this._tickService(); if (this._injuryDay) this._injuryDay(d); if (this._arcDay) this._arcDay(d); if (this._allStarDay) this._allStarDay(d); if (this._aiTradeDay) this._aiTradeDay(d); if (this._unrestDay) this._unrestDay(d); if (this._growDay) this._growDay(d); if (this._eventDay) this._eventDay(d); if (this._finSnapDay) this._finSnapDay(d); if (this._trainDay) this._trainDay(); if (this._scoutDay) this._scoutDay(); if (this._milestoneDay) this._milestoneDay(); this.playFutures(d); this.returnMilitary(this.milYM(d));
       if (!ug) { S.day++; return { status: 'ok', day: d }; }
       if (live) { S.pendingDay = d; return { status: 'userGame', day: d, game: ug.g, idx: ug.i }; }
       const L = this.startUserGame(ug.g, ug.i); this.playAuto(L); const res = this.finishUserGame(L);

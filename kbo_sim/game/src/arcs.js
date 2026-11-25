@@ -35,6 +35,8 @@
   /* ================= 공통 도구 ================= */
   const pct = x => Math.round(x * 100) + '%';
   const voice = (L, p, m) => { const t = L.traitOf(p); return m[t] || m.def; };
+  /* 이야기의 선택이 성장에 남는다: 숨은 정점(peak)을 ±로 조정(정점이 없는 선수는 성장 여력 pot로 환산). ⚠ 크기는 가정 */
+  const devPeak = (L, p, v, why) => { if (!p || !v || p.age > 25) return ''; if (p.peak !== undefined) p.peak = clamp(Math.round((p.peak + v) * 10) / 10, 25, 85); else p.pot = clamp((p.pot || 0) + v / 30, 0, 1.4); (p.devLog = p.devLog || []).push({ y: L.S.year, d: L.S.day, v, why }); if (p.devLog.length > 8) p.devLog.shift(); return ` 성장 상한 ${v > 0 ? '+' : ''}${v}`; };
   const addLoy = (L, p, key, v, text) => { if (!p) return; p.arcLoy = (p.arcLoy || []).filter(x => !(x.k === key && x.y === L.S.year && x.t === text)); p.arcLoy.push({ k: key, v, t: text, y: L.S.year }); };   // 재계약·FA 협상의 충성도에 몇 년간 반영(off_contract.loyalty)
   const pickMentor = (L, p) => L.players(L.S.userTeam).filter(x => x.id !== p.id && x.type === p.type && x.age >= 31 && !x.foreign).sort((a, b) => (b.pos === p.pos) - (a.pos === p.pos) || L.ovr(b) - L.ovr(a))[0] || null;
 
@@ -169,7 +171,7 @@
             const p = P(L, a.pid), f = L._arcForm(p) || 0, mt = pickMentor(L, p); a.mem.f0 = f; a.mem.mentor = mt ? mt.id : null; L._arcLog(a, `2군의 ${p.ko}(${p.age}세, OVR ${L.ovr(p)})이 최근 경기에서 눈에 띄는 활약을 펼치고 있습니다.`);
             const say = voice(L, p, { clutch: '"기회만 주시면 보여 드리겠습니다."', shy: '"…제가 1군에서 통할지 모르겠습니다."', leader: '"먼저 선배들께 배우겠습니다."', model: '"맡겨 주신 자리에서 최선을 다하겠습니다."', free: '"1군이요? 재밌겠는데요."', def: '' });
             L._arcEvent(a, { title: '2군의 신예', ttl: 9, def: 'wait', rec: 'callup', text: `${p.ko}(${TRAITS[L.traitOf(p)] || '-'})이(가) 2군에서 좋은 흐름을 이어 갑니다(최근 흐름 ▲${f.toFixed(1)}). ${say} 팬과 언론의 관심도 커졌습니다.`, choices: [
-              { k: 'callup', label: '1군으로 콜업', hint: '같은 유형 가장 약한 1군 선수와 교체 · 컨디션 +2(30일) · 부진하면 부담' }, { k: 'mentor', label: mt ? `${mt.ko}(${mt.age}세)을 멘토로(0.3억)` : '멘토를 붙여 지켜본다(0.3억)', hint: `60%: 컨디션 +2(30일)${mt ? ` · ${mt.ko} 충성도 +1` : ''} · 실패해도 손해 없음` }, { k: 'wait', label: '2군에서 더 지켜본다', hint: '3주 뒤 다시 평가 · 변화 없음' }] });
+              { k: 'callup', label: '1군으로 콜업', hint: '같은 유형 가장 약한 1군 선수와 교체 · 컨디션 +2(30일) · 부진하면 부담' }, { k: 'mentor', label: mt ? `${mt.ko}(${mt.age}세)을 멘토로(0.3억)` : '멘토를 붙여 지켜본다(0.3억)', hint: `60%: 컨디션 +2(30일) · 성장 상한 +1.5${mt ? ` · ${mt.ko} 충성도 +1` : ''} · 실패해도 손해 없음` }, { k: 'wait', label: '2군에서 더 지켜본다', hint: '3주 뒤 다시 평가 · 변화 없음' }] });
           },
           resolve(L, a, k) {
             const p = P(L, a.pid), f = L.S.fin && L.S.fin.teams[L.S.userTeam], mt = a.mem.mentor ? P(L, a.mem.mentor) : null; a.mem.choice = k;
@@ -178,7 +180,7 @@
               if (err) { L._arcGo(a, 'review', 21); a.mem.choice = 'wait'; return `콜업이 어렵습니다(${err}). 2군에서 더 지켜봅니다.`; }
               mood(L, p, 2, 30); L._arcGo(a, 'review', 18); return `${p.ko}을(를) 1군에 올렸습니다${dn ? '(' + dn.p.ko + ' 2군행)' : ''}(컨디션 +2, 30일). 프로 무대에서 어떤 모습을 보일까요?`;
             }
-            if (k === 'mentor') { if (f) f.evCost = Math.round(((f.evCost || 0) + 0.3) * 10) / 10; if (mt) addLoy(L, mt, 'rising', 1, '후배 멘토 역할을 맡았던 기억'); const ok = rngFor(L.S.seed, L.S.year, L.S.day, 9230).random() < 0.6; L._arcGo(a, 'review', 21); if (ok) { mood(L, p, 2, 30); return `${mt ? mt.ko + '의' : '멘토의'} 조언이 효과를 봤습니다(${p.ko} 컨디션 +2, 30일).`; } return `멘토링은 큰 변화가 없었습니다. 3주 뒤 다시 평가합니다.`; }
+            if (k === 'mentor') { if (f) f.evCost = Math.round(((f.evCost || 0) + 0.3) * 10) / 10; if (mt) addLoy(L, mt, 'rising', 1, '후배 멘토 역할을 맡았던 기억'); const ok = rngFor(L.S.seed, L.S.year, L.S.day, 9230).random() < 0.6; L._arcGo(a, 'review', 21); if (ok) { mood(L, p, 2, 30); const g = devPeak(L, p, 1.5, '멘토의 조언'); return `${mt ? mt.ko + '의' : '멘토의'} 조언이 효과를 봤습니다(${p.ko} 컨디션 +2, 30일,${g}).`; } return `멘토링은 큰 변화가 없었습니다. 3주 뒤 다시 평가합니다.`; }
             L._arcGo(a, 'review', 21); return `2군에서 더 지켜보기로 했습니다.`;
           }
         },
@@ -186,14 +188,14 @@
           enter(L, a) {
             const p = P(L, a.pid), f = L._arcForm(p), good = f !== null && f >= 0.8, bad = f !== null && f <= -0.8; a.mem.f1 = f;
             const where = p.active ? '1군' : '2군', fs = f === null ? '' : `(최근 흐름 ${f >= 0 ? '▲' : '▼'}${Math.abs(f).toFixed(1)})`;
-            if (good) { L._arcLog(a, `${p.ko}이(가) ${where}에서도 계속 좋은 모습을 이어 갑니다.`); L._arcEvent(a, { title: '그 기세 그대로', ttl: 9, def: 'keep', rec: 'keep', text: `${p.ko}의 상승세가 이어집니다${fs}.${p.rookie === L.S.year ? ' 신인왕 레이스 이야기까지 나옵니다.' : ''} 어떻게 이끌까요?`, choices: [{ k: 'keep', label: '계속 기회를 준다', hint: '컨디션 +2(40일) · 충성도 +3 · 서사 이어짐' }, { k: 'manage', label: '체력 관리를 위해 쉬게 한다', hint: '컨디션 +1(14일) · 무리하지 않음' }] }); a.mem.tone = 'good'; }
-            else { L._arcLog(a, `${p.ko}${bad ? '이(가) 기대에 못 미쳐 부담을 느끼는 모습입니다.' : '의 활약은 평범한 수준에 머물렀습니다.'}`); L._arcEvent(a, { title: '기대와 부담 사이', ttl: 9, def: 'trust', rec: 'trust', text: `${p.ko}${bad ? '이(가) 부진합니다' : '의 기세가 한풀 꺾였습니다'}${fs}. ${voice(L, p, { shy: '"…죄송합니다. 기대에 못 미쳐서."', clutch: '"다음엔 반드시 보여 드리겠습니다."', def: '' })} 어떻게 할까요?`, choices: [{ k: 'trust', label: '믿고 계속 기용', hint: '50%: 컨디션 +2(30일)·충성도 +3 / 아니면 −2(30일)' }, { k: 'reset', label: '2군에서 재정비', hint: '컨디션 +2(40일) · 서사는 천천히' }] }); a.mem.tone = 'bad'; }
+            if (good) { L._arcLog(a, `${p.ko}이(가) ${where}에서도 계속 좋은 모습을 이어 갑니다.`); L._arcEvent(a, { title: '그 기세 그대로', ttl: 9, def: 'keep', rec: 'keep', text: `${p.ko}의 상승세가 이어집니다${fs}.${p.rookie === L.S.year ? ' 신인왕 레이스 이야기까지 나옵니다.' : ''} 어떻게 이끌까요?`, choices: [{ k: 'keep', label: '계속 기회를 준다', hint: '컨디션 +2(40일) · 충성도 +3 · 성장 상한 +2' }, { k: 'manage', label: '체력 관리를 위해 쉬게 한다', hint: '컨디션 +1(14일) · 무리하지 않음 · 성장 상한 +1' }] }); a.mem.tone = 'good'; }
+            else { L._arcLog(a, `${p.ko}${bad ? '이(가) 기대에 못 미쳐 부담을 느끼는 모습입니다.' : '의 활약은 평범한 수준에 머물렀습니다.'}`); L._arcEvent(a, { title: '기대와 부담 사이', ttl: 9, def: 'trust', rec: 'trust', text: `${p.ko}${bad ? '이(가) 부진합니다' : '의 기세가 한풀 꺾였습니다'}${fs}. ${voice(L, p, { shy: '"…죄송합니다. 기대에 못 미쳐서."', clutch: '"다음엔 반드시 보여 드리겠습니다."', def: '' })} 어떻게 할까요?`, choices: [{ k: 'trust', label: '믿고 계속 기용', hint: '50%: 컨디션 +2(30일)·충성도 +3·성장 상한 +1.5 / 아니면 컨디션 −2(30일)·성장 상한 −1' }, { k: 'reset', label: '2군에서 재정비', hint: '컨디션 +2(40일) · 성장 상한 +1 · 서사는 천천히' }] }); a.mem.tone = 'bad'; }
           },
           resolve(L, a, k) {
             const p = P(L, a.pid), r = rngFor(L.S.seed, L.S.year, L.S.day, 9231).random(); let txt, tone = 'ok';
-            if (a.mem.tone === 'good') { if (k === 'keep') { mood(L, p, 2, 40); addLoy(L, p, 'rising', 3, '기회를 믿고 맡겨 준 기억'); txt = `${p.ko}이(가) 기회를 살려 팀의 새 얼굴로 자리 잡아 갑니다(컨디션 +2, 충성도 +3).`; } else { mood(L, p, 1, 14); txt = `${p.ko}에게 휴식을 주며 길게 보기로 했습니다(컨디션 +1). 서두르지 않는 육성입니다.`; tone = 'mixed'; } }
-            else if (k === 'trust') { if (r < 0.5) { mood(L, p, 2, 30); addLoy(L, p, 'rising', 3, '부진할 때 믿어 준 기억'); txt = `믿어 준 보람이 있었습니다. ${p.ko}이(가) 감을 되찾습니다(컨디션 +2, 충성도 +3).`; } else { mood(L, p, -2, 30); tone = 'bad'; txt = `기용을 이어 갔지만 ${p.ko}의 부진이 길어집니다(컨디션 −2, 30일). 좋은 경험으로 남기를 바랄 뿐입니다.`; } }
-            else { mood(L, p, 2, 40); tone = 'mixed'; txt = `${p.ko}을(를) 2군에서 재정비시킵니다(컨디션 +2, 40일). 성장은 조금 천천히 가는 걸로.`; if (p.active) L.moveActive(p.id, false); }
+            if (a.mem.tone === 'good') { if (k === 'keep') { mood(L, p, 2, 40); addLoy(L, p, 'rising', 3, '기회를 믿고 맡겨 준 기억'); const g = devPeak(L, p, 2, '기회를 살린 시즌'); txt = `${p.ko}이(가) 기회를 살려 팀의 새 얼굴로 자리 잡아 갑니다(컨디션 +2, 충성도 +3,${g}).`; } else { mood(L, p, 1, 14); const g = devPeak(L, p, 1, '서두르지 않는 육성'); txt = `${p.ko}에게 휴식을 주며 길게 보기로 했습니다(컨디션 +1,${g}). 서두르지 않는 육성입니다.`; tone = 'mixed'; } }
+            else if (k === 'trust') { if (r < 0.5) { mood(L, p, 2, 30); addLoy(L, p, 'rising', 3, '부진할 때 믿어 준 기억'); const g = devPeak(L, p, 1.5, '부진을 이겨 낸 경험'); txt = `믿어 준 보람이 있었습니다. ${p.ko}이(가) 감을 되찾습니다(컨디션 +2, 충성도 +3,${g}).`; } else { mood(L, p, -2, 30); tone = 'bad'; const g = devPeak(L, p, -1, '길어진 부진의 부담'); txt = `기용을 이어 갔지만 ${p.ko}의 부진이 길어집니다(컨디션 −2, 30일,${g}). 좋은 경험으로 남기를 바랄 뿐입니다.`; } }
+            else { mood(L, p, 2, 40); tone = 'mixed'; const g = devPeak(L, p, 1, '2군 재정비'); txt = `${p.ko}을(를) 2군에서 재정비시킵니다(컨디션 +2, 40일,${g}). 성장은 조금 천천히 가는 걸로.`; if (p.active) L.moveActive(p.id, false); }
             p.arcMem = Object.assign(p.arcMem || {}, { rising: { choice: a.mem.choice, tone: a.mem.tone, res: tone, y: L.S.year } }); L.note(p, `이야기 「${a.title}」: ${a.mem.choice === 'callup' ? '1군 콜업' : a.mem.choice === 'mentor' ? '멘토링' : '2군 관찰'} → ${a.mem.tone === 'good' ? '상승세' : '난관'}`);
             L._arcEnd(a, txt, tone); return txt;
           }

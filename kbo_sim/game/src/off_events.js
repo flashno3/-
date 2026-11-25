@@ -170,6 +170,7 @@
     else if (e.type === 'fanloss' && this._fanLossResolve) res = this._fanLossResolve(e, k);
     else if ((e.type === 'allstar' || e.type === 'halfsum') && this._asResolve) res = this._asResolve(e, k);
     else if (e.type === 'unrest' && this._unrestResolve) res = this._unrestResolve(e, k);
+    else if (e.type === 'grow' && this._growResolve) res = this._growResolve(e, k);
     e.status = 'done'; e.choice = k; e.result = res; e.auto = !!auto; news(this, `${e.title}: ${res}`); this.invalidate();
     return { ok: true, msg: res };
   };

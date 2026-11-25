@@ -1,6 +1,6 @@
 /* KBO 감독 모드: 훈련 센터 (타자/투수 분리 집중훈련 · 개별 훈련 슬롯 · 코치 연동 · 프리셋 · 부상 위험 · 비시즌 캠프)
  * 성장 계산 규칙은 기존과 같다: 시즌 중 매일 누적한 훈련 일수가 연말 성장(양의 성장분)에 곱해진다.
- *   - 전체 보정  = 1 + 0.12 × Σ(집중 분야 비중 × 분야 기본값 × 코치 보정)
+ *   - 전체 보정  = 1 + 0.18 × Σ(집중 분야 비중 × 분야 기본값 × 코치 보정)
  *   - 능력치 가중 = 1 + 0.5 × Σ(집중 분야 비중 × 분야 가중치 × 코치 보정)  (집중한 능력치가 더 빨리 큼, 양의 성장일 때만)
  *   - 코치 보정  = 1 + 0.006 × (담당 코치 능력 − 60), 0.8~1.25
  * 훈련 설정이 모두 '없음/보통'이면 이전 버전과 결과가 같다(AI 구단에는 적용되지 않음). 엔진(경기 시뮬레이션)은 건드리지 않는다.
@@ -48,6 +48,7 @@
   proto.trainFocusKeys = function (side) { return Object.keys(FOC[side]); };
   proto.trainIntenName = function (k) { return INT_KO[k] || k; };
   const sideOf = p => p.type === 'P' ? 'P' : 'B';
+  const TRAIN_K = 0.18;   // 훈련 누적 1당 성장 배율(⚠ 가정, 0.12 → 0.18로 상향: 기존에는 강훈련도 23~25세 연 +0.4 OVR에 그쳐 체감이 약했다)
   /* 신체 훈련(phys)의 나이별 효과: 성장 효과는 어릴수록 크고(≤25 1.0 · ≤29 0.8 · ≤33 0.5 · 그 외 0.3), 부상 예방·회복 효과는 고령일수록 크다(≤25 0.8 · ≤30 1.0 · 그 외 1.4). ⚠ 계수는 가정 */
   const ageGrow = age => age <= 25 ? 1 : age <= 29 ? 0.8 : age <= 33 ? 0.5 : 0.3, ageProt = age => age <= 25 ? 0.8 : age <= 30 ? 1 : 1.4;
   const focInjMul = (side, f, age) => { const i = FOC[side][f]; if (!i) return 1; if (f === 'cond') return 0.88; if (!i.phys) return 1; const m = i.injMul || 1; return m < 1 ? 1 - (1 - m) * ageProt(age) : m; };
@@ -148,7 +149,7 @@
       for (const k of Object.keys(info.w)) out.w[k] = (out.w[k] || 1) + EMPH * share * info.w[k] * cf;
       if (info.speed) out.speed += share * info.speed * cf; if (info.range) out.range += share * info.range * cf; if (info.stamina) out.stamina += share * info.stamina * cf;
     }
-    out.mult = 1 + 0.12 * tot * (this.investMult ? this.investMult('train') : 1); return out;   // 훈련 시설 투자: 훈련 보정 ×1.05~1.15(투자하지 않으면 1)
+    out.mult = 1 + TRAIN_K * tot * (this.investMult ? this.investMult('train') : 1); return out;   // 훈련 시설 투자: 훈련 보정 ×1.05~1.15(투자하지 않으면 1)
   };
   proto._trainMult = function (p) { return this._trainEff(p).mult; };
   proto._trainInjFor = function (p) {
