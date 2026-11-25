@@ -450,3 +450,7 @@ td .sub { min-width: 230px; gap: 1px 8px; } td .sub span { white-space: nowrap; 
 .wfall { display: block; width: 100%; max-width: 560px; height: auto; margin: 8px 0 4px; } .wfall .w0 { stroke: var(--line); }
 .wfall .w-up { fill: color-mix(in srgb, var(--pos) 70%, var(--surface)); } .wfall .w-dn { fill: color-mix(in srgb, var(--neg) 65%, var(--surface)); } .wfall .w-tot { fill: var(--brand); } .wfall .w-neg { fill: var(--neg); }
 .wfall .wv { font-size: 10px; font-family: var(--font-display); fill: var(--fg); } .wfall .wl { font-size: 9.5px; fill: var(--muted); }
+
+/* ---- 순위 싸움: 확정 배너·맞대결 프리뷰 ---- */
+.hero .hclinch { margin: -4px 0 10px; padding: 8px 12px; border-radius: 10px; font-weight: 700; background: rgba(255,255,255,.18); } .hero .hclinch.in { background: rgba(255,214,107,.3); }
+.racecard { border-left: 4px solid var(--neg); }

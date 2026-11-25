@@ -4,7 +4,7 @@
 })(typeof self !== 'undefined' ? self : this, function (LG, Engine) {
   'use strict';
   /* [오프시즌 분할] 다음 순간까지 진행·훈련 방침·기록 — 원본 offseason.js 순서 그대로. 공용 심볼은 off_common.js(LG.OFFC). */
-  const { proto, KO0, LIM_DEADLINE, news } = LG.OFFC;
+  const { proto, KO0, LIM_DEADLINE, news, rngFor } = LG.OFFC;
   /* ---------------- 다음 중요 순간까지 진행 ----------------
      내가 정한 조건 중 하나가 생기면 그날 멈춘다: 새 소식(결정 필요) · 내 1군 선수 부상 · 트레이드 마감 5일 전 · 가을야구 확률 구간 변화 · 시즌 목표(순위) 달성 여부 변화 · 월초 점검(선택). 내 경기 직접 지휘를 켜면 내 경기 직전에도 멈춘다. */
   proto.stopOpts = function () { return Object.assign({ event: true, injury: true, deadline: true, odds: true, goal: true, month: false }, this.S.stopOpts || {}); };
@@ -84,5 +84,38 @@
     if (others.filter(x => pmin(x) > pmax(me)).length >= 5) return 'out';
     if (others.filter(x => pmax(x) >= pmin(me)).length <= 4) return 'in';
     return null;
+  };
+  /* 매직넘버·트래직넘버(가을야구 5위·정규시즌 1위): 언론식 공식 G + 1 − 내 승 − 상대 패(무승부 제외 근사, ⚠ 승률 동률·무승부 때문에 실제 확정 시점과 1경기 안팎 다를 수 있다).
+   *  확정·탈락이 이미 정해졌으면 null(그때는 postClinch를 쓴다). 9월(남은 경기 30 이하)부터만 낸다 */
+  proto.magicNumber = function (t) {
+    const S = this.S, st = this.standings(), len = (S.schedule && S.schedule.length) || 144, me = st.find(x => x.team === t); if (!me || S.phase !== 'regular') return null;
+    const rem = len - (me.w + me.l + me.d); if (rem > 30 || rem <= 0 || (this.postClinch && this.postClinch(t))) return null;
+    const i = st.indexOf(me), out = [];
+    if (i < 5) { const opp = st[5]; out.push({ k: 'post', n: Math.max(1, len + 1 - me.w - opp.l), vs: opp.team, t: '가을야구 매직넘버' }); }
+    else { const fifth = st[4]; out.push({ k: 'tragic', n: Math.max(1, len + 1 - fifth.w - me.l), vs: fifth.team, t: '가을야구 트래직넘버' }); }
+    if (i === 0 && st[1]) { const n = len + 1 - me.w - st[1].l; if (n > 0) out.push({ k: 'first', n, vs: st[1].team, t: '정규시즌 1위 매직넘버' }); }
+    return out;
+  };
+  /* 순위 싸움 맞대결: 시즌 막바지(남은 30경기 이하)에 5위 선 근처(두 팀 모두 3~8위 사이, 경기 차 3 이하)의 맞대결 */
+  proto.raceGame = function (a, b) {
+    const S = this.S, st = this.standings(), len = (S.schedule && S.schedule.length) || 144, A = st.find(x => x.team === a), B = st.find(x => x.team === b); if (!A || !B || S.phase !== 'regular') return null;
+    if (len - (A.w + A.l + A.d) > 30) return null; const gb = Math.abs((A.w - B.w) - (A.l - B.l)) / 2, ra = st.indexOf(A) + 1, rb = st.indexOf(B) + 1;
+    const near = r => r >= 3 && r <= 8, across = (ra <= 5) !== (rb <= 5); if (!(near(ra) && near(rb) && gb <= 3 && (across || gb <= 1.5))) return null;   // 5위 선을 사이에 둔 3경기 차 이내, 또는 같은 쪽이라도 1.5경기 차 이내
+    return { gb, ra, rb };
+  };
+  /* 매일: 가을야구 확정·탈락 순간과 내 팀 연승·연패(5·8·10) — 소식·스토리·팬 반응(실제 결과에서 고른 문장) */
+  const FANR = {
+    in: ['커뮤니티: "올해는 가을에 야구 본다!" 축하 글이 쏟아집니다.', '팬 반응: 확정 순간 응원석이 떠나갈 듯했습니다.'],
+    out: ['커뮤니티: "내년엔 달라야 한다"는 글이 이어집니다.', '팬 반응: 아쉬움 속에서도 남은 경기 응원은 계속하자는 분위기입니다.'],
+    w: ['커뮤니티: "분위기 탔다, 이대로만 가자"는 반응입니다.', '팬 반응: 연승에 예매 문의가 늘었다는 소식입니다.'],
+    l: ['커뮤니티: "감독 뭐 하냐"는 날 선 글이 늘었습니다.', '팬 반응: 연패가 길어지자 라인업·불펜 운영에 대한 불만이 커집니다.', '커뮤니티: "그래도 버티자"는 목소리와 쓴소리가 섞여 있습니다.']
+  };
+  proto._clinchDay = function (d) {
+    const S = this.S; if (S.phase !== 'regular' || !this.postClinch) return; const t = S.userTeam, KOt = KO0[t] || t, pick = (arr, salt) => arr[Math.floor(rngFor(S.seed, S.year, d, salt).random() * arr.length)];
+    const c = this.postClinch(t), C = S.clinch = S.clinch && S.clinch.y === S.year ? S.clinch : { y: S.year, k: null, d: null, st: 0 };
+    if (c && C.k !== c) { C.k = c; C.d = d; const txt = c === 'in' ? `${KOt}, 가을야구 진출 확정` : `${KOt}, 가을야구 탈락 확정`; this._lnews(txt); if (this.story) this.story('race', txt, 3); if (this._press) this._press('race', { text: txt, fan: pick(FANR[c], 7501) }); }
+    const games = S.results.filter(x => x.home === t || x.away === t), wl = x => { const h = x.home === t, a = h ? x.rh : x.ra, b = h ? x.ra : x.rh; return a === b ? 'D' : a > b ? 'W' : 'L'; };
+    let n = 0, k = null; for (const x of games.slice().reverse()) { const r = wl(x); if (k === null) k = r; if (r !== k) break; n++; }
+    const sig = k === 'D' ? 0 : (k === 'W' ? 1 : -1) * n; if ([5, 8, 10].includes(n) && k !== 'D' && C.st !== sig) { C.st = sig; const txt = `${KOt} ${n}${k === 'W' ? '연승' : '연패'}`; if (this._press) this._press('race', { text: k === 'W' ? `${txt} — 상승세` : `${txt} — 위기`, fan: pick(FANR[k === 'W' ? 'w' : 'l'], 7502) }); }
   };
 });

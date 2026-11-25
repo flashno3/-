@@ -466,7 +466,7 @@
     extend: ['{team}, {p}와 비FA 다년계약…{yrs}년 총 {tot}억', '{p}, {team}에 {yrs}년 더 남는다', '{team}의 장기 투자 — {p} 다년계약'],
     break: ['{p}, {team}과 협상 결렬', '{team}-{p} 협상 평행선…결국 불발', '{p} 협상 무산, {team}의 선택은?'],
     lost: ['{p}, 협상 중 {opp} 유니폼…{team} 놓쳤다', '{team}, {p} 영입 경쟁서 밀려'],
-    trade: ['{text}'], release: ['{text}']
+    trade: ['{text}'], release: ['{text}'], race: ['{text}']
   };
   const FAN = {
     big: ['커뮤니티: "너무 비싼 거 아니냐" vs "이 정도는 써야 한다"로 갈립니다.', '팬 반응: 기대와 우려가 반반입니다. 성적으로 증명해야 합니다.', '팬들은 "구단이 확실히 베팅했다"는 반응입니다.'],
@@ -482,6 +482,6 @@
     else if (kind === 'break' || kind === 'lost') fan = 'bad';
     else if (kind === 'trade' || kind === 'release') fan = 'neutral';
     const head = fill(pool[Math.floor(r.random() * pool.length)], x), fl = FAN[fan];
-    S.press = S.press || []; S.press.unshift({ y: S.year, d: S.day, kind, head, fan: kind === 'trade' || kind === 'release' ? '' : fl[Math.floor(r.random() * fl.length)] }); if (S.press.length > 40) S.press.length = 40;
+    S.press = S.press || []; S.press.unshift({ y: S.year, d: S.day, kind, head, fan: c.fan !== undefined ? c.fan : kind === 'trade' || kind === 'release' ? '' : fl[Math.floor(r.random() * fl.length)] });   // c.fan: 경기·순위 소식의 팬 반응(실제 일어난 일에서 고른 문장) if (S.press.length > 40) S.press.length = 40;
   };
 });
