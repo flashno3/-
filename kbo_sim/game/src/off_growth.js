@@ -25,9 +25,11 @@
   proto._peakAdj = function (p, v) { p.peak = clamp(Math.round((p.peak + v) * 10) / 10, 25, 85); if (p.scout) p.scout.ceil = clamp(Math.round((p.scout.ceil + v) * 10) / 10, 25, 85); };
   proto._growDay = function (d) {
     const S = this.S; if (S.phase !== 'regular' || d < GR.from || d > GR.to) return;
+    const rd = LG.OFFC.rngFor(S.seed, S.year, d, 7300);   // 하루 난수 하나를 구단·선수 순서대로 쓴다
     for (const t of TEAMS) for (const p of this.players(t)) {
-      if (p.peak === undefined || p.age > 25 || p.foreign || p.grEv === S.year || this.isInj(p)) continue; const gap = p.peak - this.ovr(p); if (gap < GR.gap) continue;
-      const x = grr(S, p, d, 1); let kind = null; if (x < GR.up) kind = 'up'; else if (x < GR.up + GR.down) kind = 'down'; if (!kind) continue;
+      if (p.peak === undefined || p.age > 25 || p.foreign || p.grEv === S.year) continue;
+      const x = rd.random(); let kind = null; if (x < GR.up) kind = 'up'; else if (x < GR.up + GR.down) kind = 'down'; if (!kind) continue;   // 난수를 먼저 보고(대부분 여기서 끝) 비싼 계산은 당첨된 선수만
+      if (this.isInj(p) || p.peak - this.ovr(p) < GR.gap) continue;
       p.grEv = S.year; const v = kind === 'up' ? Math.round((2 + 2 * grr(S, p, d, 2)) * 10) / 10 : -Math.round((2 + 2 * grr(S, p, d, 3)) * 10) / 10; this._peakAdj(p, v);
       (p.devLog = p.devLog || []).push({ y: S.year, d, v, why: kind === 'up' ? '시즌 중 각성' : '시즌 중 벽' }); if (p.devLog.length > 8) p.devLog.shift();
       if (t === S.userTeam) this._growEvent(p, kind, v); else if (kind === 'up' && this.ovr(p) >= 45) this._lnews(`${KO0[t] || t} 유망주 ${p.ko}(${p.age}세)이(가) 한 단계 올라섰다는 평가를 받습니다`);

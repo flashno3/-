@@ -357,3 +357,39 @@ table.rec thead th { position: sticky; top: 0; background: var(--surface); z-ind
 .tabs.wrap { flex-wrap: wrap; overflow-x: visible; }   /* 탭이 많은 줄(스토리)은 휴대폰에서 넘기지 않고 줄바꿈 — 마지막 탭(구단 역사)이 화면 밖에 숨는 문제 방지 */
 table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; } table.car td:first-child, table.car th:first-child { position: sticky; left: 0; background: var(--surface); } table.car tr.tot td { border-top: 2px solid var(--line); background: var(--surface2); font-weight: 600; }   /* 경력 표: 가로로 넘겨도 시즌 열 고정 */
 .arcg { display: flex; align-items: center; gap: 8px; margin: 2px 0; font-size: 12.5px; } .arcg .gl { width: 62px; color: var(--muted); } .arcg .ab { flex: 1; height: 8px; border-radius: 4px; background: var(--surface2); overflow: hidden; } .arcg .ab i { display: block; height: 100%; background: #4ec36f; } .arcg.mid .ab i { background: #e6b422; } .arcg.bad .ab i { background: #e0575b; } .arcg .gv { width: 26px; text-align: right; }
+
+/* ---- 대시보드: 구단 색 히어로 + 2단 배치 ---- */
+.hero { --hb: color-mix(in srgb, var(--tp) 72%, #000); background: linear-gradient(135deg, var(--hb), color-mix(in srgb, var(--tp) 45%, #000)); color: #fff; border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; box-shadow: 0 6px 20px color-mix(in srgb, var(--tp) 25%, transparent); }
+.hero .hrow { display: flex; align-items: center; gap: 12px; } .hero .logo { background: rgba(255,255,255,.92); border-radius: 8px; padding: 3px; }
+.hero .hname b { display: block; font-family: var(--font-display); font-size: 22px; line-height: 1.15; } .hero .hname span { font-size: 13px; opacity: .85; }
+.hero .hodds { text-align: right; } .hero .hodds b { display: block; font-family: var(--font-display); font-size: 26px; line-height: 1; } .hero .hodds span { font-size: 12px; opacity: .85; }
+.hero .hstats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.hero .hstats > div { background: rgba(255,255,255,.12); border-radius: 10px; padding: 8px 10px; min-width: 0; } .hero .hstats b { display: block; font-family: var(--font-display); font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .hero .hstats span { font-size: 12px; opacity: .8; }
+.hero .l10 { display: inline-flex; gap: 3px; vertical-align: middle; } .hero .l10 i { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,.35); } .hero .l10 i.W { background: #7CE3A8; } .hero .l10 i.L { background: #FF9A9A; } .hero .l10 i.D { background: #E8E8E8; }
+.hero .hfoot { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-top: 10px; font-size: 13px; } .hero .hfoot .logo { height: 16px !important; width: 23px !important; padding: 1px; vertical-align: -3px; }
+.hero .hchip { min-height: 28px; padding: 2px 9px; margin-left: 4px; border-radius: 999px; border: 1px solid rgba(255,255,255,.4); background: rgba(255,255,255,.14); color: #fff; font-size: 13px; }
+.hero .hchip.hot::before { content: '🔥 '; } .hero .hchip.cold::before { content: '🧊 '; } .hero .hchip.rise::before { content: '🌱 '; } .hero .hchip.warn::before { content: '⚠ '; } .hero .hinj { opacity: .9; }
+@media (max-width: 560px) { .hero .hstats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .hero .hname b { font-size: 19px; } .hero .hodds b { font-size: 22px; } }
+.dash { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 14px; } .dash .dcol { min-width: 0; }
+@media (min-width: 1100px) { .dash { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); } }
+.kpis.small3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } .kpis.small3 .v { font-size: 15px; }
+/* ---- 구단 색(브랜드): 정체성·조작 요소에만 쓴다. 데이터의 좋음/나쁨(--accent·--pos·--neg)은 그대로 둬서 붉은 구단에서도 '좋은 값'이 빨갛게 보이지 않게 한다.
+ *  밝은 화면: 구단 색 82% + 검정(흰 글자 대비 4.5 이상) / 어두운 화면: 구단 색 55% + 흰색(어두운 글자) */
+:root { --brand: color-mix(in srgb, var(--tp) 82%, #000); --brand-fg: #FFFFFF; --brand-soft: color-mix(in srgb, var(--tp) 12%, var(--surface)); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --brand: color-mix(in srgb, var(--tp) 55%, #fff); --brand-fg: #0A130E; --brand-soft: color-mix(in srgb, var(--tp) 28%, var(--surface)); } }
+:root[data-theme="dark"] { --brand: color-mix(in srgb, var(--tp) 55%, #fff); --brand-fg: #0A130E; --brand-soft: color-mix(in srgb, var(--tp) 28%, var(--surface)); }
+button.primary { background: var(--brand); color: var(--brand-fg); border-color: var(--brand); }
+button:hover:not(:disabled) { border-color: var(--brand); }
+.tabs button[aria-selected=true] { border-bottom-color: var(--brand); }
+tr.me td, table.rec tr.me td:nth-child(2) { background: var(--brand-soft); }
+.chips button[aria-pressed=true], .seg button[aria-pressed=true] { background: var(--brand); color: var(--brand-fg); border-color: var(--brand); }
+.nb.me { background: var(--brand); color: var(--brand-fg); }
+
+/* ---- 선수 상태 한 줄(컨디션·충성도·불만·성장) ---- */
+.sstrip { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 4px 12px; margin: 8px 2px 2px; }
+.smeter { display: flex; align-items: center; gap: 6px; font-size: 12px; min-width: 0; } .smeter .sl { color: var(--muted); width: 38px; flex: none; } .smeter b { font-family: var(--font-display); font-size: 12.5px; white-space: nowrap; min-width: 34px; text-align: right; }
+.smeter .sb { position: relative; flex: 1; height: 7px; border-radius: 4px; background: var(--surface2); overflow: hidden; } .smeter .sb i { position: absolute; top: 0; bottom: 0; left: 0; background: var(--muted); border-radius: 4px; }
+.smeter .sb.c::after { content: ''; position: absolute; left: 50%; top: -1px; bottom: -1px; width: 1px; background: var(--line); }
+.smeter.good .sb i { background: var(--pos); } .smeter.bad .sb i { background: var(--neg); } .smeter.warn .sb i { background: var(--warn); }
+.smeter.grow .sb i { background: var(--accent); } .smeter.grow .sb u { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--accent) 45%, transparent) 0 4px, transparent 4px 7px); }
+.smeter em { font-style: normal; margin-left: 2px; } .smeter em.up { color: var(--pos); } .smeter em.dn { color: var(--neg); }

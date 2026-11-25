@@ -20,16 +20,16 @@
     const S = this.S, set = S.teams[t].set, tr = TRAIT_K[this.traitOf(p)] || 1; let up = 0;
     const star = ctx.star.has(p.id), core = ctx.core.has(p.id);
     if (star && !p.active && !this.isInj(p)) up += 0.55; else if (star && p.active && !core && p.type === 'B') up += 0.35; else if (star && p.active && !core && p.role === 'SP') up += 0.35;
-    else if (!p.active && !this.isInj(p) && this.ovr(p) >= ctx.minAct + 4) up += 0.3;
+    else if (!p.active && !this.isInj(p) && (ctx.ov ? ctx.ov.get(p.id) : this.ovr(p)) >= ctx.minAct + 4) up += 0.3;
     if ((p.loyAdj || 0) <= -2) up += (-(p.loyAdj || 0) - 1) * 0.06;
     if (t === S.userTeam && this.moodOf(p) <= -2) up += 0.15;
     return up * tr - 0.12 - (ctx.win ? 0.1 : 0);
   };
   proto._unrestCtx = function (t) {
-    const S = this.S, set = S.teams[t].set, ps = this._unrestPlayers(t), byOvr = ps.slice().sort((a, b) => this.ovr(b) - this.ovr(a)), r = S.rec[t] || [0, 0, 0];
-    const act = ps.filter(p => p.active && !this.isInj(p)), minAct = act.length ? Math.min(...act.map(p => this.ovr(p))) : 0;
+    const S = this.S, set = S.teams[t].set, ps = this._unrestPlayers(t), ov = new Map(ps.map(p => [p.id, this.ovr(p)])), byOvr = ps.slice().sort((a, b) => ov.get(b.id) - ov.get(a.id)), r = S.rec[t] || [0, 0, 0];   // OVR은 한 번만 계산(정렬 비교마다 다시 계산하지 않게)
+    const act = ps.filter(p => p.active && !this.isInj(p)), minAct = act.length ? Math.min(...act.map(p => ov.get(p.id))) : 0;
     const core = new Set([...(set.lineup || []).map(x => x.id || x), ...(set.rotation || []), set.bullpen && set.bullpen.closer, ...((set.bullpen && set.bullpen.setup) || [])].filter(Boolean));
-    return { star: new Set(byOvr.slice(0, 14).map(p => p.id)), core, minAct, win: (r[0] + r[1] + r[2]) >= 20 && r[0] / Math.max(1, r[0] + r[1]) >= 0.55 };
+    return { ov, ps, star: new Set(byOvr.slice(0, 14).map(p => p.id)), core, minAct, win: (r[0] + r[1] + r[2]) >= 20 && r[0] / Math.max(1, r[0] + r[1]) >= 0.55 };
   };
   const cause = (L, p, t) => { const ctx = L._unrestCtx(t); if (ctx.star.has(p.id) && !p.active) return '주전급 기량인데 1군에서 뛰지 못하는 것'; if (ctx.star.has(p.id) && !ctx.core.has(p.id)) return '주전급 기량에 걸맞은 출전 기회를 받지 못하는 것'; if ((p.loyAdj || 0) <= -3) return '최근 구단의 대우에 대한 서운함'; return '개인적인 사정과 팀 분위기'; };
   const rrp = (L, p, salt, d) => rngFor(L.S.seed, L.S.year, d === undefined ? L.S.day : d, 8900 + salt + (parseInt(String(p.id).slice(1)) || 0) % 997).random();
@@ -37,11 +37,11 @@
   proto._unrestDay = function (d) {
     const S = this.S; if (S.phase !== 'regular') return;
     for (const t of TEAMS) {
-      const ctx = this._unrestCtx(t);
-      for (const p of this._unrestPlayers(t)) {
+      const ctx = this._unrestCtx(t), rd = rngFor(S.seed, S.year, d, 8800 + TEAMS.indexOf(t));   // 하루·구단당 난수 하나를 선수 순서대로 쓴다(선수마다 새 난수를 만들면 느리다)
+      for (const p of ctx.ps.slice()) {   // ctx.ps = _unrestPlayers(t) (같은 목록, 처리 중 이적으로 바뀔 수 있어 복사)
         if (p.unrest) { this._unrestStage(p, t, d); continue; }
         let v = p.grv || 0; v += this._grvRate(p, t, ctx);
-        if (rrp(this, p, 1, d) < 0.0004) v += 15 + 10 * rrp(this, p, 2, d);   // 개인 사정·언론 보도 같은 돌발 불만
+        const x = rd.random(); if (x < 0.0004) v += 15 + 10 * (x / 0.0004);   // 개인 사정·언론 보도 같은 돌발 불만(크기는 같은 난수의 남은 자리로)
         v = clamp(v, 0, 100); if (v <= 0) delete p.grv; else p.grv = r1(v);
         if (!(p.unrestCool && d < p.unrestCool)) { const n = p.unrestYear === S.year ? (p.unrestN || 0) : 0; if (v >= TH.request && n >= 1) this._unrestEnter(p, t, d, 'request'); else if (v >= TH.meeting && n < 3) this._unrestEnter(p, t, d, 'meeting'); }
       }
