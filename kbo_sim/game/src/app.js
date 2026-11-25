@@ -76,22 +76,25 @@
   /* 메뉴를 5개 묶음으로 단순화: 대시보드 · 선수단 · 리그 · 운영 · 설정(+오프시즌). 묶음 안의 화면은 상단 탭으로 전환 */
   const SCR = { home: '대시보드', desk: '프런트 데스크', roster: '로스터', farm: '2군', lineup: '라인업', pitching: '투수진', train: '훈련', schedule: '일정·결과', standings: '순위·기록', records: '선수 기록', teams: '팀 정보', story: '스토리', mood: '분위기', finance: '재정', invest: '투자 센터', coach: '코치진', scout: '스카우팅', market: '이적시장', offseason: '오프시즌', save: '저장·설정' };
   const GROUPS = [['home', '대시보드', ['home', 'desk']], ['team', '선수단', ['roster', 'lineup', 'pitching', 'train', 'mood']], ['league', '리그', ['schedule', 'standings', 'records', 'teams', 'story']], ['ops', '운영', ['finance', 'invest', 'coach', 'scout', 'market']], ['offseason', '오프시즌', ['offseason']], ['save', '설정', ['save']]];
+  const faOpen = () => { const S = L.S; return !!(S.faMkt && !S.faMkt.closed && S.phase !== 'offseason'); };   // 개막 전 FA 협상 기간(시즌 경기는 FA 마감 뒤에 진행)
+  function statusText(my) { const S = L.S; return S.phase === 'offseason' ? '오프시즌' : faOpen() ? `FA 협상 기간 · 개막까지 ${L.faDaysLeft()}일` : (my.w + my.l + my.d === 0 ? '개막 전' : `${my.rank}위 · ${my.w}승 ${my.l}패${my.d ? ' ' + my.d + '무' : ''}`); }
   function primary() {
     const S = L.S, st = L.standings(), my = st.find(x => x.team === U());
     if (S.phase === 'offseason') return { label: '오프시즌 진행', act: 'go', a: 'offseason' };
+    if (faOpen()) return L.faDaysLeft() > 0 ? { label: 'FA 하루 진행', act: 'faDay', a: 1 } : { label: 'FA 마감 · 개막', act: 'faClose' };   // 이 기간에는 경기 진행 버튼 대신 FA 일정을 진행
     if (S.phase === 'post_done') return { label: '오프시즌 시작', act: 'toOff' };
     if (S.phase === 'post') return L.userInPost() ? { label: '내 경기 진행', act: 'postNext' } : { label: '포스트시즌 진행', act: 'postNext' };
     if (S.phase === 'regular_done') return my.rank <= 5 ? { label: '포스트시즌 시작', act: 'startPost' } : { label: '시즌 종료 · 오프시즌', act: 'startPost' };
     return { label: L.userGameToday() ? (ui.liveMode ? '경기 시작(직접 지휘)' : '다음 경기') : '하루 진행', act: 'adv', a: 1 };
   }
-  function phaseLabel() { const S = L.S; return S.phase === 'offseason' ? '오프시즌' : S.phase === 'post' || S.phase === 'post_done' ? '포스트시즌 · ' + L.postDateStr() : S.phase === 'regular_done' ? '정규시즌 종료' : L.dateStr(Math.min(S.day, 143)); }
+  function phaseLabel() { const S = L.S; if (faOpen()) return L.faDateStr(S.faMkt.day); return S.phase === 'offseason' ? '오프시즌' : S.phase === 'post' || S.phase === 'post_done' ? '포스트시즌 · ' + L.postDateStr() : S.phase === 'regular_done' ? '정규시즌 종료' : L.dateStr(Math.min(S.day, 143)); }
   function shell(content) {
     const S = L.S, st = L.standings(), my = st.find(x => x.team === U()), pr = primary(), grp = GROUPS.find(g => g[2].includes(ui.screen)) || GROUPS[0], nav = GROUPS.filter(g => g[0] !== 'offseason' || S.phase === 'offseason'), evn = L.eventsOpen().length;
     return `<div class="app"><nav class="side" aria-label="메뉴"><div class="club">${logo(U(), 34)}${KO[U()]}</div>
       ${nav.map(g => `<button data-act="goG" data-a="${g[0]}" ${grp[0] === g[0] ? 'aria-current="true"' : ''}>${g[1]}${g[0] === 'offseason' ? ' ●' : ''}${g[0] === 'home' && evn ? ` <span class="chip warn">${evn}</span>` : ''}</button>`).join('')}</nav>
-      <div class="main"><header class="top"><div class="info"><span class="date">${S.year} · ${phaseLabel()}</span><span class="muted">${S.phase === 'offseason' ? '오프시즌' : (my.w + my.l + my.d === 0 ? '개막 전' : `${my.rank}위 · ${my.w}승 ${my.l}패 ${my.d}무`)}</span><span class="muted">${cbtText(U())}</span></div>
+      <div class="main"><header class="top"><div class="info"><span class="date">${S.year} · ${phaseLabel()}</span><span class="muted">${statusText(my)}</span><span class="muted">${cbtText(U())}</span></div>
       <button class="sm" data-act="searchOpen" aria-label="검색 (단축키 /)" title="검색 (/)">🔍</button><button class="primary" data-act="${pr.act}" ${pr.a !== undefined ? `data-a="${pr.a}"` : ''}>${pr.label}</button></header><main class="content">${grp[2].length > 1 ? `<div class="tabs sub" role="tablist">${grp[2].map(s => `<button role="tab" aria-selected="${ui.screen === s}" data-act="go" data-a="${s}">${SCR[s]}</button>`).join('')}</div>` : ''}${content}</main>
-      <div class="dock"><button class="sm dk" data-act="undo" title="${L.undoLabel() ? '되돌리기: ' + esc(L.undoLabel()) : '되돌릴 변경 없음'}" aria-label="되돌리기" ${L.undoLabel() ? '' : 'disabled'}>↶</button>${(S.phase === 'regular' || S.phase === 'preseason') && !(S.faMkt && !S.faMkt.closed) ? '<button class="sm dk" data-act="advMoment" title="다음 중요 순간까지" aria-label="다음 중요 순간까지">⏭</button>' : ''}<div class="dinfo"><b>${phaseLabel()}</b><span class="muted">${S.phase === 'offseason' ? '오프시즌' : (my.w + my.l + my.d === 0 ? '개막 전' : `${my.rank}위 · ${my.w}승 ${my.l}패${my.d ? ' ' + my.d + '무' : ''}`)}</span></div><button class="primary" data-act="${pr.act}" ${pr.a !== undefined ? `data-a="${pr.a}"` : ''}>${pr.label}</button></div></div></div>`;
+      <div class="dock"><button class="sm dk" data-act="undo" title="${L.undoLabel() ? '되돌리기: ' + esc(L.undoLabel()) : '되돌릴 변경 없음'}" aria-label="되돌리기" ${L.undoLabel() ? '' : 'disabled'}>↶</button>${(S.phase === 'regular' || S.phase === 'preseason') && !(S.faMkt && !S.faMkt.closed) ? '<button class="sm dk" data-act="advMoment" title="다음 중요 순간까지" aria-label="다음 중요 순간까지">⏭</button>' : ''}<div class="dinfo"><b>${phaseLabel()}</b><span class="muted">${statusText(my)}</span></div><button class="primary" data-act="${pr.act}" ${pr.a !== undefined ? `data-a="${pr.a}"` : ''}>${pr.label}</button></div></div></div>`;
   }
 
   /* ---------------- 대시보드 ---------------- */
@@ -1850,7 +1853,7 @@
   }
   const prospectBlockFor = p => { if (p.team !== U() || p.age > 24 || p.foreign) return ''; const n = L.prospectNote(p); return n ? `<div class="card" style="margin:8px 0"><div class="small"><b>성장 서사</b> <span class="muted">(확인된 기록)</span></div>${prospectRowNote(n)}</div>` : ''; };
   function growthAnimate() { setTimeout(() => { document.querySelectorAll('.gbar i.now[data-to]').forEach(i => { i.style.width = i.dataset.to + '%'; }); }, 40); }
-  const toastHtml = () => (ui.toast ? `<div class="toast" role="status">${esc(ui.toast)}</div>` : '');
+  const toastHtml = () => (ui.toast ? `<div class="toast" role="status" data-act="toastClose" title="눌러서 닫기">${esc(ui.toast)}</div>` : '');
 
   /* ---------------- 액션 ---------------- */
   function startPlay(g, idx) { if (ui.hl) openLiveHL(g, idx); else openLive(g, idx, false); }
@@ -2063,6 +2066,7 @@
     faOverToggle() { ui.faOver = !ui.faOver; render(); },
     fatab(a) { ui.faTab = a; render(); },
     faDay(a) { const k = L.faAdvance(+a); toast(L.S.faMkt ? `${L.faDateStr(L.S.faMkt.day)}가 되었습니다.` : ''); if (k) autosave(); render(); },
+    toastClose() { ui.toast = null; clearTimeout(toast.t); const t = $('.toast'); if (t) t.remove(); },
     faClose() { L.closeFA(); toast('FA 협상을 마감했습니다.'); autosave(); render(); },
     faBeat(a) { const p = P(a), q = k => $(`[data-sel="${k}"][data-a="${a}"]`), y = q('fayears'), b = L.faBeat(p, U(), y ? +y.value : undefined); (ui.faIn = ui.faIn || {})[a] = { years: b.years, salary: b.salary, bonus: b.bonus }; render(); },
     signFA(a) { confirmFA(a); },

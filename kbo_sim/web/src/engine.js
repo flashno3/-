@@ -153,7 +153,7 @@
         const pool = [];
         for (const [b, a, z, pr] of BYT[team]) if (a <= g && g <= z && !cand.includes(b)) pool.push([b, pr]);
         while (cand.length < 10 && pool.length) {
-          const i = rng.choice(pool.map((_, k) => k), pool.map(q => Math.max(q[1], 0.02)));
+          const i = rng.choice(pool.map((_, k) => k), pool.map(q => Math.max(q[1] || 0, 0.02)));
           cand.push(pool.splice(i, 1)[0][0]);
         }
       }
@@ -168,7 +168,7 @@
       }
       if (dhb === null) {
         let e3 = cand.filter(b => !used.has(b.key)); if (!e3.length) e3 = assign.map(a => a[0]);
-        dhb = rng.choice(e3, e3.map(x => x.PA));
+        const wp = e3.map(x => x.PA > 0 ? x.PA : 0); dhb = rng.choice(e3, wp.some(v => v > 0) ? wp : wp.map(() => 1));   // 후보 모두 타석 기록이 없으면(신인·가상 선수) 균등 — 기존 결과는 그대로
       }
       const L = assign.map(a => a[0]).concat([dhb]);
       L.sort((x, y) => -(x.obp * 2 + x.slg) - -(y.obp * 2 + y.slg));
@@ -234,7 +234,7 @@
     class StaffState {
       constructor(S, rng, sp) {
         const st = S.filter(p => p.GS > 0); let rel = S.filter(p => p.relief_ip > 1); this.rel = rel.length ? rel : S;
-        this.sp = sp || rng.choice(st, st.map(p => p.GS));
+        this.sp = sp || (st.length ? rng.choice(st, st.map(p => p.GS)) : rng.choice(S, S.map(() => 1)));   // 선발 기록이 있는 투수가 없으면 균등(기존 결과는 그대로)
         this.sp_outs = Math.max(3, Math.trunc(rng.gauss(this.sp.ipgs * 3, 4)));
         this.cur = this.sp; this.o = 0; this.runs = 0; this.rng = rng; this.used = new Set([this.sp.name]);
       }
@@ -245,7 +245,7 @@
       }
       change() {
         let el = this.rel.filter(p => !this.used.has(p.name)); if (!el.length) el = this.rel;
-        this.cur = this.rng.choice(el, el.map(p => p.relief_ip)); this.used.add(this.cur.name); this.o = 0;
+        const w = el.map(p => p.relief_ip > 0 ? p.relief_ip : 0); this.cur = this.rng.choice(el, w.some(v => v > 0) ? w : w.map(() => 1)); this.used.add(this.cur.name); this.o = 0;   // 구원 기록이 모두 0이면 균등
       }
     }
 

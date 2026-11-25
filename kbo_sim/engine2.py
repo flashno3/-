@@ -65,7 +65,7 @@ def lineup(team,g,rng):
         w=[b.gs.get(pos,0)+0.3 for b in el];b=rng.choices(el,w)[0];used.add(b.key);assign.append((b,pos))
     if dhb is None:
         el=[b for b in cand if b.key not in used] or [b for b,_ in assign]
-        dhb=rng.choices(el,[x.PA for x in el])[0]
+        wp=[x.PA if x.PA>0 else 0 for x in el];dhb=rng.choices(el,wp if any(v>0 for v in wp) else [1]*len(wp))[0]  # 후보 모두 타석 기록이 없으면 균등(JS 엔진과 동일)
     b=dhb
     L=[a[0] for a in assign]+[b]
     L.sort(key=lambda x:-(x.obp*2+x.slg))
