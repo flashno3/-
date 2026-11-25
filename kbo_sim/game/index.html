@@ -5672,7 +5672,7 @@ td .sub { min-width: 230px; gap: 1px 8px; } td .sub span { white-space: nowrap; 
     win.forEach((p, i) => { if (i < half) this._milEnlist(p, Y * 12 + 11, 'sangmu'); else { p.mil = Object.assign({}, p.mil, { win: 'spring' }); this._milEnlist(p, S.year * 12 + 2, 'sangmu'); } });
     const med = {}; for (const t of TEAMS) { const o = this.players(t).filter(q => !q.foreign).map(q => this.ovr(q)).sort((a, b) => a - b); med[t] = o.length ? o[Math.floor(o.length / 2)] : 40; }
     for (const p of lose) { if (p.mil.last) this._milEnlist(p, Y * 12 + 11, 'army');
-      else if (p.team !== S.userTeam && this.ovr(p) < med[p.team] && r.random() < 0.5) this._milEnlist(p, Y * 12 + 11, 'army');   // AI: 팀 중간 이하 탈락자는 절반이 현역으로(⚠ 가정)
+      else if (p.team !== S.userTeam && r.random() < (this.ovr(p) < med[p.team] ? 0.85 : 0.6)) this._milEnlist(p, Y * 12 + 11, 'army');   // AI: 입대를 결심한 탈락자 대부분은 현역·사회복무로(중간 이하 85%·그 위 60%, ⚠ 가정 — 다년 측정으로 미필 적체를 막는 값)
       else p.mil = Object.assign({}, p.mil, { st: 'pending', tried: (p.mil.tried || 0) + 1 }); }
     const mine = rank.filter(p => p.milTeam === S.userTeam || p.team === S.userTeam);
     S.milSel = { y: Y, to, out: out12, apps: apps.length, win: win.length, cap: ROSTER_CAP };
