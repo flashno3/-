@@ -5634,9 +5634,9 @@ td .sub { min-width: 230px; gap: 1px 8px; } td .sub span { white-space: nowrap; 
         if (deadline) this._milEnlist(p, when, 'army'); else p.mil = Object.assign({}, m, { st: 'apply', y, last: age >= SANGMU_MAX_AGE });   // 지원서 제출 — 선발은 새 시즌 직전(_milSelect)
       }
       const o = this.players(t).filter(q => !q.foreign).map(q => this.ovr(q)).sort((a, b) => a - b), med = o.length ? o[Math.floor(o.length / 2)] : 40;
-      for (const p of this.players(t)) {   // AI: 상무 지원하지 않은 21~26세 미필 중 팀 중간 이하 선수는 해마다 30%가 현역·사회복무로 먼저 입대(⚠ 가정 — 미필 적체 방지)
+      for (const p of this.players(t)) {   // AI: 상무 지원하지 않은 21~26세 미필 중 팀 중간 이하 선수는 해마다 20%가 현역·사회복무로 먼저 입대(⚠ 가정 — 미필 적체 방지, 다년 측정으로 맞춤)
         if (t === S.userTeam || p.foreign || !p.mil || p.mil.st !== 'pending' || p.age < 21 || p.age >= SANGMU_MAX_AGE || this.ovr(p) >= med || core.has(p.id)) continue;
-        if (rngFor(S.seed, y, 4310, parseInt(String(p.id).slice(1)) || 0).random() < 0.3) this._milEnlist(p, when, 'army');
+        if (rngFor(S.seed, y, 4310, parseInt(String(p.id).slice(1)) || 0).random() < 0.2) this._milEnlist(p, when, 'army');
       }
     }
   };
