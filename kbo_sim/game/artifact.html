@@ -5611,6 +5611,7 @@ td .sub { min-width: 230px; gap: 1px 8px; } td .sub span { white-space: nowrap; 
       if (p.mil.st === 'serving' && p.mil.enlist && p.team in S.teams) { const f = ym(p.mil.enlist), kind = /-12$/.test(p.mil.enlist) || /-04$/.test(p.mil.enlist) ? 'sangmu' : 'unknown'; const t0 = p.team, sal = p.contract ? p.contract.salary : 0; this._milEnlist(p, f, kind, false); moved.push(p.ko); ids.push({ id: p.id, t: t0, sal }); }
     }
     S.milInit = { moved, ids, at: '2026년 11월 말 목록' };
+    if (ids.some(x => x.t === S.userTeam) && this.ensureActive) { this.ensureActive(S.userTeam); this.repairSettings(S.userTeam); }   // 내 구단 1군에서 빠진 입대자 자리를 시작 때 채운다(AI 구단은 refreshTeam이 채움)
   };
   const ARMY_RUST = -0.1;   // 현역 복귀 감각 저하(일회성, 능력 이동량 −0.1 ≈ OVR −1.4, ⚠ 가정: 18개월 실전 공백)
   proto._milReturned = function (p) { const army = p.milKind === 'army', o0 = this.ovr(p); if (army) { p.p = this._shifted(p, ARMY_RUST); (p.devLog = p.devLog || []).push({ y: this.S.year, v: 0, why: `현역 복귀 감각 저하(OVR ${o0}→${this.ovr(p)})` }); this.invalidate(); } p.mil = Object.assign({}, p.mil || {}, { st: 'done', src: (p.mil && p.mil.src) || 'game', back: this.S.year }); delete p.milKind; };
