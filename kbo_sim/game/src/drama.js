@@ -1,5 +1,5 @@
 /* 몰입 2단계: 라커룸 분위기 지수 · 기자회견 · 상대 감독 성향
- *  - 라커룸 분위기(내 구단, 0~100): 최근 10경기·불만 선수·선수 컨디션·주장·기자회견 효과의 합. 70 이상이면 선수 컨디션 +1, 30 이하면 −1(경기 엔진 입력, moodOf). ⚠ 가중치·임계값은 가정
+ *  - 라커룸 분위기(내 구단, 0~100): 최근 10경기·불만 선수·선수 컨디션·주장·기자회견 효과의 합. 62 이상이면 선수 컨디션 +1, 35 이하면 −1(경기 엔진 입력, moodOf). ⚠ 가중치·임계값은 가정
  *  - 기자회견(내 구단 이벤트): 5연패·7연승·무단이탈·가을야구 확정/탈락 뒤(12일에 한 번). 선택이 라커룸 분위기·팀 컨디션·팬 충성도 지수·이사회 신뢰도에 작게 반영. ⚠ 크기는 가정
  *  - 상대 감독 성향(AI 구단): 작전 야구(컨택)·빅볼(장타)·신중한 승부·공격적 승부. 내 구단과의 경기에서 상대 팀 기본 작전으로 쓰인다(AI끼리 경기는 작전이 없는 빠른 계산이라 영향 없음). ⚠ 성향 배정은 게임 설정 */
 (function (root, factory) {
@@ -29,7 +29,7 @@
     const act = ps.filter(p => p.active), md = act.length ? act.reduce((a, p) => a + (p.mood && S.day < p.mood.until ? p.mood.v : 0), 0) / act.length : 0; v += add('선수 컨디션 평균', md * 4);
     if (this.captain && this.captain()) v += add('주장 있음', 5);
     const pa = (S.chemAdj || []).filter(x => x.until > S.day && x.y === S.year), ps2 = pa.reduce((a, x) => a + x.v, 0); if (pa.length) v += add('기자회견', ps2);
-    const out = { v: clamp(Math.round(v), 0, 100), items }; out.tag = out.v >= 70 ? '최고' : out.v >= 58 ? '좋음' : out.v >= 42 ? '보통' : out.v > 30 ? '가라앉음' : '최악'; out.mood = out.v >= 70 ? 1 : out.v <= 30 ? -1 : 0;   // 시뮬레이션에서 80/20은 한 번도 닿지 않아 70/30으로(⚠ 가정)
+    const out = { v: clamp(Math.round(v), 0, 100), items }; out.tag = out.v >= 62 ? '최고' : out.v >= 55 ? '좋음' : out.v >= 45 ? '보통' : out.v > 35 ? '가라앉음' : '최악'; out.mood = out.v >= 62 ? 1 : out.v <= 35 ? -1 : 0;   // 측정 분포(p5 37·p50 50·p95 60)의 양쪽 끝 약 3%가 되게 대칭으로(⚠ 가정)
     this._chem = { key, v: out }; return out;
   };
   proto.chemMood = function () { return this.S.phase === 'offseason' || !this.S.results ? 0 : this.chemistry().mood; };

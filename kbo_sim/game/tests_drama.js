@@ -11,8 +11,8 @@ const mk = (seed, team) => { const L = League.create(base, team || 'Lions', seed
 // 2) 라커룸 분위기: 구성 요소와 경기 반영 임계값
 { const L = mk(3), S = L.S, U = S.userTeam; const c0 = L.chemistry(); ok(c0.v >= 0 && c0.v <= 100 && c0.tag, '범위');
   L._chemAdd(10, 14, '테스트'); ok(L.chemistry().v === Math.min(100, c0.v + 10) || L.chemistry().v === 100, '기자회견 보정 반영 ' + c0.v + '→' + L.chemistry().v);
-  const p = L.players(U).find(q => q.active && !q.foreign); const m0 = L.moodOf(p); L._chemAdd(60, 14, '테스트'); ok(L.chemistry().v >= 70 && L.chemMood() === 1 && L.moodOf(p) === Math.min(4, m0 + 1), '70 이상 → 컨디션 +1');
-  S.chemAdj = []; L._chem = null; L._chemAdd(-90, 14, '테스트'); ok(L.chemistry().v <= 30 && L.chemMood() === -1, '30 이하 → −1');
+  const p = L.players(U).find(q => q.active && !q.foreign); S.chemAdj = []; L._chem = null; const base0 = L.chemMood(), m0 = L.moodOf(p) - base0;   // 분위기 보정을 뺀 기준 컨디션 L._chemAdd(60, 14, '테스트'); ok(L.chemistry().v >= 62 && L.chemMood() === 1 && L.moodOf(p) === Math.min(4, m0 + 1), '62 이상 → 컨디션 +1');
+  S.chemAdj = []; L._chem = null; L._chemAdd(-90, 14, '테스트'); ok(L.chemistry().v <= 35 && L.chemMood() === -1, '35 이하 → −1');
   const ai = L.players(Object.keys(S.teams).find(t => t !== U))[0]; ok(L.moodOf(ai) === 0 || !(ai.mood), 'AI 구단에는 적용 안 됨');
   S.chemAdj = []; L._chem = null; const q = L.players(U).filter(x => !x.foreign)[3]; const v1 = L.chemistry().v; q.grv = 80; q.unrest = { stage: 'slack', since: S.day, y: S.year, t: U }; L._chem = null; ok(L.chemistry().v === Math.max(0, v1 - 8), '불만 선수(태업) −8'); }
 // 3) 기자회견: 확정 순간에 열리고, 선택 효과가 힌트와 일치

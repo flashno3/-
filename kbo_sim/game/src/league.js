@@ -127,7 +127,7 @@
     }
     /* 컨디션(분위기)·운영 방침: 내 팀 선수의 경기 능력치에 반영(엔진 입력만 바꾸므로 시뮬레이션 규칙은 그대로).
        mood: 선수 개별(-3~+3, 기한 있음) + 팀 분위기. 1단계 ≈ OVR 0.55 */
-    moodOf(p) { const S = this.S, m = p.mood && S.day < p.mood.until ? p.mood.v : 0, tm = S.teamMood && S.day < S.teamMood.until && p.team === S.userTeam ? S.teamMood.v : 0, cb = p.team === S.userTeam && this.capBonus ? this.capBonus() : 0, cl = p.team === S.userTeam && /^post/.test(S.phase) && this.traitOf && this.traitOf(p) === 'clutch' ? 1 : 0, ch = p.team === S.userTeam && this.chemMood ? this.chemMood() : 0; return clamp(m + tm + cb + cl + ch, -4, 4); }   // ch: 라커룸 분위기(70 이상 +1 · 30 이하 −1)
+    moodOf(p) { const S = this.S, m = p.mood && S.day < p.mood.until ? p.mood.v : 0, tm = S.teamMood && S.day < S.teamMood.until && p.team === S.userTeam ? S.teamMood.v : 0, cb = p.team === S.userTeam && this.capBonus ? this.capBonus() : 0, cl = p.team === S.userTeam && /^post/.test(S.phase) && this.traitOf && this.traitOf(p) === 'clutch' ? 1 : 0, ch = p.team === S.userTeam && this.chemMood ? this.chemMood() : 0; return clamp(m + tm + cb + cl + ch, -4, 4); }   // ch: 라커룸 분위기(62 이상 +1 · 35 이하 −1)
     policy() { const P = this.S.policy || {}; return { pitch: P.pitch || 'normal', run: P.run || 'normal' }; }
     setPolicy(k, v) { const ok = { pitch: ['save', 'normal', 'push'], run: ['low', 'normal', 'high'] }; if (!ok[k] || !ok[k].includes(v)) return false; this.S.policy = Object.assign({ pitch: 'normal', run: 'normal' }, this.S.policy, { [k]: v }); this.invalidate(); return true; }
     _modRates(p) {

@@ -826,7 +826,7 @@
     if (!L.chemistry) return ''; const c = L.chemistry();
     return `<div class="card"><div class="row"><h2 style="margin:0">라커룸 분위기</h2><span class="sp"></span><span class="chip ${c.v >= 60 ? 'in' : c.v <= 40 ? 'warn' : ''}">${c.tag}</span></div><div class="gauge ${c.v >= 60 ? 'good' : c.v >= 40 ? 'mid' : 'low'}" style="margin:8px 0"><span class="gbar" style="width:160px"><i style="width:${c.v}%"></i></span><span class="gtxt">${c.v}</span></div>
       ${c.items.map(x => `<div class="row small"><span>${esc(x[0])}</span><span class="sp"></span><b class="${x[1] >= 0 ? 'pos' : 'neg'}">${x[1] > 0 ? '+' : ''}${x[1]}</b></div>`).join('')}
-      <div class="small muted" style="margin-top:6px">기본 50에서 시작합니다. 70 이상이면 선수 전원 컨디션 +1, 30 이하면 −1이 경기에 반영됩니다(⚠ 가중치·임계값은 게임 설정). 연승·연패, 불만 선수, 주장, 기자회견 답변이 움직입니다.</div></div>`;
+      <div class="small muted" style="margin-top:6px">기본 50에서 시작합니다. 62 이상이면 선수 전원 컨디션 +1, 35 이하면 −1이 경기에 반영됩니다(⚠ 가중치·임계값은 게임 설정). 연승·연패, 불만 선수, 주장, 기자회견 답변이 움직입니다.</div></div>`;
   }
   function screenMood() {
     const rp = L.reputation(), bd = L.clubhouseBoard(), cap = L.captain(), fa = v => { v = Math.round((v || 0) * 10) / 10; return (v > 0 ? '+' : '') + v; }, chip = id => { const p = P(id); return `<button class="sm" data-act="player" data-a="${id}">${esc(p.ko)} <span class="muted">${fa(p.loyAdj)}</span></button>`; };
