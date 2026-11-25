@@ -187,7 +187,7 @@
       if (k === 'notice') { u.stage = 'notice'; u.since = d; return `${p.ko}에게 14일 시정 촉구서를 보냈습니다(규약상 계약 해지의 전 단계).`; }
       if (k === 'restrict') { p.unrest = { stage: 'restr', since: d, min: 20, kind: '제한선수', y: S.year }; return `${p.ko}을(를) 제한선수로 지정 요청했습니다(최소 20일, 정지 기간 연봉 1/300 감액).`; }
       if (k === 'suspend') { p.unrest = { stage: 'restr', since: d, min: 30, kind: '자격정지선수', y: S.year }; return `${p.ko}을(를) 자격정지선수로 지정 요청했습니다(최소 30일, 정지 기간 연봉 1/300 감액).`; }
-      if (k === 'release') { this._unrestRelease(p, t, `${p.ko}과(와) 14일 시정 촉구 뒤 계약을 해지했습니다(선수 귀책, 총재 승인)`, false); return `${p.ko}의 계약을 해지했습니다(잔여 연봉 미지급).`; }
+      if (k === 'release') { if (!u.noticed) return `계약 해지는 14일 시정 촉구가 끝난 뒤에만 할 수 있습니다(통일계약서 제24조).`; this._unrestRelease(p, t, `${p.ko}과(와) 14일 시정 촉구 뒤 계약을 해지했습니다(선수 귀책, 총재 승인)`, false); return `${p.ko}의 계약을 해지했습니다(잔여 연봉 미지급).`; }   // 이중 안전장치
       this._unrestRelease(p, t, `${p.ko}과(와) 임의해지로 합의했습니다(1년 복귀 제한)`, true); return `${p.ko}과(와) 임의해지로 합의했습니다(연봉 지급 중단, 1년 복귀 제한).`;
     }
     if (stage === 'return') {

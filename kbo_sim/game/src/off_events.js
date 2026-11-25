@@ -104,6 +104,7 @@
   };
   proto.resolveEvent = function (id, k, auto, opts) {
     const S = this.S, t = S.userTeam, f = S.fin.teams[t], e = ((S.events || {}).list || []).find(x => x.id === id); if (!e || e.status !== 'open') return { ok: false, msg: '처리할 수 없는 소식입니다.' };
+    { const c = (e.choices || []).find(x => x.k === k); if (c && typeof c.req === 'string' && c.req) { if (!auto) return { ok: false, msg: `아직 고를 수 없습니다: ${c.req}` }; k = e.def; } }   // 잠긴 선택지(예: 시정 촉구 전 계약 해지)는 고를 수 없고, 자동 처리는 기본값으로
     let res = '';
     const adj = (p, v) => { p.loyAdj = clamp((p.loyAdj || 0) + v, -15, 15); }, mood = (p, v, days) => { p.mood = { v, until: S.day + days }; this.invalidate(); }, tmood = (v, days) => { S.teamMood = { v, until: S.day + days }; this.invalidate(); }, rr = salt => rngFor(S.seed, S.year, S.day, salt).random();
     if (e.type === 'grievance') {

@@ -393,3 +393,28 @@ tr.me td, table.rec tr.me td:nth-child(2) { background: var(--brand-soft); }
 .smeter.good .sb i { background: var(--pos); } .smeter.bad .sb i { background: var(--neg); } .smeter.warn .sb i { background: var(--warn); }
 .smeter.grow .sb i { background: var(--accent); } .smeter.grow .sb u { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--accent) 45%, transparent) 0 4px, transparent 4px 7px); }
 .smeter em { font-style: normal; margin-left: 2px; } .smeter em.up { color: var(--pos); } .smeter em.dn { color: var(--neg); }
+
+/* ---- 모바일 탐색 단계 줄이기: 화면 탭(grp)은 한 줄 가로 스크롤, 화면 안의 탭 줄은 작은 알약형 토글로(밑줄 탭이 겹겹이 쌓이지 않게) ---- */
+@media (max-width: 860px) {
+  .tabs.grp { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; } .tabs.grp::-webkit-scrollbar { display: none; } .tabs.grp button { flex: none; }
+  .content .tabs:not(.grp) { border-bottom: 0; gap: 6px; padding: 2px 0 6px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .content .tabs:not(.grp)::-webkit-scrollbar { display: none; }
+  .content .tabs:not(.grp) button { flex: none; min-height: 32px; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-size: 13px; }
+  .content .tabs:not(.grp) button[aria-selected=true] { background: var(--brand-soft); border-color: var(--brand); color: var(--fg); }
+  .content .tabs.wrap:not(.grp) { flex-wrap: wrap; }
+}
+/* ---- 데스크톱 표 밀도: 세부 능력 칸이 좁아 한 줄에 하나씩 세로로 쌓이지 않게 ---- */
+td .sub { min-width: 230px; gap: 1px 8px; } td .sub span { white-space: nowrap; }
+
+/* ---- 이벤트 카드: 종류별 색 띠·선수 이니셜 ---- */
+.evcard .ev { --evc: var(--line); border-left: 4px solid var(--evc); padding-left: 10px; border-radius: 6px; }
+.evcard .ev[data-type="unrest"], .evcard .ev[data-type="fanloss"] { --evc: var(--neg); } .evcard .ev[data-type="grow"] { --evc: var(--pos); } .evcard .ev[data-type="arc"] { --evc: #7B5CC4; }
+.evcard .ev[data-type="legend"], .evcard .ev[data-type="retcer"], .evcard .ev[data-type="awards"], .evcard .ev[data-type="allstar"] { --evc: var(--gold); } .evcard .ev[data-type="grievance"], .evcard .ev[data-type="board"] { --evc: var(--warn); }
+.evcard .ev[data-type="sponsor"], .evcard .ev[data-type="promo"], .evcard .ev[data-type="camp"] { --evc: var(--brand); }
+.evcard .evh { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } .evav { width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex: none; background: color-mix(in srgb, var(--evc) 18%, var(--surface)); color: var(--fg); font-weight: 700; font-size: 13px; border: 1px solid var(--evc); }
+.evcard .evbtn button:disabled { opacity: .6; }
+
+/* ---- 커리어 성장 그래프 ---- */
+.gchart { display: block; width: 100%; max-width: 520px; height: auto; margin: 6px 0 2px; } .gchart .gg { stroke: var(--line); stroke-width: 1; } .gchart .gt { fill: var(--muted); font-size: 10px; font-family: var(--font-display); }
+.gchart .gl { fill: none; stroke: var(--brand); stroke-width: 2.5; stroke-linejoin: round; } .gchart .gp { fill: var(--surface); stroke: var(--brand); stroke-width: 2; }
+.gchart .gc { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 5 4; } .gchart .gm { font-size: 10px; } .gchart .gm.up { fill: var(--pos); } .gchart .gm.dn { fill: var(--neg); }
+.gchart .gp.now { fill: var(--brand); }
