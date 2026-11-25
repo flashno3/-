@@ -5621,8 +5621,8 @@ td .sub { min-width: 230px; gap: 1px 8px; } td .sub span { white-space: nowrap; 
     for (const p of Object.values(S.players)) if (p.mil && p.mil.st === 'apply' && p.mil.win === 'spring' && p.team in S.teams) this._milEnlist(p, S.year * 12 + 2, 'sangmu');   // 3월 말 회차 합격자
   };
   /* 오프시즌(12월 입대): AI 구단은 자동, 내 구단은 선수별 결정 이벤트 */
-  const ROSTER_CAP = 42;
-  const WANT = { 22: 0.05, 23: 0.12, 24: 0.22, 25: 0.35, 26: 0.5 };   // AI 구단 미필 선수의 연도별 입대 확률(⚠ 가정), 27세는 100%
+  const ROSTER_CAP = 42, ROSTER_TARGET = 40;   // 상무 인원: 상시 약 38~42명(사용자 제공) — 선발은 40명 기준으로 채운다
+  const WANT = { 22: 0.1, 23: 0.25, 24: 0.35, 25: 0.45, 26: 0.6 };   // AI 구단 미필 선수의 연도별 상무 지원 확률(⚠ 가정, 다년 시뮬레이션에서 미필 적체가 생기지 않게), 27세는 100%
   proto._milOffseason = function () {
     const S = this.S, y = S.year, when = y * 12 + 11;
     for (const t of TEAMS) {
@@ -5654,10 +5654,13 @@ td .sub { min-width: 230px; gap: 1px 8px; } td .sub span { white-space: nowrap; 
     const S = this.S, Y = S.year - 1, all = Object.values(S.players); for (const p of all) if (p.mil && p.mil.st === 'apply' && !(p.team in S.teams && p.mil.y === Y)) p.mil = Object.assign({}, p.mil, { st: 'pending' });   // 구단을 떠났거나 지난 지원서는 미필로
     const apps = all.filter(p => p.mil && p.mil.st === 'apply' && p.mil.y === Y && p.team in S.teams);
     if (!apps.length) return null; const sm = (S.mil || []).map(id => S.players[id]).filter(p => p && p.milKind !== 'army'), out12 = sm.filter(p => p.milReturn <= (Y + 1) * 12 + 11).length;
-    const r = rngFor(S.seed, Y, 4400), to = clamp(Math.min(out12 + Math.floor(r.random() * 5) - 2, ROSTER_CAP - (sm.length - out12)), 0, 40);
+    const r = rngFor(S.seed, Y, 4400), keep = sm.length - out12, to = clamp(Math.min(ROSTER_TARGET - keep + Math.floor(r.random() * 5) - 2, ROSTER_CAP - keep), 0, 40);   // 남는 인원을 40명 기준으로 채움 ±2(18개월 복무라 연 약 24~28명)
     const rank = apps.slice().sort((a, b) => (this.war(b) - this.war(a)) || (this.ovr(b) - this.ovr(a))), win = rank.slice(0, to), lose = rank.slice(to), half = Math.ceil(win.length / 2);
     win.forEach((p, i) => { if (i < half) this._milEnlist(p, Y * 12 + 11, 'sangmu'); else { p.mil = Object.assign({}, p.mil, { win: 'spring' }); this._milEnlist(p, S.year * 12 + 2, 'sangmu'); } });
-    for (const p of lose) { if (p.mil.last) this._milEnlist(p, Y * 12 + 11, 'army'); else p.mil = Object.assign({}, p.mil, { st: 'pending', tried: (p.mil.tried || 0) + 1 }); }
+    const med = {}; for (const t of TEAMS) { const o = this.players(t).filter(q => !q.foreign).map(q => this.ovr(q)).sort((a, b) => a - b); med[t] = o.length ? o[Math.floor(o.length / 2)] : 40; }
+    for (const p of lose) { if (p.mil.last) this._milEnlist(p, Y * 12 + 11, 'army');
+      else if (p.team !== S.userTeam && this.ovr(p) < med[p.team] && r.random() < 0.5) this._milEnlist(p, Y * 12 + 11, 'army');   // AI: 팀 중간 이하 탈락자는 절반이 현역으로(⚠ 가정)
+      else p.mil = Object.assign({}, p.mil, { st: 'pending', tried: (p.mil.tried || 0) + 1 }); }
     const mine = rank.filter(p => p.milTeam === S.userTeam || p.team === S.userTeam);
     S.milSel = { y: Y, to, out: out12, apps: apps.length, win: win.length, cap: ROSTER_CAP };
     this._lnews(`상무 야구단 선발: 지원 ${apps.length}명 중 ${win.length}명 합격(연간 선발 인원 ${to}명 · 전역 예정 ${out12}명)`);
