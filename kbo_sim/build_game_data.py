@@ -547,6 +547,7 @@ def load_military(players):
             else: p,why=find(n,t,typ,hint)
             if not p: (rep['miss'] if why=='없음' else rep['amb']).append('%s:%s(%s) %s'%(t,n,k,why)); continue
             if p.get('mil'): rep['conflict'].append('%s:%s 중복 지정(%s→%s)'%(t,n,p['mil']['st'],k)); continue
+            if p['team']=='MIL' and k=='serving' and en and p.get('milFrom') and p['milFrom'].replace('.','-')!=en: rep['conflict'].append('%s:%s 입대 연월 목록 %s, 게임 데이터 %s'%(t,n,en,p.get('milFrom')))
             if p['team']=='MIL' and k!='serving':
                 rep['conflict'].append('%s:%s 목록 %s, 게임 데이터는 상무 복무 중(%s 입대) → 복무 유지'%(t,n,k,p.get('milFrom'))); p['mil']={'st':'serving','enlist':None,'src':'data','after':'done'}; continue
             p['mil']={'st':k,'enlist':en,'src':'list'}; rep['ok']+=1

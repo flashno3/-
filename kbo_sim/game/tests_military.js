@@ -31,4 +31,11 @@ const byKo = (S, ko, t) => Object.values(S.players).filter(p => p.ko === ko && (
   L._milOffseason(); ok(old.team === 'MIL' && old.milKind === 'army', 'AI: 나이 상한 넘은 미필은 현역 입대'); ok(!L.integrity().errors.length, '정합성 유지'); }
 // 5) 신인은 미필로 시작
 { const L = League.create(base, 'Eagles', 7); const LG = require(__dirname + '/src/league.js'); const r = LG.OFFC.rngFor(1, 2, 3); const rk = L.makeRookie(r, 'B'); ok(rk.mil && rk.mil.st === 'pending', '신인 미필'); }
+// 6) 현역 복귀 감각 저하 · AI 27세 100% 입대 · 목록 확인분(상충 해소)
+{ const L = League.create(base, 'Eagles', 8), S = L.S; L.faAdvance(75); L.closeFA();
+  for (const [ko, t, fr] of [['박명근', 'Twins', '2026.04'], ['여동건', 'Bears', '2025.12'], ['황동재', 'Lions', '2025.12']]) { const q = byKo(S, ko, t)[0]; ok(q.team === 'MIL' && q.milFrom === fr && q.mil.st === 'serving', `${ko} 상무 복무(${fr})`); }
+  ok(byKo(S, '김휘집', 'Dinos')[0].mil.st === 'pending', '김휘집 미필');
+  const U = S.userTeam, p = L.players(U).find(q => !q.foreign && q.mil.st === 'pending'); p.age = 28; L._milEnlist(p, S.year * 12 + 11, 'army'); const o0 = L.ovr(p); L.returnMilitary(2040 * 12); ok(p.team === U && p.mil.st === 'done' && L.ovr(p) < o0, '현역 복귀: 능력 감소 ' + o0 + '→' + L.ovr(p));
+  const ai = Object.keys(S.teams).find(t => t !== U), cs = L.players(ai).filter(x => !x.foreign && !L.isInj(x)).slice(0, 3); for (const c of cs) { c.mil = { st: 'pending', src: 'test' }; c.age = 27; } L._milOffseason(); ok(cs.every(c => c.team === 'MIL'), 'AI: 27세 미필은 반드시 입대');
+}
 console.log('military tests ok', n);

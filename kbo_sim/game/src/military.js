@@ -1,6 +1,7 @@
 /* 병역: 실존 선수의 병역 상태(사용자 제공 2026년 11월 말 기준 목록, 빌드 때 p.mil로 매칭) + 게임 안의 입대·전역 순환.
  *  규약 근거: 제24조 ②(군 입대 선수는 선수 정원에서 제외, 군보류 기간 = 입대일~전역일), 제62조 ④(군보류수당 = 연봉의 25%, 최대 1,200만원, 10개월 지급).
- *  ⚠ 게임 설정(규약에 없는 것): 상무 지원 상한 만 27세(사용자 제공 자료 기준, 원문 미확인)·상무 합격 확률·AI 구단의 입대 시점 판단·현역 복무 중 성장 정체.
+ *  상무 지원 만 19~27세(지원서 접수 연도 기준, 현역병 모집업무 규정)·입영 연기 상한 만 28세(병역법) — 사용자 제공 근거(law.go.kr·easylaw.go.kr·mma.go.kr 링크).
+ *  ⚠ 게임 설정: 상무 합격 확률·AI 구단의 입대 시점 판단(27세는 100%)·현역 복무 중 성장 정체·현역 복귀 감각 저하.
  *  상태: done(필)·ag(AG 금메달 예술체육요원, 필로 취급)·serving(복무 중)·pending(미필)·sangmu27(2027 상무 1차 합격, 2027년 6월 입대 ⚠)·unknown(목록에 없는 실존 선수 — 입대 대상에서 제외).
  *  게임 중 새로 들어오는 국내 신인은 미필(pending)로 시작. 외국인은 대상 아님. 복무 기간 18개월(기존 상무 처리와 같음). */
 (function (root, factory) {
@@ -31,7 +32,8 @@
     }
     S.milInit = { moved, at: '2026년 11월 말 목록' };
   };
-  proto._milReturned = function (p) { p.mil = Object.assign({}, p.mil || {}, { st: 'done', src: (p.mil && p.mil.src) || 'game', back: this.S.year }); delete p.milKind; };
+  const ARMY_RUST = -0.1;   // 현역 복귀 감각 저하(일회성, 능력 이동량 −0.1 ≈ OVR −1.4, ⚠ 가정: 18개월 실전 공백)
+  proto._milReturned = function (p) { const army = p.milKind === 'army', o0 = this.ovr(p); if (army) { p.p = this._shifted(p, ARMY_RUST); (p.devLog = p.devLog || []).push({ y: this.S.year, v: 0, why: `현역 복귀 감각 저하(OVR ${o0}→${this.ovr(p)})` }); this.invalidate(); } p.mil = Object.assign({}, p.mil || {}, { st: 'done', src: (p.mil && p.mil.src) || 'game', back: this.S.year }); delete p.milKind; };
   /* 매일: 2027 상무 1차 합격자 6월 입대(⚠ 시기 가정) */
   proto._milDay = function () {
     const S = this.S; if (S.phase !== 'regular' || S.year !== 2027) return; const d = this.dateOf(S.day); if (d.getUTCMonth() < 5) return;
@@ -39,7 +41,7 @@
   };
   /* 오프시즌(12월 입대): AI 구단은 자동, 내 구단은 선수별 결정 이벤트 */
   const SEL = ov => clamp(0.3 + (ov - 35) * 0.02, 0.15, 0.85);   // 상무 합격 확률(⚠ 가정: 능력이 높을수록 유리)
-  const WANT = { 22: 0.05, 23: 0.12, 24: 0.22, 25: 0.35, 26: 0.5, 27: 0.75 };   // AI 구단 미필 선수의 연도별 입대 확률(⚠ 가정)
+  const WANT = { 22: 0.05, 23: 0.12, 24: 0.22, 25: 0.35, 26: 0.5 };   // AI 구단 미필 선수의 연도별 입대 확률(⚠ 가정), 27세는 100%
   proto._milOffseason = function () {
     const S = this.S, y = S.year, when = y * 12 + 11;
     for (const t of TEAMS) {
@@ -47,16 +49,16 @@
       for (const p of this.players(t)) {
         const m = p.mil; if (p.foreign || !m || m.st !== 'pending') continue; const age = p.age, ov = this.ovr(p), r = rngFor(S.seed, y, 4300, parseInt(String(p.id).slice(1)) || 0);
         if (t === S.userTeam) { if (age >= 24) this._milEvent(p, age > SANGMU_MAX_AGE); continue; }
-        const deadline = age > SANGMU_MAX_AGE, pr = deadline ? 1 : (WANT[clamp(age, 22, 27)] || 0) * (core.has(p.id) ? 0.5 : 1); if (age < 22 || r.random() >= pr) continue;
+        const deadline = age > SANGMU_MAX_AGE, pr = age >= SANGMU_MAX_AGE ? 1 : (WANT[clamp(age, 22, 26)] || 0) * (core.has(p.id) ? 0.5 : 1); if (age < 22 || r.random() >= pr) continue;   // 만 27세 오프시즌에는 반드시(상무 지원 마지막 해)
         const kind = !deadline && r.random() < SEL(ov) ? 'sangmu' : 'army'; this._milEnlist(p, when, kind);
       }
     }
   };
   proto._milEvent = function (p, deadline) {
     const sel = Math.round(SEL(this.ovr(p)) * 100), when = this.S.year * 12 + 11;
-    return this._evAdd({ type: 'military', ttl: 9999, def: deadline ? 'army' : 'wait', rec: deadline ? 'army' : p.age >= 26 ? 'sangmu' : 'wait', data: { pid: p.id, when }, title: `${p.ko} 병역 계획`, text: `${p.ko}(${p.age}세, OVR ${this.ovr(p)})은 병역 미필입니다. ${deadline ? `상무 지원 나이(만 ${SANGMU_MAX_AGE}세 이하, ⚠ 자료 기준)를 넘겨 더 미룰 수 없습니다.` : '입대 시기를 정해야 합니다. 상무는 퓨처스리그에서 계속 뛰지만, 현역은 18개월 동안 야구를 거의 하지 못합니다.'} 복무 중에는 선수 정원에서 빠지고 구단이 군보류수당(연봉의 25%, 최대 0.12억)을 냅니다.`, choices: [
+    return this._evAdd({ type: 'military', ttl: 9999, def: deadline ? 'army' : 'wait', rec: deadline ? 'army' : p.age >= 26 ? 'sangmu' : 'wait', data: { pid: p.id, when }, title: `${p.ko} 병역 계획`, text: `${p.ko}(${p.age}세, OVR ${this.ovr(p)})은 병역 미필입니다. ${deadline ? `상무 지원 나이(만 ${SANGMU_MAX_AGE}세 이하, 현역병 모집업무 규정)를 넘겨 더 미룰 수 없습니다.` : '입대 시기를 정해야 합니다. 상무는 퓨처스리그에서 계속 뛰지만, 현역은 18개월 동안 야구를 거의 하지 못합니다.'} 복무 중에는 선수 정원에서 빠지고 구단이 군보류수당(연봉의 25%, 최대 0.12억)을 냅니다.`, choices: [
       { k: 'sangmu', label: '상무 지원(12월 입대)', req: deadline ? `만 ${SANGMU_MAX_AGE}세 초과` : null, hint: `합격 확률 약 ${sel}%(능력 기준 ⚠) · 18개월 퓨처스 출전(성장 유지) · 떨어지면 올해는 그대로` },
-      { k: 'army', label: '현역 입대(12월)', hint: '18개월 · 실전 공백으로 성장 정체(⚠ 출전 비중 10%로 계산)' },
+      { k: 'army', label: '현역 입대(12월)', hint: '18개월 · 실전 공백으로 성장 정체(⚠ 출전 비중 10%) · 복귀 때 감각 저하(OVR 약 −1.4)' },
       { k: 'wait', label: '내년으로 미룬다', req: deadline ? '더 미룰 수 없음' : null, hint: '올해는 팀에 남는다 · 나이가 찰수록 선택지가 줄어든다' }] });
   };
   proto._milResolve = function (e, k) {
