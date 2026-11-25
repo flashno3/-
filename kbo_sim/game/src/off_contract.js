@@ -159,6 +159,7 @@
       if (keep && over && !elig && !p.foreign) ask = p.contract.salary;   // 상한 때문에 증액할 수 없으면 현 연봉으로 재계약
       if (keep && (!over || (!elig && !p.foreign))) { p.contract = this._newContract(p, ask, 1); p.salHist = (p.salHist || []).slice(-2).concat([ask]); } else { this.release(t, id, true); }
     }
+    if (this._unrestVolDue) this._unrestVolDue();   // 임의해지 1년 경과 선수 → 자유계약선수
     S.phase = 'offseason'; S.off = { step: 'review', rep, year: S.year + 1, draft: null, fa: S.fa || [] };
     this.repairSettings(user); this.invalidate();
     return S.off;

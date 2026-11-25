@@ -248,6 +248,8 @@
     const S = this.S, errors = [], warns = [], E = (code, text, ids) => errors.push({ code, text, ids: ids || [] }), W = (code, text, ids) => warns.push({ code, text, ids: ids || [] });
     const all = Object.values(S.players).filter(p => p && !p.retired && p.team !== 'RET' && p.team !== 'DRAFT'), teamOf = {};
     for (const t of Object.keys(S.teams)) for (const id of S.teams[t].ids) { if (teamOf[id]) E('two-teams', `${S.players[id] ? S.players[id].ko : id}이(가) ${teamOf[id]}와 ${t} 두 팀에 있습니다.`, [id]); teamOf[id] = t; if (!S.players[id]) E('missing', `${t} 명단의 ${id}에 해당하는 선수가 없습니다.`, [id]); else if (S.players[id].team !== t) E('team-mismatch', `${S.players[id].ko}의 소속(${S.players[id].team})과 ${t} 명단이 다릅니다.`, [id]); }
+    for (const p of all) if (p.team === 'VOL' && !(p.volRet && (S.vol || []).includes(p.id))) E('vol-status', `${p.ko}의 임의해지 신분 기록이 올바르지 않습니다.`, [p.id]);   // 임의해지선수: 목록·복귀 연도가 있어야 한다
+    for (const id of S.vol || []) if (S.players[id] && S.players[id].team !== 'VOL' && !S.players[id].retired) E('vol-status', `${S.players[id].ko}이(가) 임의해지 목록에 있지만 소속은 ${S.players[id].team}입니다.`, [id]);
     for (const id of S.fa || []) if (S.players[id] && S.players[id].team !== 'FA') E('fa-mismatch', `${S.players[id].ko}이(가) FA 목록에 있지만 소속은 ${S.players[id].team}입니다.`, [id]);
     for (const p of all) {   // 부상 대체 외국인 일관성
       if (p.sub) { const o = S.players[p.sub.for]; if (p.team !== S.userTeam || !p.foreign || p.aq) E('sub-team', `${p.ko}의 대체 계약 상태가 올바르지 않습니다.`, [p.id]); else if (!o || o.team !== p.team || !o.rehab || o.rehab.sub !== p.id) E('sub-link', `${p.ko}와(과) 재활 선수명단 선수의 연결이 끊어져 있습니다.`, [p.id]); }

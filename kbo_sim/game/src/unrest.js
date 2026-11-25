@@ -1,8 +1,8 @@
 /* 선수 불만 에스컬레이션(내 구단 + AI 구단): 불만 게이지가 쌓이면 면담 요구 → 이적 요청 → (거부 시) 태업 → 무단이탈 → 구단 대응(제한선수·자격정지·시정 촉구 후 계약 해지·임의해지).
  * 규정 근거(원문 확인): KBO 규약 제31조 임의해지선수(연봉 지급 중단·복귀 1년 제한)·제32조 출장정지선수·제33조 제한선수(개인 사유 참가활동 중지)·제34조 자격정지선수(계약·규약 위반)·
  *   제36조 규제선수 특례(규제 기간 일수 × 연봉 1/300 감액)·제47조·통일계약서 제24조 계약 해지(14일 이상 시정 촉구, 총재 승인, 선수 귀책 해지는 잔여 연봉 미지급)·통일계약서 제21조 트레이드 거부.
- * 규정에 없는 것(⚠ 게임 설정): 불만 게이지·단계 임계값·태업(컨디션 −3)·무단이탈 판정(연속 불참)·제한/자격정지 최소 기간(20·30일)·복귀 허가 기준·AI 구단의 판단 확률.
- * 단계: grumble(40+, 표시만) · meeting(60+) · request(75+) · refused(거부 후) · slack(태업) · awol(무단이탈) · notice(시정 촉구 14일) · restr(제한/자격정지). 외국인·올해 신인·상무·FA 선수는 제외. */
+ * 규정에 없는 것(⚠ 게임 설정): 불만 게이지·단계 임계값·태업(컨디션 −3)·무단이탈 판정(태업 20일 이상·불만 76 이상·일 3%)·제한/자격정지 최소 기간(20·30일)·복귀 허가 기준·AI 구단의 판단 확률.
+ * 단계: grumble(40+, 표시만) · meeting(50+) · request(62+, 면담 요구를 한 번 거친 뒤) · refused(거부 후) · slack(태업) · awol(무단이탈) · notice(시정 촉구 14일) · restr(제한/자격정지). 외국인·올해 신인·상무·FA 선수는 제외. */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) factory(require('./league.js'), require('../../web/src/engine.js'));
   else factory(root.KBOLeague, root.KBOEngine);
@@ -66,15 +66,15 @@
       if (p.grv < 55) { this._unrestLog(p, t, `${p.ko}이(가) 마음을 가다듬고 태업을 그쳤습니다`, 2); this._unrestCool(p, d, 60); return; }
       if (age >= 20 && p.grv >= 76 && rrp(this, p, 5, d) < 0.03) this._unrestAwol(p, t, d);
     } else if (u.stage === 'notice') {
-      if (user) this._unrestPay(p, t); if (age >= 14) this._unrestNoticeEnd(p, t, d);
-    } else if (u.stage === 'awol') { if (user) this._unrestPay(p, t); if (!user && age >= 5) this._unrestAI(p, t, d, 'awol2'); }
-    else if (u.stage === 'restr') { if (user) this._unrestPay(p, t); if (age >= u.min) { if (user) { if (!u.asked) { u.asked = true; this._unrestEvent(p, t, 'return'); } } else this._unrestAI(p, t, d, 'return'); } }
+      this._unrestPay(p, t); if (age >= 14) this._unrestNoticeEnd(p, t, d);
+    } else if (u.stage === 'awol') { this._unrestPay(p, t); if (!user && age >= 5) this._unrestAI(p, t, d, 'awol2'); }
+    else if (u.stage === 'restr') { this._unrestPay(p, t); if (age >= u.min) { if (user) { if (!u.asked) { u.asked = true; this._unrestEvent(p, t, 'return'); } } else this._unrestAI(p, t, d, 'return'); } }
     else if (u.stage === 'meeting' || u.stage === 'request') {   // 내 구단: 이벤트를 방치하면 기본 선택으로 처리(이벤트 만료 시 resolveEvent가 호출). AI: 즉시 처리됨
       if (user && age > 12 && !this.eventsOpen().some(e => e.type === 'unrest' && e.data.pid === p.id)) { this._unrestEnter2(p, t, d, u.stage === 'meeting' ? 'ignore' : 'refuse'); }
     }
   };
   proto._unrestEnter2 = function (p, t, d, k) { const msg = this._unrestApply(p, t, k, p.unrest ? p.unrest.stage : 'meeting'); return msg; };
-  proto._unrestPay = function (p, t) { const f = this.S.fin && this.S.fin.teams[t]; if (f && p.contract) f.evRev = r1((f.evRev || 0) + p.contract.salary / 300); };   // 규제·이탈 기간 일수 × 연봉 1/300 감액(제36조·통일계약서 제27조)
+  proto._unrestPay = function (p, t) { const f = this.S.fin && this.S.fin.teams[t]; if (f && p.contract) f.payCut = Math.round(((f.payCut || 0) + p.contract.salary / 300) * 1000) / 1000; };   // 규제·이탈 기간 일수 × 연봉 1/300 감액(제36조·통일계약서 제27조)
   proto._unrestAwol = function (p, t, d) {
     const S = this.S, user = t === S.userTeam; p.unrest = { stage: 'awol', since: d, y: S.year };
     p.active = false; p.inj = { dx: '무단이탈', since: `${S.year} 발생`, ret: '2099-12-31', retN: 1e9, basis: '선수 불만 에스컬레이션', apply: true, generated: false, unrest: true };
@@ -87,8 +87,12 @@
     this._unrestLog(p, t, `${p.ko}이(가) ${how}로 팀에 복귀했습니다`, 2);
   };
   proto._unrestRelease = function (p, t, text, voluntary) {
-    const S = this.S, d = S.day; this._unrestLog(p, t, text, 3); delete p.inj; delete p.unrest; delete p.grv; p.active = false; if (voluntary) p.volRet = { team: t, y: S.year + 1 };
-    this.release(t, p.id); if (t === S.userTeam) this.repairSettings(t); else this.refreshTeam(t); this.invalidate();
+    const S = this.S, d = S.day; this._unrestLog(p, t, text, 3); delete p.inj; delete p.unrest; delete p.grv; p.active = false;
+    if (voluntary) {   // 임의해지(제31조): 자유계약선수가 아니다. 공시일부터 1년이 지나야 복귀 신청 가능(제66조 ①), 그 전에는 어느 구단과도 계약할 수 없다
+      this.removeFromTeam(t, p.id); if (p.sub) delete p.sub; if (p.rehab) delete p.rehab; p.team = 'VOL'; p.lockUntil = 0; p.volRet = { team: t, y: S.year + 1, d, prev: p.contract ? p.contract.salary : 0 }; p.contract = { salary: 0, years: 0 };
+      (S.vol = S.vol || []).includes(p.id) || S.vol.push(p.id);
+    } else this.release(t, p.id);
+    if (t === S.userTeam) this.repairSettings(t); else this.refreshTeam(t); this.invalidate();
   };
   proto._unrestNoticeEnd = function (p, t, d) {   // 14일 시정 촉구 종료: 복귀하지 않으면 계약 해지가 가능해진다
     const user = t === this.S.userTeam, back = (p.grv || 0) <= 72 && rrp(this, p, 7, d) < 0.6;
@@ -122,8 +126,10 @@
   proto._unrestAITrade = function (p, A, d) {   // 같은 유형·가치 ±20%(불만 선수는 10% 할인)의 맞교환
     const S = this.S, mv = this.marketValue(p) * 0.9, r = rngFor(S.seed, S.year, d, 8999 + (parseInt(String(p.id).slice(1)) || 0) % 977);
     const teams = TEAMS.filter(x => x !== A && x !== S.userTeam).sort(() => r.random() - 0.5);
-    for (const B of teams) { const cand = this.players(B).filter(q => this._aiTradeOk(q) && q.type === p.type && (p.type === 'P' ? (p.role === 'SP') === (q.role === 'SP') : (p.pos === 'C') === (q.pos === 'C')) && !this._aiCore(B).has(q.id) && this.marketValue(q) / mv >= 0.8 && this.marketValue(q) / mv <= 1.2).sort((a, b) => Math.abs(this.marketValue(a) / mv - 1) - Math.abs(this.marketValue(b) / mv - 1))[0];
-      if (cand && this._aiTradeOk(p)) { delete p.unrest; p.grv = 20; const rec = this._aiSwap(A, B, p, cand, `${p.ko}의 이적 요청을 받아들였습니다`); if (rec) rec.unrest = true; p.unrestCool = d + 90; return true; } }
+    for (const B of teams) { const coreB = this._aiCore(B), cand = this.players(B).filter(q => this._aiTradeOk(q) && q.type === p.type && (p.type === 'P' ? (p.role === 'SP') === (q.role === 'SP') : (p.pos === 'C') === (q.pos === 'C')) && !coreB.has(q.id) && this.marketValue(q) / mv >= 0.8 && this.marketValue(q) / mv <= 1.2).sort((a, b) => Math.abs(this.marketValue(a) / mv - 1) - Math.abs(this.marketValue(b) / mv - 1))[0];
+      if (cand && this._aiTradeOk(p)) { const kk = (S.calib && S.calib.cbtK) || 1, sa = p.rookie === S.year ? 0 : p.contract.salary, sb = cand.rookie === S.year ? 0 : cand.contract.salary, payA = this.cbtPay(A) + kk * (sb - sa), payB = this.cbtPay(B) + kk * (sa - sb);
+        if ((payA > this.cbtCap() && payA > this.cbtPay(A)) || (payB > this.cbtCap() && payB > this.cbtPay(B))) continue;   // 상한을 넘기는 방향의 교환은 하지 않는다
+        delete p.unrest; p.grv = 20; const rec = this._aiSwap(A, B, p, cand, `${p.ko}의 이적 요청을 받아들였습니다`); if (rec) rec.unrest = true; p.unrestCool = d + 90; return true; } }
     return false;
   };
   /* ---- 내 구단: 이벤트 ---- */
@@ -149,7 +155,7 @@
       { k: 'restrict', label: '제한선수 지정 요청(제33조)', hint: '개인 사유로 참가활동 중지 · 최소 20일 정지 후 복귀 판단 · 정지 기간 연봉 1/300 감액' },
       { k: 'suspend', label: '자격정지선수 지정 요청(제34조)', hint: '계약 위반 · 최소 30일 정지 후 복귀 판단 · 정지 기간 연봉 1/300 감액' },
       { k: 'release', label: '계약 해지(제47조·통일계약서 제24조)', req: noticed ? null : '먼저 14일 시정 촉구가 필요', hint: '총재 승인 · 선수 귀책이라 잔여 연봉 지급 없음 · 선수는 자유계약선수가 됨' },
-      { k: 'voluntary', label: '임의해지 협의(제31조)', hint: '연봉 지급 중단 · 1년 복귀 제한 · 원소속 구단과만 복귀 가능' }] })); }
+      { k: 'voluntary', label: '임의해지 협의(제31조)', hint: '연봉 지급 중단 · 자유계약선수가 아님 · 공시 1년 뒤에야 복귀 신청 가능(그동안 어느 구단과도 계약 불가)' }] })); }
     if (stage === 'return') return this._evAdd(Object.assign(E, { title: `${p.ko} 복귀 신청`, ttl: 8, def: 'extend', rec: (p.grv || 0) <= 50 ? 'allow' : 'extend', text: `${p.ko}의 ${p.unrest.kind} 최소 기간이 지났습니다. 복귀를 신청했습니다(불만 ${v}/100).`, choices: [
       { k: 'allow', label: '복귀 허가', hint: '불만 −30 · 1군 복귀는 2군 조정 뒤' }, { k: 'extend', label: '정지 14일 연장', hint: '연봉 감액 계속 · 불만 +3' },
       { k: 'release', label: '계약 해지', hint: '선수 귀책 해지(총재 승인)' }] }));
@@ -198,6 +204,13 @@
   /* ---- 화면용 ---- */
   proto.unrestInfo = function (t) {
     t = t || this.S.userTeam; return this._unrestPlayers(t).filter(p => (p.grv || 0) >= 30 || p.unrest).map(p => ({ id: p.id, ko: p.ko, v: Math.round(p.grv || 0), stage: p.unrest ? p.unrest.stage : (p.grv >= TH.grumble ? 'grumble' : ''), kind: p.unrest && p.unrest.kind || '', cause: cause(this, p, t) })).sort((a, b) => b.v - a.v);
+  };
+  /* 임의해지 선수의 복귀: 공시 연도 다음 시즌이 끝난 오프시즌(1년 경과)에 자유계약선수로 시장에 나온다. ⚠ 복귀 신청·총재 허가 절차(제65·66조)는 자동 승인으로 단순화 */
+  proto._unrestVolDue = function () {
+    const S = this.S; if (!S.vol || !S.vol.length) return;
+    for (const id of S.vol.slice()) { const p = S.players[id]; if (!p || p.team !== 'VOL' || p.retired) { S.vol = S.vol.filter(x => x !== id); continue; } if (S.year < p.volRet.y) continue;
+      p.team = 'FA'; p.active = false; p.faInfo = { from: p.volRet.team, grade: null, prev: p.volRet.prev || 0 }; p.contract = { salary: this.askSalary(p), years: 1 }; (S.fa = S.fa || []).includes(id) || S.fa.push(id); S.vol = S.vol.filter(x => x !== id);
+      this._lnews(`${p.ko}: 임의해지 1년이 지나 복귀를 신청, 자유계약선수로 시장에 나왔습니다(전 소속 ${KO0[p.volRet.team] || p.volRet.team})`); }
   };
   proto._unrestRollover = function () { for (const p of Object.values(this.S.players)) { if (p.unrest) { if (p.unrest.stage === 'meeting') delete p.unrest; else p.unrest.since = 0; } delete p.unrestCool; if (p.grv) p.grv = r1(p.grv * 0.5); if (!p.grv) delete p.grv; } };   // 시즌이 바뀌면 불만의 절반이 가라앉는다
 });
