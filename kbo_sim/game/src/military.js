@@ -13,7 +13,7 @@
   const { proto, rngFor, clamp, TEAMS, KO0, news } = LG.OFFC;
   const SVC = 18, SANGMU_MAX_AGE = 27, ST_KO = { done: '병역 필', ag: '병역 필(AG 금메달)', serving: '복무 중', pending: '미필', sangmu27: '미필(2027 상무 합격)', apply: '미필(상무 지원 중)', unknown: '병역 정보 없음' };
   const ym = s => { const [y, m] = String(s).split(/[-.]/).map(Number); return y * 12 + (m - 1); };
-  proto.milStatus = function (p) { if (!p || p.foreign) return null; const m = p.mil || { st: p.team === 'MIL' ? 'serving' : 'unknown' }; return Object.assign({ label: ST_KO[m.st] || m.st }, m); };
+  proto.milStatus = function (p) { if (!p || p.foreign) return null; const m = p.mil || { st: p.team === 'MIL' ? 'serving' : 'unknown' }; return Object.assign({ label: m.st === 'ag' && m.how ? `병역 필(${m.how} 특례)` : ST_KO[m.st] || m.st }, m); };
   proto._milEnlist = function (p, ymFrom, kind, why) {   // 입대: 로스터에서 빼서 상무/현역 복무 명단으로
     const S = this.S, t = p.team; if (!(t in S.teams)) return false; this.removeFromTeam(t, p.id); if (p.sub) delete p.sub; if (p.rehab) delete p.rehab;
     p.team = 'MIL'; p.milTeam = t; p.milFrom = `${Math.floor(ymFrom / 12)}.${String(ymFrom % 12 + 1).padStart(2, '0')}`; p.milReturn = ymFrom + SVC; p.milKind = kind; p.active = false; p.lockUntil = 0;

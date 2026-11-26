@@ -467,7 +467,10 @@ def load_drafthist(players):
             return y-(21 if any(TWO.search(t) for t in r['_toks']) else 23) if univ else y-19
         cur=2027-p['age']
         tol=2 if p.get('birth') else 5
+        c0=[r for r in c if int(r['연도'])<=2027 and id(r) not in claimed]
         c=[r for r in c if abs(birth(r)-cur)<=tol and int(r['연도'])<=2027]
+        if not c and p.get('ageEst') and team and len(c0)==1:   # 나이가 추정값(기본 24세)이라 ±5세 안에 없는 베테랑(예: 2026년 퓨처스에만 나온 박종훈·한현희): 같은 구단 이력·포지션군 후보가 단 1명일 때만 나이 조건 없이 연결
+            c=c0;st.setdefault('wide',[]).append((p['ko'],p['team'],c0[0]['연도']))
         c2=[r for r in c if id(r) not in claimed]
         if c2: c=c2   # 먼저 배정된 지명 행은 후보에서 뺀다(남은 후보가 있을 때)
         if len(c)>1:
@@ -551,6 +554,14 @@ def load_military(players):
             if p['team']=='MIL' and k!='serving':
                 rep['conflict'].append('%s:%s 목록 %s, 게임 데이터는 상무 복무 중(%s 입대) → 복무 유지'%(t,n,k,p.get('milFrom'))); p['mil']={'st':'serving','enlist':None,'src':'data','after':'done'}; continue
             p['mil']={'st':k,'enlist':en,'src':'list'}; rep['ok']+=1
+    # 검색으로 확인한 목록 정정(game/data/military_fix_2026.csv): 목록 상태가 일치할 때만 바꾼다(목록이 바뀌었으면 정정을 적용하지 않고 보고)
+    import csv
+    TMF={'한화':'Eagles','LG':'Twins','SSG':'Landers','두산':'Bears','키움':'Heroes','KT':'Wiz','NC':'Dinos','롯데':'Giants','삼성':'Lions','KIA':'Tigers'}
+    ff=D+'game/data/military_fix_2026.csv'; rep['fix']=[]
+    for r in (csv.DictReader(open(ff,encoding='utf-8-sig')) if os.path.exists(ff) else []):
+        t=TMF[r['팀']]; c=[q for q in by.get(r['선수명'],[]) if (q['team']==t or q.get('milTeam')==t) and q.get('mil',{}).get('src')=='list']
+        if len(c)!=1 or c[0]['mil']['st']!=r['목록상태']: rep['conflict'].append('정정 미적용 %s:%s(후보 %d명)'%(t,r['선수명'],len(c))); continue
+        c[0]['mil']={'st':r['정정상태'],'enlist':None,'src':'fix','was':r['목록상태'],'why':r['근거']}; rep['fix'].append(r['선수명'])
     return rep
 MILREP=load_military(players)
 
@@ -755,11 +766,11 @@ print('FA 계약 반영',FAC['ok'],'| 시장 진출',FAC['fa'],'| 매칭 실패'
 
 print('개명 병합(이전이름→현재이름·팀)',len(RENAMED),RENAMED)
 print('드래프트 이력 중복 방지 제외',DHS['dup'])
-print('드래프트 이력 매칭',DHS['ok'],'| 모호',DHS['amb'],'| 미매칭',DHS['miss'],'| 나이 재추정',sum(1 for p in players if p.get('ageEstDraft')))
+print('드래프트 이력 매칭',DHS['ok'],'| 나이 추정 선수 넓은 매칭',DHS.get('wide'),'| 모호',DHS['amb'],'| 미매칭',DHS['miss'],'| 나이 재추정',sum(1 for p in players if p.get('ageEstDraft')))
 
 print('영구결번 WAR 참고(구단별)',WREF['players'],'명 매칭',WREF['ok'],'행 | 모호',WREF['miss'])
-print('병역 상태 매칭',MILREP['ok'],'명 | 게임 데이터에 없음',len(MILREP['miss']),'| 모호',len(MILREP['amb']),'| 상충',len(MILREP['conflict']))
-open(D+'game/refdata/military_match_report.txt','w',encoding='utf8').write('병역 목록 매칭 보고(빌드 시 생성)\n\n[게임 데이터에 없음]\n'+'\n'.join(MILREP['miss'])+'\n\n[모호해서 반영하지 않음]\n'+'\n'.join(MILREP['amb'])+'\n\n[상충]\n'+'\n'.join(MILREP['conflict'])+'\n')
+print('병역 상태 매칭',MILREP['ok'],'명 | 게임 데이터에 없음',len(MILREP['miss']),'| 모호',len(MILREP['amb']),'| 상충',len(MILREP['conflict']),'| 검색 정정',MILREP.get('fix'))
+open(D+'game/refdata/military_match_report.txt','w',encoding='utf8').write('병역 목록 매칭 보고(빌드 시 생성)\n\n[게임 데이터에 없음]\n'+'\n'.join(MILREP['miss'])+'\n\n[모호해서 반영하지 않음]\n'+'\n'.join(MILREP['amb'])+'\n\n[상충]\n'+'\n'.join(MILREP['conflict'])+'\n\n[검색 정정 적용(military_fix_2026.csv)]\n'+'\n'.join(MILREP.get('fix',[]))+'\n')
 print('FA 이력 반영',FAH['ok'],'행 | 미매칭(은퇴·자료 없음)',FAH['miss'])
 
 print('2027 외국인 확정 계약',len(FOREIGN27),'건')

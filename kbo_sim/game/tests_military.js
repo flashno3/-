@@ -45,4 +45,9 @@ const byKo = (S, ko, t) => Object.values(S.players).filter(p => p.ko === ko && (
   ok(losers.every(x => (x.mil.last ? x.team === 'MIL' && x.milKind === 'army' : x.mil.st === 'pending')), '탈락: 마지막 해는 현역, 아니면 미필로');
   ok(winners.every(x => x.milFrom === `${S.year}.12` || x.milFrom === `${S.year + 1}.03`), '합격자 12월·3월 말 회차');
 }
+// 6) 검색 정정(military_fix_2026.csv): 목록에서 미필로 잘못 들어간 군필 5명, 나이 추정이 틀렸던 베테랑(드래프트 이력으로 재추정)
+{ const L = League.create(base, 'Eagles', 3), S = L.S;
+  for (const [ko, t] of [['허인서', 'Eagles'], ['이주헌', 'Twins'], ['김녹원', 'Dinos'], ['김진수', 'Twins'], ['김태현', 'Dinos']]) { const p = byKo(S, ko, t)[0]; ok(p && p.mil.st === 'done' && p.mil.src === 'fix' && p.mil.was === 'pending', `${ko} 군필 정정`); }
+  ok(byKo(S, '황동하', 'Tigers')[0].mil.st === 'pending' && byKo(S, '김유성', 'Bears')[0].mil.st === 'pending', '검색으로 미필 확인된 선수는 그대로');
+  for (const [ko, t, a] of [['박종훈', 'Landers', 36], ['한현희', 'Giants', 34], ['이준영', 'Tigers', 35]]) { const p = byKo(S, ko, t)[0]; ok(p && p.age === a && p.dh && p.peak === undefined, `${ko} 나이 ${p && p.age}(드래프트 이력 재추정)·유망주 정점 없음`); } }
 console.log('military tests ok', n);

@@ -159,6 +159,7 @@
       if (keep && over && !elig && !p.foreign) ask = p.contract.salary;   // 상한 때문에 증액할 수 없으면 현 연봉으로 재계약
       if (keep && (!over || (!elig && !p.foreign))) { p.contract = this._newContract(p, ask, 1); p.salHist = (p.salHist || []).slice(-2).concat([ask]); } else { this.release(t, id, true); }
     }
+    if (this._intlOffseason) this._intlOffseason();   // 11월 국제대회(프리미어12·아시안게임) — 병역 특례가 12월 입대 판단보다 먼저(intl.js)
     if (this._milOffseason) this._milOffseason();   // 12월 입대(병역, military.js)
     if (this._unrestVolDue) this._unrestVolDue();   // 임의해지 1년 경과 선수 → 자유계약선수
     S.phase = 'offseason'; S.off = { step: 'review', rep, year: S.year + 1, draft: null, fa: S.fa || [] };
