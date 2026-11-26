@@ -306,6 +306,7 @@
       if (top && top.kind === 'deal' && top.d === S.day && top.text.includes(p.ko)) { top.text = txt; top.imp = Math.max(top.imp, imp); } else this.story('deal', txt, imp); }   // 같은 계약의 뉴스 기반 항목이 있으면 합친다
     if (neg.kind === 'fa') { const sm = this.signSummary(neg.id); if (sm && sm.comp) neg.evMsg = (neg.evMsg ? neg.evMsg + ' ' : '') + `FA 보상(${KO[sm.comp.from] || sm.comp.from}): ${sm.comp.text}`; }   // 원소속 구단이 가져간 보상을 결과 카드에 표시
     this._press(neg.kind === 'fa' ? 'sign' : neg.kind, { p, offer, tot, neg });
+    if (neg.kind === 'fa' && tot >= 50 && this._front) this._front('sign', { head: `${p.ko}, ${KO[this.S.userTeam] || ''} 유니폼 입는다`, sub: `FA ${offer.years}년 총 ${Math.round(tot * 10) / 10}억`, pid: p.id, facts: [] });   // 대형 FA 영입 1면(moments.js)
     this.invalidate();
   };
 

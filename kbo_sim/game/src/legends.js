@@ -91,7 +91,7 @@
     const S = this.S, LGd = this.legends(), c = LGd.q.find(x => x.pid === e.data.pid && x.team === S.userTeam), f = S.fin && S.fin.teams[S.userTeam];
     if (!c) return '이미 처리된 심의입니다.';
     const tr = d => { if (f) f.trust = clamp(Math.round(((f.trust === undefined ? 70 : f.trust) + d) * 10) / 10, 0, 100); };
-    if (k === 'retire') { this._legendGrant(c, 'user'); tr(c.tier === 'sure' ? 2 : 1); return `${c.name}의 등번호를 영구결번으로 지정했습니다(이사회 신뢰도 +${c.tier === 'sure' ? 2 : 1}).`; }
+    if (k === 'retire') { this._legendGrant(c, 'user'); if (this._front) { this._front('legend', { head: `${c.name}, 영원한 ${KO0[this.S.userTeam] || ''}의 전설`, sub: '영구결번 지정', pid: c.pid, facts: [] }); const lp = this.S.players[c.pid]; if (lp && this._card) { this._card(lp, `영구결번 ${c.name}`, 'holo', '구단의 영원한 상징'); (this.S.cardNew = this.S.cardNew || []).push(this.S.cardSeq); } } tr(c.tier === 'sure' ? 2 : 1); return `${c.name}의 등번호를 영구결번으로 지정했습니다(이사회 신뢰도 +${c.tier === 'sure' ? 2 : 1}).`; }
     if (k === 'decline') { LGd.q = LGd.q.filter(x => x !== c); if (c.tier === 'sure') tr(-2); return `${c.name}의 영구결번을 지정하지 않기로 했습니다${c.tier === 'sure' ? '(팬들의 실망, 이사회 신뢰도 −2)' : ''}.`; }
     if (c.holds >= MAX_HOLD) { LGd.q = LGd.q.filter(x => x !== c); return `${c.name}: 보류 한도를 넘어 지정하지 않음으로 처리했습니다.`; }
     c.holds++; c.since = S.year; return `${c.name}의 심의를 내년으로 보류했습니다(${c.holds}/${MAX_HOLD}).`;

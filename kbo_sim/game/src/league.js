@@ -549,8 +549,9 @@
       return { modes: { g: { label: 'game', noStint: true, platoon: true, league_bat: C.lb, team_def: C.team_def, pf: C.pf, batters, pitchers } }, shared: { positions: {}, defense, fielding: { players: fplayers, catchers, team_avg_range: C.fielding.team_avg_range, lg: C.fielding.lg } } };
     }
     invalidate() { this._engDirty = true; this._f2dirty = true; }
-    mergeTracking() {
-      if (!this._eng) return; const tr = this._eng.tracking(), S = this.S.stats;
+    _pstats() { const S = this.S; if (!S.pstats || S.pstats.y !== S.year) S.pstats = { y: S.year, bat: {}, pit: {} }; return S.pstats; }
+    mergeTracking(dest) {   // dest: 기록을 더할 곳(기본 정규시즌 S.stats, 포스트시즌은 S.pstats)
+      if (!this._eng) return; const tr = this._eng.tracking(), S = dest || this.S.stats;
       for (const id in tr.bat) { const c = S.bat[id] || (S.bat[id] = {}); for (const k in tr.bat[id]) c[k] = (c[k] || 0) + tr.bat[id][k]; }
       for (const id in tr.pit) { const c = S.pit[id] || (S.pit[id] = {}); for (const k in tr.pit[id]) c[k] = (c[k] || 0) + tr.pit[id][k]; }
       this._eng.resetTracking();
@@ -902,7 +903,7 @@
       if (next) { ss.cur = next; used.add(next.name); ss.o = 0; game.log.push({ k: 'PC', side, p: next, auto: true }); }
     }
     finishUserGame(ctx) {
-      const S = this.S, live = ctx.live, t = S.userTeam, d = S.day;
+      const S = this.S, live = ctx.live, t = S.userTeam, d = S.day; if (this._frontWalkoff) this._frontWalkoff(ctx);   // 끝내기 승리 1면(moments.js)
       const rh = live.score.home, ra = live.score.away, E = ctx.E;
       // 투수 피로·선발 기록
       const tr = E.tracking().pit, trB = E.tracking().bat || {};   // 이 경기 기록(리캡용)
@@ -930,7 +931,10 @@
       this.invalidate();
     }
     startPostseason() {
-      this._tieGames(); this._applyActiveMax();
+      this.mergeTracking();   // 남은 정규시즌 기록을 먼저 정규시즌에 반영
+      this._tieGames(); if (this._eng) this._eng.resetTracking();   // 순위 결정전 기록은 정규시즌에 가산하지 않는다(리그 규정 제3조) — 결과만 남긴다
+      this.S.pstats = { y: this.S.year, bat: {}, pit: {} };   // 포스트시즌 기록은 따로(정규시즌 기록·시상에 섞이지 않게)
+      this._applyActiveMax();
       const S = this.S, st = this.standings(), seeds = st.slice(0, 5).map(x => x.team), T = i => seeds[i];
       S.post = { seeds, rounds: [], cur: null, stage: 0, done: false, champion: null, day: 0 };
       S.phase = 'post'; if (this._postElig) this._postElig(); this._mkSeries(0); this.invalidate(); return S.post;
@@ -995,7 +999,7 @@
       const spH = E.pitById[this._postStarter(g.home, s).id], spA = E.pitById[this._postStarter(g.away, s).id];
       const r = rngFor(S.seed, S.year, 500 + S.post.stage, s.games.length + 1);
       const [rh, ra, info] = E.game(g.home, g.away, 144, 144, r, E.newStats(), { maxInn: 15, post: true, spH, spA });
-      this.mergeTracking(); const ended = this.postRecord(g.home, g.away, rh, ra, info); return { home: g.home, away: g.away, rh, ra, ended, round: s.name, winner: s.winner, w: Object.assign({}, s.w) };
+      this.mergeTracking(this._pstats()); const ended = this.postRecord(g.home, g.away, rh, ra, info); return { home: g.home, away: g.away, rh, ra, ended, round: s.name, winner: s.winner, w: Object.assign({}, s.w) };
     }
     /* 포스트시즌에서 내 경기를 직접 지휘할 때 */
     startUserPostGame() {
@@ -1015,7 +1019,7 @@
       ctx.live = live; return ctx;
     }
     finishUserPostGame(ctx) {
-      const live = ctx.live, s = this.S.post.cur; this.mergeTracking();
+      const live = ctx.live, s = this.S.post.cur; this.mergeTracking(this._pstats());
       const ended = this.postRecord(live.home, live.away, live.score.home, live.score.away, { inns: live.inns, spH: live.staff.home.sp.name, spA: live.staff.away.sp.name });
       return { home: live.home, away: live.away, rh: live.score.home, ra: live.score.away, ended, round: s.name, winner: s.winner, w: Object.assign({}, s.w), inns: live.inns };
     }

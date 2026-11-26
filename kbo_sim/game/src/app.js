@@ -110,8 +110,8 @@
   /* ---------------- 공통 셸 ---------------- */
   const NAV = [['home', '대시보드'], ['roster', '로스터'], ['lineup', '라인업'], ['pitching', '투수진'], ['train', '훈련'], ['schedule', '일정·결과'], ['standings', '순위·기록'], ['records', '선수 기록'], ['teams', '팀 정보'], ['story', '스토리'], ['mood', '분위기'], ['finance', '재정'], ['coach', '코치진'], ['scout', '스카우팅'], ['market', '이적시장'], ['offseason', '오프시즌'], ['save', '저장·설정']];
   /* 메뉴를 5개 묶음으로 단순화: 대시보드 · 선수단 · 리그 · 운영 · 설정(+오프시즌). 묶음 안의 화면은 상단 탭으로 전환 */
-  const SCR = { home: '대시보드', desk: '프런트 데스크', roster: '로스터', farm: '2군', lineup: '라인업', pitching: '투수진', train: '훈련', schedule: '일정·결과', standings: '순위·기록', records: '선수 기록', teams: '팀 정보', story: '스토리', mood: '분위기', finance: '재정', invest: '투자 센터', coach: '코치진', scout: '스카우팅', market: '이적시장', offseason: '오프시즌', save: '저장·설정' };
-  const GROUPS = [['home', '대시보드', ['home', 'desk']], ['team', '선수단', ['roster', 'lineup', 'pitching', 'train', 'mood']], ['league', '리그', ['schedule', 'standings', 'records', 'teams', 'story']], ['ops', '운영', ['finance', 'invest', 'coach', 'scout', 'market']], ['offseason', '오프시즌', ['offseason']], ['save', '설정', ['save']]];
+  const SCR = { home: '대시보드', desk: '프런트 데스크', roster: '로스터', farm: '2군', lineup: '라인업', pitching: '투수진', train: '훈련', schedule: '일정·결과', standings: '순위·기록', records: '선수 기록', teams: '팀 정보', story: '스토리', album: '앨범', mood: '분위기', finance: '재정', invest: '투자 센터', coach: '코치진', scout: '스카우팅', market: '이적시장', offseason: '오프시즌', save: '저장·설정' };
+  const GROUPS = [['home', '대시보드', ['home', 'desk']], ['team', '선수단', ['roster', 'lineup', 'pitching', 'train', 'mood']], ['league', '리그', ['schedule', 'standings', 'records', 'teams', 'story', 'album']], ['ops', '운영', ['finance', 'invest', 'coach', 'scout', 'market']], ['offseason', '오프시즌', ['offseason']], ['save', '설정', ['save']]];
   const faOpen = () => { const S = L.S; return !!(S.faMkt && !S.faMkt.closed && S.phase !== 'offseason'); };   // 개막 전 FA 협상 기간(시즌 경기는 FA 마감 뒤에 진행)
   function statusText(my) { const S = L.S; return S.phase === 'offseason' ? '오프시즌' : faOpen() ? `FA 협상 기간 · 개막까지 ${L.faDaysLeft()}일` : (my.w + my.l + my.d === 0 ? '개막 전' : `${my.rank}위 · ${my.w}승 ${my.l}패${my.d ? ' ' + my.d + '무' : ''}`); }
   function primary() {
@@ -153,7 +153,7 @@
       [pref('seen_lineup', '') === '1', '라인업·로테이션 확인', '선수단 > 라인업·투수진에서 자동 편성을 확인하거나 바꾸세요.', 'lineup'],
       [played > 0, '첫 경기', '주 버튼으로 경기를 진행하세요. 「직접 지휘」를 켜면 타석마다 작전을 낼 수 있습니다.', 'home']];
     const n = st.filter(x => x[0]).length;
-    return `<div class="card guide"><div class="row"><h2 style="margin:0">처음 시작하기</h2><span class="chip">${n}/3</span><span class="sp"></span><button class="sm" data-act="guideOff">안내 닫기</button></div>${st.map((x, i) => `<div class="gstep ${x[0] ? 'done' : ''}"><span class="gnum">${x[0] ? '✓' : i + 1}</span><div><b>${x[1]}</b><div class="small muted">${x[2]}</div></div>${x[0] || x[3] === 'home' ? '' : `<button class="sm" data-act="go" data-a="${x[3]}">열기</button>`}</div>`).join('')}</div>`;
+    return `<div class="card guide">${mascot(56, n === 0 ? '안녕하세요, 감독님! 저는 볼리예요. 세 가지만 하면 시즌을 시작할 수 있어요.' : n === 3 ? '완벽해요! 이제 우승을 향해 가 봐요!' : `좋아요, ${n}/3 했어요. 조금만 더!`)}<div class="row"><h2 style="margin:0">처음 시작하기</h2><span class="chip">${n}/3</span><span class="sp"></span><button class="sm" data-act="guideOff">안내 닫기</button></div>${st.map((x, i) => `<div class="gstep ${x[0] ? 'done' : ''}"><span class="gnum">${x[0] ? '✓' : i + 1}</span><div><b>${x[1]}</b><div class="small muted">${x[2]}</div></div>${x[0] || x[3] === 'home' ? '' : `<button class="sm" data-act="go" data-a="${x[3]}">열기</button>`}</div>`).join('')}</div>`;
   }
   function seasonLine() {   // 시즌 진행 막대: 지금 위치와 올스타·트레이드 마감·확대 엔트리·종료 표시
     const S = L.S; if (S.phase !== 'regular' || !L.seasonMarks) return ''; const sm = L.seasonMarks(), day = Math.min(S.day, sm.len), pc = d => Math.min(100, Math.max(0, d / Math.max(1, sm.len - 1) * 100));
@@ -163,7 +163,44 @@
   function chemChip() { if (!L.chemistry || L.S.phase === 'offseason') return ''; const c = L.chemistry(); return `<button class="hchip chem" data-act="go" data-a="mood" title="${esc(`라커룸 분위기 ${c.v}/100 — ${c.items.map(x => `${x[0]} ${x[1] > 0 ? '+' : ''}${x[1]}`).join(' · ') || '기본 50'}${c.mood ? ` · 선수 컨디션 ${c.mood > 0 ? '+1' : '−1'}` : ''}`)}">라커룸 ${c.v} · ${c.tag}</button>`; }
   function celebrate() {   // 큰 순간은 한 번만(브라우저에 기록): 가을야구 확정·우승
     const S = L.S; if (S.clinch && S.clinch.y === S.year && S.clinch.k === 'in') FX.once(`clinch_${S.seed}_${S.year}`, () => { FX.confetti(100); FX.play('fanfare'); FX.vib([60, 40, 120]); });
-    if (S.post && S.post.champion === U()) FX.once(`champ_${S.seed}_${S.year}`, () => { FX.confetti(180); setTimeout(() => FX.confetti(120), 900); FX.play('roar'); FX.play('fanfare'); FX.vib([100, 60, 100, 60, 240]); });
+    if (S.post && S.post.champion === U()) FX.once(`champ_${S.seed}_${S.year}`, () => { FX.confetti(180); setTimeout(() => FX.confetti(120), 900); FX.play('roar'); FX.play('fanfare'); FX.vib([100, 60, 100, 60, 240]); ui.champEnd = true; render(); });
+  }
+  /* ---------------- 기념의 순간: 신문 1면 · 선수 카드 · 앨범 ---------------- */
+  const wrapKo = (t, n) => { const out = []; let cur = ''; for (const w of String(t).split(' ')) { if ((cur + ' ' + w).trim().length > n && cur) { out.push(cur); cur = w; } else cur = (cur + ' ' + w).trim(); } if (cur) out.push(cur); return out.slice(0, 3); };
+  function frontSvg(f) {
+    const S = L.S, p = f.pid ? S.players[f.pid] : null, t = f.kind === 'champ' || f.kind === 'clinch' || !p ? U() : (p.team in KO ? p.team : U()), tc = BADGE[t] ? BADGE[t].p : '#333', dt = L.dateStr ? `${f.y}년 ${L.dateStr(Math.min(f.d || 0, 143))}` : `${f.y}`;
+    const lines = wrapKo(f.head, 11), hy = 128, big = lines.length > 2 ? 30 : 36, ph = p ? avatar(p, 150, { mood: 2 }).replace('<svg class="avatar"', '<svg x="18" y="' + (hy + lines.length * (big + 6) + 6) + '"') : `<g transform="translate(18 ${hy + lines.length * (big + 6) + 6})"><rect width="150" height="150" rx="8" fill="${tc}"/><text x="75" y="88" text-anchor="middle" font-size="40" font-weight="900" fill="#fff" font-family="Arial,sans-serif">${esc(KO[t] || '')}</text></g>`;
+    const py = hy + lines.length * (big + 6) + 6, facts = (f.facts || []).filter(Boolean);
+    return `<svg class="frontsvg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 480" width="360" height="480" font-family="'Noto Sans KR',sans-serif"><rect width="360" height="480" fill="#f6f1e4"/><rect x="0" y="0" width="360" height="62" fill="#1b1b1b"/><text x="18" y="40" font-size="26" font-weight="900" fill="#fff" letter-spacing="1">다이아몬드 스포츠</text><text x="342" y="26" text-anchor="end" font-size="10" fill="#ccc">${esc(dt)}</text><text x="342" y="44" text-anchor="end" font-size="10" fill="#ccc">제${(S.frontSeq || 1) + 1000}호 · 1면</text>
+      <rect x="18" y="74" width="${Math.min(324, 70 + (KO[t] || '').length * 14)}" height="22" fill="${tc}"/><text x="26" y="90" font-size="12" font-weight="800" fill="#fff">${esc({ walkoff: '끝내기', clinch: '가을야구', champ: '우승', sign: 'FA 대형 계약', legend: '영구결번' }[f.kind] || '특보')} · ${esc(KO[t] || '')}</text>
+      ${lines.map((l, i) => `<text x="18" y="${hy + i * (big + 6)}" font-size="${big}" font-weight="900" fill="#111">${esc(l)}</text>`).join('')}
+      ${ph}<text x="180" y="${py + 22}" font-size="15" font-weight="700" fill="#333">${esc(f.sub || '')}</text>${facts.map((x, i) => `<text x="180" y="${py + 50 + i * 22}" font-size="12" fill="#555">· ${esc(x)}</text>`).join('')}
+      <line x1="18" x2="342" y1="452" y2="452" stroke="#bbb"/><text x="18" y="470" font-size="9" fill="#888">KBO 감독 모드 · 게임 속 기록으로 만든 가상 신문입니다</text></svg>`;
+  }
+  function cardHtml(c, isNew, delay) {
+    const p = L.S.players[c.pid] || { id: c.pid, ko: c.ko, team: c.team, age: c.age }, tc = BADGE[c.team] ? BADGE[c.team].p : '#555';
+    return `<div class="pcardx ${c.rarity}${isNew ? ' new' : ''}" style="--tc:${tc}${delay ? `;animation-delay:${delay}s` : ''}"><div class="pcin"><div class="pcfront"><div class="pctop"><span>${c.y}</span><span>${esc(KO[c.team] || '')}</span></div>${avatar(p, 92, { mood: 2 })}<b>${esc(c.ko)}</b><span class="pct">${esc(c.title)}</span><span class="pcl">${esc(c.line || '')}</span><span class="pcr">${{ holo: '홀로그램', gold: '골드', silver: '실버', common: '일반' }[c.rarity] || ''}</span></div><div class="pcback"><span>KBO 감독 모드</span></div></div></div>`;
+  }
+  function champEnding() {   // 우승 엔딩: 퍼레이드(연출) + 시즌 요약(실제 기록)
+    const S = L.S, t = U(), tc = BADGE[t] ? BADGE[t].p : '#c3262b', me = L.standings().find(x => x.team === t), best = L.players(t).slice().sort((a, b) => L.war(b) - L.war(a)).slice(0, 3), fr = (S.front || []).filter(f => f.y === S.year), wo = fr.filter(f => f.kind === 'walkoff').length;
+    const crowd = Array.from({ length: 26 }, (_, i) => `<circle class="pfan" cx="${12 + i * 13}" cy="${150 + (i % 2) * 6}" r="5" style="animation-delay:${(i * 0.05).toFixed(2)}s"/>`).join('');
+    const parade = `<svg class="parade" viewBox="0 0 340 170"><rect width="340" height="170" fill="#bfe3ff"/><rect y="118" width="340" height="52" fill="#8a8f98"/>${crowd}<g class="pfloat"><rect x="0" y="78" width="120" height="40" rx="8" fill="${tc}"/><text x="60" y="104" text-anchor="middle" font-size="16" font-weight="900" fill="#fff">${esc(KO[t])} 우승!</text><circle cx="22" cy="120" r="9" fill="#333"/><circle cx="98" cy="120" r="9" fill="#333"/>${best.map((p, i) => avatar(p, 34, { mood: 2 }).replace('<svg class="avatar"', `<svg x="${8 + i * 38}" y="44"`)).join('')}<text x="60" y="40" text-anchor="middle" font-size="22">🏆</text></g></svg>`;
+    return `<div class="sheet-bg" data-act="champClose"><div class="sheet champsheet" data-stop="1" role="dialog" aria-label="우승"><div class="grabber"></div><h2 style="text-align:center">🏆 ${esc(KO[t])}, ${S.year} 한국시리즈 우승!</h2>${parade}
+      <div class="kpis small3" style="margin-top:8px"><div class="kpi"><div class="l">정규시즌</div><div class="v">${me.w}승 ${me.l}패</div></div><div class="kpi"><div class="l">순위</div><div class="v">${me.rank}위</div></div><div class="kpi"><div class="l">끝내기 승</div><div class="v">${wo}번</div></div></div>
+      <div class="small" style="margin-top:8px"><b>올해의 주역</b> ${best.map(p => `${esc(p.ko)} WAR ${L.war(p).toFixed(1)}`).join(' · ')}</div>${fr.length ? `<div class="small muted" style="margin-top:4px">올해의 1면: ${fr.slice(0, 5).map(f => esc(f.head)).join(' / ')}</div>` : ''}
+      <button class="primary" style="width:100%;margin-top:10px" data-act="champClose">우승의 기억을 간직하고 계속</button></div></div>`;
+  }
+  function momentSheet() {
+    if (!L || ui.live || ui.modal || ui.comp || ui.sheet) return ''; if (ui.champEnd) return champEnding(); const S = L.S, view = ui.frontView ? (S.front || []).find(f => f.id === ui.frontView) : null, f = view || L.frontUnseen();
+    if (f) return `<div class="sheet-bg" data-act="frontClose" data-a="${f.id}"><div class="sheet frontsheet" data-stop="1" role="dialog" aria-label="신문 1면"><div class="grabber"></div>${frontSvg(f)}<div class="row" style="gap:6px;margin-top:8px"><button class="primary" data-act="frontSave" data-a="${f.id}">이미지로 저장</button><button data-act="go" data-a="album">앨범</button><span class="sp"></span><button data-act="frontClose" data-a="${f.id}">닫기</button></div></div></div>`;
+    const nw = (S.cardNew || []).map(id => (S.cards || []).find(c => c.id === id)).filter(Boolean);
+    if (nw.length) return `<div class="sheet-bg" data-act="cardsClose"><div class="sheet cardsheet" data-stop="1" role="dialog" aria-label="새 선수 카드"><div class="grabber"></div><h2>새 선수 카드 ${nw.length}장!</h2><div class="small muted">이번 시즌 기록으로 얻은 카드입니다. 앨범에 모입니다.</div><div class="cardgrid" style="margin-top:10px">${nw.map((c, i) => cardHtml(c, true, i * 0.25)).join('')}</div><button class="primary" style="width:100%;margin-top:10px" data-act="cardsClose">앨범에 넣기</button></div></div>`;
+    return '';
+  }
+  function screenAlbum() {
+    const S = L.S, fr = S.front || [], cards = (S.cards || []).slice().sort((a, b) => (L.cardRarityRank(b.rarity) - L.cardRarityRank(a.rarity)) || (b.y - a.y)), cnt = r => cards.filter(c => c.rarity === r).length;
+    return `<div class="card"><h2>신문 1면</h2>${fr.length ? `<div class="frontlist">${fr.map(f => `<button class="frontthumb" data-act="frontView" data-a="${f.id}"><span class="small muted">${f.y} · ${esc({ walkoff: '끝내기', clinch: '가을야구', champ: '우승', sign: 'FA', legend: '영구결번' }[f.kind] || '')}</span><b>${esc(f.head)}</b></button>`).join('')}</div>` : mascot(48, '끝내기 승리·가을야구 확정·우승·대형 FA 영입·영구결번 지정이 생기면 1면에 실려요!')}</div>
+      <div class="card"><div class="row"><h2 style="margin:0">선수 카드</h2><span class="sp"></span><span class="small muted">홀로그램 ${cnt('holo')} · 골드 ${cnt('gold')} · 실버 ${cnt('silver')}</span></div>${cards.length ? `<div class="cardgrid" style="margin-top:10px">${cards.map(c => cardHtml(c)).join('')}</div>` : mascot(48, '시즌이 끝나면 수상·30홈런·100타점·3할·150탈삼진·에이스·WAR 5 기록과 영구결번으로 카드가 생겨요!')}</div>`;
   }
   function heroCard() {
     const S = L.S, st = L.standings(), my = st.find(x => x.team === U()), g = my.w + my.l + my.d, t = U();
@@ -868,6 +905,22 @@
     const of = c.offers.filter(x => x.res); return `<div class="card"><h2>감독 커리어</h2><div class="kpis small3"><div class="kpi"><div class="l">통산</div><div class="v">${c.w}승 ${c.l}패${c.d ? ' ' + c.d + '무' : ''}</div></div><div class="kpi"><div class="l">승률 · 시즌</div><div class="v">${pct3(c.pct)} · ${c.n}</div></div><div class="kpi"><div class="l">가을야구 · 우승</div><div class="v">${c.post} · ${c.titles}</div></div></div>
       <div class="tablewrap" style="margin-top:8px"><table><thead><tr><th class="l">시즌</th><th class="l">구단</th><th>승-패</th><th>순위</th><th class="l"></th></tr></thead><tbody>${rows}</tbody></table></div>${of.length ? `<div class="small muted" style="margin-top:6px">받은 감독 제의: ${of.map(x => `${x.y} ${esc(KO[x.t])}(${x.res === 'accept' ? '수락' : x.res === 'leverage' ? '협상 카드' : '거절'})`).join(' · ')}</div>` : ''}</div>`;
   }
+  /* 라커룸 장면: 1군 선수 아바타(주장 C, 호조 ✨, 불만 ⛈, 부상 🩹), 친한 동료(같은 학교·입단 동기)는 붙어 앉는다. 눌러서 선수 상세 */
+  /* 게임 전용 마스코트 '야구공 볼리'(실제 구단 마스코트가 아닌 창작 캐릭터): 첫 게임 안내·빈 화면에서 말을 건다 */
+  function mascot(size, say) {
+    const tc = L && BADGE[U()] ? BADGE[U()].p : '#1D7A4E';
+    const svg = `<svg class="mascot" width="${size}" height="${size}" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="36" r="22" fill="#fff" stroke="#ddd" stroke-width="1.5"/><path d="M17 22 Q24 36 17 50" stroke="#d33" stroke-width="1.6" fill="none" stroke-dasharray="2.5 2"/><path d="M47 22 Q40 36 47 50" stroke="#d33" stroke-width="1.6" fill="none" stroke-dasharray="2.5 2"/><path d="M14 22 Q32 2 50 22 Z" fill="${tc}"/><path d="M14 22 Q34 26 58 20 Q34 16 14 22Z" fill="${tc}" style="filter:brightness(.8)"/><ellipse cx="26" cy="35" rx="2.6" ry="3.4" fill="#222"/><ellipse cx="38" cy="35" rx="2.6" ry="3.4" fill="#222"/><circle cx="27" cy="34" r=".9" fill="#fff"/><circle cx="39" cy="34" r=".9" fill="#fff"/><path d="M26 43 Q32 48 38 43" stroke="#a33" stroke-width="2" fill="none" stroke-linecap="round"/><ellipse cx="21" cy="41" rx="2.4" ry="1.4" fill="#f7a" opacity=".5"/><ellipse cx="43" cy="41" rx="2.4" ry="1.4" fill="#f7a" opacity=".5"/></svg>`;
+    return say ? `<div class="mascotbox">${svg}<div class="bubble">${say}</div></div>` : svg;
+  }
+  function lockerRoom() {
+    const S = L.S, t = U(), bd = L.clubhouseBoard ? L.clubhouseBoard() : { groups: [] }, cap = L.captain && L.captain(), act = L.players(t).filter(p => p.active), order = [];
+    const seen = new Set(), add = p => { if (p && !seen.has(p.id) && act.includes(p)) { seen.add(p.id); order.push(p); } };
+    if (cap) add(cap); for (const g of bd.groups || []) for (const id of g.members) add(P(id)); for (const p of act.slice().sort((a, b) => L.ovr(b) - L.ovr(a))) add(p);
+    const badge = p => { const m = L.moodOf(p); return p.unrest || (p.grv || 0) >= 40 ? '⛈' : L.isInj(p) ? '🩹' : m >= 1 ? '✨' : ''; };
+    const seat = p => `<button class="seat" data-act="player" data-a="${p.id}" title="${esc(p.ko)}">${cap && cap.id === p.id ? '<span class="capc">C</span>' : ''}${badge(p) ? `<span class="sbad">${badge(p)}</span>` : ''}${avatar(p, 46)}<span class="snm">${esc(p.ko)}</span></button>`;
+    const c = L.chemistry ? L.chemistry() : null;
+    return `<div class="card locker" style="--tc:${BADGE[t] ? BADGE[t].p : '#555'}"><div class="row"><h2 style="margin:0">라커룸</h2><span class="sp"></span>${c ? `<span class="chip ${c.v >= 58 ? 'in' : c.v <= 42 ? 'warn' : ''}">분위기 ${c.v} · ${c.tag}</span>` : ''}</div><div class="lroom"><div class="lockers"></div><div class="seats">${order.slice(0, 18).map(seat).join('')}</div></div><div class="small muted">1군 ${act.length}명 중 ${Math.min(18, order.length)}명 · 주장 C · ✨ 호조 · ⛈ 불만 · 🩹 부상 · 같은 학교·입단 동기는 붙어 앉습니다.</div></div>`;
+  }
   function chemCard() {
     if (!L.chemistry) return ''; const c = L.chemistry();
     return `<div class="card"><div class="row"><h2 style="margin:0">라커룸 분위기</h2><span class="sp"></span><span class="chip ${c.v >= 60 ? 'in' : c.v <= 40 ? 'warn' : ''}">${c.tag}</span></div><div class="gauge ${c.v >= 60 ? 'good' : c.v >= 40 ? 'mid' : 'low'}" style="margin:8px 0"><span class="gbar" style="width:160px"><i style="width:${c.v}%"></i></span><span class="gtxt">${c.v}</span></div>
@@ -876,7 +929,7 @@
   }
   function screenMood() {
     const rp = L.reputation(), bd = L.clubhouseBoard(), cap = L.captain(), fa = v => { v = Math.round((v || 0) * 10) / 10; return (v > 0 ? '+' : '') + v; }, chip = id => { const p = P(id); return `<button class="sm" data-act="player" data-a="${id}">${esc(p.ko)} <span class="muted">${fa(p.loyAdj)}</span></button>`; };
-    return `<div class="card"><div class="row"><h2 style="margin:0">감독 평판</h2><span class="sp"></span><span class="chip ${rp.score >= 55 ? 'in' : rp.score < 40 ? 'bad' : ''}">${esc(rp.tag)}</span></div>
+    return `${lockerRoom()}<div class="card"><div class="row"><h2 style="margin:0">감독 평판</h2><span class="sp"></span><span class="chip ${rp.score >= 55 ? 'in' : rp.score < 40 ? 'bad' : ''}">${esc(rp.tag)}</span></div>
       <div class="gauge ${rp.score >= 60 ? 'good' : rp.score >= 40 ? 'mid' : 'low'}" style="margin:8px 0"><span class="gbar" style="width:160px"><i style="width:${rp.score}%"></i></span><span class="gtxt">${rp.score}</span></div>
       ${rp.items.length ? rp.items.map(x => `<div class="row small"><span>${esc(x[0])}</span><span class="sp"></span><b class="${x[1] >= 0 ? 'pos' : 'neg'}">${x[1] > 0 ? '+' : ''}${x[1]}</b></div>`).join('') : '<div class="small muted">아직 쌓인 기록이 없습니다. 약속을 지키고 면담·협상을 잘 마무리하면 오릅니다.</div>'}
       <div class="small muted" style="margin-top:6px">평판은 협상·면담 호감도의 시작값에 최대 ±5 영향을 줍니다(경제 수치에는 영향 없음).</div></div>
@@ -2044,11 +2097,11 @@
     if (ui.pre && !ui.live) { document.body.classList.remove('modal-open'); root.innerHTML = screenPre() + confirmSheet() + toastHtml(); window.scrollTo(0, scroll); return; }   // 경기 전 브리핑(날짜 처리 끝, 경기 시작 전)
     if (ui.live) { document.body.classList.remove('modal-open'); root.innerHTML = screenLive() + toastHtml(); window.scrollTo(0, scroll); return; }   // 경기 화면에서는 이전 화면의 스크롤 잠금이 남지 않게 푼다
     if ((ui.screen === 'lineup' || ui.screen === 'pitching') && pref('seen_lineup', '') !== '1') setPref('seen_lineup', '1');   // 첫 게임 안내: 라인업 확인 단계
-    const S = ui.screen, f = { records: screenRecords, invest: screenInvest, desk: screenDesk, home: () => (setTimeout(celebrate, 60), '') + guideCard() + heroCard() + screenHome() + foldGroup('home_ev', '최근 소식 처리', '', evHistory().replace(/^<div class="card">|<\/div>$/g, ''), false), roster: () => screenRoster(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, story: screenStory, mood: screenMood, train: screenTrain, scout: screenScout, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
+    const S = ui.screen, f = { records: screenRecords, invest: screenInvest, desk: screenDesk, home: () => (setTimeout(celebrate, 60), '') + guideCard() + heroCard() + screenHome() + foldGroup('home_ev', '최근 소식 처리', '', evHistory().replace(/^<div class="card">|<\/div>$/g, ''), false), roster: () => screenRoster(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, story: screenStory, album: screenAlbum, mood: screenMood, train: screenTrain, scout: screenScout, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
     document.body.classList.toggle('modal-open', !!ui.modal);
     { const c = L.compOpen().find(x => !(ui.compSeen || (ui.compSeen = {}))[x.id]); if (c && !ui.live && !ui.negOpen) { ui.compSeen[c.id] = true; ui.comp = c.id; } }   // 새 FA 보상 선택은 처음 생길 때 바로 창을 띄운다
     const keep = snapInner(root);   // 체크박스·버튼으로 다시 그려도 안쪽 스크롤 상자와 펼침 상태를 유지한다
-    root.innerHTML = shell((S === 'home' || S === 'market' || S === 'offseason' ? eventCards() + excPromptCard() : evBanner()) + f()) + (ui.modal ? modalPlayer(ui.modal) : '') + compSheet() + arbSheet() + sheetHtml() + firedModal() + quickSheet() + swapSheet() + posPickSheet() + fslotSheet() + scoutSheet() + growthSheet() + subSheet() + confirmSheet() + cmpSheet() + searchSheet() + cmpTray() + negView() + toastHtml();
+    root.innerHTML = shell((S === 'home' || S === 'market' || S === 'offseason' ? eventCards() + excPromptCard() : evBanner()) + f()) + (ui.modal ? modalPlayer(ui.modal) : '') + compSheet() + arbSheet() + momentSheet() + sheetHtml() + firedModal() + quickSheet() + swapSheet() + posPickSheet() + fslotSheet() + scoutSheet() + growthSheet() + subSheet() + confirmSheet() + cmpSheet() + searchSheet() + cmpTray() + negView() + toastHtml();
     window.scrollTo(0, scroll); stackTables(root); restoreInner(root, keep);
     { const ch = root.querySelector('.neg-chat'); if (ch) ch.scrollTop = ch.scrollHeight; document.body.classList.toggle('modal-open', !!(ui.modal || (ui.negOpen && L.S.neg))); }
     { const gt = root.querySelector('.tabs.grp [aria-selected=true]'); if (gt) { const pr = gt.parentElement; if (pr.scrollWidth > pr.clientWidth) pr.scrollLeft = gt.offsetLeft - pr.offsetLeft - (pr.clientWidth - gt.offsetWidth) / 2; } }   // 휴대폰: 선택된 화면 탭이 보이게
@@ -2076,7 +2129,7 @@
     render(); window.scrollTo(0, 0);
   }
   function openLive(g, idx, post) {
-    L.mergeTracking(); const ctx = post ? L.startUserPostGame() : L.startUserGame(g, idx);
+    L.mergeTracking(post ? L._pstats() : undefined); const ctx = post ? L.startUserPostGame() : L.startUserGame(g, idx);   // 포스트시즌 경기 기록은 정규시즌에 섞지 않는다
     ui.live = { ctx, feed: [], lbl: '', pick: null, sheet: null, post: !!post, before: snapshot(), halfKey: ctx.live.inning + (ctx.live.top ? 't' : 'b'), halfL: ctx.live.log.length }; ui.live.feed.unshift({ w: '', t: `${KO[ctx.live.away]} @ ${KO[ctx.live.home]} — 선발 ${P(ctx.prep.sp.id).ko}`, sys: true }); render(); window.scrollTo(0, 0);
   }
   const A = {
@@ -2271,6 +2324,11 @@
     fatab(a) { ui.faTab = a; render(); },
     faDay(a) { const k = L.faAdvance(+a); toast(L.S.faMkt ? `${L.faDateStr(L.S.faMkt.day)}가 되었습니다.` : ''); if (k) autosave(); render(); },
     guideOff() { setPref('guide_off', '1'); render(); },
+    frontClose(a) { L.frontSeenUpTo(+a); ui.frontView = null; autosave(); render(); },
+    frontView(a) { ui.frontView = +a; render(); },
+    frontSave(a) { const el = document.querySelector('.frontsvg'); if (!el) return; try { const xml = new XMLSerializer().serializeToString(el), img = new Image(), url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' })); img.onload = () => { const c = document.createElement('canvas'); c.width = 720; c.height = 960; const x = c.getContext('2d'); x.drawImage(img, 0, 0, 720, 960); URL.revokeObjectURL(url); c.toBlob(b => { const u = URL.createObjectURL(b), aa = document.createElement('a'); aa.href = u; aa.download = `kbo_1면_${a}.png`; document.body.appendChild(aa); aa.click(); aa.remove(); setTimeout(() => URL.revokeObjectURL(u), 1000); }, 'image/png'); }; img.src = url; } catch (e) { toast('이미지로 저장하지 못했습니다.'); } },
+    champClose() { ui.champEnd = false; render(); },
+    cardsClose() { L.S.cardNew = []; autosave(); render(); },
     toastClose() { ui.toast = null; clearTimeout(toast.t); const t = $('.toast'); if (t) t.remove(); },
     faClose() { L.closeFA(); toast('FA 협상을 마감했습니다.'); autosave(); render(); },
     faBeat(a) { const p = P(a), q = k => $(`[data-sel="${k}"][data-a="${a}"]`), y = q('fayears'), b = L.faBeat(p, U(), y ? +y.value : undefined); (ui.faIn = ui.faIn || {})[a] = { years: b.years, salary: b.salary, bonus: b.bonus }; render(); },
