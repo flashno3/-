@@ -1,9 +1,9 @@
-"""감독 모드용 선수 데이터 생성: ratings_forward_pk.json(3시즌 블렌딩) + 수비·포지션 → game/src/gamedata.json
+"""감독 모드용 선수 데이터 생성: ratings_game_pk.json(3시즌 블렌딩 + 저출전 타자 사전평균 보정 PT_ALPHA=0.25) + 수비·포지션 → game/src/gamedata.json
 시작 시점은 2027 시즌 직전(나이 +1). 값은 원본 그대로 두고 필요한 필드만 추린다."""
 import json,os,math
 D=os.path.dirname(os.path.abspath(__file__))+'/'
 J=lambda f:json.load(open(D+f,encoding='utf8'))
-R=J('ratings_forward_pk.json');F=J('fielding.json');DEF=J('defense_parsed.json')['D'];POS=J('positions.json');PK=J('parks.json')['blend']
+R=J('ratings_game_pk.json');F=J('fielding.json');DEF=J('defense_parsed.json')['D'];POS=J('positions.json');PK=J('parks.json')['blend']
 POSMAP={'포수':'C','1루수':'1B','2루수':'2B','유격수':'SS','3루수':'3B','좌익수':'LF','중견수':'CF','우익수':'RF'}
 LAST={'Matt Davidson 데이비슨':'Heroes','Ju-suk Ha 하주석':'Tigers','Ah-seop Son 손아섭':'Bears','Seung Min Ryu 류승민':'Bears','Jeong-bum Lee 이정범':'Wiz','Hyeong-beom Lee 이형범':'Eagles'}
 TEAMS=['Bears','Dinos','Eagles','Giants','Heroes','Landers','Lions','Tigers','Twins','Wiz']

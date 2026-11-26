@@ -109,6 +109,22 @@ def blend(parts,cnt,F,consts):
     for w,y,r in parts:
         for k,(n_,d_) in cnt(r,y).items(): num[k]+=w*F[y][k]*n_;den[k]+=w*d_
     return num,den
+# ---------- 출전량 의존 사전 평균(PT_ALPHA>0일 때만) ----------
+# 기록이 적은 선수를 1군 리그 평균이 아니라 '출전이 적었던 선수 집단' 쪽으로 당긴다(감독이 출전을 덜 준 것 자체가 정보).
+# 사전 평균 m(T) = 리그 + PT_ALPHA × (저출전 집단 − 리그) × max(0, 1 − T/PT_T0), T = 가중 타석(투수는 가중 상대 타자 수).
+# 타자 PT_ALPHA, 투수 PT_ALPHA_P(기본 0), 적용 항목 PT_COMPS(기본 k,bb,hr — 항목별 백테스트에서 개선된 것만; BABIP·장타 비율은 악화·혼조라 제외). 저출전 집단 = 기준 시즌 PA(TBF) < PT_LOW 선수들의 합산 비율. PT_ALPHA는 운(성적이 나빠 2군행)을 걷어내는 계수로, 백테스트(전년 → 다음 해)로 정한다.
+PT_ALPHA=float(os.environ.get('PT_ALPHA','0'));PT_ALPHA_P=float(os.environ.get('PT_ALPHA_P','0'));PT_COMPS=set(os.environ.get('PT_COMPS','k,bb,hr').split(','));PT_T0=float(os.environ.get('PT_T0','300'));PT_LOW=float(os.environ.get('PT_LOW','200'))
+def _pool(rows,cnt):
+    num=collections.Counter();den=collections.Counter()
+    for r in rows:
+        for k,(n_,d_) in cnt(r).items(): num[k]+=n_;den[k]+=d_
+    return {k:num[k]/den[k] for k in num if den[k]>0}
+LOWB=_pool([r for r in D[PRIMARY][0] if 0<r['PA']<PT_LOW],bat_counts)
+LOWP=_pool([r for r in D[PRIMARY][1] if 0<r['TBF']<PT_LOW],lambda r:pit_counts(r,Dteam))
+def mprior(lgk,lowk,T,a=None,k=None):
+    a=PT_ALPHA if a is None else a
+    if k is not None and k not in PT_COMPS: return lgk
+    return lgk+a*(lowk-lgk)*max(0.0,1-T/PT_T0) if a else lgk
 # ---------- batters ----------
 bat=[]
 for r in D[PRIMARY][0]:
@@ -116,8 +132,8 @@ for r in D[PRIMARY][0]:
     pa=r['PA']
     parts=gather(r,IDX,'b') if len(SEASONS)>1 else [(1.0,PRIMARY,r)]
     num,den=blend(parts,lambda x,y:bat_counts(x),FB,N)
-    p={k:reg(num[k],den[k],lg[k],N[k]) for k in N}
-    bat.append({'key':key(r),'name':r['name'],'team':r['team'],'age':r['age'],'pos':POS[key(r)],'PA':pa,'G':r['G'],'R':r['R'],'H':r.get('H0',r['H']),'HR':r.get('HR0',r['HR']),'BB':r['BB'],'SO':r['SO'],'p':p,'seasons':[y for _,y,_ in parts]})
+    p={k:reg(num[k],den[k],mprior(lg[k],LOWB.get(k,lg[k]),den['k'],None,k),N[k]) for k in N}
+    bat.append({'key':key(r),'name':r['name'],'team':r['team'],'age':r['age'],'pos':POS[key(r)] if not os.environ.get('BACKTEST') else POS.get(key(r),'?'),'PA':pa,'G':r['G'],'R':r['R'],'H':r.get('H0',r['H']),'HR':r.get('HR0',r['HR']),'BB':r['BB'],'SO':r['SO'],'p':p,'seasons':[y for _,y,_ in parts]})
 B=D[PRIMARY][0];PT=D[PRIMARY][1]
 # ---------- 20-80 scale vs regulars (PA>=300), lower-is-better flipped ----------
 def scale(rows,field,sign,ref,w):
@@ -139,7 +155,7 @@ for r in PT:
     t=r['TBF']
     parts=gather(r,IDX,'p') if len(SEASONS)>1 else [(1.0,PRIMARY,r)]
     num,den=blend(parts,lambda x,y:pit_counts(x,DT[y]),FP,NP)
-    p={k:reg(num[k],den[k],lgp[k],NP[k]) for k in NP}
+    p={k:reg(num[k],den[k],mprior(lgp[k],LOWP.get(k,lgp[k]),den['k'],PT_ALPHA_P,k),NP[k]) for k in NP}
     role='SP' if r['GS']>=0.5*r['G'] and r['GS']>=3 else 'RP'
     ipgs=None
     if r['GS']>0:

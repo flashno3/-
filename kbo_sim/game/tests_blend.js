@@ -1,5 +1,5 @@
 const fs=require('fs'),assert=require('assert');let n=0;const ok=(c,m)=>{n++;if(!c)throw new assert.AssertionError({message:m})};
-const G=JSON.parse(fs.readFileSync(__dirname+'/src/gamedata.json')),R=JSON.parse(fs.readFileSync(__dirname+'/../ratings_forward_pk.json'));
+const G=JSON.parse(fs.readFileSync(__dirname+'/src/gamedata.json')),R=JSON.parse(fs.readFileSync(__dirname+'/../ratings_game_pk.json'));
 // 퓨처스 보강: 24~26 합계 표본이 큰 선수는 1군 레이팅 그대로, 작은 선수 일부만 달라진다
 const rb=Object.fromEntries(R.batters.map(b=>[b.name+'|'+b.team,b.p]));let same=0,diff=0,bigDiff=0;
 for(const p of G.players){if(p.type!=='B'||p.src==='F')continue;const r=rb[p.name+'|'+p.team];if(!r)continue;const d=Math.max(...['k','bb','hr','babip','xbh','sba'].map(k=>Math.abs(p.p[k]-r[k])));if(d<1e-9)same++;else{diff++;if(p.PA>=150)bigDiff++}}

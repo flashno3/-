@@ -4,7 +4,7 @@
 })(typeof self !== 'undefined' ? self : this, function (LG, Engine) {
   'use strict';
   /* [오프시즌 분할] FA 제도·보상·시장·협상 — 원본 offseason.js 순서 그대로. 공용 심볼은 off_common.js(LG.OFFC). */
-  const { proto, TEAMS, clamp, rngFor, slotPrior, gauss, FOREIGN_NEW, FOREIGN_RAISE, ACTIVE_MAX, ROSTER_MIN, news, KO0, FA_REG_DAYS, EXT_LIMIT, ROSTER_MAX, LIM_DEADLINE, FA_END, BONUS_SHARE } = LG.OFFC;
+  const { proto, TEAMS, clamp, rngFor, slotPrior, undebLR, gauss, FOREIGN_NEW, FOREIGN_RAISE, ACTIVE_MAX, ROSTER_MIN, news, KO0, FA_REG_DAYS, EXT_LIMIT, ROSTER_MAX, LIM_DEADLINE, FA_END, BONUS_SHARE } = LG.OFFC;
   /* ---------- FA ---------- */
 
   /* ---------------- KBO FA 제도 ----------------
@@ -72,6 +72,7 @@
       if (p.age <= 25 && p.peak === undefined && !p.draft && !p.foreign && p.team !== 'MIL') {   // 젊은 선수(2군 포함): 지명 슬롯 실제 분포 × 현재 OVR(나이 대비) 증거로 갱신한 정점
         const rr = this._pkRng || (this._pkRng = rngFor(S.seed, 2027, 77)), ov = this.ovr(p), smp = p.type === 'P' ? (p.IP || 0) / 80 : (p.PA || 0) / 350, pri = slotPrior(dh), ss = dh ? dh.ss || 0 : 0;
         if (p.eval && p.eval.floor) { const fl = { A: 0, B: 1, C: 2, D: 3, E: 4 }[p.eval.floor]; for (let i = fl + 1; i < pri.length; i++) pri[i] = 0; }   // 제공된 평가(보도·스카우트)가 있으면 그 하한 아래 등급은 배제
+        const ulr = p.eval ? null : undebLR(p, dh); if (ulr) for (let i = 0; i < pri.length; i++) pri[i] *= ulr[i];   // 그 나이까지 1군 미데뷔면 실제 미데뷔 선수들의 최종 등급 분포로 보정(보도·스카우트 평가가 있으면 그쪽 우선)
         const pk = clamp(this._posteriorPeak(rr, ov, p.age, pri, smp), 25, 85);
         if (p.eval) { if (p.eval.role === 'SP') p.role = 'SP'; if (p.eval.plan) p.dev = { plan: p.eval.plan, auto: false }; }
         p.peak = pk; p.scout = { o: ov, ceil: clamp(pk + gauss(rr, 0, 3 + 9 * Math.exp(-ss / 2)), 25, 85) }; p.pot = clamp((pk - ov) / 30, 0, 1.4);   // 프로 경험이 길수록 스카우트 평가 오차가 줄어든다

@@ -462,8 +462,8 @@
       if (spc.length < 5) { const have = new Set(spc.map(p => p.id)); spc.push(...P.filter(p => !have.has(p.id)).sort((a, b) => b.stamina - a.stamina).slice(0, 5 - spc.length)); }
       spc.forEach(p => act.add(p.id));
       const rps = P.filter(p => !act.has(p.id)).sort((a, b) => this._runsP(b) - this._runsP(a)).slice(0, Math.max(0, AM - act.size)); rps.forEach(p => act.add(p.id));
-      if (act.size < AM) {   // 명단 풀이 모자라면 팀의 나머지 선수 중 가치가 높은 순으로 28명까지 채운다(투수 최소 13명)
-        const rest = this.players(t).filter(p => !act.has(p.id) && !this.isInj(p)).sort((a, b) => this.marketValue(b) - this.marketValue(a));
+      if (act.size < AM) {   // 명단 풀이 모자라면 팀의 나머지 선수 중 현재 능력이 높은 순으로 28명까지 채운다(투수 최소 13명). 시장가치(나이·잠재력 반영) 순이면 기록 없는 유망주가 먼저 올라왔다
+        const rest = this.players(t).filter(p => !act.has(p.id) && !this.isInj(p)).sort((a, b) => this.ovr(b) - this.ovr(a));
         while (act.size < AM && rest.length) { const needP = [...act].filter(id => S.players[id].type === 'P').length < 13; const i = rest.findIndex(p => needP ? p.type === 'P' : true); const p = rest.splice(i < 0 ? 0 : i, 1)[0]; act.add(p.id); }
       }
       for (const p of this.players(t)) p.active = act.has(p.id);
