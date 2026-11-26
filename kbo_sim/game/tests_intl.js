@@ -45,4 +45,11 @@ const grp = p => p.type === 'P' ? 'P' : p.pos === 'C' ? 'C' : ['LF', 'CF', 'RF']
   const ho = L._intlRun(oly, so); ok(ho.place <= 3 && ho.exempt.includes(x.id) && /올림픽/.test(L.milStatus(x).label), '올림픽 메달 → 미필 특례'); }
 { const L = League.create(base, 'Wiz', 7), S = L.S, I = L._intl(), ag = L.intlEvents().find(e => e.id === 'ag_2030'), sel = L.intlPick(ag), pend = sel.ids.filter(id => S.players[id].mil && S.players[id].mil.st === 'pending');
   I.baseAG = 1e9; const h = L._intlRun(ag, sel); ok(h.place > 1 && h.exempt.length === 0 && pend.every(id => S.players[id].mil.st === 'pending'), '금메달이 아니면 특례 없음 ' + h.place); }
+// 4) WBC(2030년 3월 가정): 30명(투수 15) · 새 시즌 직전 진행 · 병역 특례 없음 · 결과 표기
+{ const L = League.create(base, 'Wiz', 9), S = L.S, ev = L.intlEvents().find(e => e.id === 'wbc_2030');
+  ok(ev && ev.phase === 'pre' && !ev.ok && ev.size === 30, 'WBC 2030 일정(가정 표시)'); const sel = L.intlPick(ev); ok(sel.ids.length === 30 && sel.ids.filter(id => S.players[id].type === 'P').length === 15, 'WBC 30명·투수 15');
+  S.year = 2030; L._intlPreseason(); const h = S.intl.hist.find(x => x.id === 'wbc_2030');
+  ok(h && h.games.length >= 4 && ['우승', '준우승', '4강', '8강', '1라운드 탈락'].includes(h.res) && h.exempt.length === 0, 'WBC 진행·특례 없음 ' + (h && h.res));
+  ok(h.games.slice(0, 4).every(g => ['JPN', 'TPE', 'AUS', 'CZE'].includes(g.opp)), '1라운드 도쿄 조(일본·대만·호주·체코)');
+  ok(!S.intl.hist.some(x => x.id === 'oqt_2028'), '최종예선은 해당 연도·조건일 때만'); }
 console.log('intl tests ok', n);
