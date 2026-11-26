@@ -457,3 +457,36 @@ td .sub { min-width: 230px; gap: 1px 8px; } td .sub span { white-space: nowrap; 
 
 .hero .hchip.chem::before { content: '🏠 '; }
 .evcard .ev[data-type="presscon"] { --evc: #3B82C4; }
+
+/* ---- 선수 아바타 ---- */
+svg.avatar { display: inline-block; vertical-align: middle; flex: none; border-radius: 50%; }
+td.l > svg.avatar { margin-right: 6px; } .mav svg.avatar { box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+.hero .hchip svg.avatar { margin: -2px 4px -2px -5px; background: #fff; }
+.evcard .evh svg.avatar { border: 2px solid var(--evc); }
+
+/* ---- 중계 연출(경기장) ---- */
+.fieldsvg .sky.day { fill: #cfe8fb; } .fieldsvg .sky.night { fill: #0f1a2e; } .fieldsvg .tower { fill: #fff6c2; filter: drop-shadow(0 0 6px #fff3a0); }
+.fieldsvg .ofgrass { fill: #4f9a57; } .fieldsvg .infield { fill: #c9a273; } .fieldsvg .track { fill: none; stroke: #b98c5f; stroke-width: 5; } .fieldsvg .fence { fill: none; stroke: #1f5130; stroke-width: 2.5; }
+.fieldsvg .grass { fill: #5fae67 !important; stroke: #f3f3f3 !important; } .fieldsvg .sky.night ~ .ofgrass { fill: #3e8a49; }
+.fieldsvg .fan { fill: #e9e2d0; } .fieldsvg .fan.f1 { fill: var(--brand); } .fieldsvg .fan.f2 { fill: #d7d0bd; } .fieldsvg .fan.f3 { fill: color-mix(in srgb, var(--brand) 60%, #fff); }
+.fieldsvg .ball { fill: #fff; stroke: #c33; stroke-width: .8; }
+.fieldsvg .stamp { font-weight: 900; paint-order: stroke; stroke: #fff; stroke-width: 3px; animation: stampin .5s cubic-bezier(.2,1.6,.4,1) both; transform-box: fill-box; transform-origin: center; }
+.fieldsvg .stamp.kst { font-size: 44px; fill: #c3262b; } .fieldsvg .stamp.bst { font-size: 15px; fill: #1f5fa8; } .fieldsvg .stamp.hst { font-size: 17px; fill: #1d7a4e; animation-delay: .55s; }
+.fieldsvg .hrban rect { fill: #ffd23f; stroke: #fff; stroke-width: 2; } .fieldsvg .hrban text { font-size: 21px; font-weight: 900; fill: #b3121a; letter-spacing: 1px; }
+.fieldsvg .hrban { animation: hrban 1.6s ease-out .9s both; transform-box: fill-box; transform-origin: center; }
+.fieldsvg .runpop { font-size: 15px; font-weight: 900; fill: #ffd23f; paint-order: stroke; stroke: #7a1c1c; stroke-width: 3px; animation: runpop 1.3s ease-out .6s both; }
+.fieldsvg .anim.cheer ~ * {} .fieldsvg:has(.anim.cheer) .fan { animation: wave .5s ease-in-out 3 alternate; }
+@keyframes stampin { 0% { opacity: 0; transform: scale(2.2); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes hrban { 0% { opacity: 0; transform: scale(.3) rotate(-8deg); } 25% { opacity: 1; transform: scale(1.12) rotate(2deg); } 40% { transform: scale(1) rotate(0); } 85% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes runpop { 0% { opacity: 0; transform: translateY(8px); } 25% { opacity: 1; } 100% { opacity: 0; transform: translateY(-22px); } }
+@keyframes wave { from { transform: translateY(0); } to { transform: translateY(-4px); } }
+.score td.cur { transition: background .3s; } .lvwrap.scored .score td.cur { animation: flipnum .6s ease-out; }
+@keyframes flipnum { 0% { transform: rotateX(90deg); background: #ffd23f; } 100% { transform: rotateX(0); } }
+.kcards { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; margin: 2px 0 4px; } .kcards span { background: #c3262b; color: #fff; font-weight: 900; font-size: 11px; width: 18px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 3px; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+.kcards span:last-child { animation: stampin .4s ease-out; }
+@media (prefers-reduced-motion: reduce) { .fieldsvg .anim *, .fieldsvg .fan, .score td.cur, .kcards span { animation: none !important; } .fieldsvg .ball animateMotion { display: none; } }
+@media (max-width: 560px) { .wpbox .wpline { height: 16px; } .wpbox { margin-top: 4px; } }
+
+/* ---- 꽃가루 ---- */
+.confetti { position: fixed; inset: 0; pointer-events: none; z-index: 80; overflow: hidden; } .confetti i { position: absolute; top: -12px; width: 8px; height: 12px; border-radius: 2px; animation: confall linear forwards; }
+@keyframes confall { 0% { transform: translateY(0) rotate(0); opacity: 1; } 100% { transform: translateY(105vh) rotate(720deg); opacity: .9; } }
