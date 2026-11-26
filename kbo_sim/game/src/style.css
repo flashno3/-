@@ -531,3 +531,4 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
 .hubsvg .hs.ring { animation: ring 1.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
 @keyframes ring { 0%, 70%, 100% { transform: rotate(0); } 75% { transform: rotate(-8deg); } 80% { transform: rotate(8deg); } 85% { transform: rotate(-6deg); } 90% { transform: rotate(6deg); } }
 @media (prefers-reduced-motion: reduce) { .hubsvg .hs.ring { animation: none; } }
+.mascot.mimg { border-radius: 50%; object-fit: cover; flex: none; background: #fff; }

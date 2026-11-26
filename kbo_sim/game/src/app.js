@@ -153,7 +153,7 @@
       [pref('seen_lineup', '') === '1', '라인업·로테이션 확인', '선수단 > 라인업·투수진에서 자동 편성을 확인하거나 바꾸세요.', 'lineup'],
       [played > 0, '첫 경기', '주 버튼으로 경기를 진행하세요. 「직접 지휘」를 켜면 타석마다 작전을 낼 수 있습니다.', 'home']];
     const n = st.filter(x => x[0]).length;
-    return `<div class="card guide">${mascot(56, n === 0 ? '안녕하세요, 감독님! 저는 볼리예요. 세 가지만 하면 시즌을 시작할 수 있어요.' : n === 3 ? '완벽해요! 이제 우승을 향해 가 봐요!' : `좋아요, ${n}/3 했어요. 조금만 더!`)}<div class="row"><h2 style="margin:0">처음 시작하기</h2><span class="chip">${n}/3</span><span class="sp"></span><button class="sm" data-act="guideOff">안내 닫기</button></div>${st.map((x, i) => `<div class="gstep ${x[0] ? 'done' : ''}"><span class="gnum">${x[0] ? '✓' : i + 1}</span><div><b>${x[1]}</b><div class="small muted">${x[2]}</div></div>${x[0] || x[3] === 'home' ? '' : `<button class="sm" data-act="go" data-a="${x[3]}">열기</button>`}</div>`).join('')}</div>`;
+    return `<div class="card guide">${mascot(56, n === 0 ? '안녕하세요, 감독님! 세 가지만 하면 시즌을 시작할 수 있어요.' : n === 3 ? '완벽해요! 이제 우승을 향해 가 봐요!' : `좋아요, ${n}/3 했어요. 조금만 더!`)}<div class="row"><h2 style="margin:0">처음 시작하기</h2><span class="chip">${n}/3</span><span class="sp"></span><button class="sm" data-act="guideOff">안내 닫기</button></div>${st.map((x, i) => `<div class="gstep ${x[0] ? 'done' : ''}"><span class="gnum">${x[0] ? '✓' : i + 1}</span><div><b>${x[1]}</b><div class="small muted">${x[2]}</div></div>${x[0] || x[3] === 'home' ? '' : `<button class="sm" data-act="go" data-a="${x[3]}">열기</button>`}</div>`).join('')}</div>`;
   }
   function seasonLine() {   // 시즌 진행 막대: 지금 위치와 올스타·트레이드 마감·확대 엔트리·종료 표시
     const S = L.S; if (S.phase !== 'regular' || !L.seasonMarks) return ''; const sm = L.seasonMarks(), day = Math.min(S.day, sm.len), pc = d => Math.min(100, Math.max(0, d / Math.max(1, sm.len - 1) * 100));
@@ -928,11 +928,37 @@
   }
   /* 라커룸 장면: 1군 선수 아바타(주장 C, 호조 ✨, 불만 ⛈, 부상 🩹), 친한 동료(같은 학교·입단 동기)는 붙어 앉는다. 눌러서 선수 상세 */
   /* 게임 전용 마스코트 '야구공 볼리'(실제 구단 마스코트가 아닌 창작 캐릭터): 첫 게임 안내·빈 화면에서 말을 건다 */
-  function mascot(size, say) {
-    const tc = L && BADGE[U()] ? BADGE[U()].p : '#1D7A4E';
-    const svg = `<svg class="mascot" width="${size}" height="${size}" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="36" r="22" fill="#fff" stroke="#ddd" stroke-width="1.5"/><path d="M17 22 Q24 36 17 50" stroke="#d33" stroke-width="1.6" fill="none" stroke-dasharray="2.5 2"/><path d="M47 22 Q40 36 47 50" stroke="#d33" stroke-width="1.6" fill="none" stroke-dasharray="2.5 2"/><path d="M14 22 Q32 2 50 22 Z" fill="${tc}"/><path d="M14 22 Q34 26 58 20 Q34 16 14 22Z" fill="${tc}" style="filter:brightness(.8)"/><ellipse cx="26" cy="35" rx="2.6" ry="3.4" fill="#222"/><ellipse cx="38" cy="35" rx="2.6" ry="3.4" fill="#222"/><circle cx="27" cy="34" r=".9" fill="#fff"/><circle cx="39" cy="34" r=".9" fill="#fff"/><path d="M26 43 Q32 48 38 43" stroke="#a33" stroke-width="2" fill="none" stroke-linecap="round"/><ellipse cx="21" cy="41" rx="2.4" ry="1.4" fill="#f7a" opacity=".5"/><ellipse cx="43" cy="41" rx="2.4" ry="1.4" fill="#f7a" opacity=".5"/></svg>`;
-    return say ? `<div class="mascotbox">${svg}<div class="bubble">${say}</div></div>` : svg;
+  /* 마스코트: 팀 상징(기본, 구단 이름의 일반적인 상징을 새로 디자인 — 공식 마스코트의 디자인·이름은 쓰지 않음) · 볼리(게임 창작) · 내 이미지(설정에서 고른 파일, 이 브라우저에만 저장) */
+  const MASCOT_NM = { Bears: '곰 코치', Tigers: '호랑 코치', Eagles: '독수리 코치', Lions: '사자 코치', Dinos: '공룡 코치', Wiz: '마법 코치', Twins: '쌍둥이 코치', Heroes: '히어로 코치', Landers: '우주 코치', Giants: '거인 코치' };
+  const mascotName = () => { const k = pref('mascot', 'team'); return k === 'bolly' ? '볼리' : k === 'custom' ? '마스코트' : (MASCOT_NM[U()] || '볼리'); };
+  function teamMascotSvg(team, size) {
+    const tc = BADGE[team] ? BADGE[team].p : '#1D7A4E', eyes = (y, c) => `<ellipse cx="26" cy="${y}" rx="2.6" ry="3.2" fill="${c || '#222'}"/><ellipse cx="38" cy="${y}" rx="2.6" ry="3.2" fill="${c || '#222'}"/><circle cx="27" cy="${y - 1}" r=".9" fill="#fff"/><circle cx="39" cy="${y - 1}" r=".9" fill="#fff"/>`;
+    const smile = y => `<path d="M27 ${y} Q32 ${y + 5} 37 ${y}" stroke="#7a2a2a" stroke-width="1.8" fill="none" stroke-linecap="round"/>`, cheeks = y => `<ellipse cx="20.5" cy="${y}" rx="2.4" ry="1.4" fill="#f7a" opacity=".45"/><ellipse cx="43.5" cy="${y}" rx="2.4" ry="1.4" fill="#f7a" opacity=".45"/>`;
+    const body = `<path d="M14 64 Q14 50 32 49 Q50 50 50 64Z" fill="${tc}"/><path d="M28 49 L32 54 L36 49" stroke="#fff" stroke-width="1.6" fill="none"/>`;
+    const head = {
+      Bears: `<circle cx="17" cy="15" r="6" fill="#7a4e2d"/><circle cx="47" cy="15" r="6" fill="#7a4e2d"/><circle cx="17" cy="15" r="3" fill="#c79a73"/><circle cx="47" cy="15" r="3" fill="#c79a73"/><circle cx="32" cy="30" r="18" fill="#8b5a33"/><ellipse cx="32" cy="38" rx="8" ry="6" fill="#d9b48f"/><ellipse cx="32" cy="35" rx="2.6" ry="1.8" fill="#222"/>${eyes(28)}${smile(39)}`,
+      Tigers: `<path d="M15 18 L19 8 L25 15Z" fill="#f08c1a"/><path d="M49 18 L45 8 L39 15Z" fill="#f08c1a"/><circle cx="32" cy="30" r="18" fill="#f59f2e"/><path d="M32 12 L30 19 M32 12 L34 19 M15 28 L21 29 M15 33 L21 32 M49 28 L43 29 M49 33 L43 32" stroke="#3a2a1a" stroke-width="2" stroke-linecap="round"/><ellipse cx="32" cy="38" rx="9" ry="6" fill="#fff4e6"/><ellipse cx="32" cy="35" rx="2.6" ry="1.8" fill="#222"/>${eyes(28)}${smile(39)}`,
+      Eagles: `<path d="M14 26 Q32 4 50 26 Q32 18 14 26Z" fill="#7a5233"/><circle cx="32" cy="31" r="17" fill="#fdfdfd"/><path d="M24 36 L32 46 L40 36 Q32 33 24 36Z" fill="#f5b51b"/>${eyes(29)}`,
+      Lions: `<circle cx="32" cy="30" r="22" fill="#c9771c"/><g fill="#a45e14">${Array.from({ length: 12 }, (_, k) => { const a = k / 12 * Math.PI * 2; return `<circle cx="${(32 + Math.cos(a) * 20).toFixed(1)}" cy="${(30 + Math.sin(a) * 20).toFixed(1)}" r="5"/>`; }).join('')}</g><circle cx="32" cy="30" r="16" fill="#f2c36b"/><ellipse cx="32" cy="37" rx="7.5" ry="5.5" fill="#fff1d6"/><ellipse cx="32" cy="34" rx="2.6" ry="1.8" fill="#5a3310"/>${eyes(28)}${smile(38)}`,
+      Dinos: `<path d="M20 15 L24 7 L28 14 L32 5 L36 14 L40 7 L44 15Z" fill="#2f8f5b"/><circle cx="32" cy="30" r="18" fill="#57b97a"/><ellipse cx="32" cy="39" rx="11" ry="6" fill="#a8e0b8"/><circle cx="29" cy="37" r=".9" fill="#2a5a3a"/><circle cx="35" cy="37" r=".9" fill="#2a5a3a"/>${eyes(27)}${smile(41)}`,
+      Wiz: `<circle cx="32" cy="32" r="17" fill="#f6d4b5"/><path d="M14 22 L32 -2 L50 22Z" fill="#26264d"/><rect x="12" y="20" width="40" height="5" rx="2" fill="#3b3b7a"/><text x="27" y="14" font-size="8" fill="#ffd23f">★</text><text x="36" y="20" font-size="5" fill="#ffd23f">★</text>${eyes(32)}${cheeks(37)}${smile(39)}`,
+      Twins: `<circle cx="22" cy="31" r="12" fill="#fff" stroke="#ddd"/><circle cx="42" cy="31" r="12" fill="#fff" stroke="#ddd"/><path d="M14 24 Q18 31 14 38 M50 24 Q46 31 50 38" stroke="#d33" stroke-width="1.4" fill="none" stroke-dasharray="2 1.6"/><ellipse cx="19" cy="30" rx="1.8" ry="2.3" fill="#222"/><ellipse cx="25" cy="30" rx="1.8" ry="2.3" fill="#222"/><ellipse cx="39" cy="30" rx="1.8" ry="2.3" fill="#222"/><ellipse cx="45" cy="30" rx="1.8" ry="2.3" fill="#222"/><path d="M19 35 Q22 38 25 35 M39 35 Q42 38 45 35" stroke="#7a2a2a" stroke-width="1.5" fill="none" stroke-linecap="round"/>`,
+      Heroes: `<path d="M10 64 L18 40 L46 40 L54 64Z" fill="${tc}" style="filter:brightness(.7)"/><circle cx="32" cy="30" r="17" fill="#f6d4b5"/><path d="M15 25 Q32 20 49 25 L49 32 Q42 34 38 30 L26 30 Q22 34 15 32Z" fill="#1f1f2e"/>${eyes(28, '#fff')}<ellipse cx="26" cy="28" rx="1.6" ry="2" fill="#222"/><ellipse cx="38" cy="28" rx="1.6" ry="2" fill="#222"/>${smile(38)}<text x="32" y="16" text-anchor="middle" font-size="9" font-weight="900" fill="${tc}">★</text>`,
+      Landers: `<circle cx="32" cy="29" r="20" fill="#e9eef5" stroke="#b8c2d0" stroke-width="2"/><circle cx="32" cy="30" r="14" fill="#1d2b44"/><path d="M22 26 Q26 22 30 24" stroke="#9fd3ff" stroke-width="2" fill="none" stroke-linecap="round"/>${eyes(31, '#ffd23f')}<path d="M28 37 Q32 40 36 37" stroke="#ffd23f" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="32" cy="8" r="2.5" fill="${tc}"/><line x1="32" y1="9" x2="32" y2="12" stroke="#b8c2d0" stroke-width="1.5"/>`,
+      Giants: `<circle cx="32" cy="27" r="19" fill="#f1c9a5"/><path d="M13 22 Q32 2 51 22 Q40 16 32 17 Q24 16 13 22Z" fill="#3a2a1a"/>${eyes(26)}${cheeks(32)}${smile(34)}<path d="M44 52 Q58 42 56 56 Q54 64 44 62Z" fill="#b5651d" stroke="#7a3f0f" stroke-width="1"/>`
+    }[team];
+    if (!head) return '';
+    return `<svg class="mascot" width="${size}" height="${size}" viewBox="0 0 64 64" aria-hidden="true">${body}${head}</svg>`;
   }
+  function mascot(size, say) {
+    const k = pref('mascot', 'team'), img = k === 'custom' ? pref('mascot_img', '') : '', tc = L && BADGE[U()] ? BADGE[U()].p : '#1D7A4E';
+    let svg = '';
+    if (img && /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(img)) svg = `<img class="mascot mimg" src="${img}" width="${size}" height="${size}" alt="">`;   // 이 브라우저에만 저장된 내 이미지(형식 검사 후 사용)
+    else if (k === 'team' && L) svg = teamMascotSvg(U(), size);
+    if (!svg) svg = `<svg class="mascot" width="${size}" height="${size}" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="36" r="22" fill="#fff" stroke="#ddd" stroke-width="1.5"/><path d="M17 22 Q24 36 17 50" stroke="#d33" stroke-width="1.6" fill="none" stroke-dasharray="2.5 2"/><path d="M47 22 Q40 36 47 50" stroke="#d33" stroke-width="1.6" fill="none" stroke-dasharray="2.5 2"/><path d="M14 22 Q32 2 50 22 Z" fill="${tc}"/><path d="M14 22 Q34 26 58 20 Q34 16 14 22Z" fill="${tc}" style="filter:brightness(.8)"/><ellipse cx="26" cy="35" rx="2.6" ry="3.4" fill="#222"/><ellipse cx="38" cy="35" rx="2.6" ry="3.4" fill="#222"/><circle cx="27" cy="34" r=".9" fill="#fff"/><circle cx="39" cy="34" r=".9" fill="#fff"/><path d="M26 43 Q32 48 38 43" stroke="#a33" stroke-width="2" fill="none" stroke-linecap="round"/><ellipse cx="21" cy="41" rx="2.4" ry="1.4" fill="#f7a" opacity=".5"/><ellipse cx="43" cy="41" rx="2.4" ry="1.4" fill="#f7a" opacity=".5"/></svg>`;
+    return say ? `<div class="mascotbox">${svg}<div class="bubble"><b class="small">${esc(mascotName())}</b><br>${say}</div></div>` : svg;
+  }
+
   function lockerRoom() {
     const S = L.S, t = U(), bd = L.clubhouseBoard ? L.clubhouseBoard() : { groups: [] }, cap = L.captain && L.captain(), act = L.players(t).filter(p => p.active), order = [];
     const seen = new Set(), add = p => { if (p && !seen.has(p.id) && act.includes(p)) { seen.add(p.id); order.push(p); } };
@@ -1521,6 +1547,9 @@
     const fs = pref('fs', 'm'), fv = favs().map(P).filter(Boolean);
     return `<div class="card"><h2>화면 설정</h2><div class="row small">글자 크기 ${[['s', '작게'], ['m', '보통'], ['l', '크게'], ['xl', '더 크게']].map(([k, t]) => `<button class="sm ${fs === k ? 'primary' : ''}" data-act="fontSz" data-a="${k}">${t}</button>`).join('')}</div>
       <div class="row small"><label><input type="checkbox" data-act="vibTog" ${pref('vib', '1') === '1' ? 'checked' : ''}> 조작 시 진동 효과(지원 기기)</label></div>
+      <div class="row small" style="align-items:center;gap:6px">마스코트 ${[['team', '팀 상징'], ['bolly', '볼리'], ['custom', '내 이미지']].map(([k, t]) => `<button class="sm ${pref('mascot', 'team') === k ? 'primary' : ''}" data-act="mascotSet" data-a="${k}">${t}</button>`).join('')} ${mascot(34)}</div>
+      ${pref('mascot', 'team') === 'custom' ? `<div class="row small" style="align-items:center;gap:6px"><label class="sm">이미지 고르기 <input id="mascotFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif"></label>${pref('mascot_img', '') ? '<button class="sm" data-act="mascotClear">지우기</button>' : ''}<span class="muted">이 브라우저에만 저장됩니다(게임 파일·공유 페이지에는 들어가지 않음). 128px로 줄여 보관합니다.</span></div>` : ''}
+      <div class="small muted">팀 상징 마스코트는 구단 이름의 일반적인 상징을 새로 그린 캐릭터로, 각 구단의 공식 마스코트가 아닙니다.</div>
       <div class="row small"><label><input type="checkbox" data-act="sfxTog" ${pref('sfx', '0') === '1' ? 'checked' : ''}> 효과음(타격음·관중 함성·득점 팡파르 — 브라우저에서 합성, 기본 꺼짐)</label></div>
       <div class="small muted" style="margin-top:6px">관심 선수 ${fv.length}명 — 선수 상세의 ☆ 버튼으로 추가합니다.${fv.length ? '<br>' + fv.map(p => `<button class="sm" data-act="player" data-a="${p.id}">${esc(p.ko)} ${L.ovr(p)}</button>`).join(' ') : ''}</div></div>`;
   }
@@ -2248,6 +2277,8 @@
     persuadeCancel() { ui.persuade = null; render(); },
     fontSz(a) { setPref('fs', a); applyFont(); render(); },
     vibTog(a, el) { setPref('vib', el.checked ? '1' : '0'); render(); },
+    mascotSet(a) { setPref('mascot', a); render(); },
+    mascotClear() { setPref('mascot_img', ''); render(); },
     sfxTog(a, el) { setPref('sfx', el.checked ? '1' : '0'); if (el.checked) FX.play('fanfare'); render(); },
     fav(a) { const f = favs(), i = f.indexOf(a); if (i >= 0) f.splice(i, 1); else f.push(a); autosave(); render(); },
     selClear() { ui.sel = null; render(); },
@@ -2442,6 +2473,8 @@
   document.addEventListener('change', e => {
     const el = e.target; if (!L && el.id !== 'seedIn') return;
     if (el.id === 'seedIn') { ui.seed = el.value; return; }
+    if (el.id === 'mascotFile') { const f = el.files && el.files[0]; if (!f || !/^image\/(png|jpeg|webp|gif)$/.test(f.type)) { toast('PNG·JPG·WEBP·GIF 이미지를 골라 주세요.'); return; }   // 내 마스코트 이미지: 128px로 줄여 이 브라우저에만 저장
+      const rd = new FileReader(); rd.onload = () => { const im = new Image(); im.onload = () => { const c = document.createElement('canvas'), k = Math.min(1, 128 / Math.max(im.width, im.height)); c.width = Math.max(1, Math.round(im.width * k)); c.height = Math.max(1, Math.round(im.height * k)); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); let d = ''; try { d = c.toDataURL('image/png'); } catch (e2) { d = ''; } if (!d) { toast('이미지를 읽지 못했습니다.'); return; } setPref('mascot_img', d); if (pref('mascot_img', '') !== d) toast('브라우저 저장 공간이 부족해 저장하지 못했습니다.'); else toast('마스코트 이미지를 바꿨습니다.'); render(); }; im.onerror = () => toast('이미지를 읽지 못했습니다.'); im.src = rd.result; }; rd.readAsDataURL(f); return; }
     if (el.id === 'liveMode') { ui.liveMode = el.checked; render(); return; }
     if (el.id === 'playMode') { ui.liveMode = el.value !== 'auto'; ui.hl = el.value === 'highlight'; render(); return; }
     if (el.id === 'autoBp') { ui.live.ctx.auto = el.checked; return; }
