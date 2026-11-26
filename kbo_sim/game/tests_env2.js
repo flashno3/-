@@ -9,7 +9,8 @@ const sim=(N,seed)=>{let hw=0,aw=0,R=0,G=0;const s={K:0,BB:0,HR:0,PA:0,'1B':0,'2
  ok(t[0][0]>t[1][0]&&t[1][0]>t[2][0],'삼진 배율 감소');ok(t[0][2]<t[1][2],'홈런 배율 1바퀴째 낮음');ok(t[0][3]<t[1][3]&&t[1][3]<t[2][3],'BABIP 배율 증가');ok(E.env.hfa>0&&E.env.bbs>=1,'홈·볼넷 설정')}
 // 홈 승률 51.5~52.1% 부근, 리그 평균 지표는 홈 어드밴티지를 껐을 때와 같다
 {const a=sim(14000,21);ok(a.home>0.505&&a.home<0.532,`홈 승률(무승부 제외) ${(a.home*100).toFixed(1)}%`);
- const save=E.env.hfa;E.env.hfa=0;const b=sim(14000,21);E.env.hfa=save;ok(Math.abs(a.avg-b.avg)<0.003&&Math.abs(a.rpg-b.rpg)<0.12,`리그 평균 불변 AVG ${a.avg.toFixed(3)}/${b.avg.toFixed(3)} R/G ${a.rpg.toFixed(2)}/${b.rpg.toFixed(2)}`);ok(b.home<a.home-0.012,`끄면 홈 승률 낮음 ${(b.home*100).toFixed(1)}`);
+ const save=E.env.hfa;E.env.hfa=0;const b=sim(14000,21),b2=sim(14000,22);E.env.hfa=save;const a2=sim(14000,22),dh=((a.home-b.home)+(a2.home-b2.home))/2;   // 홈 효과 폭은 시드 하나로는 1.2~2.4%p로 흔들려 두 시드 평균으로 본다
+ ok(Math.abs(a.avg-b.avg)<0.003&&Math.abs(a.rpg-b.rpg)<0.12,`리그 평균 불변 AVG ${a.avg.toFixed(3)}/${b.avg.toFixed(3)} R/G ${a.rpg.toFixed(2)}/${b.rpg.toFixed(2)}`);ok(dh>0.012,`끄면 홈 승률 낮음(두 시드 평균 차 ${(dh*100).toFixed(2)}%p)`);
  ok(a.avg>0.262&&a.avg<0.274&&a.bb>0.088&&a.bb<0.099&&a.hr>0.022&&a.hr<0.027&&a.rpg>4.6&&a.rpg<5.3,`리그 지표 범위 AVG ${a.avg.toFixed(3)} BB ${(a.bb*100).toFixed(1)} HR ${(a.hr*100).toFixed(2)} R/G ${a.rpg.toFixed(2)}`)}
 // 3바퀴째 효과: 선발 상대 타석을 구간별로 나눠 삼진율·홈런율이 방향대로, 켜고 끈 리그 평균은 같음
 {const tot=[{pa:0,k:0,hr:0},{pa:0,k:0,hr:0},{pa:0,k:0,hr:0}];const bk=(on)=>{const save=E.env.tto;if(!on)E.env.tto=0;for(const t of tot){t.pa=t.k=t.hr=0}
