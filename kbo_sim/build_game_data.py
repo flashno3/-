@@ -718,9 +718,9 @@ def load_school_home():
                 if n==full: out[a]=tm
     return out
 SCHOOLHOME=load_school_home()
-def load_awards():   # 실제 KBO 신인왕·골든글러브 2020~2025(사용자 제공, 2026 시상 예정: 신인왕 11/26·골든글러브 12/8)
+def load_awards():   # 실제 KBO MVP·신인왕·골든글러브 2020~2025(사용자 제공) + 2026 MVP·신인왕(2026-11-26 시상식 보도 검색). 2026 골든글러브는 12/8 시상 예정
     import csv
-    f=D+'game/data/awards_2020_2025.csv'
+    f=D+'game/data/awards_2020_2026.csv'
     return [dict(y=int(r['연도']),k=r['구분'],pos=r['포지션'],name=r['선수'],team=r['팀'],note=r['비고']) for r in csv.DictReader(open(f,encoding='utf-8-sig'))] if os.path.exists(f) else []
 AWARDS=load_awards()
 out={'awards':AWARDS,'schoolHome':SCHOOLHOME,'coaches':COACHES,'finance':FINANCE,'faclass2027':FACLASS,'foreign2027':FOREIGN27,'draft2027':DRAFT,'teams':TEAMS,'players':players,'league_bat':R['league_bat'],'team_def':R['team_def'],'pf':PK['pf_by_team'],

@@ -650,12 +650,12 @@
       <div class="grid">${tbl('주요 선수 (OVR 상위)', star)}${tbl('타순', lu, t === U() ? '현재 라인업 기준' : '현재 1군 타자로 구성한 예상 라인업')}${tbl('선발 로테이션', rot)}${tbl('불펜 (마무리·승리조·중간)', pen)}</div>
       ${inj.length ? `<div class="card"><h2>부상자</h2><div class="tablewrap"><table><tbody>${inj.map(p => `<tr class="click" data-act="player" data-a="${p.id}"><td class="l"><b>${esc(p.ko)}</b> <span class="muted small">${pos(p)}</span></td><td class="l small">${esc(p.inj.dx)}</td><td class="n small">~${L.injDateStr(p)}</td></tr>`).join('')}</tbody></table></div></div>` : ''}`;
   }
-  /* 수상 기록: 실제 KBO 신인왕·골든글러브(2020~2025)와 내 게임의 연도별 수상 */
+  /* 수상 기록: 실제 KBO MVP·신인왕·골든글러브(2020~2026, 2026 골든글러브는 12/8 시상 예정)와 내 게임의 연도별 수상 */
   function awardsCard() {
     const S = L.S, real = S.awardsReal || [], mine = S.awardsHist || [];
     const years = Array.from(new Set(real.map(x => x.y))).sort((a, b) => b - a);
-    const realHtml = years.length ? `<details style="margin-top:6px"><summary><b>실제 KBO 신인왕·골든글러브 (${years[years.length - 1]}~${years[0]})</b> — 2026 시상: 신인왕 11/26 · 골든글러브 12/8 예정</summary>${years.map(y => { const rk = real.find(x => x.y === y && x.k === '신인왕'), gg = real.filter(x => x.y === y && x.k === '골든글러브');
-      return `<div style="margin-top:8px"><b>${y}</b> <span class="small muted">신인왕</span> ${rk ? `<b>${esc(rk.name)}</b> (${esc(rk.team)} ${esc(rk.pos)}) <span class="small muted">${esc(rk.note)}</span>` : '-'}<div class="small" style="margin-top:2px">${gg.map(g => `<span class="chip" title="${esc(g.note)}">${esc(g.pos.replace('수', ''))} ${esc(g.name)}(${esc(g.team)})</span>`).join(' ')}</div></div>`; }).join('')}</details>` : '';
+    const realHtml = years.length ? `<details style="margin-top:6px"><summary><b>실제 KBO MVP·신인왕·골든글러브 (${years[years.length - 1]}~${years[0]})</b> — 2026 골든글러브는 12/8 시상 예정</summary>${years.map(y => { const mv = real.find(x => x.y === y && x.k === 'MVP'), rk = real.find(x => x.y === y && x.k === '신인왕'), gg = real.filter(x => x.y === y && x.k === '골든글러브');
+      return `<div style="margin-top:8px"><b>${y}</b> <span class="small muted">MVP</span> ${mv ? `<b>${esc(mv.name)}</b> (${esc(mv.team)} ${esc(mv.pos)}) <span class="small muted">${esc(mv.note)}</span>` : '-'}<br><span class="small muted">신인왕</span> ${rk ? `<b>${esc(rk.name)}</b> (${esc(rk.team)} ${esc(rk.pos)}) <span class="small muted">${esc(rk.note)}</span>` : '-'}<div class="small" style="margin-top:2px">${gg.map(g => `<span class="chip" title="${esc(g.note)}">${esc(g.pos.replace('수', ''))} ${esc(g.name)}(${esc(g.team)})</span>`).join(' ')}</div></div>`; }).join('')}</details>` : '';
     const mineHtml = mine.length ? `<div style="margin-top:8px"><b>내 게임 수상 기록</b>${mine.slice().reverse().map(m => `<div class="small" style="margin-top:4px"><b>${m.year}</b> ${m.awards.filter(a => ['MVP', '신인왕', '홈런왕', '타율왕'].includes(a.label)).map(a => `${a.label} ${esc(a.name)}`).join(' · ')}</div>`).join('')}</div>` : '';
     return `<div class="card"><h2>수상 기록</h2>${mineHtml}${realHtml || '<span class="muted small">기록이 없습니다.</span>'}</div>`;
   }
