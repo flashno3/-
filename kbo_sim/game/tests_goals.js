@@ -31,6 +31,7 @@ console.log('goals tests ok',n);
  ok2(new Set(gg.map(a=>a.id)).size===gg.length,'골든글러브 중복 없음');ok2(A.some(a=>a.label==='신인왕'),'신인왕 선정');
  const rk=A.find(a=>a.label==='신인왕'),p=S.players[rk.id];ok2(p&&!p.foreign&&p.age<=30,'신인왕은 신인 자격 선수 '+p.ko);
  ok2(S.awardsHist&&S.awardsHist.length===1,'수상 기록 누적');
- ok2(S.awardsReal.length===66&&S.awardsReal.filter(x=>x.k==='신인왕').length===6&&S.awardsReal.filter(x=>x.k==='골든글러브'&&x.y===2025).length===10,'실제 수상 데이터 2020~2025 (신인왕 6, 연 GG 10)');
+ ok2(S.awardsReal.length===74&&S.awardsReal.filter(x=>x.k==='신인왕').length===7&&S.awardsReal.filter(x=>x.k==='MVP').length===7&&S.awardsReal.filter(x=>x.k==='골든글러브'&&x.y===2025).length===10&&S.awardsReal.filter(x=>x.k==='골든글러브'&&x.y===2026).length===0,'실제 수상 데이터: 2020~2025 GG 연 10 + MVP·신인왕 2020~2026 각 7 (2026 GG 미시상)');
+ ok2(S.awardsReal.filter(x=>x.k==='MVP').every(m=>m.y===2026||S.awardsReal.some(g=>g.k==='골든글러브'&&g.y===m.y&&g.name===m.name&&/MVP$/.test(g.note))),'MVP 2020~2025는 골든글러브 비고 MVP 표시와 일치');
  ok2(S.awardsReal.find(x=>x.y===2025&&x.k==='신인왕').name==='안현민','2025 신인왕 안현민');n+=6}
 console.log('award tests ok',n);
