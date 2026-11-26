@@ -5,7 +5,7 @@ const mk=(seed,team)=>{const L=League.create(base,team||'Lions',seed);L.faAdvanc
 // 1) 기본 조건: 시즌이 끝날 때까지 여러 번 멈추고, 이유가 있다
 {const L=mk(3),S=L.S;let stops=0,reasons=[],g=0,days=0;
  while(g++<200){const r=L.advanceMoment(false);if(r.status==='seasonEnd')break;ok(r.status==='moment'&&r.reason&&r.played>=1,'멈춤 이유');stops++;reasons.push(r.reason);days+=r.played;for(const e of L.eventsOpen())L.resolveEvent(e.id,e.def||e.choices[0].k)}
- ok(S.phase==='regular_done'&&S.day>=S.schedule.length,'시즌 끝까지 진행');ok(stops>=3&&stops<=60,'시즌 중 중요 순간 '+stops+'회 — '+[...new Set(reasons.map(x=>x.split(':')[0].split(' ')[0]))].join(','));
+ ok(S.phase==='regular_done'&&S.day>=S.schedule.length,'시즌 끝까지 진행');ok(stops>=3&&stops<=100,'시즌 중 중요 순간(43단계 감독 결정 포함, 약 2경기에 1번 이하) '+stops+'회 — '+[...new Set(reasons.map(x=>x.split(':')[0].split(' ')[0]))].join(','));
  ok(reasons.some(x=>/마감/.test(x)),'트레이드 마감 5일 전에 멈춤');}
 // 2) 조건 끄기: 아무것도 끄면 시즌 끝까지 한 번에
 {const L=mk(4),S=L.S;for(const k of ['event','injury','deadline','odds','goal','month'])ok(L.setStop(k,false),'조건 끄기 '+k);ok(!L.setStop('x',true),'알 수 없는 조건 거부');
