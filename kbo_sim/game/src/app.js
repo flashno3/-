@@ -2327,7 +2327,16 @@
     guideOff() { setPref('guide_off', '1'); render(); },
     frontClose(a) { L.frontSeenUpTo(+a); ui.frontView = null; autosave(); render(); },
     frontView(a) { ui.frontView = +a; render(); },
-    frontSave(a) { const el = document.querySelector('.frontsvg'); if (!el) return; try { const xml = new XMLSerializer().serializeToString(el), img = new Image(), url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' })); img.onload = () => { const c = document.createElement('canvas'); c.width = 720; c.height = 960; const x = c.getContext('2d'); x.drawImage(img, 0, 0, 720, 960); URL.revokeObjectURL(url); c.toBlob(b => { const u = URL.createObjectURL(b), aa = document.createElement('a'); aa.href = u; aa.download = `kbo_1면_${a}.png`; document.body.appendChild(aa); aa.click(); aa.remove(); setTimeout(() => URL.revokeObjectURL(u), 1000); }, 'image/png'); }; img.src = url; } catch (e) { toast('이미지로 저장하지 못했습니다.'); } },
+    frontSave(a) {   // 1면 PNG: claude.ai 뷰어에서는 downloads 기능(뷰어 확인 후 저장), 단독 파일(index.html)에서는 일반 내려받기
+      const el = document.querySelector('.frontsvg'); if (!el) return;
+      const toPng = () => new Promise((res, rej) => { try { const xml = new XMLSerializer().serializeToString(el), img = new Image(), url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' })); img.onload = () => { const c = document.createElement('canvas'); c.width = 720; c.height = 960; c.getContext('2d').drawImage(img, 0, 0, 720, 960); URL.revokeObjectURL(url); c.toBlob(b => b ? res(b) : rej(new Error('png')), 'image/png'); }; img.onerror = rej; img.src = url; } catch (e) { rej(e); } });
+      const name = `kbo_front_${a}.png`;
+      toPng().then(async blob => {
+        if (window.claude && window.claude.use) { const dl = await window.claude.use('downloads'); if (!dl) { toast('이 화면에서는 파일 저장을 쓸 수 없습니다.'); return; }
+          try { await dl.save({ filename: name, data: blob }); toast('1면 이미지를 저장했습니다.'); } catch (e) { const c = e && e.code; toast(c === 'declined' ? '저장을 취소했습니다.' : c === 'rate_limited' ? '잠시 후 다시 시도해 주세요.' : c === 'host_unavailable' ? '이 앱에서는 저장할 수 없습니다. 브라우저나 컴퓨터에서 열어 주세요.' : '이미지를 저장하지 못했습니다.'); } return; }
+        const u = URL.createObjectURL(blob), aa = document.createElement('a'); aa.href = u; aa.download = name; document.body.appendChild(aa); aa.click(); aa.remove(); setTimeout(() => URL.revokeObjectURL(u), 1000);   // 단독 실행(index.html)
+      }).catch(() => toast('이미지로 저장하지 못했습니다.'));
+    },
     champClose() { ui.champEnd = false; render(); },
     cardsClose() { L.S.cardNew = []; autosave(); render(); },
     toastClose() { ui.toast = null; clearTimeout(toast.t); const t = $('.toast'); if (t) t.remove(); },
