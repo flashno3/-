@@ -37,7 +37,7 @@
     for (const t of TEAMS) if (t === S.userTeam) this.ensureActive(t);
     this.topUpWhales();
     this.returnMilitary(S.year * 12 + 2);   // 새 시즌 개막(3월) 전까지 전역한 선수 복귀
-    if (S.dec) { S.dec.mods = []; S.dec.follow = []; S.dec.cd = {}; S.dec.retAsked = []; }   // 결정 보정은 시즌 안에서만(decide.js)
+    if (S.dec) { S.dec.mods = []; S.dec.follow = []; S.dec.cd = {}; S.dec.retAsked = []; S.dec.dir = null; }   // 결정 보정은 시즌 안에서만(decide.js)
     if (this._intlPreseason) this._intlPreseason();   // 3월 올림픽 최종예선(intl.js)
     if (this._milSelect) this._milSelect();   // 상무 선발(지난 오프시즌 지원자, military.js)
     if (S.cbt && S.cbt.excPrompt) S.cbt.excPrompt = null;   // 확인하지 않아도 추천 선수로 적용된 상태로 새 시즌 시작
@@ -79,8 +79,8 @@
     if (aiN < ROSTER_MIN || myN < ROSTER_MIN) return { ok: false, why: `보유 선수 최소 ${ROSTER_MIN}명이 필요합니다.` };
     { const cb = this.capBlockTrade(me, tp, gp); if (cb) return { ok: false, why: cb }; }   // 내 구단도 FA 영입과 같은 상한 규칙
     // AI 구단은 트레이드로 상한을 넘기지 않는다
-    const aiPay = this.cbtPay(aiTeam) + (S.calib.cbtK || 1) * (gp.reduce((a, p) => a + (p.rookie === S.year || p.foreign ? 0 : p.contract.salary), 0) - tp.reduce((a, p) => a + (p.rookie === S.year || p.foreign ? 0 : p.contract.salary), 0));
-    if (aiPay > this.cbtCap() && aiPay > this.cbtPay(aiTeam)) return { ok: false, why: `${aiTeam} 구단이 연봉 상한(${this.cbtCap()}억)을 넘게 되어 수락하지 않습니다.` };
+    const aiCap = this._capTrade(aiTeam, gp, tp);   // 정산과 같은 계산(현재 연봉 근사는 계약금이 큰 선수에서 어긋남)
+    if (aiCap.over) return { ok: false, why: `${aiTeam} 구단이 연봉 상한(${this.cbtCap()}억)을 넘게 되어 수락하지 않습니다.` };
     // AI가 핵심 선수를 내줄 때는 더 큰 대가를 요구
     const star = tp.some(p => this.ovr(p) >= 65) ? 1.25 : 1.0, need = vGet * 1.12 * star + 0.1;   // 가치는 묶음 가치 기준
     return { ok: vGive >= need, vGive: Math.round(vGive * 10) / 10, vGet: Math.round(vGet * 10) / 10, need: Math.round(need * 10) / 10, why: vGive >= need ? null : `상대 구단이 받는 가치(${Math.round(vGive * 10) / 10})가 요구 수준(${Math.round(need * 10) / 10})에 못 미칩니다.` };

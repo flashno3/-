@@ -37,4 +37,12 @@ const mk = (seed, team) => { const L = League.create(base, team || 'Bears', seed
   const P = L.startPostseason(); let g = 0; while (!P.done && g++ < 100) { if (L.userInPost()) { const c = L.startUserPostGame(); c.live.playToEnd(); L.finishUserPostGame(c); } else L.simPostGame(); }
   L.startOffseason(); L.resignAll(); L.finishContracts(); L.buildDraft(); L.draftAutoRest(); L.finishDraft(); L.finishFA(); L.startNewSeason();
   ok(S.dec.mods.length === 0 && (S.dec.follow || []).length === 0, '새 시즌에 결정 보정·후속 초기화'); }
+// 6) 2차 결정: 시즌 방향·캠프·트레이드 마감 — 모든 선택지, 목표 조정, 실제 거래와 정합성
+{ for (const [k, chk] of [['win', (S, g0) => S.goals.rank === Math.max(1, g0.rank - 1)], ['build', (S, g0) => S.goals.rank === Math.min(10, g0.rank + 2) && S.goals.youth === g0.youth + 2], ['bal', (S, g0) => S.goals.rank === g0.rank]]) {
+    const L = League.create(base, 'Bears', 31), S = L.S; L.faAdvance(75); L.closeFA(); const g0 = Object.assign({}, S.goals); const e = L._decDir(); const r = L.resolveEvent(e.id, k); ok(r.ok && chk(S, g0) && S.dec.dir === k, `시즌 방향 ${k}: ${r.msg} ${JSON.stringify(S.goals)}`); }
+  for (const k of ['skill', 'tac', 'fit']) { const L = League.create(base, 'Bears', 32), S = L.S; L.faAdvance(75); L.closeFA(); const e = L._decCamp(); const r = L.resolveEvent(e.id, k); ok(r.ok && r.msg && !/undefined/.test(r.msg), `캠프 ${k}: ${r.msg}`); if (k === 'tac') ok(S.dec.tac === S.year, '전술 캠프 표시'); if (k === 'fit') ok(S.restUntil >= 40, '체력 캠프: 부상 위험 감소 기간'); }
+  let traded = 0; for (const [seed, team] of [[33, 'Heroes'], [34, 'Lions'], [35, 'Wiz'], [36, 'Twins']]) { const L = League.create(base, team, seed), S = L.S; L.faAdvance(75); L.closeFA(); L.advance(100, false);
+    const e = L._decDeadline(); if (!e) continue; for (const c of e.choices) { if (c.k === 'hold') continue; const L2 = League.create(base, team, seed); L2.faAdvance(75); L2.closeFA(); L2.advance(100, false); const e2 = L2._decDeadline(); const deal = e2.data[c.k], before = deal && L2.S.players[deal.get].team;
+      const r = L2.resolveEvent(e2.id, c.k); ok(r.ok, `마감 ${c.k}: ${r.msg}`); if (deal && !/성사되지/.test(r.msg)) { ok(L2.S.players[deal.get].team === L2.S.userTeam && L2.S.players[deal.give].team === before, `마감 ${c.k}: 실제 거래`); traded++; } ok(!L2.integrity().errors.length, `마감 ${c.k} 뒤 정합성`); } }
+  ok(traded >= 1, '트레이드 마감 거래 1건 이상 성사 ' + traded); }
 console.log('decide tests ok', n);
