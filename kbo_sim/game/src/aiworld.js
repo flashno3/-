@@ -45,8 +45,7 @@
       if (pa.type !== pb.type) continue; if (pa.type === 'P' ? (pa.role === 'SP') !== (pb.role === 'SP') : (pa.pos === 'C') !== (pb.pos === 'C')) continue;
       const va = this.marketValue(pa), vbv = this.marketValue(pb), ratio = va / vbv; if (ratio < 0.85 || ratio > 1.15) continue;
       if (this.war(pb) < this.war(pa) + 0.3) continue;   // A는 당장의 전력이 나아져야 한다
-      const kk = (S.calib && S.calib.cbtK) || 1, sa = pa.rookie === S.year ? 0 : pa.contract.salary, sb = pb.rookie === S.year ? 0 : pb.contract.salary;
-      const payA = this.cbtPay(A) + kk * (sb - sa), payB = this.cbtPay(B) + kk * (sa - sb); if ((payA > this.cbtCap() && payA > this.cbtPay(A)) || (payB > this.cbtCap() && payB > this.cbtPay(B))) continue;   // 상한을 넘기는 방향의 교환은 하지 않는다
+      if (this._capTrade(A, [pb], [pa]).over || this._capTrade(B, [pa], [pb]).over) continue;   // 상한을 넘기는 방향의 교환은 하지 않는다(정산과 같은 계산 — 현재 연봉 근사는 계약금이 큰 선수에서 어긋났다: 2029 두산 원태인 트레이드로 초과)
       pairs.push({ pa, pb, s: Math.abs(1 - ratio) - 0.05 * (this.war(pb) - this.war(pa)) });
     }
     if (!pairs.length) return null; pairs.sort((x, y) => x.s - y.s); const pick = pairs[Math.min(pairs.length - 1, Math.floor(r.random() * Math.min(3, pairs.length)))];

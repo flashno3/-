@@ -193,11 +193,15 @@
     if (after > cap + 1e-9 && after > before + 1e-9) return `경쟁균형세 상한(${cap.toFixed(1)}억)을 넘게 되어 영입할 수 없습니다(상위 40명 합계 ${before} → ${after}억). 1~2년 상한을 깨고 우승에 도전하는 시즌이라면 경쟁균형세 카드에서 '상한 초과 영입 허용'을 켜세요(초과분 기금 납부·연속 초과 시 지명권 하락).`;
     return null;
   };
-  proto.capBlockTrade = function (t, incoming, outgoing) {   // 트레이드로 받는 선수(보수 합 증가)가 상위 40명 합계를 상한 위로 올리면 막는다(FA 영입과 같은 규칙·같은 허용 토글)
-    const S = this.S; if (S.cbt && S.cbt.allowOver) return null; const next = S.phase === 'offseason', y = S.year + (next ? 1 : 0), cap = this.cbtCap(y), exc = this.cbtExc(t), eid = exc ? exc.id : null, k = S.calib.cbtK || 1, out = new Set(outgoing.map(p => p.id));
+  proto._capTrade = function (t, incoming, outgoing) {   // 트레이드 뒤 상위 40명 합계(정산과 같은 계산: 산정 보수·예외 선수 50%·신인·외국인 제외) — 사용자·AI 공용
+    const S = this.S, next = S.phase === 'offseason', y = S.year + (next ? 1 : 0), cap = this.cbtCap(y), exc = this.cbtExc(t), eid = exc ? exc.id : null, k = S.calib.cbtK || 1, out = new Set(outgoing.map(p => p.id));
     const base = this.players(t).filter(q => q.rookie !== y && !q.foreign).map(q => ({ id: q.id, v: this.cbtVal(q) * (q.id === eid ? 0.5 : 1) })), top = a => Math.round(a.slice().sort((x, z) => z - x).slice(0, 40).reduce((u, v) => u + v, 0) * k * 10) / 10;
     const before = top(base.map(x => x.v)), after = top(base.filter(x => !out.has(x.id)).map(x => x.v).concat(incoming.filter(q => q.rookie !== y && !q.foreign).map(q => this.cbtVal(q))));
-    return after > cap + 1e-9 && after > before + 1e-9 ? `경쟁균형세 상한(${cap.toFixed(1)}억)을 넘게 되어 트레이드할 수 없습니다(상위 40명 합계 ${before} → ${after}억). 1~2년 상한을 깨고 우승에 도전하는 시즌이라면 경쟁균형세 카드에서 '상한 초과 영입 허용'을 켜세요.` : null;
+    return { before, after, cap, over: after > cap + 1e-9 && after > before + 1e-9 };
+  };
+  proto.capBlockTrade = function (t, incoming, outgoing) {   // 트레이드로 받는 선수(보수 합 증가)가 상위 40명 합계를 상한 위로 올리면 막는다(FA 영입과 같은 규칙·같은 허용 토글)
+    const S = this.S; if (S.cbt && S.cbt.allowOver) return null; const { before, after, cap, over } = this._capTrade(t, incoming, outgoing);
+    return over ? `경쟁균형세 상한(${cap.toFixed(1)}억)을 넘게 되어 트레이드할 수 없습니다(상위 40명 합계 ${before} → ${after}억). 1~2년 상한을 깨고 우승에 도전하는 시즌이라면 경쟁균형세 카드에서 '상한 초과 영입 허용'을 켜세요.` : null;
   };
   proto.setAllowOver = function (on) { const S = this.S; S.cbt = S.cbt || { over: {}, under: {}, drop: {}, fees: {}, log: [] }; S.cbt.allowOver = !!on; return null; };
   proto._compPay = function (signer, old, amt, label) {
