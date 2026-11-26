@@ -8674,7 +8674,7 @@ td.l > svg.avatar { margin-right: 6px; } .mav svg.avatar { box-shadow: 0 2px 8px
   }
   /* ---------------- FA 시장 속보 ---------------- */
   function faFeedCard() {
-    const S = L.S, all = S.faFeed || [], fd = all.filter(x => (x.y === S.year || x.y === S.year - 1) && (x.kind === 'bid' || x.mine)).slice(0, 10); if (!fd.length) return '';   // 계약 완료는 위쪽 FA 로그에 이미 나오므로 입찰 소식과 내 관심 선수 소식만 보여준다
+    const S = L.S, all = S.faFeed || [], fd = all.filter(x => (x.y === S.year || x.y === S.year - 1) && (x.kind === 'bid' || x.mine)).slice(0, 10); if (!fd.length) return S.faMkt && !S.faMkt.closed ? '<div class="card"><h2 style="margin:0">시장 속보</h2><div class="small muted" style="margin-top:6px">아직 다른 구단의 입찰 소식이 없습니다. 날짜를 넘기면 입찰 경쟁이 여기에 표시됩니다.</div></div>' : '';   // FA 기간에는 소식이 없어도 자리를 지킨다   // 계약 완료는 위쪽 FA 로그에 이미 나오므로 입찰 소식과 내 관심 선수 소식만 보여준다
     const seen = ui.faSeen === undefined ? 0 : ui.faSeen, fresh = Math.max(0, all.length - seen); ui.faSeen = all.length;
     return `<div class="card"><div class="row"><h2 style="margin:0">시장 속보</h2>${fresh ? `<span class="chip in">새 소식 ${Math.min(fresh, 10)}</span>` : ''}</div>${fd.map(x => `<div class="small feeditem ${x.kind}${x.mine ? ' mine' : ''}"><span class="muted">${S.faMkt ? L.faDateStr(x.d) : ''}</span> ${x.kind === 'sign' ? '✅' : '📣'} ${esc(x.text)}${x.mine ? ' <span class="chip in">관심</span>' : ''}</div>`).join('')}</div>`;
   }
