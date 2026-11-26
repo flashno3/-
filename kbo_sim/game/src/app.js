@@ -1548,7 +1548,7 @@
     return `<div class="card"><h2>화면 설정</h2><div class="row small">글자 크기 ${[['s', '작게'], ['m', '보통'], ['l', '크게'], ['xl', '더 크게']].map(([k, t]) => `<button class="sm ${fs === k ? 'primary' : ''}" data-act="fontSz" data-a="${k}">${t}</button>`).join('')}</div>
       <div class="row small"><label><input type="checkbox" data-act="vibTog" ${pref('vib', '1') === '1' ? 'checked' : ''}> 조작 시 진동 효과(지원 기기)</label></div>
       <div class="row small" style="align-items:center;gap:6px">마스코트 ${[['team', '팀 상징'], ['bolly', '볼리'], ['custom', '내 이미지']].map(([k, t]) => `<button class="sm ${pref('mascot', 'team') === k ? 'primary' : ''}" data-act="mascotSet" data-a="${k}">${t}</button>`).join('')} ${mascot(34)}</div>
-      ${pref('mascot', 'team') === 'custom' ? `<div class="row small" style="align-items:center;gap:6px"><label class="sm">이미지 고르기 <input id="mascotFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif"></label>${pref('mascot_img', '') ? '<button class="sm" data-act="mascotClear">지우기</button>' : ''}<span class="muted">이 브라우저에만 저장됩니다(게임 파일·공유 페이지에는 들어가지 않음). 128px로 줄여 보관합니다.</span></div>` : ''}
+      ${pref('mascot', 'team') === 'custom' ? `<div class="row small" style="align-items:center;gap:6px"><button class="sm primary" data-act="mascotPick">이미지 고르기</button><input id="mascotFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none" tabindex="-1" aria-hidden="true">${pref('mascot_img', '') ? '<button class="sm" data-act="mascotClear">지우기</button>' : ''}<span class="muted">이 브라우저에만 저장됩니다(게임 파일·공유 페이지에는 들어가지 않음). 128px로 줄여 보관합니다.</span></div><div class="mascotdrop small muted" data-drop="mascot">고르기 창이 안 열리면: 이미지를 복사한 뒤 이 화면에서 <b>붙여넣기(Ctrl/⌘+V)</b> 하거나, 이 칸으로 파일을 <b>끌어다 놓으세요</b>.</div>` : ''}
       <div class="small muted">팀 상징 마스코트는 구단 이름의 일반적인 상징을 새로 그린 캐릭터로, 각 구단의 공식 마스코트가 아닙니다.</div>
       <div class="row small"><label><input type="checkbox" data-act="sfxTog" ${pref('sfx', '0') === '1' ? 'checked' : ''}> 효과음(타격음·관중 함성·득점 팡파르 — 브라우저에서 합성, 기본 꺼짐)</label></div>
       <div class="small muted" style="margin-top:6px">관심 선수 ${fv.length}명 — 선수 상세의 ☆ 버튼으로 추가합니다.${fv.length ? '<br>' + fv.map(p => `<button class="sm" data-act="player" data-a="${p.id}">${esc(p.ko)} ${L.ovr(p)}</button>`).join(' ') : ''}</div></div>`;
@@ -2279,6 +2279,7 @@
     vibTog(a, el) { setPref('vib', el.checked ? '1' : '0'); render(); },
     mascotSet(a) { setPref('mascot', a); render(); },
     mascotClear() { setPref('mascot_img', ''); render(); },
+    mascotPick() { const i = $('#mascotFile'); if (!i) return; try { i.value = ''; if (i.showPicker) i.showPicker(); else i.click(); } catch (e) { try { i.click(); } catch (e2) { toast('이 화면에서는 파일 고르기 창을 열 수 없습니다. 이미지를 복사해 붙여넣거나 끌어다 놓아 주세요.'); } } },
     sfxTog(a, el) { setPref('sfx', el.checked ? '1' : '0'); if (el.checked) FX.play('fanfare'); render(); },
     fav(a) { const f = favs(), i = f.indexOf(a); if (i >= 0) f.splice(i, 1); else f.push(a); autosave(); render(); },
     selClear() { ui.sel = null; render(); },
@@ -2470,11 +2471,21 @@
     const act = el.dataset.act; if (A[act]) A[act](el.dataset.a, el.dataset.b);
   });
   document.addEventListener('input', e => { const el = e.target; if (el.id === 'gsq' && ui.search) { ui.search.q = el.value; const r = $('#gsres'); if (r) r.innerHTML = searchHtml(el.value); return; } if (el.id === 'handsText') ui.handsText = el.value; else if (el.id === 'saveText') ui.saveText = el.value; });
+  function mascotLoad(f) {   // 내 마스코트 이미지: 128px로 줄여 이 브라우저에만 저장(파일 고르기·붙여넣기·끌어놓기 공용)
+    if (!f || !/^image\/(png|jpeg|webp|gif)$/.test(f.type)) { toast('PNG·JPG·WEBP·GIF 이미지를 골라 주세요.'); return; }
+    const rd = new FileReader(); rd.onerror = () => toast('이미지를 읽지 못했습니다.');
+    rd.onload = () => { const im = new Image(); im.onload = () => { const c = document.createElement('canvas'), k = Math.min(1, 128 / Math.max(im.width, im.height)); c.width = Math.max(1, Math.round(im.width * k)); c.height = Math.max(1, Math.round(im.height * k)); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); let d = ''; try { d = c.toDataURL('image/png'); } catch (e2) { d = ''; } if (!d) { toast('이미지를 읽지 못했습니다.'); return; } setPref('mascot', 'custom'); setPref('mascot_img', d); if (pref('mascot_img', '') !== d) toast('브라우저 저장 공간이 부족해 저장하지 못했습니다.'); else toast('마스코트 이미지를 바꿨습니다.'); render(); }; im.onerror = () => toast('이미지를 읽지 못했습니다.'); im.src = rd.result; };
+    rd.readAsDataURL(f);
+  }
+  const mascotTarget = () => L && pref('mascot', 'team') === 'custom' && !!$('#mascotFile');
+  document.addEventListener('paste', e => { if (!mascotTarget()) return; const t = e.target; if (t && (t.tagName === 'TEXTAREA' || (t.tagName === 'INPUT' && t.type !== 'file'))) return; const it = [...((e.clipboardData && e.clipboardData.items) || [])].find(x => x.kind === 'file' && String(x.type).indexOf('image/') === 0); if (!it) return; e.preventDefault(); mascotLoad(it.getAsFile()); });
+  document.addEventListener('dragover', e => { if (mascotTarget() && e.target.closest && e.target.closest('[data-drop="mascot"]')) { e.preventDefault(); e.target.closest('[data-drop="mascot"]').classList.add('over'); } });
+  document.addEventListener('dragleave', e => { const z = e.target.closest && e.target.closest('[data-drop="mascot"]'); if (z) z.classList.remove('over'); });
+  document.addEventListener('drop', e => { const z = e.target.closest && e.target.closest('[data-drop="mascot"]'); if (!z || !mascotTarget()) return; e.preventDefault(); z.classList.remove('over'); mascotLoad(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]); });
   document.addEventListener('change', e => {
     const el = e.target; if (!L && el.id !== 'seedIn') return;
     if (el.id === 'seedIn') { ui.seed = el.value; return; }
-    if (el.id === 'mascotFile') { const f = el.files && el.files[0]; if (!f || !/^image\/(png|jpeg|webp|gif)$/.test(f.type)) { toast('PNG·JPG·WEBP·GIF 이미지를 골라 주세요.'); return; }   // 내 마스코트 이미지: 128px로 줄여 이 브라우저에만 저장
-      const rd = new FileReader(); rd.onload = () => { const im = new Image(); im.onload = () => { const c = document.createElement('canvas'), k = Math.min(1, 128 / Math.max(im.width, im.height)); c.width = Math.max(1, Math.round(im.width * k)); c.height = Math.max(1, Math.round(im.height * k)); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); let d = ''; try { d = c.toDataURL('image/png'); } catch (e2) { d = ''; } if (!d) { toast('이미지를 읽지 못했습니다.'); return; } setPref('mascot_img', d); if (pref('mascot_img', '') !== d) toast('브라우저 저장 공간이 부족해 저장하지 못했습니다.'); else toast('마스코트 이미지를 바꿨습니다.'); render(); }; im.onerror = () => toast('이미지를 읽지 못했습니다.'); im.src = rd.result; }; rd.readAsDataURL(f); return; }
+    if (el.id === 'mascotFile') { mascotLoad(el.files && el.files[0]); return; }
     if (el.id === 'liveMode') { ui.liveMode = el.checked; render(); return; }
     if (el.id === 'playMode') { ui.liveMode = el.value !== 'auto'; ui.hl = el.value === 'highlight'; render(); return; }
     if (el.id === 'autoBp') { ui.live.ctx.auto = el.checked; return; }
