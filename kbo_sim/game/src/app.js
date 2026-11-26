@@ -985,6 +985,18 @@
     const c = L.chemistry ? L.chemistry() : null;
     return `<div class="card locker" style="--tc:${BADGE[t] ? BADGE[t].p : '#555'}"><div class="row"><h2 style="margin:0">라커룸</h2><span class="sp"></span>${c ? `<span class="chip ${c.v >= 58 ? 'in' : c.v <= 42 ? 'warn' : ''}">분위기 ${c.v} · ${c.tag}</span>` : ''}</div><div class="lroom"><div class="lockers"></div><div class="seats">${order.slice(0, 18).map(seat).join('')}</div></div><div class="small muted">1군 ${act.length}명 중 ${Math.min(18, order.length)}명 · 주장 C · ✨ 호조 · ⛈ 불만 · 🩹 부상 · 같은 학교·입단 동기는 붙어 앉습니다.</div></div>`;
   }
+  /* 결정 효과 장부(43단계): 올해 내 결정이 만든 예상 승수 · 종류별 · 최근 결정과 결과 · 지금 걸린 효과 */
+  function decCard() {
+    if (!L.decLedger || L.S.phase === 'offseason') return '';
+    const D = L.decLedger(); if (!D.list.length && !D.active.length) return `<div class="card"><h2>결정 효과</h2><div class="small muted">시즌 중 결정(총력전·전력분석·휴식·유망주 기회·분위기·복귀 시점)이 생기면 여기에 결과와 예상 승수가 쌓입니다. 같은 선택도 결과가 여러 갈래로 나뉩니다.</div></div>`;
+    const sg = v => `<b style="color:${v > 0 ? 'var(--accent)' : v < 0 ? 'var(--bad, #c0392b)' : 'inherit'}">${v > 0 ? '+' : ''}${v}승</b>`;
+    const by = Object.entries(D.by).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="chip">${esc(k)} ${v > 0 ? '+' : ''}${v}</span>`).join(' ');
+    const act = D.active.map(m => { const p = m.pid ? P(m.pid) : null; const who = m.who === 'pid' ? (p ? p.ko : '선수') : { all: '팀 전체', bat: '타선', pit: '투수진', bull: '불펜' }[m.who]; return m.v ? `<span class="chip ${m.v > 0 ? 'in' : 'warn'}">${esc(who)} ${m.v > 0 ? '▲' : '▼'} ~${L.dateStr(Math.min(m.d1, 143))}</span>` : (m.force ? `<span class="chip in">${esc(who)} 선발 고정 ~${L.dateStr(Math.min(m.d1, 143))}</span>` : ''); }).join(' ');
+    return `<div class="card"><div class="row"><h2 style="margin:0">결정 효과</h2><span class="sp"></span><span class="small muted">올해 내 결정 예상</span>&nbsp;${sg(D.total)}</div>
+      ${by ? `<div class="small" style="margin-top:6px">${by}</div>` : ''}${act ? `<div class="small" style="margin-top:6px"><b>지금 걸린 효과</b> ${act}</div>` : ''}
+      <div style="margin-top:6px">${D.list.slice(0, 6).map(x => `<div class="stl"><span class="d">${esc(L.dateStr(Math.min(x.d, 143)))}</span><span><b>${esc(x.label)}</b> <span class="small">${esc(x.out)}</span> ${x.w ? sg(x.w) : ''}</span></div>`).join('')}</div>
+      <div class="small muted" style="margin-top:6px">예상 승수는 효과 크기·기간으로 계산한 추정치입니다(⚠ 환산 근사). 같은 선택도 확률에 따라 결과가 달라집니다.</div></div>`;
+  }
   function chemCard() {
     if (!L.chemistry) return ''; const c = L.chemistry();
     return `<div class="card"><div class="row"><h2 style="margin:0">라커룸 분위기</h2><span class="sp"></span><span class="chip ${c.v >= 60 ? 'in' : c.v <= 40 ? 'warn' : ''}">${c.tag}</span></div><div class="gauge ${c.v >= 60 ? 'good' : c.v >= 40 ? 'mid' : 'low'}" style="margin:8px 0"><span class="gbar" style="width:160px"><i style="width:${c.v}%"></i></span><span class="gtxt">${c.v}</span></div>
@@ -2164,7 +2176,7 @@
     if (ui.pre && !ui.live) { document.body.classList.remove('modal-open'); root.innerHTML = screenPre() + confirmSheet() + toastHtml(); window.scrollTo(0, scroll); return; }   // 경기 전 브리핑(날짜 처리 끝, 경기 시작 전)
     if (ui.live) { document.body.classList.remove('modal-open'); root.innerHTML = screenLive() + toastHtml(); window.scrollTo(0, scroll); return; }   // 경기 화면에서는 이전 화면의 스크롤 잠금이 남지 않게 푼다
     if ((ui.screen === 'lineup' || ui.screen === 'pitching') && pref('seen_lineup', '') !== '1') setPref('seen_lineup', '1');   // 첫 게임 안내: 라인업 확인 단계
-    const S = ui.screen, f = { records: screenRecords, invest: screenInvest, desk: screenDesk, home: () => (setTimeout(celebrate, 60), '') + guideCard() + officeHub() + heroCard() + screenHome() + foldGroup('home_ev', '최근 소식 처리', '', evHistory().replace(/^<div class="card">|<\/div>$/g, ''), false), roster: () => screenRoster(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, story: screenStory, album: screenAlbum, intl: screenIntl, mood: screenMood, train: screenTrain, scout: screenScout, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
+    const S = ui.screen, f = { records: screenRecords, invest: screenInvest, desk: screenDesk, home: () => (setTimeout(celebrate, 60), '') + guideCard() + officeHub() + heroCard() + decCard() + screenHome() + foldGroup('home_ev', '최근 소식 처리', '', evHistory().replace(/^<div class="card">|<\/div>$/g, ''), false), roster: () => screenRoster(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, story: screenStory, album: screenAlbum, intl: screenIntl, mood: screenMood, train: screenTrain, scout: screenScout, finance: screenFinance, coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
     document.body.classList.toggle('modal-open', !!ui.modal);
     { const c = L.compOpen().find(x => !(ui.compSeen || (ui.compSeen = {}))[x.id]); if (c && !ui.live && !ui.negOpen) { ui.compSeen[c.id] = true; ui.comp = c.id; } }   // 새 FA 보상 선택은 처음 생길 때 바로 창을 띄운다
     const keep = snapInner(root);   // 체크박스·버튼으로 다시 그려도 안쪽 스크롤 상자와 펼침 상태를 유지한다

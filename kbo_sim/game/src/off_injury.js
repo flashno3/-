@@ -34,7 +34,7 @@
     const S = this.S, now = this.todayN(), r = rngFor(S.seed, S.year, d, 7000), changed = new Set(), user = S.userTeam, back = {}, out = {};
     for (const t of TEAMS) for (const p of this.players(t)) {
       if (p.inj && p.inj.natl && !this.isInj(p)) {   // 국가대표 복귀(부상 아님: 부상 복귀 알림·유대 변화 없음, 보관해 둔 부상 기록 복원)
-        if (t === user) news(this, `대표팀 복귀: ${p.ko} — 2군에서 대기 중`); if (p.injPrev) { p.inj = p.injPrev; delete p.injPrev; } else delete p.inj; changed.add(t); (back[t] = back[t] || []).push(p); continue;
+        if (t === user) news(this, `${/대표/.test(p.inj.dx) ? '대표팀 복귀' : '복귀'}: ${p.ko} — 2군에서 대기 중`); if (p.injPrev) { p.inj = p.injPrev; delete p.injPrev; } else delete p.inj; changed.add(t); (back[t] = back[t] || []).push(p); continue;
       }
       if (p.inj && p.inj.apply !== false && !this.isInj(p)) {   // 복귀
         if (t === user) { news(this, `부상 복귀: ${p.ko} (${p.inj.dx}) — 2군에서 대기 중`); this._bondShift(p, 1, '부상 복귀'); if (this.injAuto() !== 'full') this._returnEvent(p); }

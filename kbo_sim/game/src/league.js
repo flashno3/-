@@ -132,7 +132,7 @@
     policy() { const P = this.S.policy || {}; return { pitch: P.pitch || 'normal', run: P.run || 'normal' }; }
     setPolicy(k, v) { const ok = { pitch: ['save', 'normal', 'push'], run: ['low', 'normal', 'high'] }; if (!ok[k] || !ok[k].includes(v)) return false; this.S.policy = Object.assign({ pitch: 'normal', run: 'normal' }, this.S.policy, { [k]: v }); this.invalidate(); return true; }
     _modRates(p) {
-      const S = this.S; if (p.team !== S.userTeam) return p.unrest && p.unrest.stage === 'slack' ? this._shifted(p, -0.12) : p.p; const m = this.moodOf(p), pol = this.policy(); let q = m ? this._shifted(p, 0.04 * m) : p.p;
+      const S = this.S; if (p.team !== S.userTeam) return p.unrest && p.unrest.stage === 'slack' ? this._shifted(p, -0.12) : p.p; const m = this.moodOf(p), pol = this.policy(), ds = (this._decShift ? this._decShift(p) : 0) + 0.07 * m; let q = ds ? this._shifted(p, ds) : p.p;   // 컨디션 1단계 = 0.07(43단계에서 0.04 → 0.07, ⚠ 결정 영향력 강화) + 감독 결정 보정(decide.js)
       if (p.type === 'B' && pol.run !== 'normal') q = Object.assign({}, q, { sba: q.sba * (pol.run === 'high' ? 1.5 : 0.6) });
       return q;
     }
@@ -717,7 +717,7 @@
       });
       this.mergeTracking();
       for (const o of others) this.commit(o.home, o.away, o.rh, o.ra, { spH: o.spH, spA: o.spA });
-      this._applyActiveMax(); this._decayFatigue(); this._tickService(); if (this._injuryDay) this._injuryDay(d); if (this._arcDay) this._arcDay(d); if (this._allStarDay) this._allStarDay(d); if (this._aiTradeDay) this._aiTradeDay(d); if (this._unrestDay) this._unrestDay(d); if (this._growDay) this._growDay(d); if (this._clinchDay) this._clinchDay(d); if (this._pressConDay) this._pressConDay(d); if (this._milDay) this._milDay(d); if (this._intlDay) this._intlDay(d); if (this._eventDay) this._eventDay(d); if (this._finSnapDay) this._finSnapDay(d); if (this._trainDay) this._trainDay(); if (this._scoutDay) this._scoutDay(); if (this._milestoneDay) this._milestoneDay(); this.playFutures(d); this.returnMilitary(this.milYM(d));
+      this._applyActiveMax(); this._decayFatigue(); this._tickService(); if (this._injuryDay) this._injuryDay(d); if (this._arcDay) this._arcDay(d); if (this._allStarDay) this._allStarDay(d); if (this._aiTradeDay) this._aiTradeDay(d); if (this._unrestDay) this._unrestDay(d); if (this._growDay) this._growDay(d); if (this._clinchDay) this._clinchDay(d); if (this._pressConDay) this._pressConDay(d); if (this._milDay) this._milDay(d); if (this._intlDay) this._intlDay(d); if (this._decDayAll) this._decDayAll(d); if (this._eventDay) this._eventDay(d); if (this._finSnapDay) this._finSnapDay(d); if (this._trainDay) this._trainDay(); if (this._scoutDay) this._scoutDay(); if (this._milestoneDay) this._milestoneDay(); this.playFutures(d); this.returnMilitary(this.milYM(d));
       if (!ug) { S.day++; return { status: 'ok', day: d }; }
       if (live) { S.pendingDay = d; return { status: 'userGame', day: d, game: ug.g, idx: ug.i }; }
       const L = this.startUserGame(ug.g, ug.i); this.playAuto(L); const res = this.finishUserGame(L);

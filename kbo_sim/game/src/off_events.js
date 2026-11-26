@@ -175,6 +175,7 @@
     else if (e.type === 'presscon' && this._pressConResolve) res = this._pressConResolve(e, k);
     else if (e.type === 'mgroffer' && this._mgrOfferResolve) res = this._mgrOfferResolve(e, k);
     else if (e.type === 'military' && this._milResolve) res = this._milResolve(e, k);
+    else if (e.type === 'dec' && this._decResolve) res = this._decResolve(e, k);
     e.status = 'done'; e.choice = k; e.result = res; e.auto = !!auto; news(this, `${e.title}: ${res}`); this.invalidate();
     return { ok: true, msg: res };
   };

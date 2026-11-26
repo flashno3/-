@@ -37,6 +37,7 @@
     for (const t of TEAMS) if (t === S.userTeam) this.ensureActive(t);
     this.topUpWhales();
     this.returnMilitary(S.year * 12 + 2);   // 새 시즌 개막(3월) 전까지 전역한 선수 복귀
+    if (S.dec) { S.dec.mods = []; S.dec.follow = []; S.dec.cd = {}; S.dec.retAsked = []; }   // 결정 보정은 시즌 안에서만(decide.js)
     if (this._intlPreseason) this._intlPreseason();   // 3월 올림픽 최종예선(intl.js)
     if (this._milSelect) this._milSelect();   // 상무 선발(지난 오프시즌 지원자, military.js)
     if (S.cbt && S.cbt.excPrompt) S.cbt.excPrompt = null;   // 확인하지 않아도 추천 선수로 적용된 상태로 새 시즌 시작
