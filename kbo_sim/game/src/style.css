@@ -524,3 +524,10 @@ td.l > svg.avatar { margin-right: 6px; } .mav svg.avatar { box-shadow: 0 2px 8px
 .mascotbox .bubble::before { content: ''; position: absolute; left: -6px; bottom: 12px; border: 6px solid transparent; border-right-color: var(--surface2); border-left: 0; }
 svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
 @media (prefers-reduced-motion: reduce) { .parade .pfloat, .parade .pfan, svg.mascot { animation: none !important; } }
+
+/* ---- 감독실 허브 ---- */
+.hub { padding: 10px; } .hubsvg { width: 100%; height: auto; display: block; border-radius: 10px; }
+.hubsvg .hs { cursor: pointer; } .hubsvg .hs:hover, .hubsvg .hs:focus-visible { filter: brightness(1.08) drop-shadow(0 0 4px color-mix(in srgb, var(--brand) 60%, transparent)); outline: none; }
+.hubsvg .hs.ring { animation: ring 1.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes ring { 0%, 70%, 100% { transform: rotate(0); } 75% { transform: rotate(-8deg); } 80% { transform: rotate(8deg); } 85% { transform: rotate(-6deg); } 90% { transform: rotate(6deg); } }
+@media (prefers-reduced-motion: reduce) { .hubsvg .hs.ring { animation: none; } }
