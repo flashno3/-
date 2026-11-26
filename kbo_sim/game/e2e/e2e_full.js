@@ -91,7 +91,7 @@ async function run(vp,label,team){
   await pg.fill('#gsq','김');await pg.waitForTimeout(80);await click('#gsres .srow button[data-act="cmpAdd"]');await pg.evaluate(()=>{const b=[...document.querySelectorAll('#gsres .srow button[data-act="cmpAdd"]')];if(b[1])b[1].dispatchEvent(new MouseEvent('click',{bubbles:true}))});await pg.waitForTimeout(80);
   await pg.keyboard.press('Escape');await pg.waitForTimeout(80);ok(!(await pg.$('#gsq')),`${label}: Esc로 검색 닫기`);ok(await click('.cmptray button[data-act="cmpOpen"]'),`${label}: 비교 열기`);await pg.waitForTimeout(100);
   ok(await pg.evaluate(()=>!!document.querySelector('table.cmpt')&&document.querySelectorAll('table.cmpt tbody tr').length>8),`${label}: 비교 표`);await sweep('비교');await click('.sheet.cmp button[data-act="cmpClear"]');ok(!(await pg.$('.cmptray')),`${label}: 비교 비우기`);
-  await nav('대시보드','프런트 데스크');ok(await pg.evaluate(()=>/오늘 처리할 일/.test(document.body.innerText)&&/선수단 점검/.test(document.body.innerText)&&/계약·재정/.test(document.body.innerText)),`${label}: 프런트 데스크`);await sweep('프런트 데스크');
+  await nav('대시보드');await pg.evaluate(()=>{const d=document.querySelector('details[data-fold="desk"]');if(d)d.open=true});ok(await pg.evaluate(()=>/오늘 처리할 일/.test(document.body.innerText)&&/선수단 점검/.test(document.body.innerText)&&/계약·재정/.test(document.body.innerText)),`${label}: 프런트 점검(대시보드)`);await sweep('프런트 점검');
   await nav('선수단','로스터');await pg.evaluate(()=>{const r=document.querySelector('tr[data-act="player"]');if(r)r.click()});await pg.waitForTimeout(150);
   if(await click('button[data-act="releaseAsk"]')){await pg.waitForTimeout(100);ok(await pg.evaluate(()=>/위약금 합계/.test(document.body.innerText)&&/방출 후 로스터/.test(document.body.innerText)),`${label}: 방출 확정 요약`);await sweep('방출 요약');await click('.sheet button[data-act="cfClose"]');ok(!(await pg.$('table.cf')),`${label}: 요약 취소`)}
   await click('button[data-act="closeModal"]');
@@ -101,10 +101,10 @@ async function run(vp,label,team){
   if(await click('button[data-act="investAsk"]:not([disabled])')){await pg.waitForTimeout(100);ok(await pg.evaluate(()=>/착공 확정/.test(document.body.innerText)&&/올해 예상 손익/.test(document.body.innerText)&&/선수단 예산·경쟁균형세/.test(document.body.innerText)),`${label}: 착공 전 요약`);await sweep('착공 요약');
     await click('button[data-act="cfDo"]');await pg.waitForTimeout(150);ok(await pg.evaluate(()=>/공사 중/.test(document.body.innerText)&&/투자 이력/.test(document.body.innerText)&&/착공/.test(document.body.innerText)),`${label}: 착공 후 공사 중 표시`);await sweep('착공 후')}
   // 5) 전 화면 순회
-  const groups=[['대시보드',[]],['선수단',['로스터','라인업','투수진','훈련','분위기']],['리그',['일정·결과','순위·기록','선수 기록','팀 정보','스토리']],['운영',['재정','투자 센터','코치진','스카우팅','이적시장']],['설정',[]]];
+  const groups=[['대시보드',[]],['선수단',['로스터','라인업','투수진','훈련','분위기']],['리그',['일정·결과','순위·기록','선수 기록','팀 정보','스토리·앨범','국제대회']],['운영',['재정','투자 센터','코치진','스카우팅','이적시장']],['설정',[]]];
   for(const [g,subs] of groups){await nav(g);await sweep(g);for(const s of subs){await nav(g,s);await sweep(g+'/'+s)}}
   // 스토리 탭
-  await nav('리그','스토리');for(const t of ['top','line','press','chal','hist']){await click(`button[data-act="storyTab"][data-a="${t}"]`);await sweep('스토리'+t)}
+  await nav('리그','스토리·앨범');for(const t of ['top','line','press','chal','hist']){await click(`button[data-act="storyTab"][data-a="${t}"]`);await sweep('스토리'+t)}
   // 6) 2군 필터·정렬, 콜업 시트
   await nav('선수단','로스터');for(const f of ['res','inj','young','exp','frn','all','act']){await click(`button[data-act="rfilter"][data-a="${f}"]`);await sweep('로스터구분'+f)}await click('button[data-act="rfilter"][data-a="res"]');await click('button[data-act="rmore"]');await sweep('2군더보기');ok(await pg.evaluate(()=>/콜업 추천|2군 훈련|상무|2군 순위/.test(document.body.innerText)),'2군 구분에 콜업·훈련·순위 묶음');for(const v of ['stat','list','pos'])await click(`button[data-act="rview"][data-a="${v}"]`);ok(await pg.evaluate(()=>/1군 \d+\/\d+/.test(document.body.innerText)),'상단 한 줄 요약');await click('button[data-act="rfilter"][data-a="act"]');
   if(await click('.plist button[data-act="toggleActive"]')){await pg.waitForTimeout(200);await sweep('콜업시트');await click('button[data-act="swapClose"]')}
