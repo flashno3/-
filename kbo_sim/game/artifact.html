@@ -625,7 +625,8 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
   const PARKNAME = { Bears: '잠실', Twins: '잠실', Heroes: '고척', Landers: '문학', Wiz: '수원', Eagles: '대전', Tigers: '광주', Giants: '사직', Dinos: '창원', Lions: '대구' };
   const ORDER = ['C', 'SS', 'CF', '2B', '3B', '1B', 'LF', 'RF'];
   const WD = { '2B': .18, 'SS': .22, '3B': .16, '1B': .07, 'LF': .10, 'CF': .17, 'RF': .10 };
-  const ENV = { gdp: 0.185, sf: 0.40, adv13: 0.33, sc2on1: 0.65, sc1on2: 0.48, roe: 0.016, hrs: 0.88, bbs: 1.02, hfa: 0.0075, tto: [[1.0806, 0.9732, 0.9183, 0.9826], [0.9766, 1.0092, 1.0495, 0.9969], [0.9189, 1.0248, 1.0495, 1.0280]], wp: 0.0215, sb_mult: 1.6, prod: 0.30 };
+  const ENV = { gdp: 0.185, sf: 0.40, adv13: 0.33, sc2on1: 0.65, sc1on2: 0.48, roe: 0.016, hrs: 0.88, bbs: 1.02, hfa: 0.0075, tto: [[1.0806, 0.9732, 0.9183, 0.9826], [0.9766, 1.0092, 1.0495, 0.9969], [0.9189, 1.0248, 1.0495, 1.0280]], wp: 0.0215, pb: 0.00288, bk: 0.00098, ea: 0.01955, sb_mult: 1.6, prod: 0.30 };
+  /* 주자 있을 때 타석 전 진루 사건(한 난수로 구간 판정 → 폭투 결과·난수 흐름은 그대로): 폭투 wp · 포일 pb · 보크 bk · 주자 진루 실책 ea. 빈도는 2026 실측 팀 경기당 폭투 0.424·포일 0.056·보크 0.019·실책 0.673 중 타자 출루 실책(엔진 ROE 0.293)을 뺀 0.38을 폭투 기회와 같은 비율로 환산. 진루 실책은 상황·진루 폭 자료가 없어 모든 주자 한 베이스 진루로 단순화(⚠) */
   /* 홈 어드밴티지(ENV.hfa): 홈팀 타자는 타구 질·홈런·볼넷을 올리고 원정팀은 같은 폭만큼 내린다(리그 평균 불변, 홈 승률 보정). 3바퀴째 효과(ENV.tto): 선발 투수를 상대하는 누적 타자 수(1~9 · 10~18 · 19~)별 삼진·볼넷·홈런·BABIP 배율 [k, bb, hr, babip] */
   const homeMod = sgn => ENV.hfa ? { babip: 1 + sgn * ENV.hfa, hr: 1 + sgn * 2.5 * ENV.hfa, bb: 1 + sgn * 0.5 * ENV.hfa } : null;   // sgn +1 홈 / −1 원정(리그 평균은 그대로, 홈-원정 격차만 만든다)
   const mulMod = (a, t) => ({ k: (a && a.k || 1) * t[0], bb: (a && a.bb || 1) * t[1], hr: (a && a.hr || 1) * t[2], babip: (a && a.babip || 1) * t[3] });
@@ -794,7 +795,7 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
       }
     }
 
-    const newStats = () => ({ K: 0, BB: 0, HBP: 0, HR: 0, '1B': 0, '2B': 0, '3B': 0, ROE: 0, OUT: 0, PA: 0, SB: 0, CS: 0, WP: 0, GDP: 0, SF: 0 });
+    const newStats = () => ({ K: 0, BB: 0, HBP: 0, HR: 0, '1B': 0, '2B': 0, '3B': 0, ROE: 0, OUT: 0, PA: 0, SB: 0, CS: 0, WP: 0, PB: 0, BK: 0, EA: 0, GDP: 0, SF: 0 });
     let PLAYER = {}, PITCH = {};   // 선수별 누적 (난수와 무관)
     const track = (b, e) => { const c = PLAYER[b.id] || (PLAYER[b.id] = { PA: 0, K: 0, BB: 0, HBP: 0, HR: 0, '1B': 0, '2B': 0, '3B': 0, ROE: 0, OUT: 0, SF: 0, RBI: 0, SB: 0, CS: 0 }); c.PA++; c[e]++; return c; };
     const trackRun = (b, k) => { const c = PLAYER[b.id] || (PLAYER[b.id] = { PA: 0, K: 0, BB: 0, HBP: 0, HR: 0, '1B': 0, '2B': 0, '3B': 0, ROE: 0, OUT: 0, SF: 0, RBI: 0, SB: 0, CS: 0 }); c[k]++; };
@@ -857,11 +858,15 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
         else { bases[0] = null; h.outs++; stats.CS++; trackRun(runner, 'CS'); if (h.log) h.log.push({ k: 'CS', b: runner }); }
         if (h.outs >= 3) { h.idx--; trackP(p, null, h.outs - o0, h.runs - r0); return true; }
       }
-      if ((bases[0] || bases[1] || bases[2]) && rng.random() < ENV.wp) {
-        stats.WP++;
-        if (bases[2]) h.runs++;
-        bases[2] = bases[1]; bases[1] = bases[0]; bases[0] = null;
-        if (h.log) h.log.push({ k: 'WP' });
+      if (bases[0] || bases[1] || bases[2]) {
+        const x = rng.random(), c1 = ENV.wp, c2 = c1 + (ENV.pb || 0), c3 = c2 + (ENV.bk || 0), c4 = c3 + (ENV.ea || 0);
+        const k = x < c1 ? 'WP' : x < c2 ? 'PB' : x < c3 ? 'BK' : x < c4 ? 'EA' : null;
+        if (k) {
+          stats[k] = (stats[k] || 0) + 1;
+          if (bases[2]) h.runs++;
+          bases[2] = bases[1]; bases[1] = bases[0]; bases[0] = null;
+          if (h.log) h.log.push({ k });
+        }
       }
       let mod = h.mod; if (ss.cur === ss.sp) { const n = ss.bf || 0; if (ENV.tto) mod = mulMod(mod, ENV.tto[Math.min(2, Math.floor(n / 9))]); ss.bf = n + 1; }   // 선발 상대 타자 수(3바퀴째 효과)
       const e = pa(b, p, rng, dm, mod); stats.PA++; stats[e]++;
@@ -9496,7 +9501,7 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
         if (e.dout >= 2) return { t: `${b} 병살타${pn}`, run: false };
         return { t: `${b} ${e.runs ? '희생타로 ' + e.runs + '점' : '범타 아웃'}${pn}`, run: e.runs > 0 };
       }
-      case 'SB': return { t: `${nm(e.b)} 도루 성공` }; case 'CS': return { t: `${nm(e.b)} 도루 실패` }; case 'WP': return { t: '폭투로 주자 진루' };
+      case 'SB': return { t: `${nm(e.b)} 도루 성공` }; case 'CS': return { t: `${nm(e.b)} 도루 실패` }; case 'WP': return { t: '폭투로 주자 진루' }; case 'PB': return { t: '포일로 주자 진루' }; case 'BK': return { t: '보크로 주자 진루' }; case 'EA': return { t: '실책으로 주자 진루' };
       case 'PC': return { t: `${e.auto ? '[자동] ' : ''}투수 교체: ${nm(e.p)}`, sys: true };
       case 'PH': return { t: `대타: ${nm(e.out)} → ${nm(e.in)}`, sys: true };
       case 'MV': return { t: `마운드 방문 (${e.n}/3): ${nm(e.p)} 안정을 찾습니다`, sys: true };
@@ -9789,14 +9794,14 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
   }
   /* 승리 확률(참고용, ⚠ 단순 모델): 현재 이닝·초말·아웃·주자·점수 차에서 남은 경기를 리그 평균 타석 결과(이 게임의 보정 리그 비율)로 2,000번 굴린다.
    *  선수 능력·작전·투수 교체·홈 이점은 넣지 않았고 주루는 단순 규칙(⚠ 가정). 경기 엔진·기록에는 아무 영향이 없다(읽기 전용 계산). */
-  const WP_CACHE = new Map(), WPR = { s2: 0.75, t1: 0.3, d1: 0.5, sf: 0.55, adv: 0.4, roe: 0.015 };   // 주루·실책 가정(⚠): 단타 2루→홈 75%·1루→3루 30%, 2루타 1루→홈 50%, 아웃 때 3루→홈 55%·2루→3루 40%, 인플레이 아웃의 1.5%는 실책 출루 — 이 게임 엔진의 경기당 득점에 맞춘 값
+  const WP_CACHE = new Map(), WPR = { s2: 0.75, t1: 0.3, d1: 0.5, sf: 0.55, adv: 0.4, roe: 0.015, adv0: 0.013 };   // adv0: 타석 전 주자 한 베이스 진루(폭투·포일·보크·진루 실책 몫). 이 모델은 단순 주루 규칙을 엔진 경기당 득점에 맞춘 것이라 엔진 합(0.0449)이 아니라 엔진 득점(약 5.01)에 맞춘 값. 주루·실책 가정(⚠): 단타 2루→홈 75%·1루→3루 30%, 2루타 1루→홈 50%, 아웃 때 3루→홈 55%·2루→3루 40%, 인플레이 아웃의 1.5%는 실책 출루 — 이 게임 엔진의 경기당 득점에 맞춘 값
   function winProb(g, side) {
     const lb = L.S.calib.lb, inn = g.inning, top = g.top, outs = g.outs, b = g.bases.map(x => !!x), diff = g.score.home - g.score.away, maxInn = g.maxInn || 11;
     const key = [inn, top ? 1 : 0, outs, b.map(x => x ? 1 : 0).join(''), diff, maxInn].join('|'); let ph = WP_CACHE.get(key);
     if (ph === undefined) {
       let seed = 0; for (const ch of key) seed = (Math.imul(seed ^ ch.charCodeAt(0), 16777619) + 2166136261) >>> 0; const rnd = () => { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
       const pk = lb.k, pbb = lb.bb + lb.hbp, phr = lb.hr, bab = lb.babip, xbh = lb.xbh, tri = lb.tri || 0.08, N = 2000;
-      const half = (o0, b0) => { let o = o0, r = 0, B = b0.slice(); while (o < 3) { const u = rnd(); if (u < pk) { o++; continue; } if (u < pk + pbb) { if (B[0]) { if (B[1]) { if (B[2]) r++; B[2] = true; } B[1] = true; } B[0] = true; continue; } if (u < pk + pbb + phr) { r += 1 + B.filter(Boolean).length; B = [false, false, false]; continue; }
+      const half = (o0, b0) => { let o = o0, r = 0, B = b0.slice(); while (o < 3) { if ((B[0] || B[1] || B[2]) && rnd() < WPR.adv0) { if (B[2]) r++; B = [false, B[0], B[1]]; } const u = rnd(); if (u < pk) { o++; continue; } if (u < pk + pbb) { if (B[0]) { if (B[1]) { if (B[2]) r++; B[2] = true; } B[1] = true; } B[0] = true; continue; } if (u < pk + pbb + phr) { r += 1 + B.filter(Boolean).length; B = [false, false, false]; continue; }
           if (rnd() < bab) { const x = rnd(); if (x < xbh * tri) { r += B.filter(Boolean).length; B = [false, false, true]; } else if (x < xbh) { const s1 = B[0] && rnd() < WPR.d1; r += (B[2] ? 1 : 0) + (B[1] ? 1 : 0) + (s1 ? 1 : 0); B = [false, true, B[0] && !s1]; } else { r += B[2] ? 1 : 0; const s2 = B[1] && rnd() < WPR.s2, t1 = B[0] && !(B[1] && !s2) && rnd() < WPR.t1; if (s2) r++; B = [true, B[0] && !t1, (B[1] && !s2) || t1]; } }
           else { if (rnd() < WPR.roe) { if (B[0]) { if (B[1]) { if (B[2]) r++; B[2] = true; } B[1] = true; } B[0] = true; continue; } if (B[0] && o < 2 && rnd() < 0.12) { o += 2; B[0] = false; continue; } o++; if (o < 3 && B[2] && rnd() < WPR.sf) { r++; B[2] = false; } if (o < 3 && B[1] && !B[2] && rnd() < WPR.adv) { B[2] = true; B[1] = false; } } } return r; };
       let win = 0; for (let n = 0; n < N; n++) { let h = 0, a = 0, i = inn, t = top, first = true; const d0 = diff; h = Math.max(0, d0); a = Math.max(0, -d0); let done = false;

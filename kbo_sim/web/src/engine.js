@@ -80,7 +80,8 @@
   const PARKNAME = { Bears: '잠실', Twins: '잠실', Heroes: '고척', Landers: '문학', Wiz: '수원', Eagles: '대전', Tigers: '광주', Giants: '사직', Dinos: '창원', Lions: '대구' };
   const ORDER = ['C', 'SS', 'CF', '2B', '3B', '1B', 'LF', 'RF'];
   const WD = { '2B': .18, 'SS': .22, '3B': .16, '1B': .07, 'LF': .10, 'CF': .17, 'RF': .10 };
-  const ENV = { gdp: 0.185, sf: 0.40, adv13: 0.33, sc2on1: 0.65, sc1on2: 0.48, roe: 0.016, hrs: 0.88, bbs: 1.02, hfa: 0.0075, tto: [[1.0806, 0.9732, 0.9183, 0.9826], [0.9766, 1.0092, 1.0495, 0.9969], [0.9189, 1.0248, 1.0495, 1.0280]], wp: 0.0215, sb_mult: 1.6, prod: 0.30 };
+  const ENV = { gdp: 0.185, sf: 0.40, adv13: 0.33, sc2on1: 0.65, sc1on2: 0.48, roe: 0.016, hrs: 0.88, bbs: 1.02, hfa: 0.0075, tto: [[1.0806, 0.9732, 0.9183, 0.9826], [0.9766, 1.0092, 1.0495, 0.9969], [0.9189, 1.0248, 1.0495, 1.0280]], wp: 0.0215, pb: 0.00288, bk: 0.00098, ea: 0.01955, sb_mult: 1.6, prod: 0.30 };
+  /* 주자 있을 때 타석 전 진루 사건(한 난수로 구간 판정 → 폭투 결과·난수 흐름은 그대로): 폭투 wp · 포일 pb · 보크 bk · 주자 진루 실책 ea. 빈도는 2026 실측 팀 경기당 폭투 0.424·포일 0.056·보크 0.019·실책 0.673 중 타자 출루 실책(엔진 ROE 0.293)을 뺀 0.38을 폭투 기회와 같은 비율로 환산. 진루 실책은 상황·진루 폭 자료가 없어 모든 주자 한 베이스 진루로 단순화(⚠) */
   /* 홈 어드밴티지(ENV.hfa): 홈팀 타자는 타구 질·홈런·볼넷을 올리고 원정팀은 같은 폭만큼 내린다(리그 평균 불변, 홈 승률 보정). 3바퀴째 효과(ENV.tto): 선발 투수를 상대하는 누적 타자 수(1~9 · 10~18 · 19~)별 삼진·볼넷·홈런·BABIP 배율 [k, bb, hr, babip] */
   const homeMod = sgn => ENV.hfa ? { babip: 1 + sgn * ENV.hfa, hr: 1 + sgn * 2.5 * ENV.hfa, bb: 1 + sgn * 0.5 * ENV.hfa } : null;   // sgn +1 홈 / −1 원정(리그 평균은 그대로, 홈-원정 격차만 만든다)
   const mulMod = (a, t) => ({ k: (a && a.k || 1) * t[0], bb: (a && a.bb || 1) * t[1], hr: (a && a.hr || 1) * t[2], babip: (a && a.babip || 1) * t[3] });
@@ -249,7 +250,7 @@
       }
     }
 
-    const newStats = () => ({ K: 0, BB: 0, HBP: 0, HR: 0, '1B': 0, '2B': 0, '3B': 0, ROE: 0, OUT: 0, PA: 0, SB: 0, CS: 0, WP: 0, GDP: 0, SF: 0 });
+    const newStats = () => ({ K: 0, BB: 0, HBP: 0, HR: 0, '1B': 0, '2B': 0, '3B': 0, ROE: 0, OUT: 0, PA: 0, SB: 0, CS: 0, WP: 0, PB: 0, BK: 0, EA: 0, GDP: 0, SF: 0 });
     let PLAYER = {}, PITCH = {};   // 선수별 누적 (난수와 무관)
     const track = (b, e) => { const c = PLAYER[b.id] || (PLAYER[b.id] = { PA: 0, K: 0, BB: 0, HBP: 0, HR: 0, '1B': 0, '2B': 0, '3B': 0, ROE: 0, OUT: 0, SF: 0, RBI: 0, SB: 0, CS: 0 }); c.PA++; c[e]++; return c; };
     const trackRun = (b, k) => { const c = PLAYER[b.id] || (PLAYER[b.id] = { PA: 0, K: 0, BB: 0, HBP: 0, HR: 0, '1B': 0, '2B': 0, '3B': 0, ROE: 0, OUT: 0, SF: 0, RBI: 0, SB: 0, CS: 0 }); c[k]++; };
@@ -312,11 +313,15 @@
         else { bases[0] = null; h.outs++; stats.CS++; trackRun(runner, 'CS'); if (h.log) h.log.push({ k: 'CS', b: runner }); }
         if (h.outs >= 3) { h.idx--; trackP(p, null, h.outs - o0, h.runs - r0); return true; }
       }
-      if ((bases[0] || bases[1] || bases[2]) && rng.random() < ENV.wp) {
-        stats.WP++;
-        if (bases[2]) h.runs++;
-        bases[2] = bases[1]; bases[1] = bases[0]; bases[0] = null;
-        if (h.log) h.log.push({ k: 'WP' });
+      if (bases[0] || bases[1] || bases[2]) {
+        const x = rng.random(), c1 = ENV.wp, c2 = c1 + (ENV.pb || 0), c3 = c2 + (ENV.bk || 0), c4 = c3 + (ENV.ea || 0);
+        const k = x < c1 ? 'WP' : x < c2 ? 'PB' : x < c3 ? 'BK' : x < c4 ? 'EA' : null;
+        if (k) {
+          stats[k] = (stats[k] || 0) + 1;
+          if (bases[2]) h.runs++;
+          bases[2] = bases[1]; bases[1] = bases[0]; bases[0] = null;
+          if (h.log) h.log.push({ k });
+        }
       }
       let mod = h.mod; if (ss.cur === ss.sp) { const n = ss.bf || 0; if (ENV.tto) mod = mulMod(mod, ENV.tto[Math.min(2, Math.floor(n / 9))]); ss.bf = n + 1; }   // 선발 상대 타자 수(3바퀴째 효과)
       const e = pa(b, p, rng, dm, mod); stats.PA++; stats[e]++;

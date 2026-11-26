@@ -1611,7 +1611,7 @@
         if (e.dout >= 2) return { t: `${b} 병살타${pn}`, run: false };
         return { t: `${b} ${e.runs ? '희생타로 ' + e.runs + '점' : '범타 아웃'}${pn}`, run: e.runs > 0 };
       }
-      case 'SB': return { t: `${nm(e.b)} 도루 성공` }; case 'CS': return { t: `${nm(e.b)} 도루 실패` }; case 'WP': return { t: '폭투로 주자 진루' };
+      case 'SB': return { t: `${nm(e.b)} 도루 성공` }; case 'CS': return { t: `${nm(e.b)} 도루 실패` }; case 'WP': return { t: '폭투로 주자 진루' }; case 'PB': return { t: '포일로 주자 진루' }; case 'BK': return { t: '보크로 주자 진루' }; case 'EA': return { t: '실책으로 주자 진루' };
       case 'PC': return { t: `${e.auto ? '[자동] ' : ''}투수 교체: ${nm(e.p)}`, sys: true };
       case 'PH': return { t: `대타: ${nm(e.out)} → ${nm(e.in)}`, sys: true };
       case 'MV': return { t: `마운드 방문 (${e.n}/3): ${nm(e.p)} 안정을 찾습니다`, sys: true };
@@ -1904,14 +1904,14 @@
   }
   /* 승리 확률(참고용, ⚠ 단순 모델): 현재 이닝·초말·아웃·주자·점수 차에서 남은 경기를 리그 평균 타석 결과(이 게임의 보정 리그 비율)로 2,000번 굴린다.
    *  선수 능력·작전·투수 교체·홈 이점은 넣지 않았고 주루는 단순 규칙(⚠ 가정). 경기 엔진·기록에는 아무 영향이 없다(읽기 전용 계산). */
-  const WP_CACHE = new Map(), WPR = { s2: 0.75, t1: 0.3, d1: 0.5, sf: 0.55, adv: 0.4, roe: 0.015 };   // 주루·실책 가정(⚠): 단타 2루→홈 75%·1루→3루 30%, 2루타 1루→홈 50%, 아웃 때 3루→홈 55%·2루→3루 40%, 인플레이 아웃의 1.5%는 실책 출루 — 이 게임 엔진의 경기당 득점에 맞춘 값
+  const WP_CACHE = new Map(), WPR = { s2: 0.75, t1: 0.3, d1: 0.5, sf: 0.55, adv: 0.4, roe: 0.015, adv0: 0.013 };   // adv0: 타석 전 주자 한 베이스 진루(폭투·포일·보크·진루 실책 몫). 이 모델은 단순 주루 규칙을 엔진 경기당 득점에 맞춘 것이라 엔진 합(0.0449)이 아니라 엔진 득점(약 5.01)에 맞춘 값. 주루·실책 가정(⚠): 단타 2루→홈 75%·1루→3루 30%, 2루타 1루→홈 50%, 아웃 때 3루→홈 55%·2루→3루 40%, 인플레이 아웃의 1.5%는 실책 출루 — 이 게임 엔진의 경기당 득점에 맞춘 값
   function winProb(g, side) {
     const lb = L.S.calib.lb, inn = g.inning, top = g.top, outs = g.outs, b = g.bases.map(x => !!x), diff = g.score.home - g.score.away, maxInn = g.maxInn || 11;
     const key = [inn, top ? 1 : 0, outs, b.map(x => x ? 1 : 0).join(''), diff, maxInn].join('|'); let ph = WP_CACHE.get(key);
     if (ph === undefined) {
       let seed = 0; for (const ch of key) seed = (Math.imul(seed ^ ch.charCodeAt(0), 16777619) + 2166136261) >>> 0; const rnd = () => { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
       const pk = lb.k, pbb = lb.bb + lb.hbp, phr = lb.hr, bab = lb.babip, xbh = lb.xbh, tri = lb.tri || 0.08, N = 2000;
-      const half = (o0, b0) => { let o = o0, r = 0, B = b0.slice(); while (o < 3) { const u = rnd(); if (u < pk) { o++; continue; } if (u < pk + pbb) { if (B[0]) { if (B[1]) { if (B[2]) r++; B[2] = true; } B[1] = true; } B[0] = true; continue; } if (u < pk + pbb + phr) { r += 1 + B.filter(Boolean).length; B = [false, false, false]; continue; }
+      const half = (o0, b0) => { let o = o0, r = 0, B = b0.slice(); while (o < 3) { if ((B[0] || B[1] || B[2]) && rnd() < WPR.adv0) { if (B[2]) r++; B = [false, B[0], B[1]]; } const u = rnd(); if (u < pk) { o++; continue; } if (u < pk + pbb) { if (B[0]) { if (B[1]) { if (B[2]) r++; B[2] = true; } B[1] = true; } B[0] = true; continue; } if (u < pk + pbb + phr) { r += 1 + B.filter(Boolean).length; B = [false, false, false]; continue; }
           if (rnd() < bab) { const x = rnd(); if (x < xbh * tri) { r += B.filter(Boolean).length; B = [false, false, true]; } else if (x < xbh) { const s1 = B[0] && rnd() < WPR.d1; r += (B[2] ? 1 : 0) + (B[1] ? 1 : 0) + (s1 ? 1 : 0); B = [false, true, B[0] && !s1]; } else { r += B[2] ? 1 : 0; const s2 = B[1] && rnd() < WPR.s2, t1 = B[0] && !(B[1] && !s2) && rnd() < WPR.t1; if (s2) r++; B = [true, B[0] && !t1, (B[1] && !s2) || t1]; } }
           else { if (rnd() < WPR.roe) { if (B[0]) { if (B[1]) { if (B[2]) r++; B[2] = true; } B[1] = true; } B[0] = true; continue; } if (B[0] && o < 2 && rnd() < 0.12) { o += 2; B[0] = false; continue; } o++; if (o < 3 && B[2] && rnd() < WPR.sf) { r++; B[2] = false; } if (o < 3 && B[1] && !B[2] && rnd() < WPR.adv) { B[2] = true; B[1] = false; } } } return r; };
       let win = 0; for (let n = 0; n < N; n++) { let h = 0, a = 0, i = inn, t = top, first = true; const d0 = diff; h = Math.max(0, d0); a = Math.max(0, -d0); let done = false;

@@ -19,7 +19,7 @@ STINT={'Matt Davidson 데이비슨':[('Dinos',1,60,0.93),('Heroes',61,144,0.81)]
        'Jeong-bum Lee 이정범':[('Wiz',1,144,9/144)]}
 PMOVE={'Hyeong-beom Lee 이형범':[('Tigers',1,95),('Eagles',96,144)]}
 TTO=[[1.0806,0.9732,0.9183,0.9826],[0.9766,1.0092,1.0495,0.9969],[0.9189,1.0248,1.0495,1.0280]]
-ENV={'gdp':0.185,'sf':0.40,'adv13':0.33,'sc2on1':0.65,'sc1on2':0.48,'roe':0.016,'hrs':0.88,'bbs':1.02,'hfa':0.0075,'wp':0.0215,'sb_mult':1.6,'prod':0.30}
+ENV={'gdp':0.185,'sf':0.40,'adv13':0.33,'sc2on1':0.65,'sc1on2':0.48,'roe':0.016,'hrs':0.88,'bbs':1.02,'hfa':0.0075,'wp':0.0215,'pb':0.00288,'bk':0.00098,'ea':0.01955,'sb_mult':1.6,'prod':0.30}
 odds=lambda p:p/(1-p)
 def comb(pb,pp,pl):
     o=odds(pb)*odds(pp)/odds(pl);return o/(1+o)
@@ -130,10 +130,13 @@ def half(L,idx,ss,rng,stats,dm,limit=None,mod=None):
             if rng.random()<comb(bases[0].p['sbp'],1-dm[2],1-CSLG): bases[1]=bases[0];bases[0]=None;stats['SB']+=1
             else: bases[0]=None;outs+=1;stats['CS']+=1
             if outs>=3: idx-=1;break
-        if any(bases) and rng.random()<ENV['wp']:
-            stats['WP']+=1
-            if bases[2]: runs+=1
-            bases=[None,bases[0],bases[1]]
+        if any(bases):   # 폭투·포일·보크·주자 진루 실책: 한 난수로 구간 판정(engine.js 와 같은 규칙)
+            x=rng.random();c1=ENV['wp'];c2=c1+ENV['pb'];c3=c2+ENV['bk'];c4=c3+ENV['ea']
+            k='WP' if x<c1 else 'PB' if x<c2 else 'BK' if x<c3 else 'EA' if x<c4 else None
+            if k:
+                stats[k]+=1
+                if bases[2]: runs+=1
+                bases=[None,bases[0],bases[1]]
         m=mod
         if ss.cur is ss.sp:
             m=mul_mod(m,TTO[min(2,ss.bf//9)]);ss.bf+=1
@@ -215,4 +218,4 @@ if __name__=='__main__':
     json.dump({'recs':Rr,'stats':dict(S),'n':n,'player':{k:dict(v) for k,v in PLAYER.items()},'park':{k:v for k,v in PARKR.items()}},open(out,'w'))
     g=1440*n;rs=sum(v[3] for r in Rr for v in r.values())/g
     pa_=S['PA'];ab=pa_-S['BB']-S['HBP']-S['SF'];h=S['1B']+S['2B']+S['3B']+S['HR']
-    print(f"{n}시즌 {time.time()-t0:.0f}초 | R/G {rs:.2f} AVG {h/ab:.3f} K% {S['K']/pa_:.3f} BB% {S['BB']/pa_:.3f} HR/PA {S['HR']/pa_:.4f} | GDP {S['GDP']/g:.2f} SB {S['SB']/g:.2f} CS {S['CS']/g:.2f} ROE {S['ROE']/g:.2f} WP {S['WP']/g:.2f}")
+    print(f"{n}시즌 {time.time()-t0:.0f}초 | R/G {rs:.2f} AVG {h/ab:.3f} K% {S['K']/pa_:.3f} BB% {S['BB']/pa_:.3f} HR/PA {S['HR']/pa_:.4f} | GDP {S['GDP']/g:.2f} SB {S['SB']/g:.2f} CS {S['CS']/g:.2f} ROE {S['ROE']/g:.2f} WP {S['WP']/g:.2f} PB {S['PB']/g:.2f} BK {S['BK']/g:.2f} EA {S['EA']/g:.2f}")
