@@ -60,6 +60,7 @@
       if (L._milInit) L._milInit();   // 병역 상태·2026년 11~12월 입대자 복무 명단으로(military.js) — 운영비 역산(위) 뒤에: 입대자 연봉이 2026 보수에는 들어가고 2027에는 빠지도록
       L._liftMinSal();   // 2027년부터 최저연봉 3,300만원(규약 제71조): 운영비 역산 뒤에 올려 증가분이 손익에 그대로 반영되게 한다
       if (L._initCoaches) L._initCoaches(base.coaches || []);
+      if (L._mgrSeat) L._mgrSeat();   // 우리 구단 감독 = 사용자, 원래 감독은 퇴임·후보 명단(mgrseat.js)
       if (L.openFAMarket) L.openFAMarket();   // 2027 FA 협상 기간: 1월 1일 시작   // 코칭스태프(보도 기반 일부 + 가상)
       S.calib.base = L.talentLevel(undefined, true);
       L.newSeasonSetup(true);
@@ -110,6 +111,7 @@
       if (!S.coach && L._ensureCoach) L._ensureCoach();   // 예전 저장: 가상 코칭스태프 생성
       L._legacyFin = !S.fin;   // 예전 저장: 재정 데이터 없음(데이터 파일이 필요해 복원하지 않음)
       for (const id in S.players) { const p = S.players[id]; if (p.foreign === undefined) p.foreign = !/[가-힣]/.test(p.ko || ''); }
+      if (L._mgrSeat) L._mgrSeat();   // 예전 저장: 실존 감독이 남아 있으면 퇴임 처리
       return L; }
     save() { return JSON.stringify(this.S); }
     static load(str) { return League.fromJSON(JSON.parse(str)); }
@@ -717,7 +719,7 @@
       });
       this.mergeTracking();
       for (const o of others) this.commit(o.home, o.away, o.rh, o.ra, { spH: o.spH, spA: o.spA });
-      this._applyActiveMax(); this._decayFatigue(); this._tickService(); if (this._injuryDay) this._injuryDay(d); if (this._arcDay) this._arcDay(d); if (this._allStarDay) this._allStarDay(d); if (this._aiTradeDay) this._aiTradeDay(d); if (this._unrestDay) this._unrestDay(d); if (this._growDay) this._growDay(d); if (this._clinchDay) this._clinchDay(d); if (this._pressConDay) this._pressConDay(d); if (this._milDay) this._milDay(d); if (this._intlDay) this._intlDay(d); if (this._decDayAll) this._decDayAll(d); if (this._eventDay) this._eventDay(d); if (this._finSnapDay) this._finSnapDay(d); if (this._trainDay) this._trainDay(); if (this._scoutDay) this._scoutDay(); if (this._milestoneDay) this._milestoneDay(); this.playFutures(d); this.returnMilitary(this.milYM(d));
+      this._applyActiveMax(); this._decayFatigue(); this._tickService(); if (this._injuryDay) this._injuryDay(d); if (this._arcDay) this._arcDay(d); if (this._allStarDay) this._allStarDay(d); if (this._aiTradeDay) this._aiTradeDay(d); if (this._unrestDay) this._unrestDay(d); if (this._growDay) this._growDay(d); if (this._clinchDay) this._clinchDay(d); if (this._pressConDay) this._pressConDay(d); if (this._milDay) this._milDay(d); if (this._intlDay) this._intlDay(d); if (this._decDayAll) this._decDayAll(d); if (this._lgNewsDay) this._lgNewsDay(d); if (this._eventDay) this._eventDay(d); if (this._finSnapDay) this._finSnapDay(d); if (this._trainDay) this._trainDay(); if (this._scoutDay) this._scoutDay(); if (this._milestoneDay) this._milestoneDay(); this.playFutures(d); this.returnMilitary(this.milYM(d));
       if (!ug) { S.day++; return { status: 'ok', day: d }; }
       if (live) { S.pendingDay = d; return { status: 'userGame', day: d, game: ug.g, idx: ug.i }; }
       const L = this.startUserGame(ug.g, ug.i); this.playAuto(L); const res = this.finishUserGame(L);

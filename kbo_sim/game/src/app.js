@@ -101,8 +101,8 @@
     }).join('');
     return `<div class="start"><header><h1>KBO 감독 모드</h1><p class="muted" style="margin:6px 0 0">구단을 골라 라인업·로테이션·불펜을 짜고, 경기를 직접 지휘하고, 트레이드·FA·드래프트로 팀을 키우세요. 정규시즌 144경기 뒤 포스트시즌이 이어지고, 시즌이 끝나면 다음 시즌으로 계속됩니다.</p></header>
       <div class="teamcards">${cards}</div>
-      <div class="card row startbar"><div><h2>${KO[ui.team]}으로 시작</h2><div class="small muted">2027 시즌 · 선수 능력치는 2024~2026 기록을 합산해 평균으로 보정한 값입니다.</div></div><span class="sp"></span>
-        <button class="primary big" data-act="newgame">감독 시작</button>${has ? '<button class="big" data-act="continue">이어하기</button>' : ''}</div>
+      <div class="card row startbar"><div><h2>${KO[ui.team]}으로 시작</h2><div class="small muted">2027 시즌 · 구단은 신임 감독인 나에게 선수단 구성과 운영 전권(FA·트레이드·재정)을 맡겼습니다. 원래 감독은 퇴임한 것으로 처리합니다. 선수 능력치는 2024~2026 기록을 합산해 평균으로 보정한 값입니다.</div></div><span class="sp"></span>
+        <label class="small" style="display:flex;align-items:center;gap:6px">감독 이름 <input id="mgrNameIn" type="text" maxlength="10" value="${esc(ui.mgrName || '')}" placeholder="나" style="width:110px"></label><button class="primary big" data-act="newgame">감독 시작</button>${has ? '<button class="big" data-act="continue">이어하기</button>' : ''}</div>
       <details class="card adv" ${ui.seed ? 'open' : ''}><summary class="small">고급 설정</summary><div class="small muted" style="margin:6px 0">시드: 성장·부상·드래프트·경기 결과 등 모든 우연의 출발값입니다. 비워 두면 게임마다 무작위로 정해지고, 같은 숫자와 같은 선택이면 같은 결과가 재현됩니다.</div>
         <label class="small muted">시드(선택) <input type="text" id="seedIn" inputmode="numeric" value="${esc(ui.seed)}" style="width:110px" placeholder="무작위"></label></details></div>`;
   }
@@ -110,8 +110,8 @@
   /* ---------------- 공통 셸 ---------------- */
   const NAV = [['home', '대시보드'], ['roster', '로스터'], ['lineup', '라인업'], ['pitching', '투수진'], ['train', '훈련'], ['schedule', '일정·결과'], ['standings', '순위·기록'], ['records', '선수 기록'], ['teams', '팀 정보'], ['story', '스토리'], ['mood', '분위기'], ['finance', '재정'], ['coach', '코치진'], ['scout', '스카우팅'], ['market', '이적시장'], ['offseason', '오프시즌'], ['save', '저장·설정']];
   /* 메뉴를 5개 묶음으로 단순화: 대시보드 · 선수단 · 리그 · 운영 · 설정(+오프시즌). 묶음 안의 화면은 상단 탭으로 전환 */
-  const SCR = { intl: '국제대회', home: '대시보드', desk: '프런트 데스크', roster: '로스터', farm: '2군', lineup: '라인업', pitching: '투수진', train: '훈련', schedule: '일정·결과', standings: '순위·기록', records: '선수 기록', teams: '팀 정보', story: '스토리·앨범', album: '앨범', mood: '분위기', finance: '재정', invest: '투자 센터', coach: '코치진', scout: '스카우팅', market: '이적시장', offseason: '오프시즌', save: '저장·설정' };
-  const GROUPS = [['home', '대시보드', ['home']], ['team', '선수단', ['roster', 'lineup', 'pitching', 'train', 'mood']], ['league', '리그', ['schedule', 'standings', 'records', 'teams', 'story', 'intl']], ['ops', '운영', ['finance', 'invest', 'coach', 'scout', 'market']], ['offseason', '오프시즌', ['offseason']], ['save', '설정', ['save']]];
+  const SCR = { news: '뉴스', intl: '국제대회', home: '대시보드', desk: '프런트 데스크', roster: '로스터', farm: '2군', lineup: '라인업', pitching: '투수진', train: '훈련', schedule: '일정·결과', standings: '순위·기록', records: '선수 기록', teams: '팀 정보', story: '스토리·앨범', album: '앨범', mood: '분위기', finance: '재정', invest: '투자 센터', coach: '코치진', scout: '스카우팅', market: '이적시장', offseason: '오프시즌', save: '저장·설정' };
+  const GROUPS = [['home', '대시보드', ['home']], ['team', '선수단', ['roster', 'lineup', 'pitching', 'train', 'mood']], ['league', '리그', ['news', 'schedule', 'standings', 'records', 'teams', 'story', 'intl']], ['ops', '운영', ['finance', 'invest', 'coach', 'scout', 'market']], ['offseason', '오프시즌', ['offseason']], ['save', '설정', ['save']]];
   const faOpen = () => { const S = L.S; return !!(S.faMkt && !S.faMkt.closed && S.phase !== 'offseason'); };   // 개막 전 FA 협상 기간(시즌 경기는 FA 마감 뒤에 진행)
   function statusText(my) { const S = L.S; return S.phase === 'offseason' ? '오프시즌' : faOpen() ? `FA 협상 기간 · 개막까지 ${L.faDaysLeft()}일` : (my.w + my.l + my.d === 0 ? '개막 전' : `${my.rank}위 · ${my.w}승 ${my.l}패${my.d ? ' ' + my.d + '무' : ''}`); }
   function primary() {
@@ -275,11 +275,26 @@
     const kp = `<div class="kpis"><div class="kpi"><div class="l">득점 / 실점</div><div class="v">${my.rs} / ${my.ra}</div></div><div class="kpi"><div class="l">경기 진행</div><div class="v">${Math.min(S.day, 144)} / 144</div></div></div>`;
     return `${screenPhaseBanner()}${act}${extra || ''}<div class="dash"><div class="dcol">${pv}${nxt}${allStarCard()}${newsCard(news)}</div><div class="dcol">${kp}${goalCard()}${injCard()}<div class="card"><div class="row"><h2 style="margin:0">순위</h2><span class="sp"></span><button class="sm" data-act="go" data-a="standings">전체 순위·기록</button></div><div class="tablewrap"><table><tbody>${rows}</tbody></table></div></div></div></div>`;
   }
+  /* 리그 뉴스(47단계): 리그 전체 주요 사건을 기사 형식으로 — 분류 필터·우리 구단 관련·주요 기사 */
+  const NEWS_CAT = ['순위', '기록', '트레이드', 'FA', '부상', '감독', '연승·연패', '파워랭킹', '포스트시즌', '국제대회'];
+  const newsWhen = x => x.ph === 'regular' || x.ph === 'preseason' ? `${x.y} ${L.dateStr(Math.min(x.d, 143))}` : x.ph === 'offseason' ? `${x.y} 오프시즌` : x.ph && x.ph.startsWith('post') ? `${x.y} 가을야구` : `${x.y}`;
+  const newsLogos = x => (x.teams || []).filter(t => t in KO).slice(0, 2).map(t => logo(t, 22)).join('');
+  function newsItem(x, big) { const p = x.pid ? P(x.pid) : null; return `<div class="nitem${big ? ' big' : ''}${x.teams && x.teams.includes(U()) ? ' mine' : ''}"><div class="row small" style="gap:6px"><span class="chip ncat">${esc(x.cat)}</span><span class="muted">${esc(newsWhen(x))}</span><span class="sp"></span>${newsLogos(x)}</div><div class="nhead">${esc(x.head)}</div>${x.body ? `<div class="small nbody">${esc(x.body)}</div>` : ''}${p && p.team in KO ? `<button class="linkbtn small" data-act="player" data-a="${p.id}">${esc(p.ko)} 선수 정보</button>` : ''}</div>`; }
+  function screenNews() {
+    if (!L.lgNewsList) return ''; const cat = ui.newsCat || '', mine = !!ui.newsMine, all = L.lgNewsList({ cat, mine }), n = ui.newsN || 30;
+    const chips = [['', '전체']].concat(NEWS_CAT.map(c => [c, c])).map(([k, t]) => `<button class="sm" aria-pressed="${cat === k}" data-act="newsCat" data-a="${k}">${t}</button>`).join('') + `<button class="sm" aria-pressed="${mine}" data-act="newsMine">우리 구단 관련</button>`;
+    const lead = !cat && !mine ? (L.lgNewsList().slice(0, 15).find(x => x.imp >= 3) || L.lgNewsList()[0]) : null;
+    const rest = all.filter(x => x !== lead).slice(0, n);
+    return `<div class="card"><div class="row"><h2 style="margin:0">리그 뉴스</h2><span class="sp"></span><span class="small muted">게임 속 기록으로 만든 가상 기사입니다</span></div><div class="chips" style="margin-top:8px">${chips}</div></div>
+      ${lead ? `<div class="card">${newsItem(lead, true)}</div>` : ''}
+      <div class="card">${rest.length ? rest.map(x => newsItem(x)).join('') : mascot(48, '아직 이 분류의 기사가 없습니다. 시즌이 진행되면 순위 변화·기록·트레이드·부상 소식이 쌓입니다.')}${all.length - (lead ? 1 : 0) > n ? '<div class="row" style="justify-content:center;margin-top:8px"><button class="sm" data-act="newsMore">기사 더 보기</button></div>' : ''}</div>`;
+  }
   /* 소식(화면 정리): 이야기 중·언론·팬 반응·보고서·구단 소식·최근 처리한 소식을 한 카드에 접어 둔다 */
   function newsCard(news) {
     const inner = h => (h || '').replace(/^\s*<div class="card">/, '').replace(/<\/div>\s*$/, '');
     const arc = arcCard(), pr = pressCard(), rp = reportsCard(), un = L.reportsUnread ? L.reportsUnread() : 0, eh = evHistory();
-    return `<div class="card"><h2>소식</h2>${foldGroup('nw_arc', '이야기 중', '', inner(arc), true)}${foldGroup('nw_press', '언론·팬 반응', '', pr ? pr.replace(/<h2[^>]*>언론·팬 반응<\/h2>/, '') : '', false)}${foldGroup('nw_rpt', '보고서', un ? `새 보고서 ${un}` : '', inner(rp), !!un)}${foldGroup('nw_news', '구단 소식', '', `<ul class="news">${news}</ul>`, true)}${foldGroup('home_ev', '최근 처리한 소식', '', inner(eh), false)}</div>`;
+    const lg = L.lgNewsList ? L.lgNewsList().slice(0, 5) : [], lgh = lg.length ? `${lg.map(x => `<div class="stl"><span class="d"><span class="chip ncat">${esc(x.cat)}</span></span><span>${esc(x.head)}</span></div>`).join('')}<div class="row" style="justify-content:flex-end"><button class="sm" data-act="go" data-a="news">리그 뉴스 전체</button></div>` : '';
+    return `<div class="card"><h2>소식</h2>${foldGroup('nw_lg', '리그 뉴스', lg.length ? lg[0].head : '', lgh, true)}${foldGroup('nw_arc', '이야기 중', '', inner(arc), true)}${foldGroup('nw_press', '언론·팬 반응', '', pr ? pr.replace(/<h2[^>]*>언론·팬 반응<\/h2>/, '') : '', false)}${foldGroup('nw_rpt', '보고서', un ? `새 보고서 ${un}` : '', inner(rp), !!un)}${foldGroup('nw_news', '구단 소식', '', `<ul class="news">${news}</ul>`, true)}${foldGroup('home_ev', '최근 처리한 소식', '', inner(eh), false)}</div>`;
   }
   /* 화면 정리 도우미: 최상위 카드(<div class="card">) 단위로 나눠 제목으로 고른 카드를 접기 묶음으로 옮긴다(참고·가정 자료처럼 자주 안 보는 카드) */
   function splitCards(html) {
@@ -2201,7 +2216,7 @@
     if (ui.pre && !ui.live) { document.body.classList.remove('modal-open'); root.innerHTML = screenPre() + confirmSheet() + toastHtml(); window.scrollTo(0, scroll); return; }   // 경기 전 브리핑(날짜 처리 끝, 경기 시작 전)
     if (ui.live) { document.body.classList.remove('modal-open'); root.innerHTML = screenLive() + toastHtml(); window.scrollTo(0, scroll); return; }   // 경기 화면에서는 이전 화면의 스크롤 잠금이 남지 않게 푼다
     if ((ui.screen === 'lineup' || ui.screen === 'pitching') && pref('seen_lineup', '') !== '1') setPref('seen_lineup', '1');   // 첫 게임 안내: 라인업 확인 단계
-    const S = ui.screen, f = { records: screenRecords, invest: () => foldCards(screenInvest(), /실제 KBO 시설 투자 현황|리그 관중 추이|규칙 가정값/, 'inv_ref', '참고 자료·가정 보기'), desk: screenDesk, home: () => (setTimeout(celebrate, 60), '') + guideCard() + officeHub() + heroCard() + screenHome(decCard() + deskFold()), roster: () => screenRoster(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, story: () => screenStory() + screenAlbum(), album: () => screenStory() + screenAlbum(), intl: screenIntl, mood: () => foldCards(screenMood(), /^라커룸 분위기|^선수단 분위기|^동료 관계|^감독 커리어/, 'mood_more', '라커룸·선수단 세부'), train: screenTrain, scout: screenScout, finance: () => foldCards(cbtCard() + screenFinance(), /재정이 게임에 미치는 영향|비용 구조|재정 자료|재정 성장 가정/, 'fin_ref', '자료·가정 보기'), coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
+    const S = ui.screen, f = { records: screenRecords, invest: () => foldCards(screenInvest(), /실제 KBO 시설 투자 현황|리그 관중 추이|규칙 가정값/, 'inv_ref', '참고 자료·가정 보기'), desk: screenDesk, home: () => (setTimeout(celebrate, 60), '') + guideCard() + officeHub() + heroCard() + screenHome(decCard() + deskFold()), roster: () => screenRoster(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, story: () => screenStory() + screenAlbum(), album: () => screenStory() + screenAlbum(), intl: screenIntl, news: screenNews, mood: () => foldCards(screenMood(), /^라커룸 분위기|^선수단 분위기|^동료 관계|^감독 커리어/, 'mood_more', '라커룸·선수단 세부'), train: screenTrain, scout: screenScout, finance: () => foldCards(cbtCard() + screenFinance(), /재정이 게임에 미치는 영향|비용 구조|재정 자료|재정 성장 가정/, 'fin_ref', '자료·가정 보기'), coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
     document.body.classList.toggle('modal-open', !!ui.modal);
     { const c = L.compOpen().find(x => !(ui.compSeen || (ui.compSeen = {}))[x.id]); if (c && !ui.live && !ui.negOpen) { ui.compSeen[c.id] = true; ui.comp = c.id; } }   // 새 FA 보상 선택은 처음 생길 때 바로 창을 띄운다
     const keep = snapInner(root);   // 체크박스·버튼으로 다시 그려도 안쪽 스크롤 상자와 펼침 상태를 유지한다
@@ -2238,7 +2253,7 @@
   }
   const A = {
     pickteam(a) { ui.team = a; render(); },
-    newgame() { const seed = parseInt(($('#seedIn') || {}).value, 10); ui.seed = ($('#seedIn') || {}).value || ''; L = League.create(KBO_BASE, ui.team, Number.isFinite(seed) ? seed : 1 + Math.floor(Math.random() * 99999)); ui.screen = 'home'; window.scrollTo(0, 0); autosave(); render(); },
+    newgame() { const seed = parseInt(($('#seedIn') || {}).value, 10); ui.seed = ($('#seedIn') || {}).value || ''; L = League.create(KBO_BASE, ui.team, Number.isFinite(seed) ? seed : 1 + Math.floor(Math.random() * 99999)); ui.mgrName = (($('#mgrNameIn') || {}).value || '').trim(); if (L.setMgrName) { L.setMgrName(ui.mgrName || '나'); if (L._mgrSeat) L._mgrSeat(); } ui.screen = 'home'; window.scrollTo(0, 0); autosave(); render(); },
     continue() { const s = store.get(SAVE_KEY); if (s) { try { L = League.load(s); ui.screen = 'home'; window.scrollTo(0, 0); render(); } catch (e) { toast('저장 데이터를 읽을 수 없습니다.'); } } },
     negOpen(a) { const [id, kind, topic, evId, rep] = a.split('|'), n = L.S.neg; if (n && n.id === id && n.kind === kind && n.state === 'open' && (!rep || n.replace === rep)) { if (!ui.negBack) ui.negBack = { scroll: window.scrollY, screen: ui.screen, market: ui.market, faTab: ui.faTab, modal: ui.modal }; ui.negOpen = true; ui.modal = null; render(); return; } if (n) L.negClose();
       if (kind === 'meeting' && !evId) { const b = L.meetBlock(id); if (b) { toast(b); return; } }
@@ -2258,6 +2273,7 @@
     integrityRun() { ui.integ = L.integrity(); render(); },
     recSet(a) { const [k, v] = a.split('|'), R = ui.rec; if (k === 't') R.t = v; else if (k === 'v') R.v = v; else if (k === 'src') R.src = v; else if (k === 'farm') R.farm = v === '1'; else if (k === 'q') R.q = v === '1'; R.n = 50; render(); const w = document.querySelector('table.rec'); if (w && w.parentElement) { w.parentElement.scrollTop = 0; w.parentElement.scrollLeft = 0; } },
     recSort(a) { const [t, k] = a.split('|'), st = ui.rec.s[t]; if (st.k === k) st.d = -st.d; else { st.k = k; st.d = REC_LOW.has(k) ? 1 : -1; } render(); }, recMore() { ui.rec.n += 50; render(); },
+    newsCat(a) { ui.newsCat = a || ''; ui.newsN = 30; render(); }, newsMine() { ui.newsMine = !ui.newsMine; ui.newsN = 30; render(); }, newsMore() { ui.newsN = (ui.newsN || 30) + 30; render(); },
     storyTab(a) { ui.storyTab = a; render(); }, storyMin(a) { ui.storyMin = +a; render(); },
     rolePick(a) { const [id, r] = a.split('|'), e = L.setRole(id, r); if (e) toast(e); else { toast(`${P(id).ko}: ${r === 'SP' ? '선발' : '구원'}로 지정`); autosave(); } render(); },
     devPlan(a) { const [id, pl] = a.split('|'), e = L.setDevPlan(id, pl); if (e) toast(e); else { toast(`${P(id).ko}: 육성 방향 ${L.planName(pl)}`); autosave(); } render(); },
