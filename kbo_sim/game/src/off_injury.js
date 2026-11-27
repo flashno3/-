@@ -30,11 +30,23 @@
     if (filled.length) news(this, `자동 대체: 부상 공백을 2군에서 채웠습니다 — ${filled.join(', ')}`);
     if (swapped.length) news(this, `자동 복귀 등록: ${swapped.map(x => x.replace(' ↔ ', ' 복귀(1군) / 2군행 ')).join(', ')}`);
   };
+  /* 대표팀 복귀(내 구단): 차출 전 1군이었으면 1군으로(빈자리 → 없으면 같은 유형 최저 가치 1군 선수와 교체, 규칙에 걸리면 다음 후보), 라인업에 있었으면 원래 포지션 자리로.
+   *  차출은 사용자의 선택이 아니므로 원래 상태로 되돌린다. 자동 관리 '끄기'면 2군 대기(알림만) */
+  proto._natlRestore = function (p) {
+    const S = this.S, t = S.userTeam, pv = p.natlPrev; if (!pv || !pv.active || this.injAuto() === 'off' || this.isInj(p)) return '2군에서 대기 중';
+    if (!p.active && this.openSlots() > 0) this.moveActive(p.id, true);
+    const set = S.teams[t].set, inLin = q => (set.lineup || []).some(x => x.id === q.id), val = q => q.type === 'B' ? this._runsB(q, true) : this._runsP(q);
+    if (!p.active) for (const w of this.players(t).filter(q => q.active && q.type === p.type && q.id !== p.id).sort((a, b) => (inLin(a) - inLin(b)) || val(a) - val(b))) { this.swapActive(p.id, w.id); if (p.active) break; }
+    if (!p.active) return '1군 자리를 만들지 못해 2군에서 대기 중';
+    if (pv.pos && !inLin(p)) { const i = (set.lineup || []).findIndex(x => x.pos === pv.pos); if (i >= 0) { set.lineup[i] = { id: p.id, pos: pv.pos }; this._engDirty = true; } }
+    this.repairSettings(t); this.invalidate(); return inLin(p) ? `1군 복귀(라인업 ${pv.pos})` : '1군 복귀';
+  };
   proto._injuryDay = function (d) {
     const S = this.S, now = this.todayN(), r = rngFor(S.seed, S.year, d, 7000), changed = new Set(), user = S.userTeam, back = {}, out = {};
     for (const t of TEAMS) for (const p of this.players(t)) {
-      if (p.inj && p.inj.natl && !this.isInj(p)) {   // 국가대표 복귀(부상 아님: 부상 복귀 알림·유대 변화 없음, 보관해 둔 부상 기록 복원)
-        if (t === user) news(this, `${/대표/.test(p.inj.dx) ? '대표팀 복귀' : '복귀'}: ${p.ko} — 2군에서 대기 중`); if (p.injPrev) { p.inj = p.injPrev; delete p.injPrev; } else delete p.inj; changed.add(t); (back[t] = back[t] || []).push(p); continue;
+      if (p.inj && p.inj.natl && !this.isInj(p)) { const dx0 = p.inj.dx;   // 국가대표 복귀(부상 아님: 부상 복귀 알림·유대 변화 없음, 보관해 둔 부상 기록 복원)
+        if (p.injPrev) { p.inj = p.injPrev; delete p.injPrev; } else delete p.inj; changed.add(t); (back[t] = back[t] || []).push(p);
+        if (t === user) { const how = this._natlRestore(p); news(this, `${/대표/.test(dx0) ? '대표팀 복귀' : '복귀'}: ${p.ko} — ${how}`); delete p.natlPrev; } continue;
       }
       if (p.inj && p.inj.apply !== false && !this.isInj(p)) {   // 복귀
         if (t === user) { news(this, `부상 복귀: ${p.ko} (${p.inj.dx}) — 2군에서 대기 중`); this._bondShift(p, 1, '부상 복귀'); if (this.injAuto() !== 'full') this._returnEvent(p); }

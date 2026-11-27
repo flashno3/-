@@ -4066,11 +4066,23 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
     if (filled.length) news(this, `자동 대체: 부상 공백을 2군에서 채웠습니다 — ${filled.join(', ')}`);
     if (swapped.length) news(this, `자동 복귀 등록: ${swapped.map(x => x.replace(' ↔ ', ' 복귀(1군) / 2군행 ')).join(', ')}`);
   };
+  /* 대표팀 복귀(내 구단): 차출 전 1군이었으면 1군으로(빈자리 → 없으면 같은 유형 최저 가치 1군 선수와 교체, 규칙에 걸리면 다음 후보), 라인업에 있었으면 원래 포지션 자리로.
+   *  차출은 사용자의 선택이 아니므로 원래 상태로 되돌린다. 자동 관리 '끄기'면 2군 대기(알림만) */
+  proto._natlRestore = function (p) {
+    const S = this.S, t = S.userTeam, pv = p.natlPrev; if (!pv || !pv.active || this.injAuto() === 'off' || this.isInj(p)) return '2군에서 대기 중';
+    if (!p.active && this.openSlots() > 0) this.moveActive(p.id, true);
+    const set = S.teams[t].set, inLin = q => (set.lineup || []).some(x => x.id === q.id), val = q => q.type === 'B' ? this._runsB(q, true) : this._runsP(q);
+    if (!p.active) for (const w of this.players(t).filter(q => q.active && q.type === p.type && q.id !== p.id).sort((a, b) => (inLin(a) - inLin(b)) || val(a) - val(b))) { this.swapActive(p.id, w.id); if (p.active) break; }
+    if (!p.active) return '1군 자리를 만들지 못해 2군에서 대기 중';
+    if (pv.pos && !inLin(p)) { const i = (set.lineup || []).findIndex(x => x.pos === pv.pos); if (i >= 0) { set.lineup[i] = { id: p.id, pos: pv.pos }; this._engDirty = true; } }
+    this.repairSettings(t); this.invalidate(); return inLin(p) ? `1군 복귀(라인업 ${pv.pos})` : '1군 복귀';
+  };
   proto._injuryDay = function (d) {
     const S = this.S, now = this.todayN(), r = rngFor(S.seed, S.year, d, 7000), changed = new Set(), user = S.userTeam, back = {}, out = {};
     for (const t of TEAMS) for (const p of this.players(t)) {
-      if (p.inj && p.inj.natl && !this.isInj(p)) {   // 국가대표 복귀(부상 아님: 부상 복귀 알림·유대 변화 없음, 보관해 둔 부상 기록 복원)
-        if (t === user) news(this, `${/대표/.test(p.inj.dx) ? '대표팀 복귀' : '복귀'}: ${p.ko} — 2군에서 대기 중`); if (p.injPrev) { p.inj = p.injPrev; delete p.injPrev; } else delete p.inj; changed.add(t); (back[t] = back[t] || []).push(p); continue;
+      if (p.inj && p.inj.natl && !this.isInj(p)) { const dx0 = p.inj.dx;   // 국가대표 복귀(부상 아님: 부상 복귀 알림·유대 변화 없음, 보관해 둔 부상 기록 복원)
+        if (p.injPrev) { p.inj = p.injPrev; delete p.injPrev; } else delete p.inj; changed.add(t); (back[t] = back[t] || []).push(p);
+        if (t === user) { const how = this._natlRestore(p); news(this, `${/대표/.test(dx0) ? '대표팀 복귀' : '복귀'}: ${p.ko} — ${how}`); delete p.natlPrev; } continue;
       }
       if (p.inj && p.inj.apply !== false && !this.isInj(p)) {   // 복귀
         if (t === user) { news(this, `부상 복귀: ${p.ko} (${p.inj.dx}) — 2군에서 대기 중`); this._bondShift(p, 1, '부상 복귀'); if (this.injAuto() !== 'full') this._returnEvent(p); }
@@ -6014,7 +6026,7 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
   };
   proto._intlAway = function (ids, retN, name) {   // 소속팀 결장(부상 구조를 빌려 씀: natl 표시, 기존 부상 기록은 보관 후 복원)
     const S = this.S, out = {};
-    for (const id of ids) { const p = S.players[id]; if (!p || !(p.team in S.teams)) continue; if (p.inj) p.injPrev = p.inj; p.inj = { dx: `${name} 대표 차출`, since: `${S.year} 소집`, ret: new Date(retN * 864e5).toISOString().slice(0, 10), retN, basis: '국가대표 소집', apply: true, generated: false, natl: true }; if (p.active) { p.active = false; (out[p.team] = out[p.team] || []).push(p); } }
+    for (const id of ids) { const p = S.players[id]; if (!p || !(p.team in S.teams)) continue; if (p.inj) p.injPrev = p.inj; p.inj = { dx: `${name} 대표 차출`, since: `${S.year} 소집`, ret: new Date(retN * 864e5).toISOString().slice(0, 10), retN, basis: '국가대표 소집', apply: true, generated: false, natl: true }; if (p.team === S.userTeam) { const lin = (S.teams[p.team].set.lineup || []).find(x => x.id === id); p.natlPrev = { active: !!p.active, pos: lin ? lin.pos : null }; } if (p.active) { p.active = false; (out[p.team] = out[p.team] || []).push(p); } }
     for (const t in out) {
       if (t === S.userTeam) { if (this._injAutoFix && this.injAuto && this.injAuto() !== 'off') this._injAutoFix(out[t], []); this.ensureActive(t); this.repairSettings(t); }
       else { this.autoActive(t); this.assignUsage(t); this.assignUsage(t, true); }
@@ -8680,7 +8692,7 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
     const mon = e => e.kind === 'P12' ? '11월' : e.kind === 'OQT' ? '3월' : e.kind === 'OLY' ? '7월 13~19일' : e.kind === 'WBC' ? '3월(가정)' : '11월(가정)';
     const nx = I.next.map(e => `<div class="stl"><span class="d">${e.y} ${mon(e)}</span><span><b>${esc(e.name)}</b> ${e.ok ? '<span class="chip in">일정 확인</span>' : '<span class="chip warn">⚠ 가정</span>'}${e.cond ? ` <span class="chip">${esc(e.cond)}</span>` : ''}${e.kind === 'OLY' || e.kind === 'AG' ? ` <span class="chip">${e.kind === 'OLY' ? '3위 이상' : '금메달'} → 병역 특례</span>` : ''}<br><span class="small muted">${esc(e.src)}</span></span></div>`).join('') || '<div class="small muted">예정된 대회가 없습니다.</div>';
     const oly = I.olyField ? `<div class="small" style="margin-top:6px"><b>LA 올림픽 출전국</b> ${I.olyField.filter(Boolean).map(t => `<span class="chip ${t === 'KOR' ? 'in' : ''}">${esc(N[t] || t)}</span>`).join(' ')} — 한국 ${I.olyQ ? '<b>출전 확정</b>' : '미확정'}</div>` : '';
-    const cur = I.cur ? (() => { const ps = I.cur.sel.ids.map(id => S.players[id]).filter(Boolean); return `<div class="card"><h2>소집 중: ${esc((L.intlEvents().find(e => e.id === I.cur.id) || {}).name || '')}</h2><div class="small muted">${I.cur.camp ? '대표 선수는 복귀(7월 21일)까지 소속팀 경기에 나서지 않습니다.' : '7월 6일 소집 — 그 전에 다치면 같은 포지션 선수로 바뀝니다.'}</div>${roster(ps, [], [])}</div>`; })() : '';
+    const cur = I.cur ? (() => { const ps = I.cur.sel.ids.map(id => S.players[id]).filter(Boolean); return `<div class="card"><h2>${I.cur.camp ? '소집 중' : '대표 명단 발표'}: ${esc((L.intlEvents().find(e => e.id === I.cur.id) || {}).name || '')}</h2><div class="small muted">${I.cur.camp ? '대표 선수는 복귀(7월 21일)까지 소속팀 경기에 나서지 않습니다.' : '7월 6일 소집 전까지는 소속팀 경기에 정상 출전합니다. 그 전에 다치면 같은 포지션 선수로 바뀝니다.'}</div>${roster(ps, [], [])}</div>`; })() : '';
     function roster(ps, ex, wc) { const g = {}; for (const p of ps) (g[grpOf(p)] = g[grpOf(p)] || []).push(p); return ['투수', '포수', '내야수', '외야수'].filter(k => g[k]).map(k => `<div class="small" style="margin-top:6px"><b>${k}</b> ${g[k].map(p => `<span class="chip ${(p.team === me || p.milTeam === me) ? 'in' : ''}" data-act="player" data-a="${p.id}" style="cursor:pointer">${esc(p.ko)}<span class="muted"> ${esc(KO[p.team] || (p.team === 'MIL' ? '상무' : p.team === 'FA' ? 'FA' : ''))}</span>${ex.includes(p.id) ? ' · 특례' : ''}${wc.includes(p.id) ? ' · WC' : ''}</span>`).join(' ')}</div>`).join(''); }
     const hist = I.hist.map(h => h.out ? `<div class="card"><h3 style="margin:0">${esc(h.name)}</h3><div class="small muted">${esc(h.note)}</div></div>` : `<div class="card"><div class="row"><h3 style="margin:0">${h.kind === 'WBC' ? (h.place === 1 ? '🏆' : '') : MED[h.place] || ''} ${esc(h.name)}</h3><span class="sp"></span><b>${h.res || h.medal || h.place + '위'}</b></div>
       <div class="small muted" style="margin-top:2px">${h.games.filter(g => g.ks > g.os).length}승 ${h.games.filter(g => g.ks < g.os).length}패 · 전력 지수 ${h.kor}${h.note ? ' · ' + esc(h.note) : ''} · 상위: ${h.top.map(t => esc(N[t] || t)).join(' > ')}</div>

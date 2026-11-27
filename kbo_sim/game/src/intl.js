@@ -149,7 +149,7 @@
   };
   proto._intlAway = function (ids, retN, name) {   // 소속팀 결장(부상 구조를 빌려 씀: natl 표시, 기존 부상 기록은 보관 후 복원)
     const S = this.S, out = {};
-    for (const id of ids) { const p = S.players[id]; if (!p || !(p.team in S.teams)) continue; if (p.inj) p.injPrev = p.inj; p.inj = { dx: `${name} 대표 차출`, since: `${S.year} 소집`, ret: new Date(retN * 864e5).toISOString().slice(0, 10), retN, basis: '국가대표 소집', apply: true, generated: false, natl: true }; if (p.active) { p.active = false; (out[p.team] = out[p.team] || []).push(p); } }
+    for (const id of ids) { const p = S.players[id]; if (!p || !(p.team in S.teams)) continue; if (p.inj) p.injPrev = p.inj; p.inj = { dx: `${name} 대표 차출`, since: `${S.year} 소집`, ret: new Date(retN * 864e5).toISOString().slice(0, 10), retN, basis: '국가대표 소집', apply: true, generated: false, natl: true }; if (p.team === S.userTeam) { const lin = (S.teams[p.team].set.lineup || []).find(x => x.id === id); p.natlPrev = { active: !!p.active, pos: lin ? lin.pos : null }; } if (p.active) { p.active = false; (out[p.team] = out[p.team] || []).push(p); } }
     for (const t in out) {
       if (t === S.userTeam) { if (this._injAutoFix && this.injAuto && this.injAuto() !== 'off') this._injAutoFix(out[t], []); this.ensureActive(t); this.repairSettings(t); }
       else { this.autoActive(t); this.assignUsage(t); this.assignUsage(t, true); }

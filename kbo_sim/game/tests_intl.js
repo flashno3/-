@@ -52,4 +52,14 @@ const grp = p => p.type === 'P' ? 'P' : p.pos === 'C' ? 'C' : ['LF', 'CF', 'RF']
   ok(h && h.games.length >= 4 && ['우승', '준우승', '4강', '8강', '1라운드 탈락'].includes(h.res) && h.exempt.length === 0, 'WBC 진행·특례 없음 ' + (h && h.res));
   ok(h.games.slice(0, 4).every(g => ['JPN', 'TPE', 'AUS', 'CZE'].includes(g.opp)), '1라운드 도쿄 조(일본·대만·호주·체코)');
   ok(!S.intl.hist.some(x => x.id === 'oqt_2028'), '최종예선은 해당 연도·조건일 때만'); }
+// 시즌 중 차출(42단계·복귀 처리 보완): 소집 기간 1군·2군 출전 없음 → 복귀하면 원래 1군·라인업 자리로(자동 관리 기본값), '끄기'면 2군 대기
+for (const mode of ['fill', 'off']) { const L = League.create(base, 'Tigers', 6), S = L.S; L.faAdvance(75); L.closeFA(); L.advance(30, false); if (mode === 'off') S.injAuto = 'off';
+  const set = S.teams.Tigers.set, a = S.players[set.lineup[0].id], b = S.players[set.lineup[3].id], posA = set.lineup[0].pos, posB = set.lineup[3].pos, key = id => [S.stats, S.stats2].map(T => ((T.bat[id] || {}).PA || 0)).join('/');
+  L._intlAway([a.id, b.id], L.todayN() + 6, '시험 대회'); const k0 = [key(a.id), key(b.id)];
+  ok(!a.active && !b.active && !set.lineup.some(x => x.id === a.id || x.id === b.id), `${mode}: 소집되면 1군·라인업에서 빠짐`);
+  L.advance(4, false); ok(key(a.id) === k0[0] && key(b.id) === k0[1], `${mode}: 소집 기간 1군·2군 출전 없음`);
+  L.advance(5, false);
+  if (mode === 'fill') ok(a.active && b.active && set.lineup.some(x => x.id === a.id && x.pos === posA) && set.lineup.some(x => x.id === b.id && x.pos === posB), '복귀 → 원래 1군·라인업 포지션');
+  else ok(!a.active && !b.active, '자동 관리 끄기: 2군 대기');
+  ok(!a.natlPrev && !b.natlPrev && !(a.inj && a.inj.natl), `${mode}: 복귀 표시 정리`); ok(!L.integrity().errors.length, `${mode}: 정합성`); }
 console.log('intl tests ok', n);
