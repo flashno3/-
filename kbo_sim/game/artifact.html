@@ -2164,10 +2164,17 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
       if (s.wc) { if (s.games.length >= 2 || s.hiAdv) return null; return { home: s.hi, away: s.lo }; }
       const hiHome = s.pattern[s.slot % s.pattern.length] === 'H'; return { home: hiHome ? s.hi : s.lo, away: hiHome ? s.lo : s.hi };
     }
+    /* 포스트시즌 선발: 1군 등록·건강한 선발 상위 4명(내 팀은 내 로테이션 순서)을 돌리되, 포스트시즌 날짜로 4일 이상 쉰 투수만 낸다(모두 덜 쉬었으면 가장 오래 쉰 투수).
+       이전: AI 후보에 2군 투수가 섞여 엔진이 같은 1선발로 대신 세우고, 시리즈마다 순번이 0부터라 같은 투수가 연속 선발하는 일이 있었다(8%) */
     _postStarter(team, s) {
-      const S = this.S;
-      if (team === S.userTeam) { const set = S.teams[team].set, list = set.rotation.map(id => S.players[id]); return list[s.sp[team]++ % Math.min(4, list.length)]; }
-      const sp = this.pitchers(team).filter(p => p.GS > 0).sort((a, b) => b.GS * b.ipgs - a.GS * a.ipgs).slice(0, 4); return sp[s.sp[team]++ % sp.length];
+      const S = this.S, P = S.post, day = (P && P.day) || 0, last = P ? (P.spLast = P.spLast || {}) : {}, ok = p => p && p.team === team && p.active && !this.isInj(p);
+      let top = team === S.userTeam ? S.teams[team].set.rotation.map(id => S.players[id]).filter(ok).slice(0, 4)
+        : this.pitchers(team, true).filter(p => ok(p) && (p.role === 'SP' || p.GS > 0)).sort((a, b) => (b.GS || 0) * (b.ipgs || 5) - (a.GS || 0) * (a.ipgs || 5)).slice(0, 4);
+      if (!top.length) top = this.pitchers(team, true).filter(ok).sort((a, b) => b.stamina - a.stamina).slice(0, 4);
+      const rest = p => day - (last[p.id] === undefined ? -99 : last[p.id]), n = top.length, i0 = (s.sp[team] || 0);
+      let pick = null, k = 0; for (; k < n; k++) { const p = top[(i0 + k) % n]; if (rest(p) >= 4) { pick = p; break; } }
+      if (!pick) { pick = top.slice().sort((a, b) => rest(b) - rest(a))[0]; k = top.indexOf(pick) - (i0 % n); }
+      s.sp[team] = i0 + Math.max(0, k) + 1; last[pick.id] = day; return pick;
     }
     /* 포스트시즌 한 경기 결과 반영. 반환: 시리즈가 끝났으면 true */
     postRecord(home, away, rh, ra, info) {
