@@ -276,7 +276,7 @@
     return `${screenPhaseBanner()}${act}${extra || ''}<div class="dash"><div class="dcol">${pv}${nxt}${allStarCard()}${newsCard(news)}</div><div class="dcol">${kp}${goalCard()}${injCard()}<div class="card"><div class="row"><h2 style="margin:0">순위</h2><span class="sp"></span><button class="sm" data-act="go" data-a="standings">전체 순위·기록</button></div><div class="tablewrap"><table><tbody>${rows}</tbody></table></div></div></div></div>`;
   }
   /* 리그 뉴스(47단계): 리그 전체 주요 사건을 기사 형식으로 — 분류 필터·우리 구단 관련·주요 기사 */
-  const NEWS_CAT = ['순위', '기록', '트레이드', 'FA', '부상', '감독', '연승·연패', '파워랭킹', '포스트시즌', '국제대회'];
+  const NEWS_CAT = ['순위', '기록', '수상 레이스', '트레이드', 'FA', '부상', '감독', '연승·연패', '파워랭킹', '포스트시즌', '국제대회'];
   const newsWhen = x => x.ph === 'regular' || x.ph === 'preseason' ? `${x.y} ${L.dateStr(Math.min(x.d, 143))}` : x.ph === 'offseason' ? `${x.y} 오프시즌` : x.ph && x.ph.startsWith('post') ? `${x.y} 가을야구` : `${x.y}`;
   const newsLogos = x => (x.teams || []).filter(t => t in KO).slice(0, 2).map(t => logo(t, 22)).join('');
   function newsItem(x, big) { const p = x.pid ? P(x.pid) : null; return `<div class="nitem${big ? ' big' : ''}${x.teams && x.teams.includes(U()) ? ' mine' : ''}"><div class="row small" style="gap:6px"><span class="chip ncat">${esc(x.cat)}</span><span class="muted">${esc(newsWhen(x))}</span><span class="sp"></span>${newsLogos(x)}</div><div class="nhead">${esc(x.head)}</div>${x.body ? `<div class="small nbody">${esc(x.body)}</div>` : ''}${p && p.team in KO ? `<button class="linkbtn small" data-act="player" data-a="${p.id}">${esc(p.ko)} 선수 정보</button>` : ''}</div>`; }
@@ -294,7 +294,8 @@
     const inner = h => (h || '').replace(/^\s*<div class="card">/, '').replace(/<\/div>\s*$/, '');
     const arc = arcCard(), pr = pressCard(), rp = reportsCard(), un = L.reportsUnread ? L.reportsUnread() : 0, eh = evHistory();
     const lg = L.lgNewsList ? L.lgNewsList().slice(0, 5) : [], lgh = lg.length ? `${lg.map(x => `<div class="stl"><span class="d"><span class="chip ncat">${esc(x.cat)}</span></span><span>${esc(x.head)}</span></div>`).join('')}<div class="row" style="justify-content:flex-end"><button class="sm" data-act="go" data-a="news">리그 뉴스 전체</button></div>` : '';
-    return `<div class="card"><h2>소식</h2>${foldGroup('nw_lg', '리그 뉴스', lg.length ? lg[0].head : '', lgh, true)}${foldGroup('nw_arc', '이야기 중', '', inner(arc), true)}${foldGroup('nw_press', '언론·팬 반응', '', pr ? pr.replace(/<h2[^>]*>언론·팬 반응<\/h2>/, '') : '', false)}${foldGroup('nw_rpt', '보고서', un ? `새 보고서 ${un}` : '', inner(rp), !!un)}${foldGroup('nw_news', '구단 소식', '', `<ul class="news">${news}</ul>`, true)}${foldGroup('home_ev', '최근 처리한 소식', '', inner(eh), false)}</div>`;
+    const rm = L.S.phase === 'regular' && L.awardRace ? raceMine(L.awardRace()) : [], rmh = rm.length ? `<div class="chiprow">${rm.slice(0, 6).map(m => `<span class="chip${m.win ? ' ks' : ''}">${esc(m.name)} ${esc(m.txt)}</span>`).join('')}</div><div class="row" style="justify-content:flex-end"><button class="ghost" data-act="go" data-a="standings">수상 레이스 전체</button></div>` : '';
+    return `<div class="card"><h2>소식</h2>${foldGroup('nw_lg', '리그 뉴스', lg.length ? lg[0].head : '', lgh, true)}${foldGroup('nw_race', '수상 레이스', rm.length ? `우리 선수 ${rm.length}건` : '', rmh, false)}${foldGroup('nw_arc', '이야기 중', '', inner(arc), true)}${foldGroup('nw_press', '언론·팬 반응', '', pr ? pr.replace(/<h2[^>]*>언론·팬 반응<\/h2>/, '') : '', false)}${foldGroup('nw_rpt', '보고서', un ? `새 보고서 ${un}` : '', inner(rp), !!un)}${foldGroup('nw_news', '구단 소식', '', `<ul class="news">${news}</ul>`, true)}${foldGroup('home_ev', '최근 처리한 소식', '', inner(eh), false)}</div>`;
   }
   /* 화면 정리 도우미: 최상위 카드(<div class="card">) 단위로 나눠 제목으로 고른 카드를 접기 묶음으로 옮긴다(참고·가정 자료처럼 자주 안 보는 카드) */
   function splitCards(html) {
@@ -708,6 +709,32 @@
       ${inj.length ? `<div class="card"><h2>부상자</h2><div class="tablewrap"><table><tbody>${inj.map(p => `<tr class="click" data-act="player" data-a="${p.id}"><td class="l"><b>${esc(p.ko)}</b> <span class="muted small">${pos(p)}</span></td><td class="l small">${esc(p.inj.dx)}</td><td class="n small">~${L.injDateStr(p)}</td></tr>`).join('')}</tbody></table></div></div>` : ''}`;
   }
   /* 수상 기록: 실제 KBO MVP·신인왕·골든글러브(2020~2026, 2026 골든글러브는 12/8 시상 예정)와 내 게임의 연도별 수상 */
+  /* 수상 레이스(48단계): L.awardRace() = 시즌 뒤 시상과 같은 계산 → 레이스 1위는 "지금 시즌이 끝나면 받는 선수" */
+  const ipTxt = o => `${Math.floor(o / 3)}${o % 3 ? ' ' + (o % 3) + '/3' : ''}이닝`;
+  const vTxt = v => `기여 ${v >= 0 ? '+' : ''}${v.toFixed(1)}점`;
+  const raceSum = x => (x.ops !== undefined ? `타율 ${pct3(x.avg)} ${x.HR}홈런 ${x.RBI}타점 OPS ${x.ops.toFixed(3)}` : `RA9 ${x.ra9.toFixed(2)} ${ipTxt(x.outs)} ${x.K}K`);
+  function raceMine(R) {
+    const t = U(), out = [];
+    const add = (list, get, lab, top) => { list.slice(0, top).forEach((y, i) => { if (get(y).p.team === t) out.push({ id: get(y).p.id, name: get(y).p.ko, txt: `${lab} ${i + 1}위`, win: i === 0 }); }); };
+    add(R.mvp, y => y.x, 'MVP', 5); add(R.rookie, y => y.x, '신인왕', 3);
+    for (const [lab, list] of R.titles) add(list, y => y, lab.replace(/왕$/, ''), 3);
+    for (const g of R.gg) g.list.slice(0, g.n).forEach(y => { if (y.p.team === t) out.push({ id: y.p.id, name: y.p.ko, txt: `골든글러브 ${g.lab} 수상권`, win: true }); });
+    return out;
+  }
+  function awardRaceCard() {
+    const S = L.S, R = L.awardRace(), fin = !['regular', 'preseason'].includes(S.phase), tt = x => teamTag(x.p.team in KO ? x.p.team : U());
+    if (!R.mvp.length) return `<div class="card"><h2>수상 레이스</h2><span class="muted small">기록이 쌓이면 표시됩니다.</span></div>`;
+    const row = (x, i, val, mark) => `<tr class="click ${x.p.team === U() ? 'me' : ''}" data-act="player" data-a="${x.p.id}"><td class="l n">${mark || i + 1}</td><td class="l">${esc(x.p.ko)}</td><td class="l">${tt(x)}</td><td class="l small">${val}</td></tr>`;
+    const tbl = rows => `<div class="tablewrap"><table><tbody>${rows || '<tr><td class="muted">후보가 아직 없습니다.</td></tr>'}</tbody></table></div>`;
+    const gapTxt = list => (list.length > 1 ? `<div class="small muted">1·2위 차이 ${(list[0].v - list[1].v).toFixed(1)}점</div>` : '');
+    const mvp = tbl(R.mvp.slice(0, 5).map((m, i) => row(m.x, i, `${raceSum(m.x)} · ${vTxt(m.v)}`)).join(''));
+    const rk = tbl(R.rookie.slice(0, 5).map((m, i) => row(m.x, i, `${raceSum(m.x)} · ${vTxt(m.v)}`)).join(''));
+    const gg = tbl(R.gg.map(g => g.list.slice(0, g.n + 1).map((x, i) => row(x, i, `${raceSum(x)} · ${vTxt(x.val)}`, i < g.n ? `<b>${g.lab}</b>` : `<span class="muted">${g.lab} 차점</span>`)).join('')).join(''));
+    const mine = raceMine(R), mh = mine.length ? `<div style="margin:4px 0 8px"><b>우리 선수</b> ${mine.map(m => `<span class="chip${m.win ? ' ks' : ''}">${esc(m.name)} ${esc(m.txt)}</span>`).join(' ')}</div>` : '';
+    return `<div class="card"><h2>${S.year} 수상 레이스${fin ? ' (최종)' : ''}</h2><div class="small muted" style="margin:-6px 0 8px">${fin ? '정규시즌 최종 기준 — 시상 결과와 같습니다.' : '지금 시즌이 끝나면 받는 선수입니다(시즌 뒤 시상과 같은 계산).'} 규정 ${R.qPA}타석·${ipTxt(R.qOuts)}(우리 구단 ${R.games}경기 기준). 실제 KBO MVP·신인왕·골든글러브는 기자 투표지만, 게임은 리그 평균 대비 득점 기여(타자: OPS와 타석, 투수: 실점률과 이닝)로 정합니다. 타이틀 순위는 아래 기록 표와 같습니다.</div>${mh}
+      <div class="grid"><div><h3>MVP</h3>${gapTxt(R.mvp)}${mvp}</div><div><h3>신인왕</h3><div class="small muted">입단 5년 이내·이전 기록 한도 이내, 60타석 또는 15이닝 이상</div>${rk}</div></div>
+      ${foldGroup('race_gg', '골든글러브', `규정의 70% 이상(${Math.ceil(R.qPA * 0.7)}타석·${ipTxt(Math.ceil(R.qOuts * 0.7))}), 주 포지션 기준`, gg, true)}</div>`;
+  }
   function awardsCard() {
     const S = L.S, real = S.awardsReal || [], mine = S.awardsHist || [];
     const years = Array.from(new Set(real.map(x => x.y))).sort((a, b) => b - a);
@@ -719,15 +746,11 @@
   function screenStandings() {
     const S = L.S, st = L.standings(), top = st[0];
     const rows = st.map(x => `<tr class="click ${x.team === U() ? 'me' : ''} ${x.rank === 5 ? 'cut' : ''}" data-act="team" data-a="${x.team}"><td class="l n">${x.rank}</td><td class="l">${teamTag(x.team)}</td><td class="n">${x.w + x.l + x.d}</td><td class="n">${x.w}</td><td class="n">${x.l}</td><td class="n hm">${x.d}</td><td class="n"><b>${pct3(x.pct)}</b></td><td class="n">${x.rank === 1 ? '-' : (((top.w - x.w) + (x.l - top.l)) / 2).toFixed(1)}</td><td class="n hm">${x.rs}</td><td class="n hm">${x.ra}</td><td class="n ${x.rs - x.ra >= 0 ? 'pos' : 'neg'}">${sgn(x.rs - x.ra)}</td></tr>`).join('');
-    const gp = Math.max(1, Math.round(S.results.length / 5)), minPA = Math.round(3.1 * gp / 10 * 1.0);
-    const bat = Object.entries(S.stats.bat).map(([id, c]) => { const p = P(id); if (!p || !c.PA) return null; const ab = c.PA - c.BB - c.HBP - c.SF, h = c['1B'] + c['2B'] + c['3B'] + c.HR; return { p, PA: c.PA, avg: ab ? h / ab : 0, HR: c.HR, RBI: c.RBI, H: h, SB: c.SB }; }).filter(Boolean);
-    const q = bat.filter(x => x.PA >= Math.max(30, 3.1 * (S.day)));
+    const R = L.awardRace(), bat = R.bat, q = R.titles[0][1], pit = R.pit, pq = R.titles[4][1];   // 타율·RA9 순위표 = 타이틀 계산과 같은 규정(48단계)
     const lead = (arr, key, fmt, n) => arr.slice().sort((a, b) => b[key] - a[key]).slice(0, n || 8).map((x, i) => `<tr class="click" data-act="player" data-a="${x.p.id}"><td class="l n">${i + 1}</td><td class="l">${esc(x.p.ko)}</td><td class="l">${teamTag(x.p.team in KO ? x.p.team : U())}</td><td class="n"><b>${fmt(x[key])}</b></td></tr>`).join('');
-    const pit = Object.entries(S.stats.pit).map(([id, c]) => { const p = P(id); if (!p || c.outs < 3) return null; return { p, ra9: c.R * 27 / c.outs, K: c.K, outs: c.outs }; }).filter(Boolean);
-    const pq = pit.filter(x => x.outs >= 3 * Math.max(5, S.day * 0.8) * 0 + 30);
     const lt = (title, body) => `<div class="card"><h2>${title}</h2><div class="tablewrap"><table><tbody>${body || '<tr><td class="muted">기록이 아직 없습니다.</td></tr>'}</tbody></table></div></div>`;
     return `<div class="card"><h2>${S.year} 정규시즌 순위</h2><div class="small muted" style="margin:-6px 0 8px">팀을 누르면 팀 정보를 볼 수 있습니다.</div><div class="tablewrap"><table class="stand"><thead><tr><th class="l">순위</th><th class="l">팀</th><th>경기</th><th>승</th><th>패</th><th class="hm">무</th><th>승률</th><th>게임차</th><th class="hm">득점</th><th class="hm">실점</th><th>득실</th></tr></thead><tbody>${rows}</tbody></table></div></div>
-      <div class="grid">${lt('홈런', lead(bat, 'HR', v => v))}${lt('타율 (규정 타석)', lead(q, 'avg', pct3))}${lt('안타', lead(bat, 'H', v => v))}${lt('타점', lead(bat, 'RBI', v => v))}${lt('탈삼진 (투수)', pit.slice().sort((a, b) => b.K - a.K).slice(0, 8).map((x, i) => `<tr class="click" data-act="player" data-a="${x.p.id}"><td class="l n">${i + 1}</td><td class="l">${esc(x.p.ko)}</td><td class="l">${teamTag(x.p.team in KO ? x.p.team : U())}</td><td class="n"><b>${x.K}</b></td></tr>`).join(''))}${lt('RA9 (30이닝 이상, 낮을수록 좋음)', pq.slice().sort((a, b) => a.ra9 - b.ra9).slice(0, 8).map((x, i) => `<tr class="click" data-act="player" data-a="${x.p.id}"><td class="l n">${i + 1}</td><td class="l">${esc(x.p.ko)}</td><td class="l">${teamTag(x.p.team in KO ? x.p.team : U())}</td><td class="n"><b>${x.ra9.toFixed(2)}</b></td></tr>`).join(''))}</div>`;
+      <div class="grid">${lt('홈런', lead(bat, 'HR', v => v))}${lt(`타율 (규정 ${R.qPA}타석)`, lead(q, 'avg', pct3))}${lt('안타', lead(bat, 'H', v => v))}${lt('타점', lead(bat, 'RBI', v => v))}${lt('도루', lead(bat, 'SB', v => v))}${lt('탈삼진 (투수)', pit.slice().sort((a, b) => b.K - a.K).slice(0, 8).map((x, i) => `<tr class="click" data-act="player" data-a="${x.p.id}"><td class="l n">${i + 1}</td><td class="l">${esc(x.p.ko)}</td><td class="l">${teamTag(x.p.team in KO ? x.p.team : U())}</td><td class="n"><b>${x.K}</b></td></tr>`).join(''))}${lt(`RA9 (규정 ${ipTxt(R.qOuts)}, 낮을수록 좋음)`, pq.slice().sort((a, b) => a.ra9 - b.ra9).slice(0, 8).map((x, i) => `<tr class="click" data-act="player" data-a="${x.p.id}"><td class="l n">${i + 1}</td><td class="l">${esc(x.p.ko)}</td><td class="l">${teamTag(x.p.team in KO ? x.p.team : U())}</td><td class="n"><b>${x.ra9.toFixed(2)}</b></td></tr>`).join(''))}</div>`;
   }
 
   /* ---------------- 선수 기록(세부 성적) ---------------- */
@@ -2216,7 +2239,7 @@
     if (ui.pre && !ui.live) { document.body.classList.remove('modal-open'); root.innerHTML = screenPre() + confirmSheet() + toastHtml(); window.scrollTo(0, scroll); return; }   // 경기 전 브리핑(날짜 처리 끝, 경기 시작 전)
     if (ui.live) { document.body.classList.remove('modal-open'); root.innerHTML = screenLive() + toastHtml(); window.scrollTo(0, scroll); return; }   // 경기 화면에서는 이전 화면의 스크롤 잠금이 남지 않게 푼다
     if ((ui.screen === 'lineup' || ui.screen === 'pitching') && pref('seen_lineup', '') !== '1') setPref('seen_lineup', '1');   // 첫 게임 안내: 라인업 확인 단계
-    const S = ui.screen, f = { records: screenRecords, invest: () => foldCards(screenInvest(), /실제 KBO 시설 투자 현황|리그 관중 추이|규칙 가정값/, 'inv_ref', '참고 자료·가정 보기'), desk: screenDesk, home: () => (setTimeout(celebrate, 60), '') + guideCard() + officeHub() + heroCard() + screenHome(decCard() + deskFold()), roster: () => screenRoster(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => screenStandings() + awardsCard(), teams: screenTeams, story: () => screenStory() + screenAlbum(), album: () => screenStory() + screenAlbum(), intl: screenIntl, news: screenNews, mood: () => foldCards(screenMood(), /^라커룸 분위기|^선수단 분위기|^동료 관계|^감독 커리어/, 'mood_more', '라커룸·선수단 세부'), train: screenTrain, scout: screenScout, finance: () => foldCards(cbtCard() + screenFinance(), /재정이 게임에 미치는 영향|비용 구조|재정 자료|재정 성장 가정/, 'fin_ref', '자료·가정 보기'), coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
+    const S = ui.screen, f = { records: screenRecords, invest: () => foldCards(screenInvest(), /실제 KBO 시설 투자 현황|리그 관중 추이|규칙 가정값/, 'inv_ref', '참고 자료·가정 보기'), desk: screenDesk, home: () => (setTimeout(celebrate, 60), '') + guideCard() + officeHub() + heroCard() + screenHome(decCard() + deskFold()), roster: () => screenRoster(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => awardRaceCard() + screenStandings() + awardsCard(), teams: screenTeams, story: () => screenStory() + screenAlbum(), album: () => screenStory() + screenAlbum(), intl: screenIntl, news: screenNews, mood: () => foldCards(screenMood(), /^라커룸 분위기|^선수단 분위기|^동료 관계|^감독 커리어/, 'mood_more', '라커룸·선수단 세부'), train: screenTrain, scout: screenScout, finance: () => foldCards(cbtCard() + screenFinance(), /재정이 게임에 미치는 영향|비용 구조|재정 자료|재정 성장 가정/, 'fin_ref', '자료·가정 보기'), coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
     document.body.classList.toggle('modal-open', !!ui.modal);
     { const c = L.compOpen().find(x => !(ui.compSeen || (ui.compSeen = {}))[x.id]); if (c && !ui.live && !ui.negOpen) { ui.compSeen[c.id] = true; ui.comp = c.id; } }   // 새 FA 보상 선택은 처음 생길 때 바로 창을 띄운다
     const keep = snapInner(root);   // 체크박스·버튼으로 다시 그려도 안쪽 스크롤 상자와 펼침 상태를 유지한다

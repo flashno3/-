@@ -1,5 +1,5 @@
 /* 리그 뉴스(47단계): 리그 전체의 주요 사건을 분류·제목·본문이 있는 기사로 쌓는다(S.lgnews, 최근 300건).
- *  매일: 선두 변화 · 연승·연패(5·8·10) · 기록 달성(홈런 20·30·40, 안타 150·200, 타점 100, 도루 30·50, 탈삼진 150·200) · 주전급 장기 부상 · 7일마다 파워랭킹.
+ *  매일: 선두 변화 · 연승·연패(5·8·10) · 기록 달성(홈런 20·30·40, 안타 150·200, 타점 100, 도루 30·50, 탈삼진 150·200) · 주전급 장기 부상 · 7일마다 파워랭킹 · 28일마다 수상 레이스.
  *  사건 훅: 구단 간 트레이드 · FA 계약 · 감독 교체 · 가을야구 확정·탈락 · 포스트시즌 시리즈·우승 · 국제대회. 기사 문장은 게임 기록으로 만든 가상 기사. */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) factory(require('./league.js'));
@@ -31,6 +31,10 @@
       for (const [k, th, nm] of PMILE) for (const x of th) if (v[k] >= x && !M.mile[id + k + x]) { M.mile[id + k + x] = 1; this.lgNews('기록', `${KO0[p.team]} ${p.ko}, 시즌 ${x}${nm}`, `${jo(p.ko, '이', '가')} 시즌 ${x}번째 삼진을 잡았습니다.`, { teams: [p.team], pid: id, imp: 1 }); } }
     // 주전급 장기 부상(OVR 58 이상, 20일 이상)
     for (const t of TEAMS) for (const p of this.players(t)) if (p.inj && p.inj.generated && this.isInj(p) && this.injLeft(p) >= 20 && this.ovr(p) >= 58) { const k = p.id + ':' + p.inj.since; if (M.inj[k]) continue; M.inj[k] = 1; this.lgNews('부상', `${KO0[t]} ${p.ko}, ${ro(p.inj.dx)} 이탈`, `${KO0[t]}의 핵심 ${p.type === 'P' ? '투수' : '타자'} ${jo(p.ko, '이', '가')} ${ro(p.inj.dx)} 약 ${this.injLeft(p)}일 동안 나서지 못합니다(복귀 예정 ${this.injDateStr(p)}).`, { teams: [t], pid: p.id, imp: 2 }); }
+    // 4주마다 수상 레이스(48단계): awardRace = 시즌 뒤 시상과 같은 계산
+    if (d >= 28 && d % 28 === 0 && this.awardRace) { const R = this.awardRace(), m = R.mvp.slice(0, 3), tm = x => (KO0[x.p.team] ? KO0[x.p.team] + ' ' : '');
+      if (m.length) { const a = m[0].x, chg = M.mvp && M.mvp !== a.p.id, rk = R.rookie[0]; M.mvp = a.p.id;
+        this.lgNews('수상 레이스', `MVP 레이스 — ${tm(a)}${a.p.ko} ${chg ? '선두 등극' : '선두'}`, `현재 MVP 레이스 순위는 ${m.map((y, i) => `${i + 1}. ${tm(y.x)}${y.x.p.ko}(${y.x.ops !== undefined ? `OPS ${y.x.ops.toFixed(3)} ${y.x.HR}홈런` : `RA9 ${y.x.ra9.toFixed(2)} ${Math.floor(y.x.outs / 3)}이닝`})`).join(' · ')}입니다.${rk ? ` 신인왕 레이스는 ${tm(rk.x)}${jo(rk.x.p.ko, '이', '가')} 앞서 있습니다.` : ''}`, { teams: [...new Set(m.map(y => y.x.p.team).concat(rk ? [rk.x.p.team] : []).filter(t => t in S.teams))], pid: a.p.id, imp: 2 }); } }
     // 주간 파워랭킹
     if (d > 0 && d % 7 === 0) { const pr = st.map(x => { const g = S.results.filter(y => y.home === x.team || y.away === x.team).slice(-7), w = g.filter(y => (y.home === x.team ? y.rh > y.ra : y.ra > y.rh)).length; return { t: x.team, rank: x.rank, w7: w, n7: g.length }; });
       const hot = pr.slice().sort((a, b) => b.w7 - a.w7)[0], cold = pr.slice().sort((a, b) => a.w7 - b.w7)[0];

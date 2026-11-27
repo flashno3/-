@@ -34,26 +34,41 @@
   };
   /* 신인왕 자격(KBO: 입단 5년 이내, 이전 누적 투수 30이닝·타자 60타석 이하): 시작 시점 입단 2023년 이후 + 기록 한도 이내, 신규 드래프트 선수. 첫 풀 시즌 후 기록 초과 시 자격 상실 */
   proto._markRookies = function () { for (const p of Object.values(this.S.players)) { const d = p.dh; if (p.foreign || p.team === 'MIL') continue; if (d && d.y >= 2023 && (d.pa || 0) <= 60 && (d.ip || 0) <= 30) p.rk = true; } };
+  /* 수상 계산(48단계): 시즌 중 수상 레이스와 시즌 뒤 시상이 이 함수 하나를 쓴다 → 레이스 1위 = 지금 시즌이 끝나면 받는 선수.
+   *  규정(타석 3.1×경기, 이닝 0.9×경기)은 우리 구단 경기 수 기준. 골든글러브는 규정의 70%, 신인왕은 60타석·15이닝 이상 */
+  proto.awardRace = function () {
+    const S = this.S, me = this.standings().find(x => x.team === S.userTeam), games = me.w + me.l + me.d;
+    const bat = Object.entries(S.stats.bat).map(([id, c]) => { const p = S.players[id]; if (!p || !c.PA) return null; const ab = c.PA - c.BB - c.HBP - c.SF, h = c['1B'] + c['2B'] + c['3B'] + c.HR, tb = c['1B'] + 2 * c['2B'] + 3 * c['3B'] + 4 * c.HR, obp = (h + c.BB + c.HBP) / Math.max(1, c.PA), slg = ab ? tb / ab : 0; return { p, c, PA: c.PA, avg: ab ? h / ab : 0, H: h, HR: c.HR, RBI: c.RBI, SB: c.SB || 0, ops: obp + slg, val: 0 }; }).filter(Boolean);
+    const pit = Object.entries(S.stats.pit).map(([id, c]) => { const p = S.players[id]; if (!p || c.outs < 3) return null; const ra9 = c.R * 27 / c.outs; return { p, c, outs: c.outs, ra9, K: c.K, val: 0 }; }).filter(Boolean);
+    /* 시즌 가치 = 리그 평균 대비 득점 기여(48단계 재보정). 타자 0.271×(OPS−리그 OPS)×타석: 0.271 은 시뮬 80개 팀-시즌의 팀 OPS→타석당 득점 회귀 기울기(r 0.92).
+     *  투수 (리그 RA9−RA9)×이닝/9. 이전 공식(타자 ÷9·기준 .72, 투수 ×1.1·기준 4.8)은 투수 MVP 36시즌 36회 → 재보정 후 14회(39%), 실제 KBO 2010~2025 16회 중 7회(44%).
+     *  ⚠ 수비·포지션 가치는 넣지 않음(실제 MVP·골든글러브는 기자 투표) */
+    let pa = 0, ow = 0, rr = 0, oo = 0; for (const x of bat) { pa += x.PA; ow += x.ops * x.PA; } for (const x of pit) { rr += x.c.R; oo += x.outs; }
+    const lgOPS = pa ? ow / pa : 0.72, lgRA9 = oo ? rr * 27 / oo : 4.8; for (const x of bat) x.val = 0.271 * (x.ops - lgOPS) * x.PA; for (const x of pit) x.val = (lgRA9 - x.ra9) * x.outs / 27;
+    const qB = bat.filter(x => x.PA >= 3.1 * games), qP = pit.filter(x => x.outs >= games * 3 * 0.9), by = (arr, f) => arr.slice().sort((a, b) => f(b) - f(a));
+    const mvp = bat.map(x => ({ x, v: x.val })).concat(pit.map(x => ({ x, v: x.val }))).sort((a, b) => b.v - a.v);
+    const titles = [['타율왕', by(qB, x => x.avg)], ['홈런왕', by(bat, x => x.HR)], ['타점왕', by(bat, x => x.RBI)], ['도루왕', by(bat, x => x.SB)], ['최저 RA9', by(qP, x => -x.ra9)], ['탈삼진왕', by(pit, x => x.K)]];
+    const gg = [], used = new Set(), okB = bat.filter(x => x.PA >= 3.1 * games * 0.7), okP = pit.filter(x => x.outs >= games * 3 * 0.9 * 0.7), pk = (arr, pred) => arr.filter(x => pred(x.p) && !used.has(x.p.id)).sort((a, b) => b.val - a.val);
+    const put = (lab, list, cnt) => { for (const x of list.slice(0, cnt)) used.add(x.p.id); gg.push({ lab, list, n: cnt }); };
+    put('투수', pk(okP, p => true), 1);
+    for (const [lab, pr, cnt] of [['포수', p => p.pos === 'C', 1], ['1루수', p => p.pos === '1B', 1], ['2루수', p => p.pos === '2B', 1], ['3루수', p => p.pos === '3B', 1], ['유격수', p => p.pos === 'SS', 1], ['외야수', p => ['LF', 'CF', 'RF'].includes(p.pos), 3]]) put(lab, pk(okB, pr), cnt);
+    { const dh = pk(okB, p => p.pos === 'DH'); put('지명타자', dh.length ? dh : pk(okB, p => true), 1); }
+    const rk = x => { const p = x.p; return p.rkx !== false && (p.rk === true || (p.rookie !== undefined && p.rookie >= S.year - 1)) && !p.foreign; };
+    const rookie = bat.filter(rk).filter(x => x.PA >= 60).map(x => ({ x, v: x.val })).concat(pit.filter(rk).filter(x => x.outs >= 45).map(x => ({ x, v: x.val }))).sort((a, b) => b.v - a.v);
+    return { games, lgOPS, lgRA9, qPA: Math.ceil(3.1 * games), qOuts: Math.ceil(games * 3 * 0.9), bat, pit, mvp, titles, gg, rookie };
+  };
   proto._seasonReport = function () {   // startOffseason 직후: 시상·팀 하이라이트·목표 평가·해임 판정
-    const S = this.S, t = S.userTeam, st = this.standings(), me = st.find(x => x.team === t), games = me.w + me.l + me.d, aw = [];
-    const bat = Object.entries(S.stats.bat).map(([id, c]) => { const p = S.players[id]; if (!p || !c.PA) return null; const ab = c.PA - c.BB - c.HBP - c.SF, h = c['1B'] + c['2B'] + c['3B'] + c.HR, tb = c['1B'] + 2 * c['2B'] + 3 * c['3B'] + 4 * c.HR, obp = (h + c.BB + c.HBP) / Math.max(1, c.PA), slg = ab ? tb / ab : 0; return { p, c, PA: c.PA, avg: ab ? h / ab : 0, H: h, HR: c.HR, RBI: c.RBI, SB: c.SB || 0, ops: obp + slg, val: (obp + slg - 0.72) * c.PA / 9 }; }).filter(Boolean);
-    const pit = Object.entries(S.stats.pit).map(([id, c]) => { const p = S.players[id]; if (!p || c.outs < 3) return null; const ra9 = c.R * 27 / c.outs; return { p, c, outs: c.outs, ra9, K: c.K, val: (4.8 - ra9) * c.outs / 27 * 1.1 }; }).filter(Boolean);
-    const qB = bat.filter(x => x.PA >= 3.1 * games), qP = pit.filter(x => x.outs >= games * 3 * 0.9), nm = x => ({ id: x.p.id, name: x.p.ko, team: x.p.team });
-    const top = (arr, f, label, txt) => { const x = arr.slice().sort((a, b) => f(b) - f(a))[0]; if (x) aw.push(Object.assign(nm(x), { label, txt: txt(x) })); };
-    const mv = bat.map(x => ({ x, v: x.val })).concat(pit.map(x => ({ x, v: x.val }))).sort((a, b) => b.v - a.v)[0];
+    const S = this.S, t = S.userTeam, st = this.standings(), me = st.find(x => x.team === t), aw = [], R = this.awardRace(), { bat, pit } = R;
+    const nm = x => ({ id: x.p.id, name: x.p.ko, team: x.p.team }), sumB = x => `타율 ${x.avg.toFixed(3).slice(1)} ${x.HR}홈런 ${x.RBI}타점`, sumP = x => `RA9 ${x.ra9.toFixed(2)} ${Math.floor(x.outs / 3)}이닝 ${x.K}K`;
+    const TX = { '타율왕': x => `타율 ${x.avg.toFixed(3).slice(1)}`, '홈런왕': x => `${x.HR}홈런`, '타점왕': x => `${x.RBI}타점`, '도루왕': x => `${x.SB}도루`, '최저 RA9': x => `RA9 ${x.ra9.toFixed(2)}`, '탈삼진왕': x => `${x.K}탈삼진` };
+    const mv = R.mvp[0];
     if (mv) aw.push(Object.assign(nm(mv.x), { label: 'MVP', txt: mv.x.ops !== undefined ? `OPS ${mv.x.ops.toFixed(3)} ${mv.x.HR}홈런 ${mv.x.RBI}타점` : `RA9 ${mv.x.ra9.toFixed(2)} ${Math.floor(mv.x.outs / 3)}이닝 ${mv.x.K}K` }));
-    top(qB, x => x.avg, '타율왕', x => `타율 ${x.avg.toFixed(3).slice(1)}`); top(bat, x => x.HR, '홈런왕', x => `${x.HR}홈런`); top(bat, x => x.RBI, '타점왕', x => `${x.RBI}타점`); top(bat, x => x.SB, '도루왕', x => `${x.SB}도루`);
-    top(qP, x => -x.ra9, '최저 RA9', x => `RA9 ${x.ra9.toFixed(2)}`); top(pit, x => x.K, '탈삼진왕', x => `${x.K}탈삼진`);
+    for (const [label, list] of R.titles) if (list[0]) aw.push(Object.assign(nm(list[0]), { label, txt: TX[label](list[0]) }));
     const mine = bat.filter(x => x.p.team === t).map(x => ({ id: x.p.id, name: x.p.ko, v: x.val, txt: `타율 ${x.avg.toFixed(3).slice(1)} ${x.HR}홈런 ${x.RBI}타점` })).concat(pit.filter(x => x.p.team === t).map(x => ({ id: x.p.id, name: x.p.ko, v: x.val, txt: `RA9 ${x.ra9.toFixed(2)} ${Math.floor(x.outs / 3)}이닝 ${x.K}K` }))).sort((a, b) => b.v - a.v).slice(0, 3);
-    // 골든글러브(포지션별 1명, 외야 3명): 주 포지션 기준 시즌 가치 최고(타자 PA 규정의 70% 이상, 투수 이닝 규정의 70% 이상)
-    { const gg = [], used = new Set(), okB = bat.filter(x => x.PA >= 3.1 * games * 0.7), okP = pit.filter(x => x.outs >= games * 3 * 0.9 * 0.7), pk = (arr, pred) => arr.filter(x => pred(x.p) && !used.has(x.p.id)).sort((a, b) => b.val - a.val);
-      const pw = pk(okP, p => true)[0]; if (pw) { used.add(pw.p.id); gg.push(Object.assign(nm(pw), { label: '골든글러브 투수', txt: `RA9 ${pw.ra9.toFixed(2)} ${Math.floor(pw.outs / 3)}이닝 ${pw.K}K` })); }
-      for (const [lab, pr, cnt] of [['포수', p => p.pos === 'C', 1], ['1루수', p => p.pos === '1B', 1], ['2루수', p => p.pos === '2B', 1], ['3루수', p => p.pos === '3B', 1], ['유격수', p => p.pos === 'SS', 1], ['외야수', p => ['LF', 'CF', 'RF'].includes(p.pos), 3]]) {
-        for (const x of pk(okB, pr).slice(0, cnt)) { used.add(x.p.id); gg.push(Object.assign(nm(x), { label: '골든글러브 ' + lab, txt: `타율 ${x.avg.toFixed(3).slice(1)} ${x.HR}홈런 ${x.RBI}타점 OPS ${x.ops.toFixed(3)}` })); } }
-      const dh = pk(okB, p => p.pos === 'DH')[0] || pk(okB, p => true)[0]; if (dh) { used.add(dh.p.id); gg.push(Object.assign(nm(dh), { label: '골든글러브 지명타자', txt: `타율 ${dh.avg.toFixed(3).slice(1)} ${dh.HR}홈런 ${dh.RBI}타점` })); }
-      // 신인왕
-      const rk = x => { const p = x.p; return p.rkx !== false && (p.rk === true || (p.rookie !== undefined && p.rookie >= S.year - 1)) && !p.foreign; };
-      const rkc = bat.filter(rk).filter(x => x.PA >= 60).map(x => ({ x, v: x.val })).concat(pit.filter(rk).filter(x => x.outs >= 45).map(x => ({ x, v: x.val }))).sort((a, b) => b.v - a.v)[0];
+    // 골든글러브(포지션별 1명, 외야 3명)·신인왕: awardRace 의 각 목록 1위
+    { const gg = [];
+      for (const g of R.gg) for (const x of g.list.slice(0, g.n)) gg.push(Object.assign(nm(x), { label: '골든글러브 ' + g.lab, txt: g.lab === '투수' ? sumP(x) : g.lab === '지명타자' ? sumB(x) : `${sumB(x)} OPS ${x.ops.toFixed(3)}` }));
+      const rkc = R.rookie[0];
       if (rkc) aw.push(Object.assign(nm(rkc.x), { label: '신인왕', txt: rkc.x.ops !== undefined ? `타율 ${rkc.x.avg.toFixed(3).slice(1)} ${rkc.x.HR}홈런 ${rkc.x.RBI}타점 OPS ${rkc.x.ops.toFixed(3)}` : `RA9 ${rkc.x.ra9.toFixed(2)} ${Math.floor(rkc.x.outs / 3)}이닝 ${rkc.x.K}K` }));
       for (const x of bat) if (x.p.rk && x.PA > 60) x.p.rkx = false; for (const x of pit) if (x.p.rk && x.outs > 90) x.p.rkx = false;   // 기록 한도를 넘으면 신인 자격 상실
       aw.push(...gg); }
