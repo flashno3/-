@@ -45,4 +45,14 @@ const mk = (seed, team) => { const L = League.create(base, team || 'Bears', seed
     const e = L._decDeadline(); if (!e) continue; for (const c of e.choices) { if (c.k === 'hold') continue; const L2 = League.create(base, team, seed); L2.faAdvance(75); L2.closeFA(); L2.advance(100, false); const e2 = L2._decDeadline(); const deal = e2.data[c.k], before = deal && L2.S.players[deal.get].team;
       const r = L2.resolveEvent(e2.id, c.k); ok(r.ok, `마감 ${c.k}: ${r.msg}`); if (deal && !/성사되지/.test(r.msg)) { ok(L2.S.players[deal.get].team === L2.S.userTeam && L2.S.players[deal.give].team === before, `마감 ${c.k}: 실제 거래`); traded++; } ok(!L2.integrity().errors.length, `마감 ${c.k} 뒤 정합성`); } }
   ok(traded >= 1, '트레이드 마감 거래 1건 이상 성사 ' + traded); }
+// 7) 유망주 선발 기용: 2군 선수도 실제로 1군·라인업에 들어가야 함(벤치 최약 타자가 백업 포수라 교체가 거부되던 문제), 못 넣으면 '무산'이고 효과 없음
+{ let tried = 0; for (const [seed, team] of [[4, 'Heroes'], [10, 'Bears'], [29, 'Heroes'], [40, 'Bears'], [9, 'Heroes']]) { const L = League.create(base, team, seed), S = L.S; L.faAdvance(75); L.closeFA(); L.advance(25, false);
+    const c = L.players(team).filter(p => p.type === 'B' && p.age <= 24 && p.peak !== undefined && p.peak - L.ovr(p) >= 6 && !L.isInj(p) && !(S.day < (p.lockUntil || 0)) && !(S.teams[team].set.lineup || []).some(x => x.id === p.id)).sort((a, b) => b.peak - a.peak)[0]; if (!c) continue;
+    const pk0 = c.peak, e = L._decYouth(c), r = L.resolveEvent(e.id, 'start'); tried++;
+    const inLin = (S.teams[team].set.lineup || []).some(x => x.id === c.id);
+    if (/무산/.test(r.msg)) ok(!c.active && c.peak === pk0 && !S.dec.mods.some(m => m.pid === c.id), `유망주 무산이면 효과 없음 ${r.msg}`);
+    else ok(c.active && inLin, `유망주 ${c.ko} 1군·라인업 진입(${r.msg})`);
+    ok(L.players(team).filter(q => q.active).length <= L.activeMax() && L.players(team).filter(q => q.active && q.pos === 'C').length >= 2, '1군 인원·포수 2명 규칙 유지');
+    ok(!L.integrity().errors.length, '유망주 기용 뒤 정합성'); }
+  ok(tried >= 4, '유망주 시험 사례 ' + tried); }
 console.log('decide tests ok', n);

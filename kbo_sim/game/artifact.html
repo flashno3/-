@@ -6084,7 +6084,7 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
     // ③ 주전 휴식: 30세 이상 주전 타자가 연속 출전 중일 때
     if (!cd('rest') && r.random() < 0.08) { const lu = (S.teams[t].set.lineup || []).map(x => S.players[x.id]).filter(p => p && p.age >= 30 && !this.isInj(p)); const p = lu.sort((a, b) => b.age - a.age)[0]; if (p) { setCd('rest', 12); return this._decRest(p); } }
     // ④ 유망주 기회: 한 달에 한 번 정도
-    if (!cd('youth') && d >= 20 && r.random() < (D.dir === 'build' ? 0.12 : 0.05)) { const c = this.players(t).filter(p => p.type === 'B' && p.age <= 24 && p.peak !== undefined && p.peak - this.ovr(p) >= 6 && !this.isInj(p) && !(S.teams[t].set.lineup || []).some(x => x.id === p.id)).sort((a, b) => b.peak - a.peak)[0]; if (c) { setCd('youth', 28); return this._decYouth(c); } }
+    if (!cd('youth') && d >= 20 && r.random() < (D.dir === 'build' ? 0.12 : 0.05)) { const c = this.players(t).filter(p => p.type === 'B' && p.age <= 24 && p.peak !== undefined && p.peak - this.ovr(p) >= 6 && !this.isInj(p) && !(S.day < (p.lockUntil || 0)) && !(S.teams[t].set.lineup || []).some(x => x.id === p.id)).sort((a, b) => b.peak - a.peak)[0]; if (c) { setCd('youth', 28); return this._decYouth(c); } }
     // ⑤ 분위기 처방: 4연패 이상 또는 5연승 이상, 또는 2주에 한 번 정도
     { const gs = S.results.filter(x => x.home === t || x.away === t).slice(-6), wl = gs.map(x => (x.home === t ? x.rh - x.ra : x.ra - x.rh)), lose = wl.slice(-4).every(v => v < 0) && wl.length >= 4, win = wl.slice(-5).every(v => v > 0) && wl.length >= 5;
       if (!cd('mood') && (lose || win || r.random() < 0.03) && !this._evOpenOf('streak')) { setCd('mood', 12); return this._decMood(lose ? 'lose' : win ? 'win' : 'flat'); } }
@@ -6229,7 +6229,8 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
     if (x.kind === 'youth') {
       if (k !== 'start') return `${jo(p.ko, '은', '는')} 2군에서 더 준비합니다.`;
       const o = pick(this, [{ k: 'boom', p: x.boom }, { k: 'exp', p: 1 - x.boom - x.bust }, { k: 'bust', p: x.bust }], 7);
-      mod({ who: 'pid', pid: p.id, v: 0, d1: d + 12, force: true, src: 'youth' }); this._decForce(this._dec().mods[this._dec().mods.length - 1]);
+      mod({ who: 'pid', pid: p.id, v: 0, d1: d + 12, force: true, src: 'youth' }); const fm = this._dec().mods[this._dec().mods.length - 1];
+      if (!this._decForce(fm)) { this._dec().mods.splice(this._dec().mods.indexOf(fm), 1); return log('유망주', `${p.ko} 선발 기회 무산`, `1군 엔트리를 비우지 못해(포수 최소 인원·말소 잠금 등) ${jo(p.ko, '은', '는')} 2군에 남습니다`, 0); }
       if (o.k === 'boom') { p.peak = clamp(p.peak + 2.5, 25, 85); mod({ who: 'pid', pid: p.id, v: 0.4, d1: d + 25, src: 'youth' }); this._decFollow('breakout', { pid: p.id }, 11); return log('유망주', `${p.ko} 선발 기회`, `${p.ko} 각성! 자신감이 붙었습니다(정점 +2.5)`, this._decWins('pid', 0.4, 12, p)); }
       if (o.k === 'bust') { p.mood = { v: -1, until: d + 20 }; p.peak = clamp(p.peak + 0.3, 25, 85); return log('유망주', `${p.ko} 선발 기회`, `${jo(p.ko, '이', '가')} 1군 벽에 위축됐습니다`, -0.3); }
       p.peak = clamp(p.peak + 1, 25, 85); return log('유망주', `${p.ko} 선발 기회`, `${jo(p.ko, '이', '가')} 경험을 쌓았습니다(정점 +1)`, -0.1);
@@ -6256,7 +6257,7 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
     }
     if (x.kind === 'compete') {   // 후속: 주전 경쟁
       const sub = S.players[x.sub]; if (!sub || sub.team !== t) return '경쟁 구도가 사라졌습니다.';
-      if (k === 'sub') { const o = pick(this, [{ k: 'ok', p: 0.6 }, { k: 'sulk', p: 0.4 }], 12); mod({ who: 'pid', pid: sub.id, v: 0.25, d1: d + 15, src: 'compete' }); this._decSwapLineup(p, sub); if (o.k === 'sulk') { p.mood = { v: -2, until: d + 20 }; p.loyAdj = clamp((p.loyAdj || 0) - 3, -15, 15); } return log('주전 경쟁', `${sub.ko} 주전 기용`, o.k === 'ok' ? `${sub.ko}에게 주전을 맡깁니다 — ${p.ko}도 받아들입니다` : `${sub.ko} 주전 · ${jo(p.ko, '이', '가')} 서운해합니다(충성도 −3)`, 0.3); }
+      if (k === 'sub') { if (!this._decSwapLineup(p, sub)) return log('주전 경쟁', `${sub.ko} 주전 기용 무산`, `${jo(sub.ko, '을', '를')} 라인업에 넣지 못해(부상·1군 등록 규칙) ${jo(p.ko, '이', '가')} 주전을 지킵니다`, 0); const o = pick(this, [{ k: 'ok', p: 0.6 }, { k: 'sulk', p: 0.4 }], 12); mod({ who: 'pid', pid: sub.id, v: 0.25, d1: d + 15, src: 'compete' }); if (o.k === 'sulk') { p.mood = { v: -2, until: d + 20 }; p.loyAdj = clamp((p.loyAdj || 0) - 3, -15, 15); } return log('주전 경쟁', `${sub.ko} 주전 기용`, o.k === 'ok' ? `${sub.ko}에게 주전을 맡깁니다 — ${p.ko}도 받아들입니다` : `${sub.ko} 주전 · ${jo(p.ko, '이', '가')} 서운해합니다(충성도 −3)`, 0.3); }
       p.mood = { v: 1, until: d + 14 }; return log('주전 경쟁', `${p.ko} 주전 유지`, `${jo(p.ko, '이', '가')} 주전 신뢰에 보답하려 합니다`, 0.2);
     }
     if (x.kind === 'blame') {   // 후속: 재부상 논란 기자회견
@@ -6270,7 +6271,7 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
       return '시간이 해결하길 기다립니다.';
     }
     if (x.kind === 'breakout') {   // 후속: 각성한 유망주 주전 도약
-      if (k === 'keep') { mod({ who: 'pid', pid: p.id, v: 0.2, d1: d + 30, force: true, src: 'youth' }); p.peak = clamp(p.peak + 1, 25, 85); return log('유망주', `${p.ko} 주전 도약`, `${jo(p.ko, '을', '를')} 주전으로 고정합니다(정점 +1)`, this._decWins('pid', 0.2, 30, p)); }
+      if (k === 'keep') { if (!this._decForce({ pid: p.id })) return log('유망주', `${p.ko} 주전 도약 무산`, `${jo(p.ko, '을', '를')} 1군 라인업에 넣지 못했습니다(부상·1군 등록 규칙)`, 0); mod({ who: 'pid', pid: p.id, v: 0.2, d1: d + 30, force: true, src: 'youth' }); p.peak = clamp(p.peak + 1, 25, 85); return log('유망주', `${p.ko} 주전 도약`, `${jo(p.ko, '을', '를')} 주전으로 고정합니다(정점 +1)`, this._decWins('pid', 0.2, 30, p)); }
       return `${jo(p.ko, '은', '는')} 다시 백업으로 돌아갑니다.`;
     }
     return '';
@@ -6289,12 +6290,14 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
   /* ---- 보조: 결장·부상·라인업 고정 ---- */
   proto._decAway = function (p, days, why) { const S = this.S, retN = this.todayN() + days; if (p.inj) p.injPrev = p.inj; p.inj = { dx: why, since: `${S.year} ${why}`, ret: new Date(retN * 864e5).toISOString().slice(0, 10), retN, basis: '감독 결정', apply: true, generated: false, natl: true }; p.active = false; this.ensureActive(S.userTeam); this.repairSettings(S.userTeam); this._engDirty = true; this.invalidate(); };
   proto._decInjure = function (p, days, dx) { const S = this.S, retN = this.todayN() + days; p.inj = { dx, since: `${S.year} 발생`, ret: new Date(retN * 864e5).toISOString().slice(0, 10), retN, basis: '감독 결정의 결과', apply: true, generated: true }; p.active = false; this.ensureActive(S.userTeam); this.repairSettings(S.userTeam); this._engDirty = true; this.invalidate(); };
-  proto._decForce = function (m) {   // 유망주 선발 고정: 같은 포지션(없으면 지명타자) 최저 가치 타자 자리에 넣는다
-    const S = this.S, t = S.userTeam, p = S.players[m.pid]; if (!p || p.team !== t || this.isInj(p)) return; const set = S.teams[t].set; if ((set.lineup || []).some(x => x.id === p.id)) return;
-    if (!p.active) { const w = this.players(t).filter(q => q.active && q.type === 'B' && !(set.lineup || []).some(x => x.id === q.id) && q.id !== p.id).sort((a, b) => this._runsB(a, true) - this._runsB(b, true))[0]; if (w) this.swapActive(p.id, w.id); else this.moveActive(p.id, true); }
-    if (!p.active) return; const slots = (set.lineup || []).map((x, i) => ({ i, x, q: S.players[x.id] })).filter(o => o.q && (o.x.pos === p.pos || (o.x.pos === 'DH'))).sort((a, b) => this._runsB(a.q, true) - this._runsB(b.q, true)); const s = slots[0]; if (s) { set.lineup[s.i] = { id: p.id, pos: s.x.pos }; this._engDirty = true; }
+  proto._decForce = function (m) {   // 유망주 선발 고정: 1군 등록(벤치 타자와 교체, 포수 최소 인원 등 규칙에 걸리면 다음 후보) → 같은 포지션(없으면 지명타자) 최저 가치 타자 자리. 성공 여부를 돌려준다
+    const S = this.S, t = S.userTeam, p = S.players[m.pid]; if (!p || p.team !== t || this.isInj(p)) return false; const set = S.teams[t].set; if ((set.lineup || []).some(x => x.id === p.id)) return true;
+    if (!p.active) { const ws = this.players(t).filter(q => q.active && q.type === 'B' && !(set.lineup || []).some(x => x.id === q.id) && q.id !== p.id).sort((a, b) => this._runsB(a, true) - this._runsB(b, true));
+      if (this.players(t).filter(q => q.active).length < this.activeMax()) this.moveActive(p.id, true);
+      for (const w of ws) { if (p.active) break; this.swapActive(p.id, w.id); } }
+    if (!p.active) return false; const slots = (set.lineup || []).map((x, i) => ({ i, x, q: S.players[x.id] })).filter(o => o.q && (o.x.pos === p.pos || (o.x.pos === 'DH'))).sort((a, b) => this._runsB(a.q, true) - this._runsB(b.q, true)); const s = slots[0]; if (!s) return false; set.lineup[s.i] = { id: p.id, pos: s.x.pos }; this._engDirty = true; return true;
   };
-  proto._decSwapLineup = function (out, inn) { const S = this.S, set = S.teams[S.userTeam].set, i = (set.lineup || []).findIndex(x => x.id === out.id); if (i < 0) return; if (!inn.active) this.swapActive(inn.id, out.id); if (inn.active) { set.lineup[i] = { id: inn.id, pos: set.lineup[i].pos }; this._engDirty = true; } };
+  proto._decSwapLineup = function (out, inn) { const S = this.S, set = S.teams[S.userTeam].set, i = (set.lineup || []).findIndex(x => x.id === out.id); if ((set.lineup || []).some(x => x.id === inn.id)) return true; if (i < 0 || this.isInj(inn)) return false; if (!inn.active) this.swapActive(inn.id, out.id); if (!inn.active) return false; set.lineup[i] = { id: inn.id, pos: set.lineup[i].pos }; this._engDirty = true; return true; };
   proto._decDayAll = function (d) { this._decFollowDay(d); this._decDay(d); };
 });
 
