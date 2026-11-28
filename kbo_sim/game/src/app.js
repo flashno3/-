@@ -598,7 +598,7 @@
   }
   function monthCard(me, mv) {
     const snap = me.snap || [], dead = (me.dead || []).filter(x => x.year >= L._finYear()), sg1 = x => (x >= 0 ? '+' : '') + f1(x);
-    const tags = [me.evRev ? `스폰서 수입 +${f1(me.evRev)}억` : '', me.evCost ? `팬 이벤트 비용 −${f1(me.evCost)}억` : '', me.boardExtra ? `이사회 추가 예산 +${f1(me.boardExtra)}억` : '', L.deadNow(U()) ? `방출 위약금 −${f1(L.deadNow(U()))}억(올 시즌)` : '', me.promo && L.S.day < me.promo.until ? `팬 이벤트 진행 중(~${L.dateStr(me.promo.until)})` : ''].filter(Boolean);
+    const tags = [me.evRev ? `스폰서·행사 수입 +${f1(me.evRev)}억` : '', me.evCost ? `팬 이벤트·행사 비용 −${f1(me.evCost)}억` : '', me.boardExtra ? `이사회 추가 예산 +${f1(me.boardExtra)}억` : '', L.deadNow(U()) ? `방출 위약금 −${f1(L.deadNow(U()))}억(올 시즌)` : '', me.promo && L.S.day < me.promo.until ? `팬 이벤트 진행 중(~${L.dateStr(me.promo.until)})` : ''].filter(Boolean);
     const rows = snap.map((s, i) => { const prev = i ? snap[i - 1].op : null; return `<tr><td class="l">${s.m}월</td><td class="n">${s.w}-${s.l}</td><td class="n">${s.rank}위</td><td class="n hm">${s.att.toLocaleString()}명</td><td class="n ${s.op >= 0 ? 'pos' : 'neg'}">${sg1(s.op)}억${prev !== null ? `<div class="small ${s.op - prev >= 0 ? 'pos' : 'neg'}">${s.op - prev >= 0 ? '▲' : '▼'}${f1(Math.abs(s.op - prev))}</div>` : ''}</td><td class="n hm">${f1(s.room)}억</td><td class="n hm">${f1(s.trust)}</td></tr>`; }).join('');
     return `<div class="card"><h2>시즌 중 재정 변화 (월말 기준)</h2><div class="small muted">성적(승률)·티켓 정책·이벤트·방출 위약금에 따라 시즌 예상 손익이 달라집니다. 지금 예상 손익 <b class="${mv.op >= 0 ? 'pos' : 'neg'}">${sg1(mv.op)}억</b>, 평균 관중 ${mv.att.toLocaleString()}명.</div>
       ${tags.length ? `<div class="row" style="margin:6px 0">${tags.map(t => `<span class="chip">${t}</span>`).join('')}</div>` : ''}
@@ -1276,7 +1276,7 @@
     return `<div class="card"><div class="row"><h2 style="margin:0">시즌 스토리</h2><span class="sp"></span><select data-sel="storyy" aria-label="시즌">${years.map(v => `<option value="${v}" ${v === y ? 'selected' : ''}>${v}</option>`).join('')}</select></div><div class="tabs wrap" role="tablist" style="margin-top:8px">${tabs}</div></div>${body}`;
   }
   /* ---------------- 시즌 중 소식(이벤트) ---------------- */
-  const evIcon = { mission: '🧭', feud: '🔥', camp: '⛺', grievance: '🗣', sponsor: '🤝', promo: '🎉', board: '🏛', arc: '📖', legend: '🏅', retcer: '🎖', awards: '🏆', unrest: '⚠', grow: '🌱', presscon: '🎤', mgroffer: '💼', military: '🎖️', fanloss: '📉', allstar: '⭐', halfsum: '📋' };
+  const evIcon = { mission: '🧭', feud: '🔥', gday: '🎪', camp: '⛺', grievance: '🗣', sponsor: '🤝', promo: '🎉', board: '🏛', arc: '📖', legend: '🏅', retcer: '🎖', awards: '🏆', unrest: '⚠', grow: '🌱', presscon: '🎤', mgroffer: '💼', military: '🎖️', fanloss: '📉', allstar: '⭐', halfsum: '📋' };
   const hintOf = (e, c) => { const dv = e.type === 'dec' && L.wearDelta ? L.wearDelta(e.data && e.data.kind, c.k) : 0; return (c.hint || '') + (dv ? `${c.hint ? ' · ' : ''}선수단 피로도 ${dv > 0 ? '+' : ''}${dv}` : ''); };   // 선수단 피로도(wear.js)
   function eventCards() {
     const open = L.eventsOpen(), warns = L.validateEntry(); if (!open.length && !warns.length) return '';

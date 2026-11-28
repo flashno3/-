@@ -178,6 +178,7 @@
     else if (e.type === 'dec' && this._decResolve) res = this._decResolve(e, k);
     else if (e.type === 'mission' && this._missionResolve) res = this._missionResolve(e, k);
     else if (e.type === 'feud' && this._feudResolve) res = this._feudResolve(e, k);
+    else if (e.type === 'gday' && this._gamedayResolve) res = this._gamedayResolve(e, k);
     e.status = 'done'; e.choice = k; e.result = res; e.auto = !!auto; news(this, `${e.title}: ${res}`); this.invalidate();
     return { ok: true, msg: res };
   };
