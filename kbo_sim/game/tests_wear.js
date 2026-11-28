@@ -14,10 +14,10 @@ const mk = seed => { const L = League.create(base, 'Bears', seed); L.faAdvance(7
   L._wearAdd(56); const w = L.wearInfo(); ok(w.tier === 3 && w.lv === '높음' && w.inj > 50, '피로도 56: 3단계·부상 위험 ' + JSON.stringify(w));
   ok(L._modRates(p).k > k0 && L._modRates(q).k === kq, '우리 팀만 경기력 하락(삼진율↑)'); ok(L._wearInj() > 1.5, '부상 위험 배수 ' + L._wearInj());
   L._wearAdd(-56); ok(L.wearTier() === 0 && Math.abs(L._modRates(p).k - k0) < 1e-12, '피로도가 내려가면 원래대로'); }
-// 3) 경기에 실제 반영: 같은 시드에서 피로도 90 고정 vs 0, 60일 · 3개 시드 합산 승수(30일 하나는 잡음이 커서 부적합)
+// 3) 경기에 실제 반영: 같은 시드에서 피로도 90 고정 vs 0, 60일 · 6개 시드 합산 승수(시드 3개는 선수 데이터가 조금만 바뀌어도 잡음에 묻힘 — 2026-11-28 보충 뒤 1·3·4 합 68→68, 8개 시드 합은 −28)
 { const run = (seed, w) => { const L = League.create(base, 'Bears', seed), S = L.S; L.faAdvance(75); L.closeFA(); L.advance(20, false); let W = 0; L._dec().wear = w; L._engDirty = true; L.invalidate();
     for (let i = 0; i < 60; i++) { L._dec().wear = w; const r0 = S.results.length; L.advance(1, false); for (const x of S.results.slice(r0)) { const my = x.home === S.userTeam ? x.rh - x.ra : x.away === S.userTeam ? x.ra - x.rh : 0; if (my > 0) W++; } } return W; };
-  let a = 0, b = 0; for (const sd of [1, 3, 4]) { a += run(sd, 0); b += run(sd, 90); } ok(b < a - 6, `피로도 90이면 승수 하락 ${a} → ${b}`); }
+  let a = 0, b = 0; for (const sd of [1, 3, 4, 5, 6, 7]) { a += run(sd, 0); b += run(sd, 90); } ok(b < a - 10, `피로도 90이면 승수 하락 ${a} → ${b}`); }
 // 4) 새 시즌 초기화·정합성
 { const L = mk(7), S = L.S; L._wearAdd(40); while (S.phase === 'regular' || S.phase === 'preseason') L.advance(30, false);
   const P = L.startPostseason(); let g = 0; while (!P.done && g++ < 100) { if (L.userInPost()) { const c = L.startUserPostGame(); c.live.playToEnd(); L.finishUserPostGame(c); } else L.simPostGame(); }

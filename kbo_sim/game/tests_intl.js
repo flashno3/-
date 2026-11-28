@@ -58,8 +58,9 @@ for (const mode of ['fill', 'off']) { const L = League.create(base, 'Tigers', 6)
   L._intlAway([a.id, b.id], L.todayN() + 6, '시험 대회'); const k0 = [key(a.id), key(b.id)];
   ok(!a.active && !b.active && !set.lineup.some(x => x.id === a.id || x.id === b.id), `${mode}: 소집되면 1군·라인업에서 빠짐`);
   L.advance(4, false); ok(key(a.id) === k0[0] && key(b.id) === k0[1], `${mode}: 소집 기간 1군·2군 출전 없음`);
-  L.advance(5, false);
-  if (mode === 'fill') ok(a.active && b.active && set.lineup.some(x => x.id === a.id && x.pos === posA) && set.lineup.some(x => x.id === b.id && x.pos === posB), '복귀 → 원래 1군·라인업 포지션');
+  L.advance(3, false);   // 복귀일(+6) 직후에 확인: 더 늦추면 복귀와 무관한 부상·1군 인원 보충(ensureActive)이 섞인다
+  if (mode === 'fill') { const back = (p, ps) => p.inj ? !p.active && !set.lineup.some(x => x.id === p.id) : p.active && set.lineup.some(x => x.id === p.id && x.pos === ps);   // 소집 중·복귀 직후 생긴 부상(예: 감독 결정 결과)은 부상자로 처리되는 것이 맞다
+    ok(back(a, posA) && back(b, posB), '복귀 → 원래 1군·라인업 포지션(부상자는 1군 제외) ' + [a.ko, !!a.inj, a.active, b.ko, !!b.inj, b.active].join(' ')); ok([a, b].some(p => !p.inj), '최소 1명은 부상 없이 복귀해 자리 복원을 실제로 검사'); }
   else ok(!a.active && !b.active, '자동 관리 끄기: 2군 대기');
   ok(!a.natlPrev && !b.natlPrev && !(a.inj && a.inj.natl), `${mode}: 복귀 표시 정리`); ok(!L.integrity().errors.length, `${mode}: 정합성`); }
 // 차출 중 이야기·결정 부상: 차출 상태는 유지되고 복귀할 때 부상이 이어서 적용(소집 첫날 이야기 부상이 차출을 덮어쓰던 문제)

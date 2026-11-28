@@ -429,19 +429,24 @@ def load_search(players):
     KT={'Eagles':'한화','Twins':'LG','Landers':'SSG','Bears':'두산','Heroes':'키움','Wiz':'KT','Dinos':'NC','Giants':'롯데','Lions':'삼성','Tigers':'KIA','Whales':'울산'}
     rows=[r for r in csv.DictReader(l for l in open(f,encoding='utf-8-sig') if not l.startswith('#'))]
     st={'ok':0,'no':0,'nonum':0,'amb':[],'hand':0,'birth':0}
+    ALIAS={('Giants','나종덕'):'나균안'}   # 개명: 나종덕 → 나균안(KBO 상세 67539 확인). 게임 표기 이름은 그대로 두고 조회만 현재 이름으로
+    used={p['kid'] for p in players if p.get('kid')}   # 이미 다른 게임 선수에게 연결된 KBO ID는 후보에서 제외(동명이인 오매칭 방지)
     for p in players:
         if p.get('no') not in (None,''): continue
         def ok(r):
-            if r['팀']!=KT.get(p['team']) and p['team']!='MIL': return False
+            if r['팀']!=KT.get(p['team']) and p['team']!='MIL' and not (p['team']=='Heroes' and r['팀']=='고양'): return False   # 키움 퓨처스 소속은 '고양'으로 표기
             if (r['포지션']=='투수')!=(p['type']=='P'): return False
             if not re.match(r'\d{4}-\d\d-\d\d',r['생년월일']): return False
+            if r['KBO_playerId'] in used: return False
+            if p.get('ageEst'): return True   # 나이가 추정값이면 나이로 거르지 않는다(이름·구단·투타구분이 유일할 때만 채택)
             return p['birth']==r['생년월일'] if p.get('birth') else abs(p['age']-(2027-int(r['생년월일'][:4])))<=1
-        c=[r for r in rows if r['이름']==p['ko'] and ok(r)]
+        nm=ALIAS.get((p['team'],p['ko']),p['ko'])
+        c=[r for r in rows if r['이름']==nm and ok(r)]
         if len(c)!=1:
             if len(c)>1: st['amb'].append((p['team'],p['ko']))
             continue
         r=c[0]; st['ok']+=1
-        p['kid']=r['KBO_playerId']
+        p['kid']=r['KBO_playerId']; used.add(r['KBO_playerId'])
         if re.match(r'^\d+$',r['등번호']): p['no']=r['등번호']; st['no']+=1
         else: st['nonum']+=1
         if not p.get('birth'): p['birth']=r['생년월일']; p['age']=2027-int(r['생년월일'][:4]); p.pop('ageEst',None); st['birth']+=1
@@ -858,6 +863,11 @@ def load_awards():   # 실제 KBO MVP·신인왕·골든글러브 2020~2025(사�
     f=D+'game/data/awards_2020_2026.csv'
     return [dict(y=int(r['연도']),k=r['구분'],pos=r['포지션'],name=r['선수'],team=r['팀'],note=r['비고']) for r in csv.DictReader(open(f,encoding='utf-8-sig'))] if os.path.exists(f) else []
 AWARDS=load_awards()
+# 개명 선수 표기: 원천 기록(영문 기록 사이트)이 개명 전 이름을 쓰는 경우, 모든 이름 매칭이 끝난 뒤 현재 KBO 등록명으로 바꾼다(KBO ID로 본인 확인)
+RENAMED={('Giants','나종덕','67539'):('나균안','Gyun-an Na 나균안')}
+for p in players:
+    k=(p['team'],p['ko'],p.get('kid'))
+    if k in RENAMED: p['ko'],p['name']=RENAMED[k]
 out={'awards':AWARDS,'schoolHome':SCHOOLHOME,'coaches':COACHES,'finance':FINANCE,'faclass2027':FACLASS,'foreign2027':FOREIGN27,'draft2027':DRAFT,'teams':TEAMS,'players':players,'league_bat':R['league_bat'],'team_def':R['team_def'],'pf':PK['pf_by_team'],
  'fielding':{'lg':F['lg'],'team_avg_range':F['team_avg_range']},
  'scale':{'B':scale(regB,['k','bb','hr','babip','xbh','sba'],lambda r:r['PA']),'P':scale(regP,['k','bb','hr','babip'],lambda r:r['TBF'])}}

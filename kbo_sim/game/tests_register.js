@@ -13,6 +13,13 @@ const one = nm => P.filter(p => p.ko === nm);
 for (const [nm, team, no, b, t, birth] of [['김광현', 'Landers', '29', 'L', 'L', '1988-07-22'], ['박성한', 'Landers', '2', 'L', 'R', '1998-03-30'], ['강민균', 'Twins', '00', 'R', 'R', '2000-07-17'], ['이도우', 'Landers', '02', 'R', 'R', '2006-05-13'], ['최정', 'Landers', '14', 'R', 'R', '1987-02-28']]) {
   const p = one(nm).find(q => q.team === team); ok(p && p.no === no && p.bats === b && p.throws === t && p.birth === birth, `${nm}: ${p && [p.no, p.bats, p.throws, p.birth].join(' ')}`); }
 { const a = one('박준영').filter(p => p.team === 'Eagles'); ok(a.length === 2 && a.find(p => p.age === 24).birth === '2003-03-02' && a.find(p => p.age === 25).birth === '2002-06-03', '한화 동명이인 박준영 생년월일 구분'); }
+// 2026-11-28 보충(사용자 요청 17명): 나이 추정 선수의 투타·KBO ID·생년월일(KBO 선수 상세·퓨처스 기록 ID 대조) · 나종덕 → 현재 등록명 나균안
+for (const [nm, team, kid, t, b, birth, und] of [['나균안', 'Giants', '67539', 'R', 'R', '1998-03-16'], ['우정안', 'Twins', '55111', 'R', 'L', '2006-01-03'], ['현원회', 'Landers', '50840', 'R', 'R', '2001-07-08'], ['양가온솔', 'Dinos', '55920', 'R', 'R', '2006-02-24'], ['이승현', 'Wiz', '54011', 'R', 'L', '2005-01-26'], ['이도훈', 'Tigers', '56635', 'R', 'R', '2007-01-06'],
+  ['김겸재', 'Eagles', '52703', 'R', 'R', '1998-12-10'], ['배민서', 'Eagles', '69974', 'R', 'R', '1999-11-18', 1], ['성준서', 'Twins', '55118', 'R', 'R', '2006-04-09'], ['최용하', 'Heroes', '52163', 'R', 'R', '2002-11-29', 1], ['이승호', 'Heroes', '67603', 'L', 'L', '1999-02-08'], ['한현희', 'Giants', '62363', 'R', 'R', '1993-06-25', 1],
+  ['박준혁', 'Wiz', '55002', 'R', 'R', '2006-03-10'], ['이현민', 'Wiz', '54014', 'R', 'R', '2001-10-13'], ['김현수', 'Tigers', '56664', 'R', 'R', '2007-11-08'], ['천겸', 'Lions', '55414', 'R', 'R', '2006-01-25'], ['정민성', 'Lions', '54467', 'R', 'R', '2005-05-09']]) {
+  const p = P.find(q => q.kid === kid); ok(p && p.ko === nm && p.team === team && p.throws === t && p.bats === b && p.birth === birth && !p.ageEst && !!p.under === !!und, `${nm}(${kid}): ${p && [p.ko, p.team, p.throws, p.bats, p.birth, p.under].join(' ')}`); }
+ok(!P.some(p => p.ko === '나종덕'), '개명 전 이름(나종덕) 남지 않음'); ok(!(P.find(q => q.kid === '55002').dh || {}).y, '박준혁(2006년생)에 2018 육성 외야수 이력이 잘못 붙지 않음');
+ok(new Set(P.filter(p => p.kid).map(p => p.kid)).size === P.filter(p => p.kid).length, 'KBO ID 중복 연결 없음');
 // 게임 안에서도 유지: 저장·불러오기
 { const L = League.create(base, 'Landers', 3), L2 = League.load(L.save()); const p = Object.values(L2.S.players).find(q => q.ko === '김광현' && q.team === 'Landers'); ok(p.no === '29' && p.ht === 188, '저장·불러오기 뒤 유지'); }
 // KBO 1군 정규시즌 실제 기록(~2026): 표본 대조 · 연도별 합 = KBO 통산 행 · 2026 이후 없음
