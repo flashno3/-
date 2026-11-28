@@ -1193,6 +1193,26 @@
     const mk = ev.map((x, k) => { const i = xi(x.y), same = ev.filter(z => xi(z.y) === i), j = same.indexOf(x), cx = Math.min(W - pr - 4, X(i) + 7 + j * 9); return `<text x="${cx}" y="${pt + 2}" class="gm ${x.v > 0 ? 'up' : 'dn'}" text-anchor="middle">${x.v > 0 ? '▲' : '▼'}<title>${x.y} · ${esc(x.why)} ${x.v > 0 ? '+' : ''}${x.v}</title></text>`; }).join('');
     return `<div class="card" style="margin:8px 0"><b>성장 그래프</b> <span class="small muted">시즌 시작 OVR ${h.filter(x => !x.now).map(x => x.o).join(' → ')}${h.some(x => x.now) ? ` · 현재 ${cur}` : ''}${ceil ? ` · 스카우트 추정 상한 ${ceil}` : ''}</span><svg class="gchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="연도별 OVR 추이">${grid}${cl}${line}${mk}${yrs}</svg>${ev.length ? `<div class="small muted">▲▼ 성장 상한이 움직인 사건: ${ev.map(x => `${x.y} ${esc(x.why)} ${x.v > 0 ? '+' : ''}${x.v}`).join(' · ')}</div>` : ''}</div>`;
   }
+  /* KBO 1군 정규시즌 실제 기록(~2026, KBO 공식 선수 상세 '통산기록') + 실제 통산 + 게임 시즌 합계 */
+  function realCard(p, gameRows) {
+    const R = p.real; if (!R || !R.y || !R.y.length) return '';
+    const isB = R.k === 'B', f3 = v => v === null || v === undefined ? '-' : pct3(v), ipS = o => Math.floor(o / 3) + (o % 3 ? ' ' + (o % 3) + '/3' : '');
+    // B: [y, team, G,PA,AB,R,H,2B,3B,HR,RBI,SB,BB,HBP,SO, AVG,OBP,SLG] · P: [y, team, G,W,L,SV,HLD,outs,H,HR,BB,SO,R,ER, ERA]
+    const bR = (a, lab, tm, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td class="l">${lab}</td><td class="l">${esc(tm)}</td><td>${a[0]}</td><td>${a[1]}</td><td>${a[4]}</td><td>${a[5]}</td><td>${a[7]}</td><td>${a[8]}</td><td>${a[9]}</td><td>${a[10]}</td><td>${a[12]}</td><td>${f3(a[13])}</td><td>${f3(a[14])}</td><td>${f3(a[15])}</td><td>${a[14] !== null && a[15] !== null ? f3(a[14] + a[15]) : '-'}</td></tr>`;
+    const pR = (a, lab, tm, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td class="l">${lab}</td><td class="l">${esc(tm)}</td><td>${a[0]}</td><td>${a[1]}</td><td>${a[2]}</td><td>${a[3]}</td><td>${a[4]}</td><td>${ipS(a[5])}</td><td>${a[9]}</td><td>${a[8]}</td><td>${a[12] === null ? '-' : a[12].toFixed(2)}</td><td>${a[5] ? ((a[6] + a[8]) * 3 / a[5]).toFixed(2) : '-'}</td></tr>`;
+    const rows = R.y.slice().reverse().map(y => (isB ? bR : pR)(y.slice(2), y[0], y[1])).join('') + (R.t ? (isB ? bR : pR)(R.t, '통산', `${new Set(R.y.map(y => y[0])).size}시즌`, 'tot') : '');
+    const head = isB ? '<th>경기</th><th>타석</th><th>안타</th><th>2루타</th><th>홈런</th><th>타점</th><th>도루</th><th>볼넷</th><th>삼진</th><th>타율</th><th>출루</th><th>장타</th><th>OPS</th>' : '<th>경기</th><th>승</th><th>패</th><th>세이브</th><th>홀드</th><th>이닝</th><th>탈삼진</th><th>볼넷</th><th>평균자책</th><th>WHIP</th>';
+    // 실제 통산 + 게임 시즌(1군): 게임 기록은 [PA,K,BB,HBP,HR,1B,2B,3B,SF,RBI,SB,CS] / [BF,K,BB,HBP,H,HR,outs,R]
+    const g = (gameRows || []).filter(x => x.c), T = R.t || [];
+    let comb = '';
+    if (g.length && R.t) {
+      if (isB) { const s = g.reduce((a, x) => { const c = x.c; a.H += c[5] + c[6] + c[7] + c[4]; a.HR += c[4]; a.RBI += c[9]; a.SB += c[10]; return a; }, { H: 0, HR: 0, RBI: 0, SB: 0 }); comb = `안타 <b>${T[4] + s.H}</b> · 홈런 <b>${T[7] + s.HR}</b> · 타점 <b>${T[8] + s.RBI}</b> · 도루 <b>${T[9] + s.SB}</b>`; }
+      else { const s = g.reduce((a, x) => { a.K += x.c[1]; a.o += x.c[6]; return a; }, { K: 0, o: 0 }); comb = `이닝 <b>${ipS(T[5] + s.o)}</b> · 탈삼진 <b>${T[9] + s.K}</b>`; }
+    }
+    return `<div class="card" style="margin:8px 0"><b>KBO 1군 실제 기록 (~2026)</b> <span class="small muted">KBO 공식 기록실 정규시즌 · 비율 기록은 공식 값</span>
+      <div class="tablewrap"><table class="car"><thead><tr><th class="l">시즌</th><th class="l">팀</th>${head}</tr></thead><tbody>${rows}</tbody></table></div>
+      ${comb ? `<div class="small" style="margin-top:6px">통산(실제 ~2026 + 게임 ${g.length}시즌): ${comb}</div>` : ''}</div>`;
+  }
   function careerPanel(p) {
     const c = L.careerOf(p), o = c.origin, isB = p.type === 'B';
     const dB = a => { const [PA, K, BB, HBP, HR, b1, b2, b3, SF, RBI, SB, CS] = a, AB = PA - BB - HBP - SF, H = b1 + b2 + b3 + HR, TB = b1 + 2 * b2 + 3 * b3 + 4 * HR, od = AB + BB + HBP + SF, obp = od ? (H + BB + HBP) / od : 0, slg = AB ? TB / AB : 0; return { PA, AB, H, b2, b3, HR, RBI, BB, K, SB, CS, avg: AB ? H / AB : 0, obp, slg, ops: obp + slg }; };
@@ -1208,9 +1228,10 @@
     const head = isB ? '<th>타석</th><th>안타</th><th>2루타</th><th>3루타</th><th>홈런</th><th>타점</th><th>볼넷</th><th>삼진</th><th>도루</th><th>타율</th><th>출루</th><th>장타</th><th>OPS</th><th title="이 게임의 구단 WAR 대용치(⚠ 환산)">WAR</th>' : '<th>이닝</th><th>피안타</th><th>피홈런</th><th>볼넷</th><th>탈삼진</th><th>실점</th><th>RA9</th><th>WHIP</th><th>K/9</th><th title="이 게임의 구단 WAR 대용치(⚠ 환산)">WAR</th>';
     const farmHtml = farmRows.length ? `<div class="card" style="margin:8px 0"><b>2군(퓨처스) 기록</b><div class="tablewrap"><table class="car"><thead><tr><th class="l">시즌</th><th class="l">팀</th>${isB ? '<th>타석</th><th>홈런</th><th>타율</th><th>OPS</th>' : '<th>이닝</th><th>탈삼진</th><th>RA9</th>'}</tr></thead><tbody>${farmRows.slice().reverse().map(x => { if (isB) { const d = dB(x.f); return `<tr><td class="l">${x.y}</td><td class="l">${KO[x.t] || x.t}</td><td>${d.PA}</td><td>${d.HR}</td><td>${p3(d.avg)}</td><td>${p3(d.ops)}</td></tr>`; } const d = dP(x.f); return `<tr><td class="l">${x.y}</td><td class="l">${KO[x.t] || x.t}</td><td>${ipS(d.outs)}</td><td>${d.K}</td><td>${d.ra9.toFixed(2)}</td></tr>`; }).join('')}</tbody></table></div></div>` : '';
     const wt = [...new Set(Object.keys(c.war.lg).concat(Object.keys(c.war.lw)))], warHtml = wt.length ? `<div class="small" style="margin-top:6px">구단별 WAR: ${wt.map(t => `<b>${KO[t] || t}</b> ${((c.war.lg[t] || 0) + (c.war.lw[t] || 0)).toFixed(1)}${c.war.lg[t] ? ` <span class="muted">(2004~2026 실제 ${c.war.lg[t].toFixed(1)}${c.war.lw[t] ? ' + 게임 내 ' + c.war.lw[t].toFixed(1) : ''})</span>` : c.war.lw[t] ? ' <span class="muted">(게임 내)</span>' : ''}`).join(' · ')}</div>` : '';
-    const dh = o || {}, preHtml = (dh.g || dh.pa || dh.ip) ? `<div class="small muted" style="margin-top:4px">게임 시작 전(~2026) KBO 통산: ${dh.g ? dh.g + '경기' : ''}${isB ? (dh.pa ? ' · ' + dh.pa + '타석' : '') : (dh.ip ? ' · ' + dh.ip + '이닝' : '')} — 연도별 기록은 없고 합계만 있습니다.</div>` : '';
+    const dh = o || {}, preHtml = !p.real && (dh.g || dh.pa || dh.ip) ? `<div class="small muted" style="margin-top:4px">게임 시작 전(~2026) KBO 통산: ${dh.g ? dh.g + '경기' : ''}${isB ? (dh.pa ? ' · ' + dh.pa + '타석' : '') : (dh.ip ? ' · ' + dh.ip + '이닝' : '')} — 연도별 기록은 없고 합계만 있습니다.</div>` : '';
     return `${o ? `<div class="small">${o.y ? o.y + '년 ' : ''}${esc(o.school || '')} ${o.univ ? '(대졸)' : o.school ? '(고졸)' : ''} ${o.kind ? '· ' + esc(o.kind) : ''}${o.pick ? ' ' + o.pick + '순위' : ''}${o.deb ? ' · 1군 데뷔 ' + esc(o.deb) : ''}</div>` : ''}
       ${growthChart(p)}
+      ${realCard(p, gameRows)}
       <div class="card" style="margin:8px 0"><b>시즌 기록 (1군)</b>${rows ? `<div class="tablewrap"><table class="car"><thead><tr><th class="l">시즌</th><th class="l">팀</th>${head}</tr></thead><tbody>${rows}${totRow}</tbody></table></div>${warHtml}${preHtml}` : '<div class="small muted">이 게임에서 완료된 시즌 기록이 아직 없습니다(시즌이 끝날 때마다 쌓입니다).</div>'}${c.ovrHist.length ? `<div class="small muted" style="margin-top:4px">종합 능력치 추이: ${c.ovrHist.map(x => `${x.y} ${x.o}`).join(' → ')}</div>` : ''}</div>
       ${farmHtml}
       ${c.asg.length ? `<div class="card" style="margin:8px 0"><b>올스타</b> <span class="small">${c.asg.length}회 — ${c.asg.join('·')}${c.asgMvp.length ? ` · 올스타전 MVP ${c.asgMvp.join('·')}` : ''}</span></div>` : ''}

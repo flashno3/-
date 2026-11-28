@@ -1,6 +1,6 @@
 """감독 모드용 선수 데이터 생성: ratings_game_pk.json(3시즌 블렌딩 + 저출전 타자 사전평균 보정 PT_ALPHA=0.25) + 수비·포지션 → game/src/gamedata.json
 시작 시점은 2027 시즌 직전(나이 +1). 값은 원본 그대로 두고 필요한 필드만 추린다."""
-import json,os,math
+import re, json,os,math
 D=os.path.dirname(os.path.abspath(__file__))+'/'
 J=lambda f:json.load(open(D+f,encoding='utf8'))
 R=J('ratings_game_pk.json');F=J('fielding.json');DEF=J('defense_parsed.json')['D'];POS=J('positions.json');PK=J('parks.json')['blend']
@@ -405,6 +405,7 @@ def load_register(players):
     for r,p in done:
         y=int(r['생년월일'][:4]); c=[p]
         p=c[0]; used.add(id(p)); st['ok']+=1
+        p['kid']=r['KBO_playerId']
         if p['team']!=TMR.get(r['최종구단']): st['moved']+=1; st.setdefault('movedL',[]).append((r['최종구단'],r['선수명'],p['team']))
         if r['등번호'] and not (r['최종구단']=='상무' and p['team']!='MIL'): p['no']=r['등번호']; st['no']+=1   # 문자열 그대로('02'·'00'은 '2'·'0'과 다른 번호). 상무 등번호는 원 소속 구단 번호가 아님
         if not p.get('birth'):
@@ -440,6 +441,7 @@ def load_search(players):
             if len(c)>1: st['amb'].append((p['team'],p['ko']))
             continue
         r=c[0]; st['ok']+=1
+        p['kid']=r['KBO_playerId']
         if re.match(r'^\d+$',r['등번호']): p['no']=r['등번호']; st['no']+=1
         else: st['nonum']+=1
         if not p.get('birth'): p['birth']=r['생년월일']; p['age']=2027-int(r['생년월일'][:4]); p.pop('ageEst',None); st['birth']+=1
@@ -451,6 +453,37 @@ def load_search(players):
             if tb[1]=='언': p['under']=True
     return st
 RS=load_search(players)
+
+# KBO 1군 정규시즌 연도별 기록(2026까지, 선수 상세 '통산기록' — 정규시즌 선택): p.real = {k, y:[[연도, 팀, ...]]}
+CB_REAL=['G','PA','AB','R','H','2B','3B','HR','RBI','SB','BB','HBP','SO']; CP_REAL=['G','W','L','SV','HLD','IP','H','HR','BB','SO','R','ER']; CB_RATE=['AVG','OBP','SLG']; CP_RATE=['ERA']   # 비율은 KBO 공식 값 그대로(희생플라이 등이 없어 직접 계산하면 어긋남)
+def load_career(players):
+    import csv
+    st={'ok':0,'seasons':0,'mismatch':[]}
+    byk={p['kid']:p for p in players if p.get('kid')}
+    def outs(ip):
+        ip=ip.strip(); m=re.match(r'^(\d+)(?:\s+(\d)/3)?$',ip) or re.match(r'^(\d)/3$',ip)
+        if not m: return 0
+        if '/' in ip and ' ' not in ip: return int(m.group(1))
+        return int(m.group(1))*3+(int(m.group(2)) if m.group(2) else 0)
+    for k,f,cols in (('B','kbo_career_bat_2026.csv',CB_REAL),('P','kbo_career_pit_2026.csv',CP_REAL)):
+        fp=D+'game/data/'+f
+        if not os.path.exists(fp): continue
+        rows=[r for r in csv.DictReader(l for l in open(fp,encoding='utf-8-sig') if not l.startswith('#'))]
+        by={}
+        for r in rows: by.setdefault(r['KBO_playerId'],[]).append(r)
+        for kid,rs in by.items():
+            p=byk.get(kid)
+            if not p: continue
+            val=lambda r,c: outs(r['IP']) if c=='IP' else int(r[c]) if r[c].strip().lstrip('-').isdigit() else 0
+            rate=CB_RATE if k=='B' else CP_RATE; fl=lambda r,c: float(r[c]) if re.match(r'^-?\d+(\.\d+)?$',r[c].strip()) else None
+            ys=[[int(r['연도']),r['팀명']]+[val(r,c) for c in cols]+[fl(r,c) for c in rate] for r in rs if r['연도']!='통산']
+            tot=[r for r in rs if r['연도']=='통산']
+            if tot:
+                sums=[sum(y[2+i] for y in ys) for i in range(len(cols))]; tv=[val(tot[0],c) for c in cols]
+                if sums!=tv: st['mismatch'].append((p['ko'],[c for c,a,b in zip(cols,sums,tv) if a!=b]))
+            if ys: p['real']={'k':k,'y':sorted(ys,key=lambda y:(y[0],y[1])),'t':([val(tot[0],c) for c in cols]+[fl(tot[0],c) for c in rate]) if tot else None}; st['ok']+=1; st['seasons']+=len(ys)
+    return st
+RC=load_career(players)
 
 # 2027 신인 드래프트 지명 결과(사용자 제공)
 def load_draft():
@@ -839,6 +872,7 @@ print('연봉 반영',SALOK,'명 | 동명이인 등으로 건너뜀',len(SALSKIP
 print('1군 명단(생년월일·투타): 매칭',R1['ok'],'| 나이 정정',R1['agefix'],'| 1군 등록',R1['reg1'],'| 모호',R1['amb'],'| 미매칭',R1['miss'])
 print('KBO 등록 현황(등번호·투타·생년월일·체격): 매칭',RG.get('ok'),'| 등번호',RG.get('no'),'| 투타',RG.get('hand'),'| 생년월일 새로',RG.get('newbirth'),'(나이 정정',RG.get('agefix'),') | 구단 다름',RG.get('moved'),'| 모호',RG.get('amb'),'| 미매칭 행',RG.get('miss'),'| 구단 다름 목록',RG.get('movedL'),'| 의심 제외',RG.get('suspect'))
 print('KBO 선수 조회 보충: 매칭',RS.get('ok'),'| 등번호',RS.get('no'),'| 번호 없음(#)',RS.get('nonum'),'| 생년월일',RS.get('birth'),'| 투타',RS.get('hand'),'| 모호',RS.get('amb'))
+print('KBO 통산 기록(정규시즌, ~2026): 선수',RC.get('ok'),'| 시즌 행',RC.get('seasons'),'| 통산 합계 불일치',RC.get('mismatch')[:8] if RC.get('mismatch') else 0)
 
 print('2027 드래프트 지명',len(DRAFT),'명')
 
