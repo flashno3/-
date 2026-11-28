@@ -9,7 +9,11 @@
   // 팀 색(테마용). 로고는 사용자가 제공한 이미지(KBO_LOGOS)를 사용한다.
   const BADGE = { Bears: { p: '#131230' }, Twins: { p: '#C30452' }, Heroes: { p: '#820024' }, Landers: { p: '#CE0E2D' }, Wiz: { p: '#1C1C1C' }, Eagles: { p: '#F26A1B' }, Tigers: { p: '#E4002B' }, Giants: { p: '#0A2547' }, Dinos: { p: '#1E3F78' }, Lions: { p: '#0A5BC4' } };
   const logo = (t, size) => (KBO_LOGOS[t] ? `<img class="logo" src="${KBO_LOGOS[t]}" alt="${KO[t]}" style="height:${size || 22}px;width:${Math.round((size || 22) * 1.45)}px">` : '');   // 로고 원본 비율이 제각각이라 같은 크기의 상자 안에 맞춰 넣는다
-  const applyTheme = () => { const r = document.documentElement.style; if (L) { r.setProperty('--tp', BADGE[L.S.userTeam].p); } else r.setProperty('--tp', ui && BADGE[ui.team] ? BADGE[ui.team].p : '#1D7A4E'); };   // 시작 화면: 고른 구단 색 미리보기
+  /* 팀 색 파생: --tp-deep = 흰 글씨 대비 4.5:1이 되는 만큼만 어둡게(밝은 팀 색이 갈색으로 탁해지지 않게), --tp-hi = 짙은 바탕 위에서 보이는 밝기 */
+  const hexRgb = h => { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }, rgbHex = c => '#' + c.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+  const lum = c => { const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
+  const teamTones = hex => { let c = hexRgb(hex); for (let i = 0; i < 20 && 1.05 / (lum(c) + 0.05) < 4.5; i++) c = c.map(v => v * 0.94); let h = hexRgb(hex); for (let i = 0; i < 20 && lum(h) < 0.16; i++) h = h.map(v => v + (255 - v) * 0.12); return { deep: rgbHex(c), hi: rgbHex(h) }; };
+  const applyTheme = () => { const r = document.documentElement.style, tp = L ? BADGE[L.S.userTeam].p : (ui && BADGE[ui.team] ? BADGE[ui.team].p : '#1D7A4E'), tt = teamTones(tp); r.setProperty('--tp', tp); r.setProperty('--tp-deep', tt.deep); r.setProperty('--tp-hi', tt.hi); };   // 시작 화면: 고른 구단 색 미리보기
   const SAVE_KEY = 'kbo.mgr.save.v1';
   const $ = (s, r) => (r || document).querySelector(s);
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -223,7 +227,7 @@
   /* 감독실 허브(대시보드 맨 위): 물건을 누르면 해당 화면으로. 표시 내용은 실제 상태(1면·언론·할 일·다음 경기·순위·라인업·우승·카드) */
   const hexMix = (a, b, k) => { const p = h => { const m = /^#?([0-9a-f]{6})$/i.exec(h); return m ? parseInt(m[1], 16) : 0x888888; }, x = p(a), y = p(b), c = sh => Math.round(((x >> sh) & 255) * k + ((y >> sh) & 255) * (1 - k)); return `rgb(${c(16)},${c(8)},${c(0)})`; };
   function officeHub() {
-    if (pref('hub_off', '') === '1') return `<div class="row small" style="justify-content:flex-end;margin-bottom:4px"><button class="sm" data-act="hubTog">🏢 감독실 보기</button></div>`;
+    if (pref('hub_off', '1') === '1') return '';   // 기본 접힘(대시보드 첫 화면 정리) — 히어로 카드의 '감독실' 버튼으로 펼침
     const S = L.S, t = U(), tc = BADGE[t] ? BADGE[t].p : '#555', st = L.standings(), my = st.find(x => x.team === t), g = my.w + my.l + my.d, dow = L.dateOf(Math.min(S.day, 143)).getUTCDay(), day = dow === 0 || dow === 6;
     const fr = (S.front || [])[0], pr = (S.press || [])[0], head = fr ? fr.head : pr ? pr.head : `${KO[t]}, ${S.year} 시즌을 준비한다`, hl = wrapKo(head, 9).slice(0, 2);
     const nEv = L.eventsOpen().length + (L.validateEntry ? (L.validateEntry().length ? 1 : 0) : 0), ng = S.phase === 'offseason' ? [] : nextGames(1), nx = ng[0], opp = nx ? (nx.home === t ? nx.away : nx.home) : null;
@@ -240,6 +244,11 @@
       <g class="hs ${nEv ? 'ring' : ''}" data-act="hubEv" role="button" tabindex="0" aria-label="전화기 — 처리할 일 ${nEv}건"><rect x="262" y="128" width="58" height="34" rx="8" fill="#3a3a3a"/><rect x="270" y="120" width="42" height="12" rx="6" fill="#2a2a2a"/><circle cx="291" cy="146" r="9" fill="#555"/>${nEv ? `<circle cx="318" cy="124" r="10" fill="#e03131"/><text x="318" y="128" text-anchor="middle" font-size="11" font-weight="900" fill="#fff">${nEv}</text>` : ''}</g>
     </svg><div class="row small"><span class="muted">${nEv ? `☎ 처리할 일 ${nEv}건이 기다립니다` : '감독실 — 물건을 누르면 해당 화면으로 갑니다'}</span><span class="sp"></span><button class="sm" data-act="hubTog">접기</button></div></div>`;
   }
+  /* 개막 전 히어로 칸: 비어 있는 성적 대신 개막까지·개막전·연봉 순위·부상자 */
+  function preHero(t, nx, opp, sp) {
+    const S = L.S, pays = TEAMS.map(x => [x, L.finPay ? L.finPay(x) : 0]).sort((a, b) => b[1] - a[1]), pr = pays.findIndex(x => x[0] === t) + 1, inj = L.players(t).filter(p => L.isInj(p)).length, dl = faOpen() && L.faDaysLeft ? L.faDaysLeft() : null;
+    return `<div class="hstats"><div><b>${dl !== null ? `D-${dl}` : '개막 전'}</b><span>개막까지</span></div><div><b>${nx ? `${nx.home === t ? 'vs' : '@'} ${KO[opp]}` : '-'}</b><span>개막전 ${nx ? L.dateStr(nx.day) : ''}</span></div><div><b>${sp ? esc(sp.ko) : '-'}</b><span>개막전 선발</span></div><div><b>${pr ? pr + '위' : '-'}</b><span>연봉 총액 순위${inj ? ` · 부상 ${inj}명` : ''}</span></div></div>`;
+  }
   function heroCard() {
     const S = L.S, st = L.standings(), my = st.find(x => x.team === U()), g = my.w + my.l + my.d, t = U();
     const games = S.results.filter(x => x.home === t || x.away === t), wl = x => { const h = x.home === t, a = h ? x.rh : x.ra, b = h ? x.ra : x.rh; return a === b ? 'D' : a > b ? 'W' : 'L'; };
@@ -255,8 +264,8 @@
     const status = S.phase === 'offseason' ? '오프시즌' : faOpen() ? 'FA 협상 기간' : g === 0 ? '개막 전' : `${my.rank}위`;
     const cz = S.clinch && S.clinch.y === S.year && S.clinch.k && S.day - S.clinch.d <= 3 ? S.clinch : null, czHtml = cz ? `<div class="hclinch ${cz.k}">${cz.k === 'in' ? '🎉 가을야구 진출 확정!' : '가을야구 탈락이 확정됐습니다. 남은 경기는 내년을 위한 시간입니다.'}</div>` : '';
     return `<section class="hero" aria-label="우리 팀 현황">${czHtml}<div class="hrow">${logo(t, 40)}<div class="hname"><b>${KO[t]}</b><span>${S.year} 시즌 · ${status}</span></div><span class="sp"></span>${(() => { const cl = S.phase === 'regular' && g > 0 && L.postClinch ? L.postClinch(t) : null; return cl ? `<div class="hodds" title="남은 경기 결과와 관계없이 정해진 상태입니다(승률 기준)."><b>${cl === 'in' ? '진출 확정' : '탈락 확정'}</b><span>가을야구</span></div>` : top5 !== null ? `<div class="hodds" title="남은 경기를 200번 시뮬레이션한 5위 이내 확률(참고용)"><b>${top5 === 0 && od[t].top5 > 0 ? '1% 미만' : top5 === 100 && od[t].top5 < 100 ? '99% 이상' : top5 + '%'}</b><span>가을야구 확률</span></div>` : ''; })()}</div>${seasonLine()}
-      <div class="hstats"><div><b>${g ? `${my.w}승 ${my.l}패${my.d ? ' ' + my.d + '무' : ''}` : '-'}</b><span>${g ? `승률 ${pct3(my.pct)}` : '성적'}</span></div>${(() => { const mg = L.magicNumber ? L.magicNumber(t) : null, m = mg && mg[0]; return m ? `<div title="${esc(`${m.t}: 남은 경기에서 우리 승리 + ${KO[m.vs]}의 패배가 이 수만큼 나오면 ${m.k === 'tragic' ? '탈락' : '확정'}(무승부 제외 근사, 실제 확정과 1경기 안팎 차이 가능)`)}"><b>${m.k === 'tragic' ? '트래직' : '매직'} ${m.n}</b><span>${m.k === 'tragic' ? `탈락까지 · ${KO[m.vs]} 기준` : `가을야구 · ${KO[m.vs]} 기준`}${mg[1] ? ` · 1위 매직 ${mg[1].n}` : ''}</span></div>` : `<div><b>${g ? gtxt : '-'}</b><span>순위 경쟁</span></div>`; })()}<div><b>${strk || '-'}</b><span>연속</span></div><div><b>${dots || '-'}</b><span>최근 10경기</span></div></div>
-      ${nx || watch || inj ? `<div class="hfoot">${nx ? `<span class="hnext">다음 · ${L.dateStr(nx.day)} ${nx.home === t ? '홈' : '원정'} ${logo(opp, 18)}${KO[opp]}${sp ? ` · 선발 ${esc(sp.ko)}` : ''}</span>` : ''}${watch ? `<span class="hwatch">주목 ${watch}</span>` : ''}${inj ? `<span class="hinj">부상 ${inj}명</span>` : ''}${chemChip()}</div>` : ''}</section>`;
+      ${g === 0 && S.phase !== 'offseason' ? preHero(t, nx, opp, sp) : `<div class="hstats"><div><b>${g ? `${my.w}승 ${my.l}패${my.d ? ' ' + my.d + '무' : ''}` : '-'}</b><span>${g ? `승률 ${pct3(my.pct)}` : '성적'}</span></div>${(() => { const mg = L.magicNumber ? L.magicNumber(t) : null, m = mg && mg[0]; return m ? `<div title="${esc(`${m.t}: 남은 경기에서 우리 승리 + ${KO[m.vs]}의 패배가 이 수만큼 나오면 ${m.k === 'tragic' ? '탈락' : '확정'}(무승부 제외 근사, 실제 확정과 1경기 안팎 차이 가능)`)}"><b>${m.k === 'tragic' ? '트래직' : '매직'} ${m.n}</b><span>${m.k === 'tragic' ? `탈락까지 · ${KO[m.vs]} 기준` : `가을야구 · ${KO[m.vs]} 기준`}${mg[1] ? ` · 1위 매직 ${mg[1].n}` : ''}</span></div>` : `<div><b>${g ? gtxt : '-'}</b><span>순위 경쟁</span></div>`; })()}<div><b>${strk || '-'}</b><span>연속</span></div><div><b>${dots || '-'}</b><span>최근 10경기</span></div></div>`}
+      ${nx || watch || inj ? `<div class="hfoot">${nx && !(g === 0 && S.phase !== 'offseason') ? `<span class="hnext">다음 · ${L.dateStr(nx.day)} ${nx.home === t ? '홈' : '원정'} ${logo(opp, 18)}${KO[opp]}${sp ? ` · 선발 ${esc(sp.ko)}` : ''}</span>` : ''}${watch ? `<span class="hwatch">주목 ${watch}</span>` : ''}${inj && !(g === 0 && S.phase !== 'offseason') ? `<span class="hinj">부상 ${inj}명</span>` : ''}${chemChip()}<button class="hhub" data-act="hubTog">${pref('hub_off', '1') === '1' ? '감독실' : '감독실 접기'}</button></div>` : ''}</section>`;
   }
   function screenHome(extra) {
     const S = L.S, st = L.standings(), my = st.find(x => x.team === U()), ng = nextGames(5);
@@ -314,7 +323,7 @@
   function deskFold() {
     if (!L.deskInfo || L.S.phase === 'offseason') return ''; const d = L.deskInfo(), urgent = d.todo.some(x => x.sev >= 3);
     const inner = screenDesk().replace(/^\s*<div class="card">/, '').replace(/<\/div>\s*$/, '');
-    return `<div class="card">${foldGroup('desk', '프런트 점검', `처리할 일 ${d.todo.length}${urgent ? ' · 긴급' : ''}`, inner, urgent)}</div>`;
+    return `<div class="card deskfold">${foldGroup('desk', '프런트 점검', `처리할 일 ${d.todo.length}${urgent ? ' · 긴급' : ''}`, inner, urgent)}</div>`;
   }
   function screenPhaseBanner() {
     const S = L.S, my = L.standings().find(x => x.team === U());
@@ -1060,7 +1069,7 @@
   function wearLine() { if (!L.wearInfo) return ''; const w = L.wearInfo(); return `<div class="small" style="margin-top:6px"><b>선수단 피로도</b> <span class="chip ${w.lv === '위험' ? 'bad' : w.lv === '높음' ? 'warn' : ''}">${w.v} · ${w.lv}</span> <span class="muted">${esc(w.txt)} — 총력전·계속 기용·조기 복귀·특타로 쌓이고, 휴식·시간이 지나면 풀립니다</span></div>`; }
   function decCard() {
     if (!L.decLedger || L.S.phase === 'offseason') return '';
-    const D = L.decLedger(); if (!D.list.length && !D.active.length) return `<div class="card"><h2>결정 효과</h2><div class="small muted">시즌 중 결정(총력전·전력분석·휴식·유망주 기회·분위기·복귀 시점)이 생기면 여기에 결과와 예상 승수가 쌓입니다. 같은 선택도 결과가 여러 갈래로 나뉩니다.</div></div>`;
+    const D = L.decLedger(); if (!D.list.length && !D.active.length && L.S.phase !== 'regular') return ''; if (!D.list.length && !D.active.length) return `<div class="card"><h2>결정 효과</h2><div class="small muted">시즌 중 결정(총력전·전력분석·휴식·유망주 기회·분위기·복귀 시점)이 생기면 여기에 결과와 예상 승수가 쌓입니다. 같은 선택도 결과가 여러 갈래로 나뉩니다.</div></div>`;
     const sg = v => `<b style="color:${v > 0 ? 'var(--accent)' : v < 0 ? 'var(--bad, #c0392b)' : 'inherit'}">${v > 0 ? '+' : ''}${v}승</b>`;
     const by = Object.entries(D.by).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="chip">${esc(k)} ${v > 0 ? '+' : ''}${v}</span>`).join(' ');
     const act = D.active.map(m => { const p = m.pid ? P(m.pid) : null; const who = m.who === 'pid' ? (p ? p.ko : '선수') : { all: '팀 전체', bat: '타선', pit: '투수진', bull: '불펜' }[m.who]; return m.v ? `<span class="chip ${m.v > 0 ? 'in' : 'warn'}">${esc(who)} ${m.v > 0 ? '▲' : '▼'} ~${L.dateStr(Math.min(m.d1, 143))}</span>` : (m.force ? `<span class="chip in">${esc(who)} 선발 고정 ~${L.dateStr(Math.min(m.d1, 143))}</span>` : ''); }).join(' ');
@@ -2518,7 +2527,7 @@
         const u = URL.createObjectURL(blob), aa = document.createElement('a'); aa.href = u; aa.download = name; document.body.appendChild(aa); aa.click(); aa.remove(); setTimeout(() => URL.revokeObjectURL(u), 1000);   // 단독 실행(index.html)
       }).catch(() => toast('이미지로 저장하지 못했습니다.'));
     },
-    hubTog() { setPref('hub_off', pref('hub_off', '') === '1' ? '' : '1'); render(); },
+    hubTog() { setPref('hub_off', pref('hub_off', '1') === '1' ? '0' : '1'); render(); },
     hubEv() { const e = document.querySelector('.evcard'); if (e) e.scrollIntoView({ behavior: 'smooth', block: 'start' }); else toast('지금 처리할 일이 없습니다.'); },
     champClose() { ui.champEnd = false; render(); },
     cardsClose() { L.S.cardNew = []; autosave(); render(); },

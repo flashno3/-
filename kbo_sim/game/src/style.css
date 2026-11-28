@@ -125,11 +125,11 @@ textarea { width: 100%; min-height: 90px; background: var(--bg); border: 1px sol
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 
 /* 팀 엠블럼·테마 */
-:root { --tp: #1D7A4E; }
+:root { --tp: #1D7A4E; --tp-deep: #1D7A4E; --tp-hi: #4FC389; }
 .logo { display: inline-block; vertical-align: middle; flex: none; object-fit: contain; padding: 2px; box-sizing: border-box; border-radius: 6px; background: #1E1F23; }
 .top { border-bottom: 3px solid var(--tp); }
-.side { background: color-mix(in srgb, var(--tp) 52%, #000); }
-.side button[aria-current=true] { background: rgba(255,255,255,.2); }
+.side { background: color-mix(in srgb, var(--tp) 12%, #14171B); }   /* 짙은 무채색 + 팀 색 기운(밝은 팀 색이 갈색으로 탁해지던 문제) */
+.side button[aria-current=true] { background: var(--tp-deep); color: #fff; box-shadow: inset 0 -3px 0 var(--tp-hi); }
 /* 모바일 하단 진행 바 */
 .dock { display: none; }
 @media (max-width: 860px) {
@@ -359,7 +359,7 @@ table.car { font-size: 12.5px; } table.car th, table.car td { padding: 5px 6px; 
 .arcg { display: flex; align-items: center; gap: 8px; margin: 2px 0; font-size: 12.5px; } .arcg .gl { width: 62px; color: var(--muted); } .arcg .ab { flex: 1; height: 8px; border-radius: 4px; background: var(--surface2); overflow: hidden; } .arcg .ab i { display: block; height: 100%; background: #4ec36f; } .arcg.mid .ab i { background: #e6b422; } .arcg.bad .ab i { background: #e0575b; } .arcg .gv { width: 26px; text-align: right; }
 
 /* ---- 대시보드: 구단 색 히어로 + 2단 배치 ---- */
-.hero { --hb: color-mix(in srgb, var(--tp) 72%, #000); background: linear-gradient(135deg, var(--hb), color-mix(in srgb, var(--tp) 45%, #000)); color: #fff; border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; box-shadow: 0 6px 20px color-mix(in srgb, var(--tp) 25%, transparent); }
+.hero { --hb: var(--tp-deep); background: linear-gradient(135deg, var(--hb), color-mix(in srgb, var(--tp-deep) 82%, #000)); color: #fff; border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; box-shadow: 0 6px 20px color-mix(in srgb, var(--tp) 25%, transparent); }
 .hero .hrow { display: flex; align-items: center; gap: 12px; } .hero .logo { background: rgba(255,255,255,.92); border-radius: 8px; padding: 3px; }
 .hero .hname b { display: block; font-family: var(--font-display); font-size: 22px; line-height: 1.15; } .hero .hname span { font-size: 13px; opacity: .85; }
 .hero .hodds { text-align: right; } .hero .hodds b { display: block; font-family: var(--font-display); font-size: 26px; line-height: 1; } .hero .hodds span { font-size: 12px; opacity: .85; }
@@ -545,3 +545,7 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
 .nitem.big .nhead { font-size: 20px; }
 .nitem .nbody { color: var(--muted, #666); margin-top: 3px; line-height: 1.5; }
 .chip.ncat { background: var(--tp, #333); color: #fff; }
+
+.hero .hhub { margin-left: auto; background: rgba(255,255,255,.14); color: #fff; border: 1px solid rgba(255,255,255,.28); border-radius: 999px; padding: 3px 12px; min-height: 28px; font-size: 12px; }
+.hero .hhub:hover:not(:disabled) { background: rgba(255,255,255,.24); border-color: rgba(255,255,255,.5); }
+.card.deskfold { padding: 0; } .card.deskfold > .foldgroup { margin: 0; } .card.deskfold > .foldgroup > summary { border: 0; }   /* 카드 안 접기 상자 이중 테두리 제거 */
