@@ -13,7 +13,9 @@ const BAD = /undefined|NaN|\[object|null/;
   for (const x of L.eventsOpen().filter(x => x.type === 'feud')) L.resolveEvent(x.id, 'calm'); const e = L._feudHbpEvent('Dinos', 2); ok(e && e.choices.length === 2, '빈볼 시비 이벤트'); const h0 = L.feudHeat('Dinos'), r = L.resolveEvent(e.id, 'protest'); ok(r.ok && L.feudHeat('Dinos') === h0 + 2 && S.teamMood.v === 1, '항의: 열기 +2·컨디션 +1 ' + r.msg);
   const e2 = L._feudHbpEvent('Dinos', 3); const r2 = L.resolveEvent(e2.id, 'calm'); ok(r2.ok && L.feudHeat('Dinos') === h0 + 1, '진정: 열기 −1');
   // 라이벌전 뒤 컨디션: 60일 진행하며 KT전 결과에 따라 ±1
-  S.teamMood = null; let seen = 0; for (let i = 0; i < 60 && seen < 2; i++) { for (const ev of L.eventsOpen()) L.resolveEvent(ev.id, ev.def); const busy = S.teamMood && S.day < S.teamMood.until, r0 = S.results.length; L.advance(1, false); const g = !busy && S.results.slice(r0).find(x => (x.home === 'Bears' && x.away === 'Wiz') || (x.away === 'Bears' && x.home === 'Wiz')); if (g && g.rh !== g.ra && S.teamMood && S.teamMood.until === S.day + 2) { const win = g.home === 'Bears' ? g.rh > g.ra : g.ra > g.rh; ok(S.teamMood.v === (win ? 1 : -1), '라이벌전 컨디션 ' + (win ? '+1' : '−1')); seen++; } }
+  let seen = 0; for (let i = 0; i < 100 && seen < 2 && S.phase === 'regular'; i++) { for (const ev of L.eventsOpen()) L.resolveEvent(ev.id, ev.def); S.teamMood = null; const r0 = S.results.length; L.advance(1, false);
+    const g = S.results.slice(r0).find(x => (x.home === 'Bears' && x.away === 'Wiz') || (x.away === 'Bears' && x.home === 'Wiz')); if (!g || g.rh === g.ra) continue; const win = g.home === 'Bears' ? g.rh > g.ra : g.ra > g.rh;
+    ok(S.teamMood && S.teamMood.v === (win ? 1 : -1) && S.teamMood.until === S.day + 3, '라이벌전 컨디션 ' + (win ? '+1' : '−1') + ' ' + JSON.stringify(S.teamMood)); seen++; }
   ok(seen >= 1, '라이벌전 컨디션 확인 ' + seen); ok(!L.integrity().errors.length, '정합성');
   // 새 시즌 ×0.6, 구단 이동 초기화
   const v0 = L.feudHeat('Wiz'); while (S.phase === 'regular' || S.phase === 'preseason') L.advance(30, false);
