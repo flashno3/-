@@ -19,7 +19,7 @@
   proto._decShift = function (p) {
     const S = this.S; if (!S.dec || p.team !== S.userTeam) return 0; let s = 0;
     for (const m of S.dec.mods) { if (S.day < m.d0 || S.day >= m.d1) continue; if (m.who === 'all' || (m.who === 'bat' && p.type === 'B') || (m.who === 'pit' && p.type === 'P') || (m.who === 'bull' && p.type === 'P' && p.role !== 'SP') || (m.who === 'pid' && m.pid === p.id)) s += m.v * DEC_K; }
-    return s;
+    return s + (this._wearShift ? this._wearShift(p) : 0);   // 선수단 피로도(wear.js)
   };
   proto._decWins = function (who, v, days, p) { return Math.round(v * DEC_K * (who === 'pid' ? pidW(p) : WPS[who]) * days / 144 * 10) / 10; };
   proto._decLog = function (o) { const D = this._dec(), S = this.S; D.log.unshift(Object.assign({ y: S.year, d: S.day }, o)); if (D.log.length > 80) D.log.length = 80; return o; };

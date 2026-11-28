@@ -4102,7 +4102,7 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
     }
     for (const t of TEAMS) for (const p of this.players(t)) {
       if (!p.active || this.isInj(p)) continue;
-      const pol = t === user ? this.policy() : null, hz = (p.type === 'B' ? 0.0030 : p.role === 'SP' ? 0.0042 : 0.0033) * (p.age >= 33 ? 1.3 : p.age <= 24 ? 0.9 : 1) * (pol ? (p.type === 'P' ? { save: 0.8, normal: 1, push: 1.3 }[pol.pitch] : { low: 0.95, normal: 1, high: 1.1 }[pol.run]) * (S.restUntil && d < S.restUntil ? 0.75 : 1) * this._trainInjFor(p) * (this.investMult ? this.investMult('med') : 1) : 1);   // 운영 방침: 투수 혹사(push)·적극 주루는 부상 위험↑
+      const pol = t === user ? this.policy() : null, hz = (t === user && this._wearInj ? this._wearInj() : 1) * (p.type === 'B' ? 0.0030 : p.role === 'SP' ? 0.0042 : 0.0033) * (p.age >= 33 ? 1.3 : p.age <= 24 ? 0.9 : 1) * (pol ? (p.type === 'P' ? { save: 0.8, normal: 1, push: 1.3 }[pol.pitch] : { low: 0.95, normal: 1, high: 1.1 }[pol.run]) * (S.restUntil && d < S.restUntil ? 0.75 : 1) * this._trainInjFor(p) * (this.investMult ? this.investMult('med') : 1) : 1);   // 운영 방침: 투수 혹사(push)·적극 주루는 부상 위험↑
       if (r.random() >= hz) continue;
       const u = r.random(), days0 = u < 0.55 ? 7 + Math.floor(r.random() * 8) : u < 0.85 ? 15 + Math.floor(r.random() * 21) : u < 0.97 ? 45 + Math.floor(r.random() * 56) : 150 + Math.floor(r.random() * 181);
       const days = t === user && this.investDur ? Math.max(1, Math.round(days0 * this.investDur())) : days0;   // 의무·재활 센터 투자: 복귀 기간 단축(투자하지 않으면 그대로)
@@ -6074,7 +6074,7 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
   proto._decShift = function (p) {
     const S = this.S; if (!S.dec || p.team !== S.userTeam) return 0; let s = 0;
     for (const m of S.dec.mods) { if (S.day < m.d0 || S.day >= m.d1) continue; if (m.who === 'all' || (m.who === 'bat' && p.type === 'B') || (m.who === 'pit' && p.type === 'P') || (m.who === 'bull' && p.type === 'P' && p.role !== 'SP') || (m.who === 'pid' && m.pid === p.id)) s += m.v * DEC_K; }
-    return s;
+    return s + (this._wearShift ? this._wearShift(p) : 0);   // 선수단 피로도(wear.js)
   };
   proto._decWins = function (who, v, days, p) { return Math.round(v * DEC_K * (who === 'pid' ? pidW(p) : WPS[who]) * days / 144 * 10) / 10; };
   proto._decLog = function (o) { const D = this._dec(), S = this.S; D.log.unshift(Object.assign({ y: S.year, d: S.day }, o)); if (D.log.length > 80) D.log.length = 80; return o; };
@@ -6504,6 +6504,38 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
   };
   /* 올해 승부처 기록 요약 */
   proto.clutchSummary = function () { const S = this.S, l = (S.clutchLog || []).filter(x => x.y === S.year); return { n: l.length, good: l.filter(x => x.good).length, w: l.filter(x => x.win === 'W').length, list: l }; };
+});
+
+/* 선수단 피로도(49단계): 공격적인 결정(총력전·계속 기용·조기 복귀·특타·기술 캠프)이 쌓이는 대가.
+ *  이전에는 공격적 선택의 대가가 그 자리 확률로 끝나 '항상 공격적'(73.4승)이 '추천대로'(73.3승)와 같았다(12시즌 측정).
+ *  피로도(0~100)는 결정마다 오르내리고 하루 0.6씩 저절로 풀린다. 35를 넘으면 10마다 우리 팀 능력치 보정 −0.07(결정 보정과 같은 척도),
+ *  20을 넘으면 부상 위험 ×(1 + (피로도−20)/60). ⚠ 게임 설정: 수치는 '공격 일변도는 손해, 피로도를 보며 골라 쓰면 이득'이 되도록 맞춘 값. */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) factory(require('./league.js'));
+  else factory(root.KBOLeague);
+})(typeof self !== 'undefined' ? self : this, function (LG) {
+  'use strict';
+  const { proto, clamp } = LG.OFFC;
+  const WEAR = { allin: { allin: 8 }, rest: { play: 3, rest: -4 }, ret: { now: 3, extra: -2 }, mood: { drill: 5, dinner: -1 }, camp: { skill: 4, fit: -8 } };
+  const DECAY = 0.6, PEN_FROM = 35, PEN_STEP = 0.07, INJ_FROM = 20, INJ_DIV = 60;
+  proto.wearDelta = function (kind, k) { return (WEAR[kind] || {})[k] || 0; };
+  proto.wear = function () { const D = this.S.dec; return D && D.wear ? D.wear : 0; };
+  proto.wearTier = function () { return Math.floor(Math.max(0, this.wear() - PEN_FROM) / 10 + (this.wear() > PEN_FROM ? 1 : 0)); };
+  proto.wearInfo = function () {
+    const w = Math.round(this.wear()), tier = this.wearTier(), inj = this._wearInj();
+    return { v: w, tier, lv: w >= 65 ? '위험' : w >= PEN_FROM ? '높음' : w >= INJ_FROM ? '보통' : '양호', pen: tier * PEN_STEP, inj: Math.round((inj - 1) * 100),
+      txt: `${tier ? `경기력 −${tier}단계` : '경기력 영향 없음'} · 부상 위험 ${inj > 1 ? '+' + Math.round((inj - 1) * 100) + '%' : '평소'}` };
+  };
+  proto._wearInj = function () { return 1 + Math.max(0, this.wear() - INJ_FROM) / INJ_DIV; };
+  proto._wearShift = function (p) { const S = this.S; if (!S.dec || p.team !== S.userTeam) return 0; return -this.wearTier() * PEN_STEP; };
+  const setW = (L, v) => { const D = L._dec(), t0 = L.wearTier(); D.wear = clamp(Math.round(v * 10) / 10, 0, 100); if (L.wearTier() !== t0) { L._engDirty = true; L.invalidate(); } };
+  proto._wearAdd = function (v) { if (v) setW(this, this.wear() + v); };
+  /* 결정 처리 뒤 피로도 반영 */
+  const _res = proto._decResolve;
+  proto._decResolve = function (e, k) { const r = _res.call(this, e, k), dv = this.wearDelta(e.data && e.data.kind, k); if (dv) { this._wearAdd(dv); if (typeof r === 'string') return `${r} (선수단 피로도 ${dv > 0 ? '+' : ''}${dv} → ${Math.round(this.wear())})`; } return r; };
+  /* 매일 회복 */
+  const _day = proto._decDay;
+  proto._decDay = function (d) { const S = this.S; if ((S.phase === 'regular' || S.phase === 'preseason') && this.wear() > 0) setW(this, this.wear() - DECAY); return _day.call(this, d); };
 });
 </script>
 <script>/* KBO 감독 모드: 협상 테이블 · 선수 면담 · 시즌 스토리 · 언론·팬 반응
@@ -9626,6 +9658,7 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
     return `<div class="card locker" style="--tc:${BADGE[t] ? BADGE[t].p : '#555'}"><div class="row"><h2 style="margin:0">라커룸</h2><span class="sp"></span>${c ? `<span class="chip ${c.v >= 58 ? 'in' : c.v <= 42 ? 'warn' : ''}">분위기 ${c.v} · ${c.tag}</span>` : ''}</div><div class="lroom"><div class="lockers"></div><div class="seats">${order.slice(0, 18).map(seat).join('')}</div></div><div class="small muted">1군 ${act.length}명 중 ${Math.min(18, order.length)}명 · 주장 C · ✨ 호조 · ⛈ 불만 · 🩹 부상 · 같은 학교·입단 동기는 붙어 앉습니다.</div></div>`;
   }
   /* 결정 효과 장부(43단계): 올해 내 결정이 만든 예상 승수 · 종류별 · 최근 결정과 결과 · 지금 걸린 효과 */
+  function wearLine() { if (!L.wearInfo) return ''; const w = L.wearInfo(); return `<div class="small" style="margin-top:6px"><b>선수단 피로도</b> <span class="chip ${w.lv === '위험' ? 'bad' : w.lv === '높음' ? 'warn' : ''}">${w.v} · ${w.lv}</span> <span class="muted">${esc(w.txt)} — 총력전·계속 기용·조기 복귀·특타로 쌓이고, 휴식·시간이 지나면 풀립니다</span></div>`; }
   function decCard() {
     if (!L.decLedger || L.S.phase === 'offseason') return '';
     const D = L.decLedger(); if (!D.list.length && !D.active.length) return `<div class="card"><h2>결정 효과</h2><div class="small muted">시즌 중 결정(총력전·전력분석·휴식·유망주 기회·분위기·복귀 시점)이 생기면 여기에 결과와 예상 승수가 쌓입니다. 같은 선택도 결과가 여러 갈래로 나뉩니다.</div></div>`;
@@ -9633,7 +9666,7 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
     const by = Object.entries(D.by).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="chip">${esc(k)} ${v > 0 ? '+' : ''}${v}</span>`).join(' ');
     const act = D.active.map(m => { const p = m.pid ? P(m.pid) : null; const who = m.who === 'pid' ? (p ? p.ko : '선수') : { all: '팀 전체', bat: '타선', pit: '투수진', bull: '불펜' }[m.who]; return m.v ? `<span class="chip ${m.v > 0 ? 'in' : 'warn'}">${esc(who)} ${m.v > 0 ? '▲' : '▼'} ~${L.dateStr(Math.min(m.d1, 143))}</span>` : (m.force ? `<span class="chip in">${esc(who)} 선발 고정 ~${L.dateStr(Math.min(m.d1, 143))}</span>` : ''); }).join(' ');
     return `<div class="card"><div class="row"><h2 style="margin:0">결정 효과</h2><span class="sp"></span><span class="small muted">올해 내 결정 예상</span>&nbsp;${sg(D.total)}</div>
-      ${by ? `<div class="small" style="margin-top:6px">${by}</div>` : ''}${act ? `<div class="small" style="margin-top:6px"><b>지금 걸린 효과</b> ${act}</div>` : ''}
+      ${wearLine()}      ${by ? `<div class="small" style="margin-top:6px">${by}</div>` : ''}${act ? `<div class="small" style="margin-top:6px"><b>지금 걸린 효과</b> ${act}</div>` : ''}
       <div style="margin-top:6px">${D.list.slice(0, 6).map(x => `<div class="stl"><span class="d">${esc(L.dateStr(Math.min(x.d, 143)))}</span><span><b>${esc(x.label)}</b> <span class="small">${esc(x.out)}</span> ${x.w ? sg(x.w) : ''}</span></div>`).join('')}</div>
       <div class="small muted" style="margin-top:6px">예상 승수는 효과 크기·기간으로 계산한 추정치입니다(⚠ 환산 근사). 같은 선택도 확률에 따라 결과가 달라집니다.</div></div>`;
   }
@@ -9837,9 +9870,10 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
   }
   /* ---------------- 시즌 중 소식(이벤트) ---------------- */
   const evIcon = { camp: '⛺', grievance: '🗣', sponsor: '🤝', promo: '🎉', board: '🏛', arc: '📖', legend: '🏅', retcer: '🎖', awards: '🏆', unrest: '⚠', grow: '🌱', presscon: '🎤', mgroffer: '💼', military: '🎖️', fanloss: '📉', allstar: '⭐', halfsum: '📋' };
+  const hintOf = (e, c) => { const dv = e.type === 'dec' && L.wearDelta ? L.wearDelta(e.data && e.data.kind, c.k) : 0; return (c.hint || '') + (dv ? `${c.hint ? ' · ' : ''}선수단 피로도 ${dv > 0 ? '+' : ''}${dv}` : ''); };   // 선수단 피로도(wear.js)
   function eventCards() {
     const open = L.eventsOpen(), warns = L.validateEntry(); if (!open.length && !warns.length) return '';
-    const rows = open.map(e => { const rec = e.rec || e.def, pid = e.data && (e.data.pid || e.data.id), ep = pid && L.S.players[pid], av = ep ? avatar(ep, 34) : ''; return `<div class="ev" data-type="${esc(e.type)}"><div class="evh">${av}<b>${evIcon[e.type] || '📢'} ${esc(e.title)}</b> <span class="muted small">${L.dateStr(e.day)} · ${e.type === 'comp' ? '직접 고를 때까지 보상이 정산되지 않습니다' : e.exp > 1e8 ? '개막 전까지 결정 · 미결정 시 변화 없음' : Math.max(0, e.exp - L.S.day) + '일 내 결정'}</span></div><div class="small" style="margin:4px 0 8px">${esc(e.text)}</div><div class="row evbtn">${e.choices.map(c => c.req ? `<button class="sm" disabled title="${esc(c.req)}">🔒 ${esc(c.label)}</button>` : `<button class="sm ${c.k === rec ? 'primary' : ''}" data-act="evChoice" data-a="${e.id}|${c.k}" title="${esc(c.hint || '')}">${c.k === rec && open.length > 1 ? '★ ' : ''}${esc(c.label)}</button>`).join('')}</div><div class="small muted" style="margin-top:4px">${e.choices.map(c => esc(c.label.replace(/ \(.*\)$/, '')) + ': ' + (c.req ? '🔒 ' + esc(c.req) : esc(c.hint || ''))).join(' / ')}</div></div>`; }).join('');
+    const rows = open.map(e => { const rec = e.rec || e.def, pid = e.data && (e.data.pid || e.data.id), ep = pid && L.S.players[pid], av = ep ? avatar(ep, 34) : ''; return `<div class="ev" data-type="${esc(e.type)}"><div class="evh">${av}<b>${evIcon[e.type] || '📢'} ${esc(e.title)}</b> <span class="muted small">${L.dateStr(e.day)} · ${e.type === 'comp' ? '직접 고를 때까지 보상이 정산되지 않습니다' : e.exp > 1e8 ? '개막 전까지 결정 · 미결정 시 변화 없음' : Math.max(0, e.exp - L.S.day) + '일 내 결정'}</span></div><div class="small" style="margin:4px 0 8px">${esc(e.text)}</div><div class="row evbtn">${e.choices.map(c => c.req ? `<button class="sm" disabled title="${esc(c.req)}">🔒 ${esc(c.label)}</button>` : `<button class="sm ${c.k === rec ? 'primary' : ''}" data-act="evChoice" data-a="${e.id}|${c.k}" title="${esc(hintOf(e, c))}">${c.k === rec && open.length > 1 ? '★ ' : ''}${esc(c.label)}</button>`).join('')}</div><div class="small muted" style="margin-top:4px">${e.choices.map(c => esc(c.label.replace(/ \(.*\)$/, '')) + ': ' + (c.req ? '🔒 ' + esc(c.req) : esc(hintOf(e, c)))).join(' / ')}</div></div>`; }).join('');
     return `<div class="card evcard"><div class="row"><h2 style="margin:0">할 일 <span class="chip warn">${open.length + (warns.length ? 1 : 0)}</span></h2><span class="sp"></span>${open.length ? '<button class="sm primary" data-act="inboxAll" title="★ 표시된 추천(없으면 기본) 선택으로 모두 처리">추천대로 모두 처리</button>' : ''}</div>${rows}${warns.length ? `<div class="ev"><b>⚠ 1군 엔트리 점검</b><div class="small neg" style="margin-top:4px">${warns.map(x => '• ' + esc(x)).join('<br>')}</div><div class="row" style="margin-top:6px"><button class="sm" data-act="go" data-a="roster">로스터에서 정리</button></div></div>` : ''}</div>`;
   }
   /* FA 보상 선택(원소속구단이 보상선수·보상금 중 선택): 고르기 전에는 경기를 진행하지 않고, 생기면 바로 선택 창을 띄운다 */
@@ -9847,7 +9881,7 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
   function compSheet() {
     const e = ui.comp ? L.compOpen().find(x => x.id === ui.comp) : null; if (!e) { ui.comp = null; return ''; }
     return `<div class="sheet-bg" data-act="compClose"><div class="sheet" data-stop="1" role="dialog" aria-label="FA 보상 선택"><div class="grabber"></div><h2>📢 ${esc(e.title)}</h2><div class="small" style="margin:4px 0 8px">${esc(e.text)}</div>
-      <div style="max-height:46vh;overflow-y:auto">${e.choices.map(c => `<button data-act="evChoice" data-a="${e.id}|${c.k}" style="width:100%;display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;min-height:52px;margin-top:6px"><b>${esc(c.label)}</b><span class="small muted">${esc(c.hint || '')}</span></button>`).join('')}</div>
+      <div style="max-height:46vh;overflow-y:auto">${e.choices.map(c => `<button data-act="evChoice" data-a="${e.id}|${c.k}" style="width:100%;display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;min-height:52px;margin-top:6px"><b>${esc(c.label)}</b><span class="small muted">${esc(hintOf(e, c))}</span></button>`).join('')}</div>
       <div class="small muted" style="margin-top:8px">고를 때까지 자동으로 처리되지 않습니다. 대시보드의 '할 일'에서도 고를 수 있습니다.</div><button style="width:100%;min-height:44px;margin-top:6px" data-act="compClose">나중에</button></div></div>`;
   }
   const evBanner = () => { const n = L.eventsOpen().length; return n ? `<div class="card evcard"><div class="row"><b>📢 결정이 필요한 소식 ${n}건</b><span class="sp"></span><button class="sm primary" data-act="go" data-a="home">대시보드에서 확인</button></div></div>` : ''; };

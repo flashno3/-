@@ -55,7 +55,7 @@
     }
     for (const t of TEAMS) for (const p of this.players(t)) {
       if (!p.active || this.isInj(p)) continue;
-      const pol = t === user ? this.policy() : null, hz = (p.type === 'B' ? 0.0030 : p.role === 'SP' ? 0.0042 : 0.0033) * (p.age >= 33 ? 1.3 : p.age <= 24 ? 0.9 : 1) * (pol ? (p.type === 'P' ? { save: 0.8, normal: 1, push: 1.3 }[pol.pitch] : { low: 0.95, normal: 1, high: 1.1 }[pol.run]) * (S.restUntil && d < S.restUntil ? 0.75 : 1) * this._trainInjFor(p) * (this.investMult ? this.investMult('med') : 1) : 1);   // 운영 방침: 투수 혹사(push)·적극 주루는 부상 위험↑
+      const pol = t === user ? this.policy() : null, hz = (t === user && this._wearInj ? this._wearInj() : 1) * (p.type === 'B' ? 0.0030 : p.role === 'SP' ? 0.0042 : 0.0033) * (p.age >= 33 ? 1.3 : p.age <= 24 ? 0.9 : 1) * (pol ? (p.type === 'P' ? { save: 0.8, normal: 1, push: 1.3 }[pol.pitch] : { low: 0.95, normal: 1, high: 1.1 }[pol.run]) * (S.restUntil && d < S.restUntil ? 0.75 : 1) * this._trainInjFor(p) * (this.investMult ? this.investMult('med') : 1) : 1);   // 운영 방침: 투수 혹사(push)·적극 주루는 부상 위험↑
       if (r.random() >= hz) continue;
       const u = r.random(), days0 = u < 0.55 ? 7 + Math.floor(r.random() * 8) : u < 0.85 ? 15 + Math.floor(r.random() * 21) : u < 0.97 ? 45 + Math.floor(r.random() * 56) : 150 + Math.floor(r.random() * 181);
       const days = t === user && this.investDur ? Math.max(1, Math.round(days0 * this.investDur())) : days0;   // 의무·재활 센터 투자: 복귀 기간 단축(투자하지 않으면 그대로)
