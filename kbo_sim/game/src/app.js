@@ -310,7 +310,7 @@
       <details style="margin-top:6px"><summary class="small">멈춤 조건 설정</summary><div class="row" style="margin-top:6px;gap:8px 14px">${[['event', '새 소식'], ['injury', '내 선수 부상'], ['deadline', '트레이드 마감 5일 전'], ['odds', '가을야구 확률 구간 변화'], ['goal', '시즌 목표 달성 여부 변화'], ['month', '월초 점검']].map(([k, l]) => `<label class="row small" style="gap:4px"><input type="checkbox" data-act="stopSet" data-a="${k}" ${L.stopOpts()[k] ? 'checked' : ''}>${l}</label>`).join('')}</div></details>
       <p class="small muted" style="margin:8px 0 0">직접 지휘를 켜면 내 경기 직전에 멈춰 타석 단위로 진행합니다. 자동 진행은 설정한 라인업·로테이션·불펜대로 경기를 처리합니다.</p></div>` : '';
     const pv = ng.length && S.phase !== 'offseason' ? previewCard(ng[0]) : '';
-    const nxt = ng.length ? `<div class="card"><h2>다음 경기</h2><div class="tablewrap"><table><tbody>${ng.map((g, i) => { const opp = g.home === U() ? g.away : g.home; return `<tr><td class="l">${L.dateStr(g.day)}</td><td class="l">${g.home === U() ? '홈' : '원정'} ${teamTag(opp)}${L.isRival(U(), opp) ? ` <span class="chip warn">${esc(L.rivalName(U(), opp))}</span>` : ''}</td><td class="l small muted">${park(g.home)}</td>${i === 0 ? `<td class="l small">선발 <b>${esc(nextSp.ko)}</b></td>` : '<td></td>'}</tr>`; }).join('')}</tbody></table></div></div>` : '';
+    const nxt = ng.length ? `<div class="card"><h2>다음 경기</h2><div class="tablewrap"><table><tbody>${ng.map((g, i) => { const opp = g.home === U() ? g.away : g.home; return `<tr><td class="l">${L.dateStr(g.day)}</td><td class="l"><span class="ha">${g.home === U() ? '홈' : '원정'}</span>${teamTag(opp)}${L.isRival(U(), opp) ? ` <span class="chip warn">${esc(L.rivalName(U(), opp))}</span>` : ''}</td><td class="l small muted">${park(g.home)}</td>${i === 0 ? `<td class="l small">선발 <b>${esc(nextSp.ko)}</b></td>` : '<td></td>'}</tr>`; }).join('')}</tbody></table></div></div>` : '';
     const kp = `<div class="kpis"><div class="kpi"><div class="l">득점 / 실점</div><div class="v">${my.rs} / ${my.ra}</div></div><div class="kpi"><div class="l">경기 진행</div><div class="v">${Math.min(S.day, 144)} / 144</div></div></div>`;
     return `${screenPhaseBanner()}${act}${extra || ''}<div class="dash"><div class="dcol">${pv}${nxt}${allStarCard()}${newsCard(news)}</div><div class="dcol">${kp}${goalCard()}${injCard()}<div class="card"><div class="row"><h2 style="margin:0">순위</h2><span class="sp"></span><button class="sm" data-act="go" data-a="standings">전체 순위·기록</button></div><div class="tablewrap"><table><tbody>${rows}</tbody></table></div></div></div></div>`;
   }
@@ -352,7 +352,7 @@
   /* 프런트 점검(화면 정리): 예전 '프런트 데스크' 탭의 처리할 일·마감·선수단 점검·계약 요약을 대시보드의 접기 카드로(긴급한 일이 있으면 펼침) */
   function deskFold() {
     if (!L.deskInfo || L.S.phase === 'offseason') return ''; const d = L.deskInfo(), urgent = d.todo.some(x => x.sev >= 3);
-    const inner = screenDesk().replace(/^\s*<div class="card">/, '').replace(/<\/div>\s*$/, '');
+    const inner = screenDesk().replace(/^\s*<div class="card">/, '<div class="deskhead">');   // 머리 카드만 일반 블록으로(닫는 태그는 그대로 두어 구조 유지)
     return `<div class="card deskfold">${foldGroup('desk', '프런트 점검', `처리할 일 ${d.todo.length}${urgent ? ' · 긴급' : ''}`, inner, urgent)}</div>`;
   }
   function screenPhaseBanner() {
@@ -570,8 +570,8 @@
   function screenSchedule() {
     const S = L.S, mine = S.results.filter(r => r.home === U() || r.away === U()).slice().reverse();
     const rows = mine.slice(0, 40).map(r => { const home = r.home === U(), opp = home ? r.away : r.home, my = home ? r.rh : r.ra, th = home ? r.ra : r.rh, w = my > th, t = my === th;
-      return `<tr><td class="l">${L.dateStr(r.day)}</td><td class="l">${home ? '홈' : '원정'} ${teamTag(opp)}</td><td class="n"><b class="${t ? '' : w ? 'pos' : 'neg'}">${t ? '무' : w ? '승' : '패'}</b> ${my}:${th}</td><td class="l small muted">${r.user ? '직접 지휘/설정 반영' : ''}</td></tr>`; }).join('');
-    const up = nextGames(10).map(g => `<tr><td class="l">${L.dateStr(g.day)}</td><td class="l">${g.home === U() ? '홈' : '원정'} ${teamTag(g.home === U() ? g.away : g.home)}</td><td class="l small muted">${park(g.home)}</td></tr>`).join('');
+      return `<tr><td class="l">${L.dateStr(r.day)}</td><td class="l"><span class="ha">${home ? '홈' : '원정'}</span>${teamTag(opp)}</td><td class="n"><b class="${t ? '' : w ? 'pos' : 'neg'}">${t ? '무' : w ? '승' : '패'}</b> ${my}:${th}</td><td class="l small muted">${r.user ? '직접 지휘/설정 반영' : ''}</td></tr>`; }).join('');
+    const up = nextGames(10).map(g => `<tr><td class="l">${L.dateStr(g.day)}</td><td class="l"><span class="ha">${g.home === U() ? '홈' : '원정'}</span>${teamTag(g.home === U() ? g.away : g.home)}</td><td class="l small muted">${park(g.home)}</td></tr>`).join('');
     return `<div class="grid"><div class="card"><h2>최근 결과</h2>${rows ? `<div class="tablewrap"><table><tbody>${rows}</tbody></table></div>` : '<p class="muted">아직 치른 경기가 없습니다.</p>'}</div><div class="card"><h2>예정 경기</h2>${up ? `<div class="tablewrap"><table><tbody>${up}</tbody></table></div>` : '<p class="muted">남은 정규시즌 경기가 없습니다.</p>'}</div></div>`;
   }
 
@@ -751,7 +751,7 @@
     const rc = last.map(wl);
     return `${chips}${aiWorldCard(t)}<div class="card"><div class="row"><h2 style="margin:0">${teamTag(t)}</h2><span class="muted small">${park(t)}${mgr ? ' · 감독 ' + esc(mgr.name) : ''}${t === U() ? ' · <b>내 팀</b>' : ''}</span></div>
       <div class="kpis" style="margin-top:10px"><div class="kpi"><div class="l">순위</div><div class="v">${S.phase === 'offseason' || x.w + x.l + x.d === 0 ? '-' : x.rank + '위'}</div></div><div class="kpi"><div class="l">성적</div><div class="v">${x.w}-${x.l}${x.d ? '-' + x.d : ''}</div><div class="small muted">승률 ${pct3(x.pct)} · 게임차 ${gb}</div></div><div class="kpi"><div class="l">득점 / 실점</div><div class="v">${x.rs} / ${x.ra}</div><div class="small muted">득실 ${sgn(x.rs - x.ra)}</div></div><div class="kpi"><div class="l">최근 10경기</div><div class="v">${l10.length ? rec10 : '-'}</div><div class="small muted">연속 ${streak}</div></div><div class="kpi"><div class="l">연봉(상위 40)</div><div class="v">${cv.pay}</div><div class="small muted">상한 ${cv.cap.toFixed(1)}억${cv.kind === 'over' ? ' · 초과' : cv.kind === 'under' ? ' · 하한 미달' : ''}</div></div><div class="kpi"><div class="l">보유</div><div class="v">${pl.length}명</div><div class="small muted">1군 ${act.length} · 외국인 ${fr.filter(p => !p.aq).length}+AQ ${fr.filter(p => p.aq).length}</div></div></div></div>
-      ${rc.length ? `<div class="card"><h2>최근 경기</h2><div class="tablewrap"><table><tbody>${last.map((g, i) => `<tr><td class="l">${L.dateStr(g.day)}</td><td class="l">${rc[i].home ? '홈' : '원정'} ${teamTag(rc[i].opp)}</td><td class="n"><b class="${rc[i].r === '승' ? 'pos' : rc[i].r === '패' ? 'neg' : ''}">${rc[i].r}</b> ${rc[i].my}:${rc[i].op}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
+      ${rc.length ? `<div class="card"><h2>최근 경기</h2><div class="tablewrap"><table><tbody>${last.map((g, i) => `<tr><td class="l">${L.dateStr(g.day)}</td><td class="l"><span class="ha">${rc[i].home ? '홈' : '원정'}</span>${teamTag(rc[i].opp)}</td><td class="n"><b class="${rc[i].r === '승' ? 'pos' : rc[i].r === '패' ? 'neg' : ''}">${rc[i].r}</b> ${rc[i].my}:${rc[i].op}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
       <div class="grid">${tbl('주요 선수 (OVR 상위)', star)}${tbl('타순', lu, t === U() ? '현재 라인업 기준' : '현재 1군 타자로 구성한 예상 라인업')}${tbl('선발 로테이션', rot)}${tbl('불펜 (마무리·승리조·중간)', pen)}</div>
       ${inj.length ? `<div class="card"><h2>부상자</h2><div class="tablewrap"><table><tbody>${inj.map(p => `<tr class="click" data-act="player" data-a="${p.id}"><td class="l"><b>${esc(p.ko)}</b> <span class="muted small">${pos(p)}</span></td><td class="l small">${esc(p.inj.dx)}</td><td class="n small">~${L.injDateStr(p)}</td></tr>`).join('')}</tbody></table></div></div>` : ''}`;
   }
@@ -1738,7 +1738,7 @@
   const snapshot = () => { const st = L.standings().find(x => x.team === U()); return { day: L.S.day, rank: st.rank, w: st.w, l: st.l, d: st.d }; };
   function resRow(g) {
     const me = U(), home = g.home === me, opp = home ? g.away : g.home, my = home ? g.rh : g.ra, th = home ? g.ra : g.rh, w = my > th, t = my === th;
-    return `<div class="gline"><span class="small muted">${L.dateStr(g.day)}</span><span>${home ? '홈' : '원정'} ${teamTag(opp)}</span><span class="res ${t ? '' : w ? 'w' : 'l'}">${t ? '무' : w ? '승' : '패'} ${my}:${th}</span></div>`;
+    return `<div class="gline"><span class="small muted">${L.dateStr(g.day)}</span><span><span class="ha">${home ? '홈' : '원정'}</span>${teamTag(opp)}</span><span class="res ${t ? '' : w ? 'w' : 'l'}">${t ? '무' : w ? '승' : '패'} ${my}:${th}</span></div>`;
   }
   function openResultSheet(before) {
     const S = L.S, st = L.standings().find(x => x.team === U()), games = S.results.filter(r => r.day >= before.day && (r.home === U() || r.away === U()));
@@ -2187,7 +2187,7 @@
     const d = L.deskInfo(), S = L.S, sev = { 3: 'bad', 2: 'warn', 1: '' };
     const todo = d.todo.length ? d.todo.map(x => `<div class="row small" style="flex-wrap:nowrap"><span class="chip ${sev[x.sev] || ''}">${x.sev >= 3 ? '긴급' : x.sev === 2 ? '중요' : '확인'}</span><span style="flex:1;min-width:0">${esc(x.text)}</span><button class="sm" data-act="${x.act}" ${x.a !== undefined ? `data-a="${esc(x.a)}"` : ''}>열기</button></div>`).join('') : '<div class="small muted">지금 처리할 일이 없습니다.</div>';
     const dl = d.deadlines.length ? d.deadlines.map(x => `<span class="chip ${x.days <= 5 ? 'warn' : ''}">${esc(x.label)} D-${Math.max(0, x.days)}</span>`).join('') : '<span class="small muted">임박한 마감이 없습니다.</span>';
-    const prow = (p, extra) => `<div class="row small" style="flex-wrap:nowrap"><button class="linkbtn" data-act="player" data-a="${p.id}"><b>${esc(p.ko)}</b></button><span class="muted">${pos(p)} · ${p.age}세</span>${ovrChip(L.ovr(p))}<span class="sp"></span><span>${extra}</span></div>`;
+    const prow = (p, extra) => `<div class="drow small"><button class="linkbtn" data-act="player" data-a="${p.id}"><b>${esc(p.ko)}</b></button><span class="muted">${pos(p)} · ${p.age}세</span>${ovrChip(L.ovr(p))}<span class="dx">${extra}</span></div>`;
     const fo = d.foreign, tiles = [['roster', '로스터'], ['lineup', '라인업'], ['pitching', '투수진'], ['train', '훈련'], ['market', '이적시장'], ['finance', '재정'], ['scout', '스카우팅'], ['story', '스토리']];
     return `<div class="card"><div class="row"><h2 style="margin:0">프런트 데스크</h2><span class="sp"></span><button class="sm" data-act="searchOpen">🔍 검색</button></div><div class="small muted" style="margin-top:4px">지금 처리할 일, 임박한 마감, 선수단·계약·재정 점검을 한 화면에서 봅니다. 읽기 전용이며 항목의 [열기]로 해당 화면에서 처리합니다.</div></div>
       <div class="card"><h2>오늘 처리할 일 <span class="chip ${d.todo.length ? 'warn' : ''}">${d.todo.length}</span></h2>${todo}<div class="chips" style="margin-top:8px">${dl}</div></div>

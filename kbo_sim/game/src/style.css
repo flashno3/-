@@ -577,3 +577,29 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
 .hero .hstats.hstats2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .pno { display: inline-block; min-width: 1.6em; margin-right: 4px; padding: 0 4px; border-radius: 4px; background: var(--surface2); color: var(--muted); font-family: var(--font-num); font-weight: 600; font-size: 12px; text-align: center; vertical-align: 1px; font-variant-numeric: tabular-nums; }
 .chip.pnochip { font-family: var(--font-num); font-weight: 700; }
+
+/* 가독성: 홈/원정 라벨은 로고·팀명과 같은 높이, 폭 고정으로 팀명 열을 맞춘다 */
+.ha { display: inline-block; min-width: 2.4em; margin-right: 4px; font-size: 12px; color: var(--muted); vertical-align: middle; }
+.ha + .team, td .team { vertical-align: middle; }
+
+/* 휴대폰 카드형 표: 라벨 위·값 아래의 고정 격자(항목이 이어 붙어 줄바꿈되며 열이 어긋나던 문제) */
+@media (max-width: 560px) {
+  .rt tr { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px 10px; align-items: start; }
+  .rt td:first-child { grid-column: 1 / -1; }
+  .rt td[data-l]:not(:first-child) { font-variant-numeric: tabular-nums; line-height: 1.25; }
+  .rt td[data-l]:not(:first-child)::before { display: block; margin: 0 0 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rt td[data-l]:not(:first-child) .small { font-size: 11px; }
+  .rt tr.sub { display: block; }
+}
+
+/* 프런트 점검(대시보드 접기): 카드 안 카드 테두리를 없애고 구획선으로만 나눈다 */
+.card.deskfold > .foldgroup > .foldbody { padding: 0 16px 14px; }
+.deskfold .foldbody .card { border: 0; box-shadow: none; background: transparent; border-radius: 0; margin: 0; padding: 12px 0; border-top: 1px solid var(--line); }
+.deskfold .foldbody > .card:first-child { border-top: 0; padding-top: 0; }
+.deskfold .foldbody .grid { gap: 0 24px; margin: 0; }
+@media (max-width: 560px) { .card.deskfold > .foldgroup > .foldbody { padding: 0 12px 12px; } }
+/* 선수 한 줄: 이름 | 포지션·나이 | OVR | 값 — 값이 화면 끝으로 멀어지지 않게 열 폭 고정 */
+.drow { display: grid; grid-template-columns: minmax(4.2em, auto) 6.6em auto minmax(0, 1fr); align-items: center; gap: 8px; padding: 3px 0; }
+.drow > .muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.drow .dx { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rt tr.me { background: var(--accent-soft); border-radius: 6px; } .rt tr.me td { background: transparent; }   /* 내 팀 행: 셀별 조각 배경 대신 행 전체 */
