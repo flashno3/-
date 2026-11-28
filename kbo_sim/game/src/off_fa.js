@@ -137,10 +137,11 @@
     const S = this.S;
     for (const aq of initial ? [false] : [false, true]) for (let k = 0; k < 4; k++) {   // 최초 상태에서는 아시아쿼터 슬롯을 비워 시장 경쟁(FA 협상 기간)에 맡긴다
       const have = this.foreignOf(t).filter(x => !!x.aq === aq).length; if (have >= (aq ? 1 : 3)) break;
-      const pool = this.faList().filter(x => x.foreign && !x.deep && !!x.aq === aq && this.foreignOK(t, x)).sort((a, b) => ((b.faInfo && b.faInfo.from === t) ? 1000 : 0) + this.war(b) - (((a.faInfo && a.faInfo.from === t) ? 1000 : 0) + this.war(a)));
+      const pool = this.faList().filter(x => x.foreign && !x.deep && !!x.aq === aq && this.foreignOK(t, x) && this.foreignSignable(x, t)).sort((a, b) => ((b.faInfo && b.faInfo.from === t) ? 1000 : 0) + this.war(b) - (((a.faInfo && a.faInfo.from === t) ? 1000 : 0) + this.war(a)));
       let cand = pool[0];
       if (!cand) { const tp = aq ? (r.random() < 0.7 ? 'P' : 'B') : (this.foreignOf(t).filter(x => !x.aq && x.type === 'P').length >= 2 ? 'B' : (this.foreignOf(t).filter(x => !x.aq && x.type === 'B').length >= 1 ? 'P' : (r.random() < 0.75 ? 'P' : 'B'))); cand = this.makeForeign(r, tp, aq); cand.team = 'FA'; (S.fa = S.fa || []).push(cand.id); }
       if (!this.foreignOK(t, cand)) break;
+      if (this.foreignCap(cand, t) < (aq ? 1 : 2)) break;   // 합산 상한 여유가 거의 없으면 채우지 않음
       const cap = this.foreignCap(cand, t), ask = Math.min(cap, Math.max(this.askSalary(cand), aq ? 2 : 6));
       this._doSign(t, cand, 1, ask); if (initial || (S.year === 2027 && S.phase === 'preseason')) cand.assumed = true;
     }

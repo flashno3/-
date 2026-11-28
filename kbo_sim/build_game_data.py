@@ -485,6 +485,19 @@ def load_career(players):
     return st
 RC=load_career(players)
 
+# 외국인 연차(현 구단 연속 시즌, 2027 기준): KBO 실제 기록의 연도별 팀으로 계산 — 합산 상한 장수 증액(재계약 1회당 10만$)의 근거
+def init_foreign_tenure(players):
+    TKR={'Eagles':{'한화'},'Twins':{'LG'},'Landers':{'SSG','SK'},'Bears':{'두산'},'Heroes':{'키움','넥센','히어로즈'},'Wiz':{'KT'},'Dinos':{'NC'},'Giants':{'롯데'},'Lions':{'삼성'},'Tigers':{'KIA'}}
+    st={'n':0,'long':[]}
+    for p in players:
+        if not p.get('foreign') or p['team'] not in TKR: continue
+        yrs={y[0]:y[1] for y in (p.get('real') or {}).get('y',[])}; n=0; y=2026
+        while yrs.get(y) in TKR[p['team']]: n+=1; y-=1
+        p['ften']=n+1; p['ftenT']=p['team']; p['ftenY']=2027; st['n']+=1
+        if n: st['long'].append((p['ko'],p['team'],n+1))
+    return st
+RF=init_foreign_tenure(players)
+
 # 2027 신인 드래프트 지명 결과(사용자 제공)
 def load_draft():
     f=D+'game/data/draft_2027.txt';out=[]
@@ -873,6 +886,7 @@ print('1군 명단(생년월일·투타): 매칭',R1['ok'],'| 나이 정정',R1[
 print('KBO 등록 현황(등번호·투타·생년월일·체격): 매칭',RG.get('ok'),'| 등번호',RG.get('no'),'| 투타',RG.get('hand'),'| 생년월일 새로',RG.get('newbirth'),'(나이 정정',RG.get('agefix'),') | 구단 다름',RG.get('moved'),'| 모호',RG.get('amb'),'| 미매칭 행',RG.get('miss'),'| 구단 다름 목록',RG.get('movedL'),'| 의심 제외',RG.get('suspect'))
 print('KBO 선수 조회 보충: 매칭',RS.get('ok'),'| 등번호',RS.get('no'),'| 번호 없음(#)',RS.get('nonum'),'| 생년월일',RS.get('birth'),'| 투타',RS.get('hand'),'| 모호',RS.get('amb'))
 print('KBO 통산 기록(정규시즌, ~2026): 선수',RC.get('ok'),'| 시즌 행',RC.get('seasons'),'| 통산 합계 불일치',RC.get('mismatch')[:8] if RC.get('mismatch') else 0)
+print('외국인 연차 초기화:',RF['n'],'명 | 2년차 이상',len(RF['long']),sorted(RF['long'],key=lambda x:-x[2])[:8])
 
 print('2027 드래프트 지명',len(DRAFT),'명')
 

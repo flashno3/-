@@ -154,10 +154,10 @@
       // 모든 비FA 계약은 1년. FA 자격자는 약 20~30%가 FA를 신청하고(가치가 높을수록 신청), 나머지는 1년 재계약. 미자격자·외국인은 구단이 재계약을 우선한다
       const decl = elig ? clamp(0.12 + 0.07 * Math.max(0, this.war(p)) - (p.age >= 36 ? 0.05 : 0), 0.08, 0.5) : 0, keepBase = p.foreign ? clamp(0.25 + (o - 40) * 0.025 - (p.age >= 34 ? 0.25 : 0), 0.08, 0.72) : 1;   // FA 자격이 없는 선수는 시장에 나갈 수 없으므로 구단이 항상 재계약(보유권)
       const keep = r.random() >= decl && r.random() < keepBase;
-      let ask = p.foreign ? this.askSalary(p) : this.resignAsk(p); if (p.foreign) ask = Math.min(ask, p.faInfo ? 1e9 : Math.max(FOREIGN_NEW[p.aq ? 'aq' : 'gen'], p.contract.salary + FOREIGN_RAISE[p.aq ? 'aq' : 'gen']));
+      let ask = p.foreign ? this.askSalary(p) : this.resignAsk(p); let fBlock = false; if (p.foreign) { const fc = this.foreignCap ? this.foreignCap(p, t) : Math.max(FOREIGN_NEW[p.aq ? 'aq' : 'gen'], p.contract.salary + FOREIGN_RAISE[p.aq ? 'aq' : 'gen']); if (ask * 0.93 > fc + 1e-9) fBlock = true; ask = Math.min(ask, fc); }   // 외국인: 합산 상한·아시아쿼터 인상 한도(foreigncap.js) — 요구가 상한을 크게 넘으면 재계약 불가
       const inc = Math.max(0, ask - this.cbtVal(p) * (S.calib.cbtK || 1)), over = inc > 0.05 && this.cbtPay(t, true) + inc > this.cbtCap() * 0.97;   // AI 구단은 상한을 넘기게 되는 증액 재계약은 하지 않는다(증액이 없으면 재계약)
       if (keep && over && !elig && !p.foreign) ask = p.contract.salary;   // 상한 때문에 증액할 수 없으면 현 연봉으로 재계약
-      if (keep && (!over || (!elig && !p.foreign))) { p.contract = this._newContract(p, ask, 1); p.salHist = (p.salHist || []).slice(-2).concat([ask]); } else { this.release(t, id, true); }
+      if (keep && !fBlock && (!over || (!elig && !p.foreign))) { p.contract = this._newContract(p, ask, 1); p.salHist = (p.salHist || []).slice(-2).concat([ask]); } else { this.release(t, id, true); }
     }
     if (this._mgrOffseason) this._mgrOffseason();   // 시즌 뒤 AI 구단 감독 교체(mgrseat.js)
     if (this._intlOffseason) this._intlOffseason();   // 11월 국제대회(프리미어12·아시안게임) — 병역 특례가 12월 입대 판단보다 먼저(intl.js)

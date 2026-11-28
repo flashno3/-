@@ -226,7 +226,7 @@
     if (kind === 'resign' && !p.foreign && this.salaryReview) { const rv = this.salaryReview(p); this._nSys(neg, `전년 연봉 ${rv.prev}억 → 요구 ${rv.ask}억(${rv.pct > 0 ? '+' : ''}${Math.round(rv.pct * 100)}%) · ${rv.reasons.join(' · ')}`); }
     if (kind === 'extend' || kind === 'resign') this._nSys(neg, tm.multi ? `${p.ko}의 희망 계약은 ${tm.pref}년 안팎입니다. 비FA 다년계약은 1~${tm.maxY}년까지 가능합니다.` : `${tm.label}입니다. FA 자격이 있거나 외국인은 1년 계약만 가능합니다.`);
     if (neg.replace) { const old = S.players[neg.replace], rc = this.releaseCost(neg.replace); this._nSys(neg, `교체 계약: 합의되면 ${old.ko}와의 계약을 해지(방출)합니다(위약금 ${rc.total}억).`, 'warn'); }
-    if (kind === 'foreign') this._nSys(neg, `외국인 연봉 상한 ${tm.cap}억(약 ${Math.round(tm.cap / (1335 / 1e8) / 1e4)}만$). 호감도가 낮아 요구액이 상한을 넘으면 계약할 수 없습니다.`);
+    if (kind === 'foreign') this._nSys(neg, `외국인 연봉 상한 ${tm.cap >= 999 ? '없음(재계약 — 합산 상한만)' : tm.cap + '억(약 ' + Math.round(tm.cap / 0.014) + '만$)'}. 호감도가 낮아 요구액이 상한을 넘으면 계약할 수 없습니다.`);
     if (bids.length) this._nSys(neg, `경쟁 구단 ${bids.length}곳이 입찰 중입니다. 협상이 길어지면 다른 구단과 계약할 수 있습니다.`, 'warn');
     return { ok: true, neg };
   };
