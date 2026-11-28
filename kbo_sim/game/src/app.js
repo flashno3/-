@@ -1121,9 +1121,17 @@
       ${lg.length ? `<div class="small" style="margin-top:8px">심의 대기: ${lg.map(x => `<b>${esc(x.name)}</b>(${x.war.toFixed(1)}${x.holds ? ', 보류 ' + x.holds : ''})`).join(' · ')}</div>` : ''}
       <h3 style="margin:10px 0 2px">현역 후보 (구단 WAR 누적)</h3>${candRows ? `<div class="tablewrap"><table><thead><tr><th class="l">선수</th><th class="n">WAR</th><th>구분</th></tr></thead><tbody>${candRows}</tbody></table></div>` : '<div class="small muted">현재 후보가 없습니다.</div>'}</div>`;
   }
+  /* 장기 계획·커리어 업적(career.js) */
+  function careerGoals() {
+    if (!L.missionProgress) return ''; const S = L.S, m = L.missionProgress(), hist = (S.misHist || []).slice().reverse(), ach = L.achvList(), got = ach.filter(a => a.done);
+    const mis = m ? `<div class="chal"><b>${esc(m.label)}</b> <span class="small muted">${m.y0}~${m.until} · ${m.left > 0 ? `${m.left}시즌 남음` : '올해가 마지막'}</span><div class="small">진행 ${m.cur} / ${m.goal}${m.done ? ' — 달성! 시즌 끝에 확정' : ''} · 달성 시 이사회 신뢰도 +${m.ok}, 실패 시 ${m.ng}</div></div>` : `<div class="small muted">진행 중인 장기 계획이 없습니다. 시즌 초에 이사회가 다년 목표를 제안합니다.</div>`;
+    const hh = hist.length ? `<div class="small" style="margin-top:6px">${hist.map(x => `<span class="chip ${x.res === 'ok' ? 'in' : x.res === 'fail' ? 'bad' : ''}">${x.y} ${esc(x.label || (L.missionDefs()[x.id] || {}).label || '')} ${x.res === 'ok' ? '달성' : x.res === 'fail' ? '실패' : '무효(구단 이동)'}</span>`).join(' ')}</div>` : '';
+    return `<div class="card"><h2>장기 계획</h2>${mis}${hh}</div>
+      <div class="card"><h2>커리어 업적 <span class="small muted">${got.length} / ${ach.length}</span></h2><div class="small muted" style="margin-bottom:6px">감독 경력 전체에 걸친 기록입니다. 업적 2개마다 감독 평판 +1(최대 +6).</div>${ach.map(a => `<div class="stl"><span class="d">${a.done ? a.y : ''}</span><span>${a.done ? '🏆' : '·'} <b${a.done ? '' : ' class="muted"'}>${esc(a.label)}</b> <span class="small muted">${esc(a.desc)}</span></span></div>`).join('')}</div>`;
+  }
   function chalPanel() {
     const S = L.S, cs = L.challenges(), done = (S.chalDone || []).slice().reverse();
-    return `<div class="card"><h2>${S.year} 시즌 도전 과제</h2><div class="small muted">시즌 목표와 별개의 기록 과제입니다(보상은 업적 기록, 경제 수치 영향 없음). 시즌 종료 시 달성이 확정됩니다.</div>${cs.map(c => `<div class="chal ${c.done ? 'done' : ''}"><div class="row"><b>${c.done ? '🏅 ' : ''}${esc(c.label)}</b><span class="sp"></span><span class="small muted">${Math.min(c.cur, c.goal)}/${c.goal}</span></div><div class="small muted">${esc(c.desc)}</div><div class="gauge ${c.done ? 'good' : 'mid'}"><span class="gbar" style="width:100%"><i style="width:${Math.min(100, Math.round(c.cur / c.goal * 100))}%"></i></span></div></div>`).join('')}</div>
+    return careerGoals() + `<div class="card"><h2>${S.year} 시즌 도전 과제</h2><div class="small muted">시즌 목표와 별개의 기록 과제입니다(보상은 업적 기록, 경제 수치 영향 없음). 시즌 종료 시 달성이 확정됩니다.</div>${cs.map(c => `<div class="chal ${c.done ? 'done' : ''}"><div class="row"><b>${c.done ? '🏅 ' : ''}${esc(c.label)}</b><span class="sp"></span><span class="small muted">${Math.min(c.cur, c.goal)}/${c.goal}</span></div><div class="small muted">${esc(c.desc)}</div><div class="gauge ${c.done ? 'good' : 'mid'}"><span class="gbar" style="width:100%"><i style="width:${Math.min(100, Math.round(c.cur / c.goal * 100))}%"></i></span></div></div>`).join('')}</div>
       <div class="card"><h2>달성 업적</h2>${done.length ? done.map(x => `<div class="stl"><span class="d">${x.y}</span><span>🏅 ${esc(x.label)}</span></div>`).join('') : '<div class="small muted">아직 달성한 업적이 없습니다.</div>'}</div>`;
   }
   /* 커리어 탭 성장 그래프: 해마다 기록한 OVR(p.ovrHist, 내 구단 선수) + 현재, 스카우트 추정 상한(점선), 성장 상한이 움직인 사건(p.devLog) 표시. 읽기 전용 */
@@ -1260,7 +1268,7 @@
     return `<div class="card"><div class="row"><h2 style="margin:0">시즌 스토리</h2><span class="sp"></span><select data-sel="storyy" aria-label="시즌">${years.map(v => `<option value="${v}" ${v === y ? 'selected' : ''}>${v}</option>`).join('')}</select></div><div class="tabs wrap" role="tablist" style="margin-top:8px">${tabs}</div></div>${body}`;
   }
   /* ---------------- 시즌 중 소식(이벤트) ---------------- */
-  const evIcon = { camp: '⛺', grievance: '🗣', sponsor: '🤝', promo: '🎉', board: '🏛', arc: '📖', legend: '🏅', retcer: '🎖', awards: '🏆', unrest: '⚠', grow: '🌱', presscon: '🎤', mgroffer: '💼', military: '🎖️', fanloss: '📉', allstar: '⭐', halfsum: '📋' };
+  const evIcon = { mission: '🧭', camp: '⛺', grievance: '🗣', sponsor: '🤝', promo: '🎉', board: '🏛', arc: '📖', legend: '🏅', retcer: '🎖', awards: '🏆', unrest: '⚠', grow: '🌱', presscon: '🎤', mgroffer: '💼', military: '🎖️', fanloss: '📉', allstar: '⭐', halfsum: '📋' };
   const hintOf = (e, c) => { const dv = e.type === 'dec' && L.wearDelta ? L.wearDelta(e.data && e.data.kind, c.k) : 0; return (c.hint || '') + (dv ? `${c.hint ? ' · ' : ''}선수단 피로도 ${dv > 0 ? '+' : ''}${dv}` : ''); };   // 선수단 피로도(wear.js)
   function eventCards() {
     const open = L.eventsOpen(), warns = L.validateEntry(); if (!open.length && !warns.length) return '';

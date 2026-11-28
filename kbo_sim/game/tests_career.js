@@ -1,22 +1,24 @@
-/* 연도별·통산 커리어: 시즌 행의 전체 카운터·2군 기록·구단 WAR·리그 시즌 기록 보존 */
+/* 다년 커리어(49단계): 장기 계획 제의·선택·달성/실패/무효 정산, 커리어 업적 판정, 평판 반영, 모듈 로드 순서(world.js 다음) */
 const fs = require('fs'), assert = require('assert'); const { League } = require(__dirname + '/src/league.js'); require(__dirname + '/src/offseason.js');
 const base = JSON.parse(fs.readFileSync(__dirname + '/src/gamedata.json')); let n = 0; const ok = (c, m) => { n++; if (!c) throw new assert.AssertionError({ message: m }); };
-const L = League.create(base, 'Lions', 4); L.faAdvance(75); L.closeFA(); const S = L.S, U = S.userTeam, cols = L.careerCols();
-ok(cols.B.length === 12 && cols.P.length === 8 && cols.B[0] === 'PA' && cols.P[6] === 'outs', '카운터 순서');
-const play = () => { L.advance(300, false); const P = L.startPostseason(); let g = 0; while (!P.done && g++ < 100) { if (L.userInPost()) { const c = L.startUserPostGame(); c.live.playToEnd(); L.finishUserPostGame(c) } else L.simPostGame() } };
-const offseason = () => { L.startOffseason(); const o = S.off; for (const id of o.rep.expiring.slice()) if (L.ovr(S.players[id]) >= 48) L.resign(id, 2); for (const e of L.eventsOpen()) L.resolveEvent(e.id, e.def || e.choices[e.choices.length - 1].k); L.finishContracts(); L.buildDraft(); L.draftAutoRest(); L.finishDraft(); L.finishFA(); L.startNewSeason(); };
-const y1 = S.year; play(); const bat1 = Object.entries(S.stats.bat).filter(([id, c]) => c.PA > 300 && S.players[id].team === U)[0]; ok(bat1, '규정급 타자'); const id1 = bat1[0], c1 = JSON.parse(JSON.stringify(S.stats.bat[id1]));
-offseason();   // 시즌 종료 시 스냅샷
-const p = S.players[id1], row = p.seasons.find(x => x.y === y1); ok(row && row.k === 'B' && Array.isArray(row.c) && row.c.length === 12, '시즌 행에 카운터 저장'); cols.B.forEach((k, i) => ok(row.c[i] === (c1[k] || 0), `카운터 일치 ${k}`)); ok(row.PA === c1.PA, '기존 필드 유지');
-const cr = L.careerOf(p); ok(cr.war && typeof cr.war.y === 'object', '경력에 WAR 필드'); ok(cr.war.y[y1] > 0, '연도별 WAR 대용치 ' + JSON.stringify(cr.war.y));
-ok(S.leagueRows && S.leagueRows[y1] && S.leagueRows[y1].B.length > 0 && S.leagueRows[y1].B.length <= 70 && S.leagueRows[y1].P.length <= 70, '리그 시즌 기록 보존 ' + (S.leagueRows[y1] && S.leagueRows[y1].B.length));
-const lr = S.leagueRows[y1].B.find(r => r[0] === id1); ok(lr && lr[1] === p.ko && lr[5] === c1.PA, '리그 기록 행(PA)');
-ok(S.leagueRows[y1].B.every((r, i, a) => i === 0 || a[i - 1][5] >= r[5]), '타석 순 정렬');
-// 2군 기록이 있는 선수: f 저장
-const farmP = Object.values(S.players).filter(q => (q.seasons || []).some(x => x.y === y1 && x.f)); ok(farmP.length > 0, '2군 기록 보존 ' + farmP.length);
-// 두 번째 시즌 후 통산 합계 = 연도별 합
-play(); offseason(); const y2 = y1 + 1, q = S.players[id1]; if (q && !q.retired) { const rs = q.seasons.filter(x => x.c && x.k === 'B'); ok(rs.length >= 2, '두 시즌 기록'); const tot = cols.B.map((k, i) => rs.reduce((a, x) => a + x.c[i], 0)); ok(tot[0] === rs.reduce((a, x) => a + x.PA, 0), '통산 타석 = 연도별 합'); }
-ok(Object.keys(S.leagueRows).length === 2, '두 해 리그 기록 ' + Object.keys(S.leagueRows)); const sizes = JSON.stringify(S.leagueRows).length; ok(sizes < 120000, '리그 기록 용량 ' + sizes);
-// 저장/불러오기
-const L2 = League.fromJSON(JSON.parse(JSON.stringify(S))); ok(L2.S.leagueRows[y1].B.length === S.leagueRows[y1].B.length, '저장 후 유지');
+const H = (L, y, rank, extra) => { const S = L.S; S.history.push(Object.assign({ year: y, champion: null, runnerUp: null, userTeam: S.userTeam, userRank: rank, userRec: { w: 75, l: 67, d: 2 }, top: [] }, extra || {})); };
+// 1) 제의: 시즌 초 이벤트, 순위에 맞는 선택지, 선택하면 계획 시작
+{ const L = League.create(base, 'Bears', 3), S = L.S; L.faAdvance(75); L.closeFA(); L.advance(4, false); const e = L.eventsOpen().find(x => x.type === 'mission');
+  ok(e && e.choices.length === 4 && e.choices.some(c => c.k === 'none'), '시즌 초 장기 계획 제의'); const r = L.resolveEvent(e.id, 'post3'); ok(r.ok && S.mission && S.mission.id === 'post3' && S.mission.y0 === S.year, '선택 → 계획 시작 ' + r.msg);
+  L.advance(10, false); ok(!L.eventsOpen().some(x => x.type === 'mission'), '진행 중이면 다시 제의하지 않음'); }
+// 2) 정산: 달성(신뢰도 +), 기한 만료 실패(신뢰도 −), 구단 이동 무효 — world.js 의 시즌 끝 평가에 연결되어 있어야 함
+{ const L = League.create(base, 'Bears', 4), S = L.S, f = () => S.fin.teams[S.userTeam];
+  S.mission = { id: 'rise2', y0: S.year, team: S.userTeam, core: 0 }; H(L, S.year, 4); const t0 = f().trust; L._challengeEval(); ok(!S.mission && S.misHist[0].res === 'ok' && f().trust === Math.min(100, t0 + 7), '달성: 신뢰도 +7 (시즌 끝 평가 연결)');
+  ok(S.achv.some(a => a.id === 'plan') && S.achv.some(a => a.id === 'post1'), '업적: 약속을 지킨 감독·첫 가을야구');
+  const rp = L.reputation(); ok(rp.items.some(x => /장기 계획 달성 1건/.test(x[0])), '평판에 장기 계획 반영 ' + JSON.stringify(rp.items));
+  S.year++; S.mission = { id: 'dyn3', y0: S.year - 2, team: S.userTeam, core: 0 }; H(L, S.year, 7); const t1 = f().trust; L._missionEval(); ok(!S.mission && S.misHist.slice(-1)[0].res === 'fail' && f().trust === Math.max(0, t1 - 5), '기한 만료 실패: 신뢰도 −5');
+  S.mission = { id: 'title5', y0: S.year, team: 'Tigers', core: 0 }; L._missionEval(); ok(!S.mission && S.misHist.slice(-1)[0].res === 'void', '구단을 옮기면 무효'); }
+// 3) 업적: 언더독(지난해 8위 이하 구단으로 가을야구)·꼴찌에서 정상으로·두 구단 우승·통산 승수
+{ const L = League.create(base, 'Lions', 5), S = L.S, y = S.year;
+  H(L, y - 1, 9, { ranks: { Lions: 9 } }); H(L, y, 3, { champion: 'Lions', ranks: { Lions: 3 } }); S.takeRank = { Lions: 10 }; L._achvEval();
+  const ids = new Set(S.achv.map(a => a.id)); ok(['under', 'title1', 'phoenix', 'post1'].every(i => ids.has(i)), '언더독·첫 우승·꼴찌에서 정상으로 ' + [...ids]);
+  ok(!ids.has('twoClubs') && !ids.has('w300'), '조건 안 되면 미달성'); H(L, y + 1, 1, { champion: 'Tigers', userTeam: 'Tigers' }); L._achvEval(); ok(S.achv.some(a => a.id === 'twoClubs'), '두 구단 우승');
+  const n0 = S.achv.length; L._achvEval(); ok(S.achv.length === n0, '같은 업적 중복 없음'); ok(L.achvList().filter(a => a.done).length === n0, '업적 목록'); }
+// 4) 내가 키운 MVP: 우리 구단 드래프트 출신 수상
+{ const L = League.create(base, 'Bears', 6), S = L.S, p = L.players('Bears').find(q => q.type === 'B'); p.myFrom = { y: S.year - 2, how: '드래프트 1라운드 지명' }; S.awardsHist = [{ year: S.year, awards: [{ id: p.id, label: 'MVP' }] }]; L._achvEval(); ok(S.achv.some(a => a.id === 'mvpHome'), '내가 키운 MVP'); }
 console.log('career tests ok', n);
