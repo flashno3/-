@@ -67,6 +67,27 @@
     if (p && p.foreign) { const ask = this.resignAsk(p), cap = this.foreignCap(p, p.team); if (ask > cap + 1e-9) return `${p.ko} 재계약 불가: 요구 ${ask}억이 외국인 상한 ${cap}억(${p.aq ? '아시아쿼터 재계약 +10만$' : '일반 외국인 합산 상한 여유'})을 넘습니다.`; }
     return _res.call(this, id);
   };
+  /* ---------------- 시장의 외국인 요구 연봉 ----------------
+   * 시장(FA·해외 후보)에 나온 외국인은 능력에 비례하되 신규 상한을 넘지 않게 요구한다(상한을 넘게 원하는 선수는 KBO 시장에 오지 않음).
+   *  일반: 4.2억(30만$) + 0.42억 × (OVR − 42), 4.2~14억 · 아시아쿼터: 1.4억 + 0.1억 × (OVR − 40), 1.0~2.8억.
+   *  구단 소속 선수의 재계약 요구는 기존 계산(성적 기반, 일반 외국인은 개인 상한 없음). ⚠ 기울기·범위는 게임 설정(2026 신규 외국인 다수가 70만~100만$, 아시아쿼터 다수가 15만~20만$) */
+  const _ask = proto.askSalary;
+  proto.askSalary = function (p) {
+    if (p && p.foreign && (p.team === 'FA' || p.team === 'DRAFT')) { const o = this.ovr(p); return p.aq ? r1(Math.min(AQ_NEW, Math.max(1.0, 1.4 + 0.1 * (o - 40)))) : r1(Math.min(NEW_GEN, Math.max(4.2, 4.2 + 0.42 * (o - 42)))); }
+    return _ask.call(this, p);
+  };
+  /* ---------------- 게임 시작 시장(2027년 1월): 해외 후보군 ----------------
+   * 시즌 중 관찰하는 해외 후보군(S.fpool)은 그 시즌이 끝난 뒤 시장에 나온다. 게임 시작 시점(2027 시즌 직전 FA 기간)에는 직전 오프시즌 후보군이
+   * 이미 시장에 있어야 하므로, 같은 규모(일반 투수 36·타자 30, 아시아쿼터 투수 28·타자 22)를 바로 시장에 낸다. AI 구단은 실제 2027 계약을 반영한 뒤
+   * 빈자리만 채우므로(이 후보들이 나오기 전) 리그 외국인 구성은 그대로. 미계약자는 2027 오프시즌 정리 때 사라진다(fpy 2026). */
+  const _initF = proto._initForeign;
+  proto._initForeign = function () {
+    const r0 = _initF.apply(this, arguments), S = this.S, r = rngFor(S.seed, S.year - 1, 7700), taken = new Set(Object.values(S.players).map(q => q.ko)); let n = 0;
+    for (const [aq, nP, nB] of [[false, 36, 30], [true, 28, 22]]) for (const [ti, k] of [['P', nP], ['B', nB]]) for (let i = 0; i < k; i++) {
+      const p = this.makeForeign(r, ti, aq, { name: this._foreignName ? this._foreignName(r, aq, taken) : undefined }); p.team = 'FA'; p.active = false; p.virtual = true; p.fpy = S.year - 1; p.startPool = true; (S.fa = S.fa || []).push(p.id); n++;
+    }
+    S.fStart = n; return r0;
+  };
   /* ---------------- 시즌 중 대체 후보군 ---------------- */
   const MID = [[5, 1, 'may'], [7, 1, 'jul']];
   proto._foreignMidDay = function (d) {

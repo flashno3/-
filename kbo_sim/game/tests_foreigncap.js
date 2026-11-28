@@ -30,4 +30,12 @@ const allOk = (L, tag) => { for (const t of Object.keys(L.S.teams)) { const c = 
   ok(moved.filter(p => p.faInfo && p.faInfo.from && p.faInfo.from !== p.team).every(p => p.ften === 1), '다른 구단에서 온 외국인은 1년째');
   ok(!Object.values(S.players).some(p => p.mid && p.team === 'FA' && p.midY < S.year), '지난해 대체 후보 미계약자 정리');
   L.faAdvance && L.faAdvance(75); L.closeFA && L.closeFA(); allOk(L, '2028 개막'); ok(!L.integrity().errors.length, '새 시즌 정합성'); }
+// 게임 시작 시장(2027년 1월): 해외 후보군이 이미 시장에 있음, 시장 외국인은 신규 상한 안에서 요구, 미계약 시작 후보는 2027 오프시즌에 정리
+{ const L = League.create(base, 'Bears', 3), S = L.S, t = S.userTeam, fa = (S.fa || []).map(id => S.players[id]).filter(p => p && p.foreign && p.team === 'FA');
+  ok(fa.length >= 150 && fa.filter(p => p.startPool).length === 116, '시작 외국인 시장 ' + fa.length + '명(해외 후보 116)');
+  ok(fa.every(p => p.aq ? L.askSalary(p) >= 1 && L.askSalary(p) <= 2.8 : L.askSalary(p) >= 4.2 && L.askSalary(p) <= 14), '시장 외국인 요구액은 신규 상한 안(일반 4.2~14억, AQ 1.0~2.8억)');
+  ok(fa.every(p => L.foreignSignable(p, t) || !L.foreignOK(t, p) || L.foreignRoom(t) < L.askSalary(p) * 0.93), '요구액 때문에 영입이 막히는 후보 없음(합산 여유 부족 제외)');
+  const o = fa.filter(p => !p.aq).map(p => L.askSalary(p)); ok(o.some(x => x === 14) && o.some(x => x < 8), '요구액이 능력에 따라 갈림');
+  ok(Object.values(S.players).filter(p => p.foreign && p.team in S.teams).every(p => !p.startPool), 'AI 구단 시작 외국인 구성은 실제 계약 기준 그대로(해외 후보 미영입)');
+  fin(L); L.startOffseason(); L.resignAll(); L.finishContracts(); ok(!(S.fa || []).some(id => S.players[id] && S.players[id].startPool), '미계약 시작 후보는 2027 오프시즌 정리'); }
 console.log('foreigncap tests ok', n);

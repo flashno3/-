@@ -90,7 +90,7 @@
   /* 2027 시작 상태: 뉴스로 계약이 확정된 외국인만 반영하고(foreign_2027.csv), 나머지 선수는 시장으로 보낸 뒤
    * 구단별 빈 슬롯을 채운다(원소속 선수 우선 → 시장 최고 → 가상 영입). 채운 선수는 `assumed`(2027 계약 미확정 가정)로 표시 */
   proto._initForeign = function () {
-    const S = this.S, r = rngFor(S.seed, 2027, 88), KRW = 1335 / 1e8, keep = new Set();
+    const S = this.S, r = rngFor(S.seed, 2027, 88), KRW = 1400 / 1e8, keep = new Set();   // 환율 1$=1,400원(외국인 상한 14억=100만$과 통일, 이전 1,335원)
     for (const c of (this._f27 || [])) {
       let p = Object.values(S.players).find(x => x.foreign && x.ko === c.name && (x.team === c.team));
       if (!p && c.status === '신규') {
