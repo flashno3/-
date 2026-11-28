@@ -10,8 +10,8 @@ const BAD = /undefined|NaN|\[object|null/;
   const news = S.lgnews.filter(x => x.cat === '라이벌'); ok(news.length === 1 && /새로운 악연/.test(news[0].head) && !BAD.test(news[0].head + news[0].body), '기사 1건');
   L._feudAdd('Wiz', -2, '선수단 진정'); L._feudAdd('Wiz', 3, '끝내기 패배'); ok(S.lgnews.filter(x => x.cat === '라이벌').length === 1, '같은 시즌 다시 넘어도 기사 중복 없음');
   // 빈볼 시비 선택
-  for (const x of L.eventsOpen().filter(x => x.type === 'feud')) L.resolveEvent(x.id, 'calm'); const e = L._feudHbpEvent('Dinos', 2); ok(e && e.choices.length === 2, '빈볼 시비 이벤트'); const h0 = L.feudHeat('Dinos'), r = L.resolveEvent(e.id, 'protest'); ok(r.ok && L.feudHeat('Dinos') === h0 + 2 && S.teamMood.v === 1, '항의: 열기 +2·컨디션 +1 ' + r.msg);
-  const e2 = L._feudHbpEvent('Dinos', 3); const r2 = L.resolveEvent(e2.id, 'calm'); ok(r2.ok && L.feudHeat('Dinos') === h0 + 1, '진정: 열기 −1');
+  for (const x of L.eventsOpen().filter(x => x.type === 'feud')) L.resolveEvent(x.id, 'calm'); delete S.feud.hbpDay; const e = L._feudHbpEvent('Dinos', 2); ok(e && e.choices.length === 2, '빈볼 시비 이벤트'); const h0 = L.feudHeat('Dinos'), r = L.resolveEvent(e.id, 'protest'); ok(r.ok && L.feudHeat('Dinos') === h0 + 2 && S.teamMood.v === 1, '항의: 열기 +2·컨디션 +1 ' + r.msg);
+  delete S.feud.hbpDay; const e2 = L._feudHbpEvent('Dinos', 3); const r2 = L.resolveEvent(e2.id, 'calm'); ok(r2.ok && L.feudHeat('Dinos') === h0 + 1, '진정: 열기 −1');
   // 라이벌전 뒤 컨디션: 60일 진행하며 KT전 결과에 따라 ±1
   let seen = 0; for (let i = 0; i < 100 && seen < 2 && S.phase === 'regular'; i++) { for (const ev of L.eventsOpen()) L.resolveEvent(ev.id, ev.def); S.teamMood = null; const r0 = S.results.length; L.advance(1, false);
     const g = S.results.slice(r0).find(x => (x.home === 'Bears' && x.away === 'Wiz') || (x.away === 'Bears' && x.home === 'Wiz')); if (!g || g.rh === g.ra) continue; const win = g.home === 'Bears' ? g.rh > g.ra : g.ra > g.rh;

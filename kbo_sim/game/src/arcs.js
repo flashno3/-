@@ -16,7 +16,7 @@
   const P = (L, id) => L.S.players[id];
   /* 최근 경기 폼 점수(화면의 ▲▼와 같은 식): 타자 OPS, 투수 RA9 기준 −3~+3 */
   proto._arcForm = function (p) {
-    const r = (this.S.recent[p.id] || []); if (!r.length) return null;
+    const r1 = p.active && this.S.recent1 ? this.S.recent1[p.id] : null, r = (r1 && r1.length ? r1 : this.S.recent[p.id]) || []; if (!r.length) return null;   // 1군 선수는 1군 기록(recent1), 2군은 2군 기록
     if (p.type === 'B') { let ab = 0, h = 0, tb = 0, bb = 0; for (const e of r) { ab += e[1]; h += e[2]; tb += e[3]; bb += e[4]; } const ops = ab + bb ? (h + bb) / (ab + bb) + (ab ? tb / ab : 0) : 0; return ab >= 15 ? clamp((ops - 0.72) * 12, -3, 3) : null; }
     let o = 0, R = 0; for (const e of r) { o += e[1]; R += e[2]; } const ra9 = o ? R * 27 / o : 0; return o >= 9 ? clamp((4.8 - ra9) * 0.8, -3, 3) : null;
   };

@@ -554,6 +554,11 @@
     _pstats() { const S = this.S; if (!S.pstats || S.pstats.y !== S.year) S.pstats = { y: S.year, bat: {}, pit: {} }; return S.pstats; }
     mergeTracking(dest) {   // dest: 기록을 더할 곳(기본 정규시즌 S.stats, 포스트시즌은 S.pstats)
       if (!this._eng) return; const tr = this._eng.tracking(), S = dest || this.S.stats;
+      if (!dest) {   // 우리 구단 1군 최근 10경기(S.recent1): 부진 이벤트·이야기의 '최근 흐름'용. S.recent 는 2군 화면용이라 섞지 않는다
+        const R1 = this.S.recent1 = this.S.recent1 || {}, u = this.S.userTeam, P = this.S.players, day = this.S.day;
+        for (const id in tr.bat) { const x = tr.bat[id], p = P[id]; if (!p || p.team !== u || !x.PA) continue; const h = (x['1B'] || 0) + (x['2B'] || 0) + (x['3B'] || 0) + (x.HR || 0), ab = x.PA - (x.BB || 0) - (x.HBP || 0) - (x.SF || 0); (R1[id] || (R1[id] = [])).push([day, ab, h, (x['1B'] || 0) + 2 * (x['2B'] || 0) + 3 * (x['3B'] || 0) + 4 * (x.HR || 0), (x.BB || 0) + (x.HBP || 0), x.HR || 0, x.PA]); if (R1[id].length > 10) R1[id].shift(); }
+        for (const id in tr.pit) { const x = tr.pit[id], p = P[id]; if (!p || p.team !== u || !x.BF) continue; (R1[id] || (R1[id] = [])).push([day, x.outs || 0, x.R || 0, x.K || 0, (x.BB || 0) + (x.HBP || 0), x.H || 0, x.BF]); if (R1[id].length > 10) R1[id].shift(); }
+      }
       for (const id in tr.bat) { const c = S.bat[id] || (S.bat[id] = {}); for (const k in tr.bat[id]) c[k] = (c[k] || 0) + tr.bat[id][k]; }
       for (const id in tr.pit) { const c = S.pit[id] || (S.pit[id] = {}); for (const k in tr.pit[id]) c[k] = (c[k] || 0) + tr.pit[id][k]; }
       this._eng.resetTracking();
@@ -578,7 +583,7 @@
       for (const p of Object.values(S.players)) p.lockUntil = 0;
       for (const t of TEAMS) { if (t !== S.userTeam) { const rp = first ? this.startPool(t) : []; this.autoActive(t, rp.length >= ACTIVE_MAX ? rp : null); this.assignUsage(t); } }
       this.repairSettings(S.userTeam);
-      S.day = 0; S.results = []; S.stats = { bat: {}, pit: {} }; S.stats2 = { bat: {}, pit: {} }; S.recent = {}; S.rec2 = {}; for (const t of this.farmTeams()) S.rec2[t] = [0, 0, 0, 0, 0]; S.post = null; S.phase = 'preseason';
+      S.day = 0; S.results = []; S.stats = { bat: {}, pit: {} }; S.stats2 = { bat: {}, pit: {} }; S.recent = {}; S.recent1 = {}; S.rec2 = {}; for (const t of this.farmTeams()) S.rec2[t] = [0, 0, 0, 0, 0]; S.post = null; S.phase = 'preseason';
       S.rec = {}; S.h2h = {}; S.h2r = {}; S.tb = null; for (const t of TEAMS) { S.rec[t] = [0, 0, 0, 0, 0]; S.h2h[t] = {}; for (const u of TEAMS) S.h2h[t][u] = [0, 0, 0]; }
       for (const id in S.players) { S.players[id].fat = 0; S.players[id].lastStart = -99; }
       S.schedule = this.makeSchedule(); S.pendingDay = null; S.userGameDone = {};

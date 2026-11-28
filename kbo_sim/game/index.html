@@ -1766,6 +1766,11 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
     _pstats() { const S = this.S; if (!S.pstats || S.pstats.y !== S.year) S.pstats = { y: S.year, bat: {}, pit: {} }; return S.pstats; }
     mergeTracking(dest) {   // dest: 기록을 더할 곳(기본 정규시즌 S.stats, 포스트시즌은 S.pstats)
       if (!this._eng) return; const tr = this._eng.tracking(), S = dest || this.S.stats;
+      if (!dest) {   // 우리 구단 1군 최근 10경기(S.recent1): 부진 이벤트·이야기의 '최근 흐름'용. S.recent 는 2군 화면용이라 섞지 않는다
+        const R1 = this.S.recent1 = this.S.recent1 || {}, u = this.S.userTeam, P = this.S.players, day = this.S.day;
+        for (const id in tr.bat) { const x = tr.bat[id], p = P[id]; if (!p || p.team !== u || !x.PA) continue; const h = (x['1B'] || 0) + (x['2B'] || 0) + (x['3B'] || 0) + (x.HR || 0), ab = x.PA - (x.BB || 0) - (x.HBP || 0) - (x.SF || 0); (R1[id] || (R1[id] = [])).push([day, ab, h, (x['1B'] || 0) + 2 * (x['2B'] || 0) + 3 * (x['3B'] || 0) + 4 * (x.HR || 0), (x.BB || 0) + (x.HBP || 0), x.HR || 0, x.PA]); if (R1[id].length > 10) R1[id].shift(); }
+        for (const id in tr.pit) { const x = tr.pit[id], p = P[id]; if (!p || p.team !== u || !x.BF) continue; (R1[id] || (R1[id] = [])).push([day, x.outs || 0, x.R || 0, x.K || 0, (x.BB || 0) + (x.HBP || 0), x.H || 0, x.BF]); if (R1[id].length > 10) R1[id].shift(); }
+      }
       for (const id in tr.bat) { const c = S.bat[id] || (S.bat[id] = {}); for (const k in tr.bat[id]) c[k] = (c[k] || 0) + tr.bat[id][k]; }
       for (const id in tr.pit) { const c = S.pit[id] || (S.pit[id] = {}); for (const k in tr.pit[id]) c[k] = (c[k] || 0) + tr.pit[id][k]; }
       this._eng.resetTracking();
@@ -1790,7 +1795,7 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
       for (const p of Object.values(S.players)) p.lockUntil = 0;
       for (const t of TEAMS) { if (t !== S.userTeam) { const rp = first ? this.startPool(t) : []; this.autoActive(t, rp.length >= ACTIVE_MAX ? rp : null); this.assignUsage(t); } }
       this.repairSettings(S.userTeam);
-      S.day = 0; S.results = []; S.stats = { bat: {}, pit: {} }; S.stats2 = { bat: {}, pit: {} }; S.recent = {}; S.rec2 = {}; for (const t of this.farmTeams()) S.rec2[t] = [0, 0, 0, 0, 0]; S.post = null; S.phase = 'preseason';
+      S.day = 0; S.results = []; S.stats = { bat: {}, pit: {} }; S.stats2 = { bat: {}, pit: {} }; S.recent = {}; S.recent1 = {}; S.rec2 = {}; for (const t of this.farmTeams()) S.rec2[t] = [0, 0, 0, 0, 0]; S.post = null; S.phase = 'preseason';
       S.rec = {}; S.h2h = {}; S.h2r = {}; S.tb = null; for (const t of TEAMS) { S.rec[t] = [0, 0, 0, 0, 0]; S.h2h[t] = {}; for (const u of TEAMS) S.h2h[t][u] = [0, 0, 0]; }
       for (const id in S.players) { S.players[id].fat = 0; S.players[id].lastStart = -99; }
       S.schedule = this.makeSchedule(); S.pendingDay = null; S.userGameDone = {};
@@ -3354,9 +3359,9 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
       if (c) { this._evAdd({ type: 'grievance', title: `${c.ko} 출전 기회 불만`, ttl: 7, data: { pid: c.id }, text: `2군에 있는 ${c.ko}(OVR ${this.ovr(c)})가 "1군 경기에 뛸 자격이 있다"며 면담을 요청했습니다. (1군 중앙값 OVR ${med})`,
         choices: [{ k: 'promote', label: '1군에 등록한다', hint: '엔트리에 여유가 있어야 합니다. 충성도 +4' }, { k: 'talk', label: '면담으로 설득한다', hint: `성공 ${Math.round(clamp(0.35 + (this.loyalty(c) ? this.loyalty(c).v : 40) / 200, 0.2, 0.85) * 100)}% — 성공 시 충성도 +1, 실패 시 −5` }, { k: 'ignore', label: '무시한다', hint: '충성도 −6' }], def: 'ignore' }); return; }
     }
-    // 2b) 부진(슬럼프): 최근 경기 성적이 나쁜 1군 선수 — 하루 3%, 같은 선수 30일 간격
-    if (!this._evOpenOf('slump') && r.random() < 0.03) {
-      const rec = new Set((E.list || []).filter(e => e.type === 'slump' && e.day > d - 30).map(e => e.data.pid)), form = p => { const x = S.recent[p.id] || []; if (p.type === 'B') { let ab = 0, h = 0; for (const e of x) { ab += e[1]; h += e[2]; } return ab >= 30 ? { bad: h / ab < 0.17 + (['free', 'shy'].includes(this.traitOf(p)) ? 0.018 : 0), txt: `최근 ${x.length}경기 타율 ${(h / ab).toFixed(3).slice(1)}`, s: h / ab } : null; } let o = 0, R = 0; for (const e of x) { o += e[1]; R += e[2]; } return o >= 18 ? { bad: R * 27 / o > 8.5, txt: `최근 ${x.length}경기 RA9 ${(R * 27 / o).toFixed(2)}`, s: -R * 27 / o } : null; };
+    // 2b) 부진(슬럼프): 최근 경기 성적이 나쁜 1군 선수(우리 구단 1군 기록 S.recent1) — 하루 6%, 같은 선수 30일 간격
+    if (!this._evOpenOf('slump') && r.random() < 0.06) {   // 측정: 3%면 시즌 0~1건(1군 기록이 없던 문제를 고친 뒤에도) → 6%
+      const rec = new Set((E.list || []).filter(e => e.type === 'slump' && e.day > d - 30).map(e => e.data.pid)), form = p => { const x = (S.recent1 || {})[p.id] || []; if (p.type === 'B') { let ab = 0, h = 0; for (const e of x) { ab += e[1]; h += e[2]; } return ab >= 30 ? { bad: h / ab < 0.17 + (['free', 'shy'].includes(this.traitOf(p)) ? 0.018 : 0), txt: `최근 ${x.length}경기 타율 ${(h / ab).toFixed(3).slice(1)}`, s: h / ab } : null; } let o = 0, R = 0; for (const e of x) { o += e[1]; R += e[2]; } return o >= 18 ? { bad: R * 27 / o > 8.5, txt: `최근 ${x.length}경기 RA9 ${(R * 27 / o).toFixed(2)}`, s: -R * 27 / o } : null; };
       const c = this.players(t).filter(p => p.active && !rec.has(p.id)).map(p => ({ p, f: form(p) })).filter(x => x.f && x.f.bad).sort((a, b) => a.f.s - b.f.s)[0];
       if (c) { const p = c.p, pr = Math.round(clamp(0.45 + 0.15 * (this.coachRating(t, p.type === 'P' ? 'control' : 'contact') - 55) / 20, 0.3, 0.75) * 100);
         this._evAdd({ type: 'slump', title: `${p.ko} 부진`, ttl: 6, data: { pid: p.id }, text: `${p.ko}(OVR ${this.ovr(p)})가 ${c.f.txt}로 부진합니다. 대응에 따라 컨디션(경기 능력치 ±)이 바뀝니다.`,
@@ -4404,7 +4409,7 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
   const P = (L, id) => L.S.players[id];
   /* 최근 경기 폼 점수(화면의 ▲▼와 같은 식): 타자 OPS, 투수 RA9 기준 −3~+3 */
   proto._arcForm = function (p) {
-    const r = (this.S.recent[p.id] || []); if (!r.length) return null;
+    const r1 = p.active && this.S.recent1 ? this.S.recent1[p.id] : null, r = (r1 && r1.length ? r1 : this.S.recent[p.id]) || []; if (!r.length) return null;   // 1군 선수는 1군 기록(recent1), 2군은 2군 기록
     if (p.type === 'B') { let ab = 0, h = 0, tb = 0, bb = 0; for (const e of r) { ab += e[1]; h += e[2]; tb += e[3]; bb += e[4]; } const ops = ab + bb ? (h + bb) / (ab + bb) + (ab ? tb / ab : 0) : 0; return ab >= 15 ? clamp((ops - 0.72) * 12, -3, 3) : null; }
     let o = 0, R = 0; for (const e of r) { o += e[1]; R += e[2]; } const ra9 = o ? R * 27 / o : 0; return o >= 9 ? clamp((4.8 - ra9) * 0.8, -3, 3) : null;
   };
@@ -8749,7 +8754,8 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
   };
   /* 빈볼 시비: 감독의 대응 선택 */
   proto._feudHbpEvent = function (opp, n) {
-    if (!this._evAdd || (this.eventsOpen() || []).some(e => e.type === 'feud')) return;
+    const M = this._feud(); if (!this._evAdd || (this.eventsOpen() || []).some(e => e.type === 'feud') || (M.hbpDay !== undefined && this.S.day - M.hbpDay < 20)) return;   // 측정: 제한 없으면 시즌 5~12건 → 20일에 한 번
+    M.hbpDay = this.S.day;
     return this._evAdd({ type: 'feud', ttl: 3, def: 'calm', rec: 'calm', data: { opp }, title: `${KO0[opp]}전 빈볼 시비`, text: `우리 타자가 몸에 맞는 공을 ${n}개 맞았습니다. 더그아웃이 술렁입니다.`,
       choices: [{ k: 'protest', label: '강하게 항의한다', hint: '팀 컨디션 +1(5일) · 30% KBO 제재금 0.1억 · 악연 +2' }, { k: 'calm', label: '선수단을 진정시킨다', hint: '변화 없음 · 악연 −1' }] });
   };
@@ -8772,7 +8778,7 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
     return ended; };
   /* 새 시즌: 열기 감소 */
   const _ns = proto.startNewSeason;
-  proto.startNewSeason = function () { const r = _ns.apply(this, arguments), F = this._feud(); for (const k in F.t) { F.t[k].v = Math.round(F.t[k].v * 0.6 * 10) / 10; if (F.t[k].v < 0.5) delete F.t[k]; } F.y = this.S.year; F.sw = {}; return r; };
+  proto.startNewSeason = function () { const r = _ns.apply(this, arguments), F = this._feud(); for (const k in F.t) { F.t[k].v = Math.round(F.t[k].v * 0.6 * 10) / 10; if (F.t[k].v < 0.5) delete F.t[k]; } F.y = this.S.year; F.sw = {}; delete F.hbpDay; return r; };
   /* 구단을 옮기면 악연은 초기화 */
   const _take = proto.takeOverTeam;
   proto.takeOverTeam = function (t) { const ok = _take.call(this, t); if (ok) this.S.feud = { y: this.S.year, t: {} }; return ok; };

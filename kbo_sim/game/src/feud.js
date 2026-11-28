@@ -41,7 +41,8 @@
   };
   /* 빈볼 시비: 감독의 대응 선택 */
   proto._feudHbpEvent = function (opp, n) {
-    if (!this._evAdd || (this.eventsOpen() || []).some(e => e.type === 'feud')) return;
+    const M = this._feud(); if (!this._evAdd || (this.eventsOpen() || []).some(e => e.type === 'feud') || (M.hbpDay !== undefined && this.S.day - M.hbpDay < 20)) return;   // 측정: 제한 없으면 시즌 5~12건 → 20일에 한 번
+    M.hbpDay = this.S.day;
     return this._evAdd({ type: 'feud', ttl: 3, def: 'calm', rec: 'calm', data: { opp }, title: `${KO0[opp]}전 빈볼 시비`, text: `우리 타자가 몸에 맞는 공을 ${n}개 맞았습니다. 더그아웃이 술렁입니다.`,
       choices: [{ k: 'protest', label: '강하게 항의한다', hint: '팀 컨디션 +1(5일) · 30% KBO 제재금 0.1억 · 악연 +2' }, { k: 'calm', label: '선수단을 진정시킨다', hint: '변화 없음 · 악연 −1' }] });
   };
@@ -64,7 +65,7 @@
     return ended; };
   /* 새 시즌: 열기 감소 */
   const _ns = proto.startNewSeason;
-  proto.startNewSeason = function () { const r = _ns.apply(this, arguments), F = this._feud(); for (const k in F.t) { F.t[k].v = Math.round(F.t[k].v * 0.6 * 10) / 10; if (F.t[k].v < 0.5) delete F.t[k]; } F.y = this.S.year; F.sw = {}; return r; };
+  proto.startNewSeason = function () { const r = _ns.apply(this, arguments), F = this._feud(); for (const k in F.t) { F.t[k].v = Math.round(F.t[k].v * 0.6 * 10) / 10; if (F.t[k].v < 0.5) delete F.t[k]; } F.y = this.S.year; F.sw = {}; delete F.hbpDay; return r; };
   /* 구단을 옮기면 악연은 초기화 */
   const _take = proto.takeOverTeam;
   proto.takeOverTeam = function (t) { const ok = _take.call(this, t); if (ok) this.S.feud = { y: this.S.year, t: {} }; return ok; };
