@@ -374,6 +374,84 @@ def load_roster1(players):
     return st
 R1=load_roster1(players)
 
+# KBO 공식 선수 등록 현황(1군·퓨처스, 2026 시즌 15개 날짜 수집): 등번호·투타·생년월일·키·몸무게
+def load_register(players):
+    import csv
+    f=D+'game/data/kbo_register_2026.csv'
+    if not os.path.exists(f): return {}
+    TMR={'한화':'Eagles','LG':'Twins','SSG':'Landers','두산':'Bears','키움':'Heroes','고양':'Heroes','KT':'Wiz','NC':'Dinos','롯데':'Giants','삼성':'Lions','KIA':'Tigers','울산':'Whales','상무':'MIL'}
+    by={}
+    for p in players: by.setdefault((p['ko'],p['type']),[]).append(p)
+    st={'ok':0,'amb':[],'miss':0,'agefix':0,'newbirth':0,'hand':0,'no':0,'moved':0}
+    rows=[r for r in csv.DictReader(l for l in open(f,encoding='utf-8-sig') if not l.startswith('#')) if r['구분'] in ('투수','포수','내야수','외야수')]   # 등록·말소 표의 코치 행 제외
+    used=set(); pend=rows; done=[]
+    def cands(r):
+        ty='P' if r['구분']=='투수' else 'B'; y=int(r['생년월일'][:4])
+        c=[p for p in by.get((r['선수명'],ty),[]) if id(p) not in used and (not p.get('birth') or p['birth']==r['생년월일'])]   # 생년월일이 이미 다른 선수 제외
+        if len(c)>1: c=[p for p in c if p.get('birth')==r['생년월일']] or c
+        if len(c)>1: c=[p for p in c if p['team']==TMR.get(r['최종구단'])] or c
+        if len(c)>1: c=[p for p in c if p['age']==2027-y] or c
+        return c
+    for _ in range(4):   # 후보가 하나로 정해지는 행부터 짝짓고, 모호한 행은 다음 회차로(동명이인 처리 순서 문제)
+        nxt=[]
+        for r in pend:
+            c=cands(r)
+            if len(c)==1: used.add(id(c[0])); done.append((r,c[0]))
+            elif len(c)>1: nxt.append(r)
+            else: st['miss']+=1
+        if len(nxt)==len(pend): break
+        pend=nxt
+    st['amb']=[(r['최종구단'],r['선수명']) for r in pend]
+    for r,p in done:
+        y=int(r['생년월일'][:4]); c=[p]
+        p=c[0]; used.add(id(p)); st['ok']+=1
+        if p['team']!=TMR.get(r['최종구단']): st['moved']+=1; st.setdefault('movedL',[]).append((r['최종구단'],r['선수명'],p['team']))
+        if r['등번호'] and not (r['최종구단']=='상무' and p['team']!='MIL'): p['no']=r['등번호']; st['no']+=1   # 문자열 그대로('02'·'00'은 '2'·'0'과 다른 번호). 상무 등번호는 원 소속 구단 번호가 아님
+        if not p.get('birth'):
+            st['newbirth']+=1
+            if p['age']!=2027-y: st['agefix']+=1
+            p['age']=2027-y; p['birth']=r['생년월일']; p.pop('ageEst',None)
+        tb=r['투타유형']
+        if len(tb)>=4 and tb[0] in '우좌':
+            p['throws']='R' if tb[0]=='우' else 'L'; p['bats']={'우':'R','좌':'L','양':'S'}.get(tb[2],p.get('bats')); st['hand']+=1
+            if tb[1]=='언': p['under']=True
+        if r['키_cm']: p['ht']=int(r['키_cm'])
+        if r['몸무게_kg']: p['wt']=int(r['몸무게_kg'])
+    return st
+RG=load_register(players)
+
+# 선수 조회(KBO 공식): 등록 현황에서 등번호를 얻지 못한 선수 보충 — 구단·투수/타자·생년월일(또는 나이 ±1)이 모두 맞을 때만
+def load_search(players):
+    import csv,re
+    f=D+'game/data/kbo_search_2026.csv'
+    if not os.path.exists(f): return {}
+    KT={'Eagles':'한화','Twins':'LG','Landers':'SSG','Bears':'두산','Heroes':'키움','Wiz':'KT','Dinos':'NC','Giants':'롯데','Lions':'삼성','Tigers':'KIA','Whales':'울산'}
+    rows=[r for r in csv.DictReader(l for l in open(f,encoding='utf-8-sig') if not l.startswith('#'))]
+    st={'ok':0,'no':0,'nonum':0,'amb':[],'hand':0,'birth':0}
+    for p in players:
+        if p.get('no') not in (None,''): continue
+        def ok(r):
+            if r['팀']!=KT.get(p['team']) and p['team']!='MIL': return False
+            if (r['포지션']=='투수')!=(p['type']=='P'): return False
+            if not re.match(r'\d{4}-\d\d-\d\d',r['생년월일']): return False
+            return p['birth']==r['생년월일'] if p.get('birth') else abs(p['age']-(2027-int(r['생년월일'][:4])))<=1
+        c=[r for r in rows if r['이름']==p['ko'] and ok(r)]
+        if len(c)!=1:
+            if len(c)>1: st['amb'].append((p['team'],p['ko']))
+            continue
+        r=c[0]; st['ok']+=1
+        if re.match(r'^\d+$',r['등번호']): p['no']=r['등번호']; st['no']+=1
+        else: st['nonum']+=1
+        if not p.get('birth'): p['birth']=r['생년월일']; p['age']=2027-int(r['생년월일'][:4]); p.pop('ageEst',None); st['birth']+=1
+        m=re.match(r'(\d+)cm,\s*(\d+)kg',r['체격'])
+        if m and not p.get('ht'): p['ht']=int(m.group(1)); p['wt']=int(m.group(2))
+        tb=r.get('투타','')
+        if len(tb)>=4 and tb[0] in '우좌' and not (p.get('bats') and p.get('throws')):
+            p['throws']='R' if tb[0]=='우' else 'L'; p['bats']={'우':'R','좌':'L','양':'S'}.get(tb[2],p.get('bats')); st['hand']+=1
+            if tb[1]=='언': p['under']=True
+    return st
+RS=load_search(players)
+
 # 2027 신인 드래프트 지명 결과(사용자 제공)
 def load_draft():
     f=D+'game/data/draft_2027.txt';out=[]
@@ -759,6 +837,8 @@ print('군 복무(상무) 반영:',sum(1 for p in players if p.get('team')=='MIL
 print('연봉 반영',SALOK,'명 | 동명이인 등으로 건너뜀',len(SALSKIP),'| 선수 데이터에 없음',len(SALMISS),'| 외국인',sum(1 for p in players if p.get('foreign')))
 
 print('1군 명단(생년월일·투타): 매칭',R1['ok'],'| 나이 정정',R1['agefix'],'| 1군 등록',R1['reg1'],'| 모호',R1['amb'],'| 미매칭',R1['miss'])
+print('KBO 등록 현황(등번호·투타·생년월일·체격): 매칭',RG.get('ok'),'| 등번호',RG.get('no'),'| 투타',RG.get('hand'),'| 생년월일 새로',RG.get('newbirth'),'(나이 정정',RG.get('agefix'),') | 구단 다름',RG.get('moved'),'| 모호',RG.get('amb'),'| 미매칭 행',RG.get('miss'),'| 구단 다름 목록',RG.get('movedL'),'| 의심 제외',RG.get('suspect'))
+print('KBO 선수 조회 보충: 매칭',RS.get('ok'),'| 등번호',RS.get('no'),'| 번호 없음(#)',RS.get('nonum'),'| 생년월일',RS.get('birth'),'| 투타',RS.get('hand'),'| 모호',RS.get('amb'))
 
 print('2027 드래프트 지명',len(DRAFT),'명')
 

@@ -575,3 +575,5 @@ svg.mascot { flex: none; animation: bob 2.4s ease-in-out infinite; } @keyframes 
 @media (max-width: 620px) { .hub2 .hb-grid { grid-template-columns: minmax(0, 1fr); } .hub2 .hb-lu { grid-row: auto; } .hub2 .hb-strip { grid-template-columns: auto minmax(0, 1fr); } .hub2 .hb-strip .hb-news { grid-column: 1 / -1; grid-row: 2; } }
 @media (prefers-reduced-motion: reduce) { .hub2 .hb-panel { transition: none; } }
 .hero .hstats.hstats2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pno { display: inline-block; min-width: 1.6em; margin-right: 4px; padding: 0 4px; border-radius: 4px; background: var(--surface2); color: var(--muted); font-family: var(--font-num); font-weight: 600; font-size: 12px; text-align: center; vertical-align: 1px; font-variant-numeric: tabular-nums; }
+.chip.pnochip { font-family: var(--font-num); font-weight: 700; }

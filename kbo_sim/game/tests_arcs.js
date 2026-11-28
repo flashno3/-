@@ -72,7 +72,7 @@ for (const kind of ['vet', 'contract', 'foreign']) {
 console.log('arcs3 ok', n);
 // ---- 이야기 엔진 2.0: 게이지·분기·잠금 선택지·기록·반응형 시작·요약 ----
 { const L = mkT(3, 'Lions'); run(L, 20); const a = L.arcStart('battery'); ok(a && a.g && a.g.trust >= 25 && a.g.trust <= 72 && a.g.tension === 35, '시작 게이지 ' + JSON.stringify(a && a.g)); run(L, 1);
-  const ev = L.eventsOpen().find(e => e.type === 'arc'); ok(ev && ev.choices.length === 4 && /리드 논쟁/.test(ev.title) && /\n/.test(ev.text), '1막 이벤트(선택지 4·대사)'); const sm = L.arcSummary().find(x => x.id === a.id); ok(sm.graph && sm.gauges.length === 2 && sm.chapter === '리드 논쟁' && sm.act === 1 && sm.steps === 5, '요약: 게이지·막 ' + JSON.stringify(sm.gauges));
+  const ev = L.eventsOpen().find(e => e.type === 'arc' && e.data.arc === a.id); ok(ev && ev.choices.length === 4 && /리드 논쟁/.test(ev.title) && /\n/.test(ev.text), '1막 이벤트(선택지 4·대사)'); const sm = L.arcSummary().find(x => x.id === a.id); ok(sm.graph && sm.gauges.length === 2 && sm.chapter === '리드 논쟁' && sm.act === 1 && sm.steps === 5, '요약: 게이지·막 ' + JSON.stringify(sm.gauges));
   const t0 = a.g.tension; L.resolveEvent(ev.id, 'wait'); ok(a.g.tension === t0 + 12 && a.stage === 'rumor' && a.hist.length === 1 && a.hist[0].c === '지켜본다', '선택 → 게이지·다음 막·기록'); }
 // 잠금 선택지: 백업 포수가 없으면 분리·번갈아 기용은 열리지 않는다
 { const L = mkT(3, 'Lions'); run(L, 20); const a = L.arcStart('battery'); run(L, 1); for (const p of L.players(L.S.userTeam)) if (p.pos === 'C' && p.id !== a.pid2) p.inj = { dx: '시험', ret: '2099-01-01', retN: 1e9, apply: true, generated: true };

@@ -45,7 +45,7 @@ ok(L.coachGrade(80)==='S'&&L.coachGrade(65)==='A'&&L.coachGrade(55)==='B'&&L.coa
  const L5=League.fromJSON(JSON.parse(L4.save()));ok(L5.coachesOf('Giants').length===L4.coachesOf('Giants').length&&L5.coachLimit()===L4.coachLimit()&&L5.S.coach.mgr.Eagles.name==='류지현','저장·불러오기 후 코치진 유지');}
 // 5) 한화 동명이인 박준영: 어린 쪽(24세)=2022 1라운드 전체 1순위, 다른 쪽=2026 육성선수
 {const a=Object.values(S.players).filter(p=>p.ko==='박준영'&&p.team==='Eagles');const y=a.find(p=>p.age===24),o=a.find(p=>p.age===25);ok(y.dh.round===1&&y.dh.pick===1&&y.dh.y===2022&&y.dh.school==='세광고','어린 박준영 = 1라운드 전체 1순위');ok(o.dh.kind==='육성선수'&&o.dh.y===2026,'다른 박준영 = 2026 육성선수');ok(y.peak!==undefined&&y.scout&&y.peak>=L.ovr(y),'정점 추정');
- ok(y.eval&&/ERA 6.06/.test(y.eval.text)&&y.role==='SP'&&y.dev.plan==='SP'&&!y.dev.auto,'박준영(03) 평가 반영: 선발 후보·육성 방향 SP');ok(y.peak>=48&&['A','B','C'].includes(L.potLetter(y)),'평가 하한: 준주전급 이상 '+y.peak);ok(!o.eval,'박준영(02)에는 평가 미적용');
+ ok(y.eval&&/ERA 6.06/.test(y.eval.text)&&y.role==='SP'&&y.dev.plan==='SP'&&!y.dev.auto,'박준영(03) 평가 반영: 선발 후보·육성 방향 SP');ok(y.peak>=48&&L.tierLabel(y.peak)!=='후보급','평가 하한: 실제 정점 준주전급 이상 '+y.peak);   // 등급 글자는 스카우트 추정(오차 포함)이라 경계 근처에서 흔들림 — 하한은 실제 정점으로 확인ok(!o.eval,'박준영(02)에는 평가 미적용');
  ok(y.inj&&y.inj.ret==='2026-12-31'&&!L.isInj(y)&&/허리/.test(y.inj.dx),'허리 부상(시즌 아웃) 이력, 개막 전 회복');
  const kk=[1,2,3,4,5,6].map(sd=>{const Lx=League.create(base,'Lions',sd),py=Object.values(Lx.S.players).find(q=>q.id===y.id);return py.peak>=48});ok(kk.every(Boolean),'시드와 무관하게 하한 유지');}
 console.log('dev tests ok',n);
