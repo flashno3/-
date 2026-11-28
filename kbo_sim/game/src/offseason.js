@@ -7,6 +7,6 @@
   if (typeof module === 'object' && module.exports) {
     factory(require('./league.js'), require('../../web/src/engine.js'));
     for (const f of ['off_common', 'off_growth', 'off_rookies', 'off_contract', 'off_draft', 'off_fa', 'off_rules', 'off_events', 'off_goals', 'off_advance', 'off_rival', 'off_season', 'off_finance', 'off_injury', 'off_salary', 'club_history','arcs','arcs2','legends','ceremony','allstar','aiworld','unrest', 'drama', 'military', 'moments', 'intl', 'decide', 'mgrseat', 'lgnews', 'clutch', 'wear']) require('./' + f + '.js');
-    require('./negotiate.js'); require('./world.js'); require('./training.js'); require('./scout.js'); require('./invest.js'); require('./career.js');   // career 는 world.js(평판·도전 과제)를 감싸므로 맨 뒤
+    require('./negotiate.js'); require('./world.js'); require('./training.js'); require('./scout.js'); require('./invest.js'); require('./career.js'); require('./feud.js');   // career 는 world.js(평판·도전 과제)를 감싸므로 맨 뒤
   } else factory(root.KBOLeague, root.KBOEngine);
 })(typeof self !== 'undefined' ? self : this, function (LG, Engine) { 'use strict'; });

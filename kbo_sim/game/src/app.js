@@ -276,7 +276,7 @@
     return `${screenPhaseBanner()}${act}${extra || ''}<div class="dash"><div class="dcol">${pv}${nxt}${allStarCard()}${newsCard(news)}</div><div class="dcol">${kp}${goalCard()}${injCard()}<div class="card"><div class="row"><h2 style="margin:0">순위</h2><span class="sp"></span><button class="sm" data-act="go" data-a="standings">전체 순위·기록</button></div><div class="tablewrap"><table><tbody>${rows}</tbody></table></div></div></div></div>`;
   }
   /* 리그 뉴스(47단계): 리그 전체 주요 사건을 기사 형식으로 — 분류 필터·우리 구단 관련·주요 기사 */
-  const NEWS_CAT = ['순위', '기록', '수상 레이스', '트레이드', 'FA', '부상', '감독', '연승·연패', '파워랭킹', '포스트시즌', '국제대회'];
+  const NEWS_CAT = ['순위', '기록', '수상 레이스', '라이벌', '트레이드', 'FA', '부상', '감독', '연승·연패', '파워랭킹', '포스트시즌', '국제대회'];
   const newsWhen = x => x.ph === 'regular' || x.ph === 'preseason' ? `${x.y} ${L.dateStr(Math.min(x.d, 143))}` : x.ph === 'offseason' ? `${x.y} 오프시즌` : x.ph && x.ph.startsWith('post') ? `${x.y} 가을야구` : `${x.y}`;
   const newsLogos = x => (x.teams || []).filter(t => t in KO).slice(0, 2).map(t => logo(t, 22)).join('');
   function newsItem(x, big) { const p = x.pid ? P(x.pid) : null; return `<div class="nitem${big ? ' big' : ''}${x.teams && x.teams.includes(U()) ? ' mine' : ''}"><div class="row small" style="gap:6px"><span class="chip ncat">${esc(x.cat)}</span><span class="muted">${esc(newsWhen(x))}</span><span class="sp"></span>${newsLogos(x)}</div><div class="nhead">${esc(x.head)}</div>${x.body ? `<div class="small nbody">${esc(x.body)}</div>` : ''}${p && p.team in KO ? `<button class="linkbtn small" data-act="player" data-a="${p.id}">${esc(p.ko)} 선수 정보</button>` : ''}</div>`; }
@@ -685,6 +685,14 @@
       <div style="margin-top:6px"><b class="small">최근 구단 간 트레이드</b>${trades.length ? trades.map(x => `<div class="small">${x.y} · ${esc(KO[x.a])} <b>${esc(x.pa.ko)}</b>(${esc(x.pa.pos)}·${x.pa.age}세) ↔ ${esc(KO[x.b])} <b>${esc(x.pb.ko)}</b>(${esc(x.pb.pos)}·${x.pb.age}세)</div>`).join('') : '<div class="small muted">아직 없습니다. 시즌 10~104일차에 우승 도전 구단과 리빌딩 구단이 선수를 맞바꿉니다.</div>'}</div>
       ${(S.unrestLog || []).filter(x => x.t !== U()).slice(0, 5).length ? `<div style="margin-top:6px"><b class="small">타 구단 선수 불만 소식</b>${(S.unrestLog || []).filter(x => x.t !== U()).slice(0, 5).map(x => `<div class="small">${x.y} · ${esc(KO[x.t] || x.t)} — ${esc(x.text)}</div>`).join('')}</div>` : ''}
       <div class="small muted" style="margin-top:6px">우승 도전 구단은 즉시 전력을, 리빌딩 구단은 젊은 선수를 택합니다. 1대1 맞교환만 하며 외국인·부상자·영구결번 후보·팀 핵심 선수는 제외됩니다(⚠ 빈도·규칙은 게임 설정).</div></div>`;
+  }
+  /* 라이벌(지역 라이벌 + 악연, feud.js) */
+  function rivalCard() {
+    if (!L.feudList) return ''; const u = U(), fixed = TEAMS.filter(x => x !== u && L.isRival(u, x) && !L.isFeud(x)), fl = L.feudList().slice(0, 6);
+    const rec = o => { const r = L.rivalRecord(o); return `${r.w}승 ${r.l}패${r.d ? ' ' + r.d + '무' : ''}`; };
+    return `<div class="card"><h2>우리 구단 라이벌</h2>${fixed.map(o => `<div class="stl"><span class="d">${teamTag(o)}</span><span><b>${esc(L.rivalName(u, o))}</b> <span class="small muted">지역 라이벌 · 올해 ${rec(o)}</span></span></div>`).join('')}
+      ${fl.map(f => `<div class="stl"><span class="d">${teamTag(f.team)}</span><span><b>${f.on ? esc(L.rivalName(u, f.team)) : '긴장 관계'}</b> <span class="chip ${f.on ? 'bad' : ''}">열기 ${f.v}${f.on ? '' : ' / 15'}</span> <span class="small muted">올해 ${rec(f.team)} · ${f.log.slice(0, 3).map(x => esc(x.why)).join(' · ')}</span></span></div>`).join('')}
+      <div class="small muted" style="margin-top:6px">빈볼 시비·끝내기 패·싹쓸이·순위 경쟁·포스트시즌 맞대결이 쌓이면 '악연' 라이벌이 됩니다(열기 15 이상). 라이벌전은 관중이 늘고, 이기면 팀 컨디션 +1, 지면 −1(3일). 새 시즌에 열기 40% 감소.</div></div>`;
   }
   function screenTeams() {
     const S = L.S, st = L.standings(), t = (ui.viewTeam && ui.viewTeam in KO ? ui.viewTeam : ((nextGames(1)[0] && (nextGames(1)[0].home === U() ? nextGames(1)[0].away : nextGames(1)[0].home)) || U())), x = st.find(r => r.team === t), top = st[0];
@@ -1268,7 +1276,7 @@
     return `<div class="card"><div class="row"><h2 style="margin:0">시즌 스토리</h2><span class="sp"></span><select data-sel="storyy" aria-label="시즌">${years.map(v => `<option value="${v}" ${v === y ? 'selected' : ''}>${v}</option>`).join('')}</select></div><div class="tabs wrap" role="tablist" style="margin-top:8px">${tabs}</div></div>${body}`;
   }
   /* ---------------- 시즌 중 소식(이벤트) ---------------- */
-  const evIcon = { mission: '🧭', camp: '⛺', grievance: '🗣', sponsor: '🤝', promo: '🎉', board: '🏛', arc: '📖', legend: '🏅', retcer: '🎖', awards: '🏆', unrest: '⚠', grow: '🌱', presscon: '🎤', mgroffer: '💼', military: '🎖️', fanloss: '📉', allstar: '⭐', halfsum: '📋' };
+  const evIcon = { mission: '🧭', feud: '🔥', camp: '⛺', grievance: '🗣', sponsor: '🤝', promo: '🎉', board: '🏛', arc: '📖', legend: '🏅', retcer: '🎖', awards: '🏆', unrest: '⚠', grow: '🌱', presscon: '🎤', mgroffer: '💼', military: '🎖️', fanloss: '📉', allstar: '⭐', halfsum: '📋' };
   const hintOf = (e, c) => { const dv = e.type === 'dec' && L.wearDelta ? L.wearDelta(e.data && e.data.kind, c.k) : 0; return (c.hint || '') + (dv ? `${c.hint ? ' · ' : ''}선수단 피로도 ${dv > 0 ? '+' : ''}${dv}` : ''); };   // 선수단 피로도(wear.js)
   function eventCards() {
     const open = L.eventsOpen(), warns = L.validateEntry(); if (!open.length && !warns.length) return '';
@@ -2250,7 +2258,7 @@
     if (ui.clutch && !ui.live) { document.body.classList.remove('modal-open'); root.innerHTML = screenClutch() + toastHtml(); window.scrollTo(0, 0); return; }   // 승부처 개입(clutch.js)
     if (ui.live) { document.body.classList.remove('modal-open'); root.innerHTML = screenLive() + toastHtml(); window.scrollTo(0, scroll); return; }   // 경기 화면에서는 이전 화면의 스크롤 잠금이 남지 않게 푼다
     if ((ui.screen === 'lineup' || ui.screen === 'pitching') && pref('seen_lineup', '') !== '1') setPref('seen_lineup', '1');   // 첫 게임 안내: 라인업 확인 단계
-    const S = ui.screen, f = { records: screenRecords, invest: () => foldCards(screenInvest(), /실제 KBO 시설 투자 현황|리그 관중 추이|규칙 가정값/, 'inv_ref', '참고 자료·가정 보기'), desk: screenDesk, home: () => (setTimeout(celebrate, 60), '') + guideCard() + officeHub() + heroCard() + screenHome(decCard() + deskFold()), roster: () => screenRoster(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => awardRaceCard() + screenStandings() + awardsCard(), teams: screenTeams, story: () => screenStory() + screenAlbum(), album: () => screenStory() + screenAlbum(), intl: screenIntl, news: screenNews, mood: () => foldCards(screenMood(), /^라커룸 분위기|^선수단 분위기|^동료 관계|^감독 커리어/, 'mood_more', '라커룸·선수단 세부'), train: screenTrain, scout: screenScout, finance: () => foldCards(cbtCard() + screenFinance(), /재정이 게임에 미치는 영향|비용 구조|재정 자료|재정 성장 가정/, 'fin_ref', '자료·가정 보기'), coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
+    const S = ui.screen, f = { records: screenRecords, invest: () => foldCards(screenInvest(), /실제 KBO 시설 투자 현황|리그 관중 추이|규칙 가정값/, 'inv_ref', '참고 자료·가정 보기'), desk: screenDesk, home: () => (setTimeout(celebrate, 60), '') + guideCard() + officeHub() + heroCard() + screenHome(decCard() + deskFold()), roster: () => screenRoster(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => awardRaceCard() + screenStandings() + awardsCard(), teams: () => rivalCard() + screenTeams(), story: () => screenStory() + screenAlbum(), album: () => screenStory() + screenAlbum(), intl: screenIntl, news: screenNews, mood: () => foldCards(screenMood(), /^라커룸 분위기|^선수단 분위기|^동료 관계|^감독 커리어/, 'mood_more', '라커룸·선수단 세부'), train: screenTrain, scout: screenScout, finance: () => foldCards(cbtCard() + screenFinance(), /재정이 게임에 미치는 영향|비용 구조|재정 자료|재정 성장 가정/, 'fin_ref', '자료·가정 보기'), coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
     document.body.classList.toggle('modal-open', !!ui.modal);
     { const c = L.compOpen().find(x => !(ui.compSeen || (ui.compSeen = {}))[x.id]); if (c && !ui.live && !ui.negOpen) { ui.compSeen[c.id] = true; ui.comp = c.id; } }   // 새 FA 보상 선택은 처음 생길 때 바로 창을 띄운다
     const keep = snapInner(root);   // 체크박스·버튼으로 다시 그려도 안쪽 스크롤 상자와 펼침 상태를 유지한다
