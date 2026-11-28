@@ -15,4 +15,11 @@ for (const [nm, team, no, b, t, birth] of [['김광현', 'Landers', '29', 'L', '
 { const a = one('박준영').filter(p => p.team === 'Eagles'); ok(a.length === 2 && a.find(p => p.age === 24).birth === '2003-03-02' && a.find(p => p.age === 25).birth === '2002-06-03', '한화 동명이인 박준영 생년월일 구분'); }
 // 게임 안에서도 유지: 저장·불러오기
 { const L = League.create(base, 'Landers', 3), L2 = League.load(L.save()); const p = Object.values(L2.S.players).find(q => q.ko === '김광현' && q.team === 'Landers'); ok(p.no === '29' && p.ht === 188, '저장·불러오기 뒤 유지'); }
+// KBO 1군 정규시즌 실제 기록(~2026): 표본 대조 · 연도별 합 = KBO 통산 행 · 2026 이후 없음
+{ const R = P.filter(p => p.real); ok(R.length >= 700, '실제 기록 보유 ' + R.length);
+  const cj = P.find(p => p.ko === '최정' && p.team === 'Landers').real, kk = P.find(p => p.ko === '김광현' && p.team === 'Landers').real;
+  ok(cj.k === 'B' && cj.t[0] === 2459 && cj.t[7] === 538 && cj.y.some(y => y[0] === 2005) && cj.y.some(y => y[0] === 2026), '최정 통산 2459경기 538홈런 ' + (cj.t && [cj.t[0], cj.t[7]]));
+  ok(kk.k === 'P' && kk.t[1] === 180 && kk.t[5] === 2321 * 3 + 2 && !kk.y.some(y => y[0] === 2026), '김광현 통산 180승 2321⅔이닝, 2026 기록 없음(시즌 전체 결장)');
+  ok(R.every(p => !p.real.t || p.real.t.slice(0, p.real.k === 'B' ? 13 : 12).every((v, i) => v === p.real.y.reduce((a, y) => a + y[2 + i], 0))), '연도별 합 = KBO 통산 행');
+  ok(R.every(p => p.real.y.every(y => y[0] >= 1982 && y[0] <= 2026)), '기록 연도 1982~2026'); }
 console.log('register tests ok', n);

@@ -69,7 +69,7 @@
   }
 
   const teamTag = t => (BADGE[t] ? `<span class="team">${logo(t, 24)}${KO[t]}</span>` : `<span class="team">${KO[t] || ''}</span>`);
-  const pct3 = x => (x >= 1 ? '1.000' : x.toFixed(3).replace(/^0/, ''));
+  const pct3 = x => (x >= 1 ? x.toFixed(3) : x.toFixed(3).replace(/^0/, ''));   // 1 이상(OPS 1.013 등)은 그대로 — 예전엔 1.000으로 잘림
   const money = x => (Math.round(x * 10) / 10).toFixed(1) + '억';
   const sgn = n => (n > 0 ? '+' + n : String(n));
   const posName = { C: '포수', '1B': '1루', '2B': '2루', '3B': '3루', SS: '유격', LF: '좌익', CF: '중견', RF: '우익', DH: '지명', SP: '선발', RP: '구원' };
