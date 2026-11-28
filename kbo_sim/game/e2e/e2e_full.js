@@ -81,7 +81,7 @@ async function run(vp,label,team){
   // 4-4) 외국인 스카우팅: KBO 기록이 없는 외국인은 능력이 불확실, 조사로 오차 감소
   await nav('운영','스카우팅');await click('button[data-act="scoutHireA"]');await nav('운영','이적시장');await click('button[data-act="mtab"][data-a="fa"]');
   for(const tab of ['aq','for']){await click(`button[data-act="fatab"][data-a="${tab}"]`);await pg.waitForTimeout(150);if(await pg.evaluate(()=>/KBO 기록이 없는 선수라 능력이 불확실/.test(document.body.innerText))){ok(true,'');await sweep('외국인 불확실 표시'+tab);const before=await pg.evaluate(()=>(document.body.innerText.match(/조사 \d+회/g)||[]).join(','));ok(await click('button[data-act="scoutFor"]'),`${label}: 외국인 조사 버튼(${tab})`);await sweep('외국인 조사 후'+tab);break}}
-  await click('button[data-act="fatab"][data-a="for"]');await pg.waitForTimeout(150);ok(await pg.evaluate(()=>/부상 대체 외국인/.test(document.body.innerText)&&/합산 상한은 56억/.test(document.body.innerText)),`${label}: 부상 대체·합산 상한 안내`);await sweep('부상 대체 카드');
+  await click('button[data-act="fatab"][data-a="for"]');await pg.waitForTimeout(150);ok(await pg.evaluate(()=>/부상 대체 외국인/.test(document.body.innerText)&&/연봉 합산 상한 \d+(\.\d)?억/.test(document.body.innerText)),`${label}: 부상 대체·합산 상한 안내`);await sweep('부상 대체 카드');
   await nav('운영','스카우팅');ok(await pg.evaluate(()=>/1차 모수/.test(document.body.innerText)&&/시장에서 빠진 선수/.test(document.body.innerText)&&/116명 중 40명 표시/.test(document.body.innerText)),`${label}: 해외 후보군 규모·1차 모수`);
   await click('button[data-act="fatab"][data-a="dom"]');
   // 4-5) 전역 검색 · 선수 비교 · 확정 전 요약 · 프런트 데스크

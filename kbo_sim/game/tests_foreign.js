@@ -18,9 +18,9 @@ const gen=(L)=>L.foreignOf(L.S.userTeam).filter(p=>!p.aq);
  L.faAdvance(75);L.closeFA();let aiDeep=0;for(const t of Object.keys(S.teams)){if(t===S.userTeam)continue;for(const p of L.foreignOf(t))if(deep.has(p.id))aiDeep++}ok(aiDeep===0,'AI 구단은 deep 후보를 영입하지 않음 '+aiDeep);}
 // 3) 합산 상한 400만$(56억): 일반 외국인 3명 합산
 {const L=mk(5),S=L.S,t=S.userTeam;const g=gen(L);ok(g.length===3,'일반 3명');for(const p of g)p.contract.salary=17;ok(L.foreignGenPay(t)===51,'합산 51');
- const cand=L.faList().find(x=>x.foreign&&!x.aq);const room=L.foreignRoom(t,g[0].id);ok(room===22,'한 명 제외 시 여유 22 '+room);
- g[0].contract.salary=14;g[1].contract.salary=20;g[2].contract.salary=18;ok(L.foreignRoom(t,g[0].id)===18&&L.foreignCap(g[0],t)<=18,'재계약 시 나머지 합산을 뺀 만큼만');
- g[1].contract.salary=30;g[2].contract.salary=30;ok(L.foreignCap(g[0],t)===0,'여유 없으면 0');
+ const cand=L.faList().find(x=>x.foreign&&!x.aq);const T=L.foreignTotalCap(t);ok(T>=56&&Math.abs(T-(56+1.4*g.reduce((a,x)=>a+L.fTenure(x,t)-1,0)))<0.05,'합산 상한 = 56억 + 장수 증액 '+T);const room=L.foreignRoom(t,g[0].id);ok(Math.abs(room-Math.round((T-34)*10)/10)<1e-9,'한 명 제외 시 여유 = 상한 − 34 '+room);
+ g[0].contract.salary=14;g[1].contract.salary=20;g[2].contract.salary=18;ok(Math.abs(L.foreignRoom(t,g[0].id)-Math.round((T-38)*10)/10)<1e-9&&L.foreignCap(g[0],t)<=T-38+1e-9,'재계약 시 나머지 합산을 뺀 만큼만');
+ g[1].contract.salary=Math.ceil(T/2);g[2].contract.salary=Math.ceil(T/2);ok(L.foreignCap(g[0],t)===0,'여유 없으면 0(나머지 둘이 합산 상한을 다 씀)');
  const ai=Object.keys(S.teams).find(x=>x!==t);const q=L.foreignOf(ai).find(x=>!x.aq);q.contract.salary=70;ok(L.foreignCap(q,ai)>0,'AI 구단에는 합산 상한을 적용하지 않음');
  const aq=L.foreignOf(t).find(x=>x.aq);if(aq)ok(L.foreignCap(aq,t)>=1.4,'아시아쿼터는 합산 대상 아님');}
 // 4) 교체 횟수 연 2회(정규시즌), 시즌 밖에는 제한 없음
