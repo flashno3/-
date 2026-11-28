@@ -21,6 +21,7 @@
     let st = this._momState(); if (S.day >= 10 && S._band === undefined) { S._band = band(this.playoffOdds(200)[t].top5); st.band = S._band; }
     while (S.day < len) {
       const before = st, r = this.playDay(live); n++;
+      if (r.status === 'clutch') return { ...r, played: n, reason: '승부처' };
       if (r.status === 'userGame') {   // 직접 지휘 모드: 내 경기마다 멈추지 않고 '중요한' 경기·접전에서만 멈춘다
         const kg = hl ? null : this._keyGame(r.game);
         if (!hl && kg) return { status: 'userGame', ...r, played: n - 1, reason: kg };

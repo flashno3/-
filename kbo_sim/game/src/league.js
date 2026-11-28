@@ -722,7 +722,9 @@
       this._applyActiveMax(); this._decayFatigue(); this._tickService(); if (this._injuryDay) this._injuryDay(d); if (this._arcDay) this._arcDay(d); if (this._allStarDay) this._allStarDay(d); if (this._aiTradeDay) this._aiTradeDay(d); if (this._unrestDay) this._unrestDay(d); if (this._growDay) this._growDay(d); if (this._clinchDay) this._clinchDay(d); if (this._pressConDay) this._pressConDay(d); if (this._milDay) this._milDay(d); if (this._intlDay) this._intlDay(d); if (this._decDayAll) this._decDayAll(d); if (this._lgNewsDay) this._lgNewsDay(d); if (this._eventDay) this._eventDay(d); if (this._finSnapDay) this._finSnapDay(d); if (this._trainDay) this._trainDay(); if (this._scoutDay) this._scoutDay(); if (this._milestoneDay) this._milestoneDay(); this.playFutures(d); this.returnMilitary(this.milYM(d));
       if (!ug) { S.day++; return { status: 'ok', day: d }; }
       if (live) { S.pendingDay = d; return { status: 'userGame', day: d, game: ug.g, idx: ug.i }; }
-      const L = this.startUserGame(ug.g, ug.i); this.playAuto(L); const res = this.finishUserGame(L);
+      const L = this.startUserGame(ug.g, ug.i);
+      if (this.clutchUI && this._clutchSpot && this.clutchOn()) { const us = L.userSide; if (!this.playAuto(L, gm => this._clutchStop(gm, us, L))) { S.pendingDay = d; S.clutchLast = d; S.clutchLastY = S.year; return { status: 'clutch', day: d, ctx: L, game: ug.g, idx: ug.i }; } }   // 승부처 개입(clutch.js): UI 진행에서만 멈춤
+      this.playAuto(L); const res = this.finishUserGame(L);
       return { status: 'ok', day: d, user: res };
     }
     /* N일 또는 시즌 끝까지. live 모드에서는 내 경기에서 멈춘다. */
@@ -730,7 +732,7 @@
       if (this.S.faMkt && this.closeFA) this.closeFA();   // 개막과 함께 FA 협상 마감
       let n = 0; const out = [];
       const evSeq = this.S.events ? this.S.events.seq : 0;
-      while (n < days && this.S.day < this.S.schedule.length) { const r = this.playDay(live); out.push(r); n++; if (r.status === 'userGame') return { status: 'userGame', ...r, played: n - 1 }; if (stopOnEvent && this.S.events && this.S.events.seq > evSeq) return { status: 'event', played: n, event: this.eventsOpen()[0] || null }; }   // 새 소식(결정 필요)이 생기면 그날 멈춘다
+      while (n < days && this.S.day < this.S.schedule.length) { const r = this.playDay(live); out.push(r); n++; if (r.status === 'userGame') return { status: 'userGame', ...r, played: n - 1 }; if (r.status === 'clutch') return { ...r, played: n }; if (stopOnEvent && this.S.events && this.S.events.seq > evSeq) return { status: 'event', played: n, event: this.eventsOpen()[0] || null }; }   // 새 소식(결정 필요)이 생기면 그날 멈춘다
       if (this.S.day >= this.S.schedule.length) { this.S.phase = 'regular_done'; return { status: 'seasonEnd', played: n }; }
       return { status: 'ok', played: n };
     }
