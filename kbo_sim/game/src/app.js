@@ -226,53 +226,48 @@
   }
   /* 감독실 허브(대시보드 맨 위): 물건을 누르면 해당 화면으로. 표시 내용은 실제 상태(1면·언론·할 일·다음 경기·순위·라인업·우승·카드) */
   const hexMix = (a, b, k) => { const p = h => { const m = /^#?([0-9a-f]{6})$/i.exec(h); return m ? parseInt(m[1], 16) : 0x888888; }, x = p(a), y = p(b), c = sh => Math.round(((x >> sh) & 255) * k + ((y >> sh) & 255) * (1 - k)); return `rgb(${c(16)},${c(8)},${c(0)})`; };
+  /* 감독실(중계 화면형): 야구장 파노라마(SVG 배경) 위에 유리 패널 — 다음 경기 · 오늘 라인업 · 우승·헤드라인·할 일. 글자는 HTML(본문 글꼴)로 */
+  function hubStadium(day, tt) {
+    const sky = day ? ['#5FA8DD', '#BFE0F4'] : ['#070C18', color(tt.deep, '#16223B', 0.22)], stand = day ? '#3E4A58' : '#0E1420', grass = day ? ['#3F9150', '#4FA65E'] : ['#1E5B2C', '#256B34'];
+    const towers = [60, 200, 340].map(x => `<rect x="${x - 0.8}" y="38" width="1.6" height="42" fill="${day ? '#6C7A89' : '#2A3446'}"/><rect x="${x - 9}" y="32" width="18" height="8" rx="1.5" fill="${day ? '#8A97A5' : '#1D2635'}"/>${[0, 1, 2, 3].map(i => `<circle cx="${x - 6 + i * 4}" cy="36" r="1.2" fill="${day ? '#EEF2F5' : '#FFF4C8'}"/>`).join('')}${day ? '' : `<circle cx="${x}" cy="36" r="34" fill="url(#hbGlow)"/><path d="M${x - 8} 40 L${x - 60} 160 L${x + 60} 160 L${x + 8} 24Z" fill="url(#hbBeam)" opacity=".5"/>`}`).join('');
+    const stripes = [0, 1, 2, 3, 4, 5].map(i => `<ellipse cx="200" cy="232" rx="${300 - i * 34}" ry="${142 - i * 16}" fill="${i % 2 ? grass[0] : grass[1]}"/>`).join('');
+    return `<svg class="hub2bg" viewBox="0 0 400 160" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <defs><linearGradient id="hbSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${sky[0]}"/><stop offset="1" stop-color="${sky[1]}"/></linearGradient>
+        <radialGradient id="hbGlow"><stop offset="0" stop-color="#FFF3C0" stop-opacity=".75"/><stop offset="1" stop-color="#FFF3C0" stop-opacity="0"/></radialGradient>
+        <linearGradient id="hbBeam" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF6D6" stop-opacity=".35"/><stop offset="1" stop-color="#FFF6D6" stop-opacity="0"/></linearGradient>
+        <linearGradient id="hbShade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#05080F" stop-opacity=".72"/><stop offset=".55" stop-color="#05080F" stop-opacity=".18"/><stop offset="1" stop-color="#05080F" stop-opacity=".6"/></linearGradient></defs>
+      <rect width="400" height="160" fill="url(#hbSky)"/>${day ? '' : '<circle cx="110" cy="12" r=".8" fill="#fff" opacity=".8"/><circle cx="285" cy="9" r=".7" fill="#fff" opacity=".7"/><circle cx="380" cy="30" r=".8" fill="#fff" opacity=".6"/>'}
+      ${towers}<path d="M0 78 Q200 50 400 78 L400 112 L0 112Z" fill="${stand}"/><path d="M0 92 Q200 66 400 92" stroke="${day ? '#55636F' : '#1A2232'}" stroke-width="1" fill="none"/><path d="M0 84 Q200 58 400 84 L400 88 Q200 62 0 88Z" fill="${tt.deep}" opacity="${day ? '.55' : '.8'}"/>
+      ${stripes}<path d="M200 98 L246 124 L200 150 L154 124Z" fill="${day ? '#B9824F' : '#8C5F38'}" opacity=".95"/><path d="M200 103 L238 124 L200 145 L162 124Z" fill="${grass[1]}"/><path d="M200 150 L120 104 M200 150 L280 104" stroke="#F4F4EE" stroke-width=".9" opacity=".75"/><circle cx="200" cy="124" r="3" fill="${day ? '#C99462' : '#9A6B42'}"/>
+      <rect width="400" height="160" fill="url(#hbShade)"/></svg>`;
+  }
+  const color = (a, b, k) => hexMix(a, b, k);
   function officeHub() {
-    if (pref('hub_off', '1') === '1') return '';   // 기본 접힘 — 팀 카드의 '감독실' 버튼으로 펼침
+    if (pref('hub_off', '0') === '1') return '';   // 접으면 팀 카드의 '감독실' 버튼으로 펼침
     const S = L.S, t = U(), tc = BADGE[t] ? BADGE[t].p : '#555', tt = teamTones(tc), st = L.standings(), my = st.find(x => x.team === t), g = my.w + my.l + my.d, dow = L.dateOf(Math.min(S.day, 143)).getUTCDay(), day = dow === 0 || dow === 6;
-    const fr = (S.front || [])[0], pr = (S.press || [])[0], head = fr ? fr.head : pr ? pr.head : `${KO[t]}, ${S.year} 시즌을 준비한다`, hl = wrapKo(head, 11).slice(0, 2);
+    const fr = (S.front || [])[0], pr = (S.press || [])[0], head = fr ? fr.head : pr ? pr.head : `${KO[t]}, ${S.year} 시즌을 준비한다`;
     const nEv = L.eventsOpen().length + (L.validateEntry ? (L.validateEntry().length ? 1 : 0) : 0), ng = S.phase === 'offseason' ? [] : nextGames(1), nx = ng[0], opp = nx ? (nx.home === t ? nx.away : nx.home) : null;
-    const lu = (L.team(t).set.lineup || []).slice(0, 5).map((x, i) => ({ n: i + 1, nm: (P(x.id) || {}).ko || '', pos: x.pos })), titles = (S.history || []).filter(h => h.userTeam === t && h.champion === t).length, cards = (S.cards || []).length;
-    const mon = S.phase === 'offseason' ? ['오프시즌', '계약 · 드래프트 · FA'] : nx ? [`다음 경기 ${L.dateStr(nx.day)}`, `${nx.home === t ? 'vs' : '@'} ${KO[opp]}`] : ['시즌 종료', ''];
-    /* 장면(360×176): 벽·창밖 야구장(낮/밤) · 팀 페넌트 · 트로피 선반 · 라인업 보드 · 책상 위 모니터·신문·머그·휴대폰. 팀 색은 소품에만 */
-    const sky = day ? ['#8CC8F0', '#DDF0FB'] : ['#0B1633', '#22365E'], lamp = day ? '#F4F1E6' : '#FFF3C4';
-    const cup = (x, on) => on ? `<g transform="translate(${x} 62)"><path d="M3 0h18v7a9 9 0 0 1-18 0z" fill="url(#hGold)"/><path d="M3 2H0v3a5 5 0 0 0 4 5M21 2h3v3a5 5 0 0 1-4 5" fill="none" stroke="#C9962C" stroke-width="1.6"/><rect x="10" y="16" width="4" height="4" fill="#C9962C"/><rect x="6" y="20" width="12" height="4" rx="1" fill="#7A5A2E"/></g>`
-      : `<g transform="translate(${x} 62)" fill="#C7CFD7"><path d="M3 0h18v7a9 9 0 0 1-18 0z"/><rect x="10" y="16" width="4" height="4"/><rect x="6" y="20" width="12" height="4" rx="1"/></g>`;
-    const trophies = [0, 1, 2].map(i => cup(22 + i * 26, i < titles)).join('');
-    return `<div class="card hub"><svg class="hubsvg" viewBox="0 0 360 176" role="group" aria-label="감독실">
-      <defs><linearGradient id="hWall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E9EDF1"/><stop offset="1" stop-color="#D5DCE3"/></linearGradient>
-        <linearGradient id="hSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${sky[0]}"/><stop offset="1" stop-color="${sky[1]}"/></linearGradient>
-        <linearGradient id="hDesk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9C7652"/><stop offset="1" stop-color="#7D5B3D"/></linearGradient>
-        <linearGradient id="hGold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F8DE85"/><stop offset="1" stop-color="#C9962C"/></linearGradient>
-        <radialGradient id="hGlow"><stop offset="0" stop-color="#FFF6C8" stop-opacity=".9"/><stop offset="1" stop-color="#FFF6C8" stop-opacity="0"/></radialGradient>
-        <clipPath id="hWin"><rect x="116" y="10" width="118" height="70" rx="3"/></clipPath>
-        <filter id="hSh" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="2" stdDeviation="1.6" flood-color="#1B2430" flood-opacity=".22"/></filter></defs>
-      <rect width="360" height="176" fill="url(#hWall)"/><rect y="104" width="360" height="1" fill="#C3CBD3"/>
-      <g class="hs" data-act="go" data-a="album" role="button" tabindex="0" aria-label="페넌트·트로피 선반 — 앨범">
-        <rect x="16" y="13" width="2" height="34" fill="#8A939C"/><path d="M18 14 L78 24 L18 36Z" fill="${tt.deep}" filter="url(#hSh)"/><text x="24" y="28" font-size="8.5" font-weight="800" fill="#fff" letter-spacing=".5">${esc(KO[t])}</text>
-        ${trophies}<rect x="14" y="86" width="84" height="5" rx="1.5" fill="#8E6B49" filter="url(#hSh)"/><text x="56" y="101" text-anchor="middle" font-size="8" fill="#5B6670">우승 ${titles}회 · 카드 ${cards}장</text></g>
-      <g filter="url(#hSh)"><rect x="112" y="6" width="126" height="78" rx="5" fill="#3B4652"/></g>
-      <g clip-path="url(#hWin)"><rect x="116" y="10" width="118" height="70" fill="url(#hSky)"/>${day ? '' : '<circle cx="140" cy="16" r=".8" fill="#fff"/><circle cx="160" cy="28" r=".7" fill="#fff"/><circle cx="206" cy="14" r=".8" fill="#fff"/>'}
-        <path d="M116 50 Q175 36 234 50 L234 80 L116 80Z" fill="${day ? '#55626F' : '#1A2333'}"/>
-        ${[128, 222].map(x => `<rect x="${x}" y="22" width="1.6" height="28" fill="${day ? '#7B8794' : '#3A4658'}"/><rect x="${x - 6}" y="18" width="13.6" height="6" rx="1" fill="${day ? '#9AA6B2' : '#2C3647'}"/>${[0, 1, 2, 3].map(i => `<circle cx="${x - 3.5 + i * 3.5}" cy="21" r="1.1" fill="${lamp}"/>`).join('')}${day ? '' : `<circle cx="${x + 0.8}" cy="21" r="14" fill="url(#hGlow)"/>`}`).join('')}
-        <ellipse cx="175" cy="86" rx="80" ry="27" fill="${day ? '#4FA65A' : '#2F7A3D'}"/><path d="M175 61 L192 70 L175 79 L158 70Z" fill="${day ? '#C9925A' : '#9E6E42'}"/><path d="M175 64 L188 70 L175 76 L162 70Z" fill="${day ? '#4FA65A' : '#2F7A3D'}"/></g>
-      <rect x="174" y="10" width="2" height="70" fill="#3B4652"/><rect x="116" y="44" width="118" height="2" fill="#3B4652"/><rect x="108" y="82" width="134" height="5" rx="1.5" fill="#B8C1CA"/>
-      <g class="hs" data-act="go" data-a="lineup" role="button" tabindex="0" aria-label="라인업 보드 — 라인업"><g filter="url(#hSh)"><rect x="252" y="10" width="94" height="88" rx="4" fill="#B9C2CB"/><rect x="255" y="13" width="88" height="82" rx="2" fill="#FBFCFD"/></g>
-        <rect x="255" y="13" width="88" height="14" rx="2" fill="${tt.deep}"/><text x="261" y="23" font-size="8.5" font-weight="800" fill="#fff">오늘 라인업</text>
-        ${lu.map((l, i) => `<text x="261" y="${39 + i * 12}" font-size="8.6" fill="#1F2A36"><tspan font-weight="800" fill="${tt.deep}">${l.n}</tspan>  ${esc(shortNm(l.nm))}</text><text x="337" y="${39 + i * 12}" text-anchor="end" font-size="7.4" fill="#6B7682">${esc(l.pos || '')}</text>`).join('')}</g>
-      <rect y="118" width="360" height="30" fill="url(#hDesk)"/><rect y="118" width="360" height="2" fill="#B08A64"/><rect y="148" width="360" height="28" fill="#5F4430"/><rect y="148" width="360" height="2" fill="#4A3424"/><rect x="40" y="156" width="110" height="16" rx="2" fill="none" stroke="#4E3726" stroke-width="1"/><rect x="210" y="156" width="110" height="16" rx="2" fill="none" stroke="#4E3726" stroke-width="1"/><rect x="85" y="162.5" width="20" height="3" rx="1.5" fill="#B9A07E"/><rect x="255" y="162.5" width="20" height="3" rx="1.5" fill="#B9A07E"/>
-      <g class="hs" data-act="go" data-a="schedule" role="button" tabindex="0" aria-label="모니터 — 일정"><g filter="url(#hSh)"><rect x="142" y="90" width="82" height="34" rx="3" fill="#1C222B"/></g><rect x="145" y="93" width="76" height="28" rx="2" fill="#0E1726"/><rect x="145" y="93" width="76" height="2.4" fill="${tt.hi}"/>
-        <text x="183" y="102" text-anchor="middle" font-size="6.4" fill="#9FB4CC">${esc(mon[0])}</text><text x="183" y="111.5" text-anchor="middle" font-size="8.6" font-weight="800" fill="#fff">${esc(mon[1])}</text><text x="183" y="119" text-anchor="middle" font-size="5.8" fill="#9FB4CC">${g ? `${my.rank}위 · ${my.w}승 ${my.l}패` : S.year + ' 시즌'}</text>
-        <rect x="179" y="124" width="8" height="5" fill="#2A313B"/><rect x="170" y="128" width="26" height="2.6" rx="1.3" fill="#2A313B"/></g>
-      <g class="hs" data-act="go" data-a="album" role="button" tabindex="0" aria-label="신문 — 앨범"><g transform="rotate(-4 66 132)" filter="url(#hSh)"><rect x="26" y="121" width="84" height="25" fill="#F7F4EC"/><rect x="26" y="121" width="84" height="6" fill="#1D232B"/><text x="29" y="125.6" font-size="4.6" font-weight="800" fill="#fff" letter-spacing=".4">다이아몬드 스포츠</text>
-        ${hl.map((l, i) => `<text x="29" y="${134 + i * 7.6}" font-size="6.6" font-weight="900" fill="#14181D">${esc(l)}</text>`).join('')}</g></g>
-      <g filter="url(#hSh)"><path d="M240 124h14v14a3 3 0 0 1-3 3h-8a3 3 0 0 1-3-3z" fill="${tt.deep}"/><path d="M254 127a4 4 0 0 1 0 8" fill="none" stroke="${tt.deep}" stroke-width="2"/></g><path d="M244.5 121c-1.5-2 1.5-3 0-5M249 121c-1.5-2 1.5-3 0-5" stroke="#AAB4BE" stroke-width=".9" fill="none" stroke-linecap="round" opacity=".7"/>
-      <g class="hs ${nEv ? 'ring' : ''}" data-act="hubEv" role="button" tabindex="0" aria-label="휴대폰 — 처리할 일 ${nEv}건"><g filter="url(#hSh)"><path d="M292 140 l-6 6 h30 l-6 -6z" fill="#3A424D"/><rect x="291" y="104" width="22" height="38" rx="4" fill="#1B2028"/><rect x="293" y="108" width="18" height="30" rx="2" fill="${nEv ? '#22344F' : '#141A22'}"/><circle cx="302" cy="106" r=".8" fill="#4A5462"/>${nEv ? `<rect x="295" y="113" width="14" height="5" rx="1.5" fill="#E8EEF6"/><rect x="295" y="120" width="14" height="5" rx="1.5" fill="#B8C6D8"/>` : '<rect x="296" y="112" width="5" height="10" rx="1" fill="#2A3340" transform="rotate(25 298 117)"/>'}</g>
-        ${nEv ? `<circle cx="313" cy="104" r="6.5" fill="#E03131" stroke="#fff" stroke-width="1.5"/><text x="313" y="107" text-anchor="middle" font-size="8" font-weight="900" fill="#fff">${nEv}</text>` : ''}</g>
-    </svg><div class="row small"><span class="muted">${nEv ? `처리할 일 ${nEv}건 — 휴대폰을 누르세요` : '감독실 — 물건을 누르면 해당 화면으로 갑니다'}</span><span class="sp"></span><button class="sm" data-act="hubTog">접기</button></div></div>`;
+    const lu = (L.team(t).set.lineup || []).slice(0, 9).map((x, i) => ({ n: i + 1, nm: (P(x.id) || {}).ko || '', pos: x.pos, id: x.id })), titles = (S.history || []).filter(h => h.userTeam === t && h.champion === t).length, cards = (S.cards || []).length;
+    const rot = S.teams[t].set.rotation, sp = rot && rot.length ? P(rot[S.teams[t].set.rotIdx % rot.length]) : null;
+    const next = S.phase === 'offseason' ? `<span class="hb-eye">오프시즌</span><b class="hb-big">계약 · 드래프트 · FA</b>` : nx ? `<span class="hb-eye">다음 경기 · ${L.dateStr(nx.day)} ${nx.home === t ? '홈' : '원정'}</span><b class="hb-big">${nx.home === t ? 'vs' : '@'} ${KO[opp]}</b><span class="hb-sub">${esc(park(nx.home))}${sp ? ` · 선발 ${esc(sp.ko)}` : ''}</span>` : `<span class="hb-eye">시즌 종료</span><b class="hb-big">${my.rank}위</b>`;
+    const rec = g ? `<span class="hb-rec"><b>${my.rank}</b>위 <i>${my.w}-${my.l}${my.d ? '-' + my.d : ''}</i></span>` : faOpen() && L.faDaysLeft ? `<span class="hb-rec">개막 <b>D-${L.faDaysLeft()}</b></span>` : `<span class="hb-rec"><i>${S.year} 시즌</i></span>`;
+    const trophy = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M7 3h10v5a5 5 0 0 1-10 0z M7 5H4v2a4 4 0 0 0 4 4 M17 5h3v2a4 4 0 0 1-4 4 M11 13h2v4h-2z M8 17h8v3H8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
+    return `<div class="card hub2 ${day ? 'day' : 'night'}" style="--hb-acc:${tt.hi}">${hubStadium(day, tt)}
+      <div class="hb-top"><span class="hb-title"><i style="background:${tt.hi}"></i>감독실</span><span class="hb-when">${day ? '주말 낮 경기' : '평일 밤 경기'}</span><button class="hb-close" data-act="hubTog" aria-label="감독실 접기">접기</button></div>
+      <div class="hb-grid">
+        <button class="hb-panel hb-next" data-act="go" data-a="schedule">${next}${rec}</button>
+        <button class="hb-panel hb-lu" data-act="go" data-a="lineup"><span class="hb-eye">오늘 라인업</span><ol>${lu.map(l => `<li><i>${l.n}</i><span>${esc(l.nm)}</span><em>${esc(l.pos || '')}</em></li>`).join('')}</ol></button>
+        <div class="hb-strip">
+          <button class="hb-panel hb-chip" data-act="go" data-a="album">${trophy}<span>우승 <b>${titles}</b></span><span class="hb-dim">카드 ${cards}장</span></button>
+          <button class="hb-panel hb-news" data-act="go" data-a="album"><span class="hb-mast">다이아몬드 스포츠</span><span class="hb-head">${esc(head)}</span></button>
+          <button class="hb-panel hb-chip ${nEv ? 'hb-alert' : ''}" data-act="hubEv">${nEv ? `<b class="hb-badge">${nEv}</b><span>처리할 일</span>` : '<span>처리할 일 없음</span>'}</button>
+        </div>
+      </div></div>`;
   }
   /* 개막 전 히어로 칸: 비어 있는 성적 대신 개막까지·개막전·연봉 순위·부상자 */
   function preHero(t, nx, opp, sp) {
     const S = L.S, pays = TEAMS.map(x => [x, L.finPay ? L.finPay(x) : 0]).sort((a, b) => b[1] - a[1]), pr = pays.findIndex(x => x[0] === t) + 1, inj = L.players(t).filter(p => L.isInj(p)).length, dl = faOpen() && L.faDaysLeft ? L.faDaysLeft() : null;
+    if (pref('hub_off', '0') !== '1') return `<div class="hstats hstats2"><div><b>${pr ? pr + '위' : '-'}</b><span>연봉 총액 순위</span></div><div><b>${inj ? inj + '명' : '없음'}</b><span>부상자</span></div></div>`;   // 감독실이 열려 있으면 개막·개막전·선발은 감독실에
     return `<div class="hstats"><div><b>${dl !== null ? `D-${dl}` : '개막 전'}</b><span>개막까지</span></div><div><b>${nx ? `${nx.home === t ? 'vs' : '@'} ${KO[opp]}` : '-'}</b><span>개막전 ${nx ? L.dateStr(nx.day) : ''}</span></div><div><b>${sp ? esc(sp.ko) : '-'}</b><span>개막전 선발</span></div><div><b>${pr ? pr + '위' : '-'}</b><span>연봉 총액 순위${inj ? ` · 부상 ${inj}명` : ''}</span></div></div>`;
   }
   function heroCard() {
@@ -291,7 +286,7 @@
     const cz = S.clinch && S.clinch.y === S.year && S.clinch.k && S.day - S.clinch.d <= 3 ? S.clinch : null, czHtml = cz ? `<div class="hclinch ${cz.k}">${cz.k === 'in' ? '🎉 가을야구 진출 확정!' : '가을야구 탈락이 확정됐습니다. 남은 경기는 내년을 위한 시간입니다.'}</div>` : '';
     return `<section class="hero" aria-label="우리 팀 현황">${czHtml}<div class="hrow">${logo(t, 40)}<div class="hname"><b>${KO[t]}</b><span>${S.year} 시즌 · ${status}</span></div><span class="sp"></span>${(() => { const cl = S.phase === 'regular' && g > 0 && L.postClinch ? L.postClinch(t) : null; return cl ? `<div class="hodds" title="남은 경기 결과와 관계없이 정해진 상태입니다(승률 기준)."><b>${cl === 'in' ? '진출 확정' : '탈락 확정'}</b><span>가을야구</span></div>` : top5 !== null ? `<div class="hodds" title="남은 경기를 200번 시뮬레이션한 5위 이내 확률(참고용)"><b>${top5 === 0 && od[t].top5 > 0 ? '1% 미만' : top5 === 100 && od[t].top5 < 100 ? '99% 이상' : top5 + '%'}</b><span>가을야구 확률</span></div>` : ''; })()}</div>${seasonLine()}
       ${g === 0 && S.phase !== 'offseason' ? preHero(t, nx, opp, sp) : `<div class="hstats"><div><b>${g ? `${my.w}승 ${my.l}패${my.d ? ' ' + my.d + '무' : ''}` : '-'}</b><span>${g ? `승률 ${pct3(my.pct)}` : '성적'}</span></div>${(() => { const mg = L.magicNumber ? L.magicNumber(t) : null, m = mg && mg[0]; return m ? `<div title="${esc(`${m.t}: 남은 경기에서 우리 승리 + ${KO[m.vs]}의 패배가 이 수만큼 나오면 ${m.k === 'tragic' ? '탈락' : '확정'}(무승부 제외 근사, 실제 확정과 1경기 안팎 차이 가능)`)}"><b>${m.k === 'tragic' ? '트래직' : '매직'} ${m.n}</b><span>${m.k === 'tragic' ? `탈락까지 · ${KO[m.vs]} 기준` : `가을야구 · ${KO[m.vs]} 기준`}${mg[1] ? ` · 1위 매직 ${mg[1].n}` : ''}</span></div>` : `<div><b>${g ? gtxt : '-'}</b><span>순위 경쟁</span></div>`; })()}<div><b>${strk || '-'}</b><span>연속</span></div><div><b>${dots || '-'}</b><span>최근 10경기</span></div></div>`}
-      ${nx || watch || inj ? `<div class="hfoot">${nx && !(g === 0 && S.phase !== 'offseason') ? `<span class="hnext">다음 · ${L.dateStr(nx.day)} ${nx.home === t ? '홈' : '원정'} ${logo(opp, 18)}${KO[opp]}${sp ? ` · 선발 ${esc(sp.ko)}` : ''}</span>` : ''}${watch ? `<span class="hwatch">주목 ${watch}</span>` : ''}${inj && !(g === 0 && S.phase !== 'offseason') ? `<span class="hinj">부상 ${inj}명</span>` : ''}${chemChip()}<button class="hhub" data-act="hubTog">${pref('hub_off', '1') === '1' ? '감독실' : '감독실 접기'}</button></div>` : ''}</section>`;
+      ${nx || watch || inj ? `<div class="hfoot">${nx && !(g === 0 && S.phase !== 'offseason') ? `<span class="hnext">다음 · ${L.dateStr(nx.day)} ${nx.home === t ? '홈' : '원정'} ${logo(opp, 18)}${KO[opp]}${sp ? ` · 선발 ${esc(sp.ko)}` : ''}</span>` : ''}${watch ? `<span class="hwatch">주목 ${watch}</span>` : ''}${inj && !(g === 0 && S.phase !== 'offseason') ? `<span class="hinj">부상 ${inj}명</span>` : ''}${chemChip()}<button class="hhub" data-act="hubTog">${pref('hub_off', '0') === '1' ? '감독실' : '감독실 접기'}</button></div>` : ''}</section>`;
   }
   function screenHome(extra) {
     const S = L.S, st = L.standings(), my = st.find(x => x.team === U()), ng = nextGames(5);
@@ -2293,7 +2288,7 @@
     if (ui.clutch && !ui.live) { document.body.classList.remove('modal-open'); root.innerHTML = screenClutch() + toastHtml(); window.scrollTo(0, 0); return; }   // 승부처 개입(clutch.js)
     if (ui.live) { document.body.classList.remove('modal-open'); root.innerHTML = screenLive() + toastHtml(); window.scrollTo(0, scroll); return; }   // 경기 화면에서는 이전 화면의 스크롤 잠금이 남지 않게 푼다
     if ((ui.screen === 'lineup' || ui.screen === 'pitching') && pref('seen_lineup', '') !== '1') setPref('seen_lineup', '1');   // 첫 게임 안내: 라인업 확인 단계
-    const S = ui.screen, f = { records: screenRecords, invest: () => foldCards(screenInvest(), /실제 KBO 시설 투자 현황|리그 관중 추이|규칙 가정값/, 'inv_ref', '참고 자료·가정 보기'), desk: screenDesk, home: () => (setTimeout(celebrate, 60), '') + guideCard() + officeHub() + heroCard() + screenHome(decCard() + deskFold()), roster: () => screenRoster(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => awardRaceCard() + screenStandings() + awardsCard(), teams: () => rivalCard() + screenTeams(), story: () => screenStory() + screenAlbum(), album: () => screenStory() + screenAlbum(), intl: screenIntl, news: screenNews, mood: () => foldCards(screenMood(), /^라커룸 분위기|^선수단 분위기|^동료 관계|^감독 커리어/, 'mood_more', '라커룸·선수단 세부'), train: screenTrain, scout: screenScout, finance: () => foldCards(cbtCard() + screenFinance(), /재정이 게임에 미치는 영향|비용 구조|재정 자료|재정 성장 가정/, 'fin_ref', '자료·가정 보기'), coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
+    const S = ui.screen, f = { records: screenRecords, invest: () => foldCards(screenInvest(), /실제 KBO 시설 투자 현황|리그 관중 추이|규칙 가정값/, 'inv_ref', '참고 자료·가정 보기'), desk: screenDesk, home: () => (setTimeout(celebrate, 60), '') + guideCard() + heroCard() + officeHub() + screenHome(decCard() + deskFold()), roster: () => screenRoster(), lineup: () => changeBar() + screenLineup(), pitching: () => changeBar() + screenPitching(), schedule: screenSchedule, standings: () => awardRaceCard() + screenStandings() + awardsCard(), teams: () => rivalCard() + screenTeams(), story: () => screenStory() + screenAlbum(), album: () => screenStory() + screenAlbum(), intl: screenIntl, news: screenNews, mood: () => foldCards(screenMood(), /^라커룸 분위기|^선수단 분위기|^동료 관계|^감독 커리어/, 'mood_more', '라커룸·선수단 세부'), train: screenTrain, scout: screenScout, finance: () => foldCards(cbtCard() + screenFinance(), /재정이 게임에 미치는 영향|비용 구조|재정 자료|재정 성장 가정/, 'fin_ref', '자료·가정 보기'), coach: screenCoach, market: screenMarket, offseason: screenOffseason, save: screenSave }[S] || screenHome;
     document.body.classList.toggle('modal-open', !!ui.modal);
     { const c = L.compOpen().find(x => !(ui.compSeen || (ui.compSeen = {}))[x.id]); if (c && !ui.live && !ui.negOpen) { ui.compSeen[c.id] = true; ui.comp = c.id; } }   // 새 FA 보상 선택은 처음 생길 때 바로 창을 띄운다
     const keep = snapInner(root);   // 체크박스·버튼으로 다시 그려도 안쪽 스크롤 상자와 펼침 상태를 유지한다
@@ -2553,7 +2548,7 @@
         const u = URL.createObjectURL(blob), aa = document.createElement('a'); aa.href = u; aa.download = name; document.body.appendChild(aa); aa.click(); aa.remove(); setTimeout(() => URL.revokeObjectURL(u), 1000);   // 단독 실행(index.html)
       }).catch(() => toast('이미지로 저장하지 못했습니다.'));
     },
-    hubTog() { setPref('hub_off', pref('hub_off', '1') === '1' ? '0' : '1'); render(); },
+    hubTog() { setPref('hub_off', pref('hub_off', '0') === '1' ? '0' : '1'); render(); },
     hubEv() { const e = document.querySelector('.evcard'); if (e) e.scrollIntoView({ behavior: 'smooth', block: 'start' }); else toast('지금 처리할 일이 없습니다.'); },
     champClose() { ui.champEnd = false; render(); },
     cardsClose() { L.S.cardNew = []; autosave(); render(); },
