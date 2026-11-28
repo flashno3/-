@@ -8,7 +8,7 @@ for(const [k,[t,ret]] of Object.entries(exp)){const p=find(k,t);ok(p&&p.inj&&p.i
 ok(new Date(L.todayN()*864e5).toISOString().slice(0,10)==='2027-03-27','개막 전 날짜');
 // 복귀 완료·개막 전 복귀 선수는 부상자 아님
 for(const k of ['최정','김광현','알칸타라']){const p=find(k);ok(p&&!L.isInj(p),k+' 개막 전 복귀');}
-ok(find('김광현').prev===2025&&find('박진').prev===2025&&find('이호성').prev===2025&&find('김광현').team==='Landers'&&find('김광현').age===38,'2026 기록 없는 선수는 2025·2024 기록으로 추가');
+ok(find('김광현').prev===2025&&find('박진').prev===2025&&find('이호성').prev===2025&&find('김광현').team==='Landers'&&find('김광현').age===39,'2026 기록 없는 선수는 2025·2024 기록으로 추가(김광현 1988년생 → 2027 시즌 39세)');
 ok(!find('이호범'),'선수 데이터 없는 신인은 미반영');
 // AI 1군 엔트리에 부상자 없음, 2군 풀에도 없음
 for(const t of Object.keys(S.teams)){ok(!L.players(t).some(p=>p.active&&L.isInj(p)),t+' 1군에 부상자 없음');const fp=L.farmPool(t);ok(!fp.H.concat(fp.P).some(p=>L.isInj(p)),t+' 2군 풀에 부상자 없음');}

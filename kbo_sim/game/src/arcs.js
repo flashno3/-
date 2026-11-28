@@ -22,7 +22,9 @@
   };
   proto._arcInjure = function (p, days, dx, arcId) {
     const S = this.S, now = this.todayN(), retN = now + days, rd = new Date(retN * 864e5), sd = new Date(now * 864e5);
-    p.inj = { dx, since: `${S.year}-${String(sd.getUTCMonth() + 1).padStart(2, '0')}-${String(sd.getUTCDate()).padStart(2, '0')} 발생`, ret: rd.toISOString().slice(0, 10), retN, basis: '이야기 진행(스토리 아크)', apply: true, generated: true, arc: arcId };
+    const inj = { dx, since: `${S.year}-${String(sd.getUTCMonth() + 1).padStart(2, '0')}-${String(sd.getUTCDate()).padStart(2, '0')} 발생`, ret: rd.toISOString().slice(0, 10), retN, basis: '이야기 진행(스토리 아크)', apply: true, generated: true, arc: arcId };
+    if (p.inj && p.inj.natl && this.isInj(p)) { p.injPrev = inj; return; }   // 대표 차출 중: 차출 상태 유지, 복귀 때 이 부상이 이어서 적용(off_injury 의 보관 기록 복원)
+    p.inj = inj;
     p.active = false; delete p.lockUntil; if (this._injAutoFix && this.injAuto() !== 'off') this._injAutoFix([p], []); this.repairSettings(S.userTeam); this.invalidate();
   };
   proto._arcLog = function (a, text, imp) { const S = this.S; a.log.push({ y: S.year, d: S.day, t: text }); this.story('arc', `[${a.title}] ${text}`, imp || 2); news(this, `[이야기] ${a.title}: ${text}`); };

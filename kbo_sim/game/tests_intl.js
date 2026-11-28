@@ -62,4 +62,10 @@ for (const mode of ['fill', 'off']) { const L = League.create(base, 'Tigers', 6)
   if (mode === 'fill') ok(a.active && b.active && set.lineup.some(x => x.id === a.id && x.pos === posA) && set.lineup.some(x => x.id === b.id && x.pos === posB), '복귀 → 원래 1군·라인업 포지션');
   else ok(!a.active && !b.active, '자동 관리 끄기: 2군 대기');
   ok(!a.natlPrev && !b.natlPrev && !(a.inj && a.inj.natl), `${mode}: 복귀 표시 정리`); ok(!L.integrity().errors.length, `${mode}: 정합성`); }
+// 차출 중 이야기·결정 부상: 차출 상태는 유지되고 복귀할 때 부상이 이어서 적용(소집 첫날 이야기 부상이 차출을 덮어쓰던 문제)
+{ const L = League.create(base, 'Wiz', 8), S = L.S; L.faAdvance(75); L.closeFA(); L.advance(30, false); const set = S.teams.Wiz.set, a = S.players[set.lineup[0].id], b = S.players[set.lineup[1].id];
+  L._intlAway([a.id, b.id], L.todayN() + 5, '시험 대회'); L._arcInjure(a, 20, '시험 이야기 부상', 'T'); L._decInjure(b, 20, '시험 결정 부상');
+  ok(a.inj.natl && b.inj.natl && a.injPrev && a.injPrev.dx === '시험 이야기 부상' && b.injPrev && b.injPrev.dx === '시험 결정 부상', '차출 중 부상은 보관(차출 상태 유지)');
+  L.advance(7, false); ok(a.inj && a.inj.dx === '시험 이야기 부상' && L.isInj(a) && b.inj && b.inj.dx === '시험 결정 부상' && L.isInj(b) && !a.active && !b.active, '복귀 뒤 부상 이어서 적용');
+  ok(!L.integrity().errors.length, '차출 중 부상 정합성'); }
 console.log('intl tests ok', n);
